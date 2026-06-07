@@ -1,6 +1,6 @@
 ---
 name: lease-abstraction-pipeline
-description: "Batch lease abstraction and rent roll data extraction for Oxford Realty Advisors. Use this skill whenever the user mentions: abstract leases, parse leases, extract lease data, process lease folder, batch lease, lease pipeline, lease data extraction, run lease abstraction, pull lease terms from folder, parse all leases, lease parsing, update rent roll from leases, scheduled lease scan, or any request to systematically extract structured data from multiple commercial lease documents stored in a folder, SharePoint directory, or Google Drive. Also trigger when the user says 'run the lease pipeline', 'process the leases', or 'update my rent roll'. Produces: master XLSX workbook (30 fields per lease, derived metrics, quality flags, portfolio analytics), Notion Tenant Database upsert, and email summary to ze@oxfordra.net. Designed for autonomous unattended operation — do not pause mid-run for individual lease clarifications. v1.2"
+description: "Batch lease abstraction and rent roll data extraction for Oxford Realty Advisors. Use this skill whenever the user mentions: abstract leases, parse leases, extract lease data, process lease folder, batch lease, lease pipeline, lease data extraction, run lease abstraction, pull lease terms from folder, parse all leases, lease parsing, update rent roll from leases, scheduled lease scan, or any request to systematically extract structured data from multiple commercial lease documents stored in a folder, SharePoint directory, or Google Drive. Also trigger when the user says 'run the lease pipeline', 'process the leases', or 'update my rent roll'. Produces: master XLSX workbook (30 fields per lease, derived metrics, quality flags, portfolio analytics), Notion Tenant Database upsert, and email summary to ggoldberg@oxfordra.net. Designed for autonomous unattended operation — do not pause mid-run for individual lease clarifications. v1.2"
 ---
 
 # Lease Abstraction Pipeline — Oxford Realty Advisors
@@ -17,7 +17,7 @@ Autonomous batch extraction of 30 structured data fields from every lease in a t
 - **Date format:** MM/DD/YYYY throughout. If a lease expresses a date as "the first day of the month following Commencement," resolve it to an actual MM/DD/YYYY date using the Commencement Date as the anchor. If it cannot be resolved deterministically, enter `NOT FOUND` and flag.
 - **Currency:** Two decimal places, no rounding. Enter as numeric values (not strings with "$") so XLSX can aggregate.
 - **SF:** Integer with comma separator (e.g., 12,500). Store as integer in XLSX for aggregation; the comma is display formatting only.
-- **Notification:** Always email ze@oxfordra.net on completion (or failure). For manually triggered runs, draft the email and wait for approval before sending. For scheduled unattended runs (see Scheduled Task section), send automatically via Gmail MCP without confirmation.
+- **Notification:** Always email ggoldberg@oxfordra.net on completion (or failure). For manually triggered runs, draft the email and wait for approval before sending. For scheduled unattended runs (see Scheduled Task section), send automatically via the Outlook helper at `C:/Users/Owner/.claude/scheduled-tasks/_shared/send-via-outlook.ps1` (Gmail MCP is deprecated for ORA per Outlook-only policy; Gmail connector pending removal as of 2026-04-28).
 
 ---
 
@@ -28,7 +28,7 @@ Locate the target folder. Default paths in strict priority order (use first avai
 2. `/mnt/user-data/uploads/` (if files uploaded directly in the current session)
 3. SharePoint: `Oxford Realty Advisors > Master Lease Database`
 
-If none of the three are accessible, fail fast: email ze@oxfordra.net with subject "Lease Pipeline — Folder Not Accessible" and halt.
+If none of the three are accessible, fail fast: email ggoldberg@oxfordra.net with subject "Lease Pipeline — Folder Not Accessible" and halt.
 
 List all files. Log: total count, file types (PDF / DOCX / other), estimated scanned PDF count (defined as a PDF where pdfplumber yields <100 words on page 1). Print inventory summary before processing begins.
 
@@ -188,7 +188,7 @@ Match logic: update record if tenant already exists (match criteria below); crea
 
 ## STEP 8 — COMPLETION NOTIFICATION
 
-After all processing is complete, generate an email to ze@oxfordra.net with the content below. For manually triggered runs, save as draft and wait for approval. For scheduled unattended runs, send automatically via Gmail MCP.
+After all processing is complete, generate an email to ggoldberg@oxfordra.net with the content below. For manually triggered runs, save as draft and wait for approval. For scheduled unattended runs, send automatically via the Outlook helper (`_shared/send-via-outlook.ps1`).
 
 **Subject:** `ORA Lease Abstraction Complete — N leases processed — [DATE]` — replace `N` with the actual count and `[DATE]` with today's MM/DD/YYYY.
 
