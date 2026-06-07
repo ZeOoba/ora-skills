@@ -39,9 +39,28 @@ If this directory is ever lost:
    `C:/Users/Owner/.claude/backups/`.
 3. Last resort: re-export from Cowork Desktop via claude.ai skills UI.
 
-## Current skills (2026-04-16)
+## Current skills (2026-06-07)
 
-11 skills: `acquisition-underwriting`, `cap-rate-snapshot`, `deal-screen`,
-`deploy-site`, `document-assembly`, `lease-abstraction-pipeline`,
-`lease-renewal-pipeline`, `market-comp-analyzer`, `monthly-close`, `tenant-email`,
-`underwrite`.
+**8 git-tracked skill directories:** `acquisition-underwriting` (v2.0, modal — SCREEN/SNAPSHOT/COMPS/UNDERWRITE/FULL),
+`deploy-site`, `document-assembly` (v1.2), `lease-abstraction-pipeline`, `lease-renewal-pipeline`,
+`loi-generation` (the SOLE LOI path — 16-pt QC Gate, 7 state overlays, ORA letterhead; vendored into this repo
+2026-06-07), `monthly-close`, `tenant-email`.
+
+**Active on disk but NOT yet git-tracked** (present in working copies / the runtime, pending a commit):
+`cowork-settings`, `psa-reconciliation`.
+
+**Shared data:** `target-markets.json` — canonical buy-box market list consumed by `acquisition-underwriting`.
+
+**Retired to `_archive/`** on 2026-06-07 (subsumed by `acquisition-underwriting`'s SCREEN / SNAPSHOT / COMPS
+modes — not live; kept for reference, reversible): `deal-screen`, `cap-rate-snapshot`, `market-comp-analyzer`,
+plus the earlier `underwrite`. Note `underwrite` carries `user-invocable: true`; it stays in `_archive/`
+precisely so it does not re-expose a slash-invocable duplicate.
+
+## Runtime skill dependencies (outside this repo)
+
+Some skills here hand off to skills **not stored in this repo** that resolve from the anthropic-skills plugin
+at runtime — `docx`, `deal-execution`, `tenant-intelligence`, `market-monitor`, `legal-intelligence`,
+`rent-comp`, `re-operations`. The composed runtime (this repo + the plugin) makes them reachable; a Recovery
+(above) that restores ONLY this repo will NOT restore them. (`loi-generation` — the SOLE LOI path — was
+plugin-only and source-controlled nowhere until 2026-06-07, when it was vendored into this repo so the LOI
+guardrail is backed up and survives recovery.)
