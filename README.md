@@ -41,13 +41,10 @@ If this directory is ever lost:
 
 ## Current skills (2026-06-07)
 
-**8 git-tracked skill directories:** `acquisition-underwriting` (v2.0, modal — SCREEN/SNAPSHOT/COMPS/UNDERWRITE/FULL),
-`deploy-site`, `document-assembly` (v1.2), `lease-abstraction-pipeline`, `lease-renewal-pipeline`,
-`loi-generation` (the SOLE LOI path — 16-pt QC Gate, 7 state overlays, ORA letterhead; vendored into this repo
-2026-06-07), `monthly-close`, `tenant-email`.
-
-**Active on disk but NOT yet git-tracked** (present in working copies / the runtime, pending a commit):
-`cowork-settings`, `psa-reconciliation`.
+**10 git-tracked skill directories:** `acquisition-underwriting` (v2.0, modal — SCREEN/SNAPSHOT/COMPS/UNDERWRITE/FULL),
+`cowork-settings`, `deploy-site`, `document-assembly` (v1.2), `lease-abstraction-pipeline`,
+`lease-renewal-pipeline`, `loi-generation` (the SOLE LOI path — 16-pt QC Gate, 7 state overlays, ORA
+letterhead; vendored 2026-06-07), `monthly-close`, `psa-reconciliation`, `tenant-email`.
 
 **Shared data:** `target-markets.json` — canonical buy-box market list consumed by `acquisition-underwriting`.
 
