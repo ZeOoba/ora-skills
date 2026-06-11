@@ -287,9 +287,9 @@ If any check fails, fix and re-run. Do not present a failing file.
 
 ### Phase 7 — Optional SHIP mode
 If user requested ship:
-1. Draft email via Composio `OUTLOOK_SEND_EMAIL` (or `OUTLOOK_DRAFT` if Mail.Send not held).
+1. Draft the email for Gabriel's review. (Composio `OUTLOOK_*` retired 2026-06-11 — connector removed, no fallback. The approved send, if Gabriel green-lights, runs via Outlook COM `C:\Users\Owner\.claude\scheduled-tasks\_shared\send-via-outlook.ps1`, the SOLE send path.)
 2. To: `{{SELLER_BROKER_EMAIL}}` (pull from HubSpot).
-3. Cc: BOTH `ggoldberg@oxfordra.net` AND `egoldberg@oxfordra.net` (this supersedes any legacy `ze@oxfordra.net` default).
+3. Cc: per thread context — no blanket cc of both principals (CC discipline, ratified 2026-06-10). Never `ze@oxfordra.net`.
 4. Subject: `LOI — [Property Street], [City], [State]`.
 5. Body: 3-sentence cover note in ORA broker voice (collegial, market-aware, no over-commitment). Attach DOCX and PDF.
 6. Do NOT send — present the draft for Gabriel's review and approval. Pause for explicit go-ahead before send.
@@ -352,7 +352,7 @@ Full overlay text in `references/state-overlays.md`. Summary of §6 distinguishi
 |---|---|---|
 | Notion | `notion-search`, `notion-fetch`, `notion-update-page` | Pull Acquisition Pipeline Tracker, Deal Sourcing Log, Tenant DB |
 | HubSpot | `search_crm_objects`, `get_crm_objects` | Pull broker contact details from Broker Relationships |
-| Outlook (Composio) | `OUTLOOK_DRAFT` / `OUTLOOK_SEND_EMAIL` | Ship mode email drafting |
+| Outlook (COM) | `send-via-outlook.ps1` via Desktop Commander `start_process` | Ship mode send after explicit approval (Composio `OUTLOOK_*` retired 2026-06-11) |
 | Workspace bash | `python3` with `python-docx` | Document assembly |
 | Workspace bash | `soffice` headless | PDF generation |
 | Cowork | `present_files` | Deliver outputs |

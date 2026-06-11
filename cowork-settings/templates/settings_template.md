@@ -2,7 +2,7 @@
 
 **Version:** {{VERSION}}
 **Effective Date:** {{EFFECTIVE_DATE}}
-**Owner:** Gabriel Goldberg, Principal
+**Owner:** Gabriel Goldberg, VP Acquisitions
 **Review Cadence:** Quarterly; next review {{NEXT_REVIEW}}
 **Supersedes:** {{PRIOR_VERSION}}
 
