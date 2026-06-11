@@ -10,6 +10,18 @@ the enclosing `Cowork OS/` and `OneDrive - Oxford Capital Partners (1)/` roots a
 NOT git-tracked and must not be (they contain QBB backups, tenant PII, and financial
 statements that should never enter a repo).
 
+## Packaging (.skill files) — MANDATORY RULE (2026-06-11)
+
+To install/update a skill on the Cowork platform, package it as a `.skill` zip and
+import it (Cowork chat "Save skill" button, or Settings → Capabilities).
+
+**NEVER use PowerShell `Compress-Archive`** — Windows PowerShell 5.1 writes zip
+entry paths with backslashes, violating the zip spec (APPNOTE 4.4.17.1); the Claude
+importer rejects the file with *"Zip file contains path with invalid characters."*
+
+**ALWAYS package with:** `python tools/package_skills.py <outdir> [skill ...]`
+(emits forward-slash entries, asserts validity, prints the entry list).
+
 ## Layout
 
 Each subdirectory is one skill and must contain:
