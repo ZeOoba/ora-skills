@@ -28,7 +28,7 @@ Governs the ORA Claude Cowork Global Settings document — the single-source use
 5. Bump the version table at the bottom of the markdown with a one-line changelog entry.
 6. Run `scripts/build_pdf.py` against the new .md to produce the branded PDF.
 7. Run `scripts/diff_versions.py <old> <new>` to emit a changelog markdown.
-8. Run the 16-point QC Gate from `institutional-output-standards`; confirm PDF text layer extracts.
+8. Run the 16-point QC Gate (ORA Institutional Style Guide v1.0+ — encoded inline in global preferences; the former `institutional-output-standards` skill was never installed and must not be referenced); confirm PDF text layer extracts.
 9. Output all three artifacts (new .md, new .pdf, changelog .md) to `/mnt/user-data/outputs` and present them.
 
 ### B. Diff two existing versions
@@ -50,10 +50,10 @@ Run `scripts/build_pdf.py` against the current version; re-output both .md and .
 - **Never delete a prior version.** Archive everything in `./versions/` — it is the governance trail.
 - **Every version MUST preserve these invariants** (Tier-0, cannot be removed without explicit major-version confirmation):
   1. Identity guardrail — "Never 'Ze' or 'Ze Ooba'"
-  2. Email routing — ggoldberg@ sends, both-address cc
+  2. Email routing — Outlook COM (`send-via-outlook.ps1`) sole send path; automated outputs → ggoldberg@ ONLY; ora-am-brief Daily Brief is the sole cc-Eric exception (ratified 2026-06-10/11)
   3. PDF extractable-text standard (Amendment No. 1)
   4. Netlify `--prod` guardrail
-  5. File-naming schema
+  5. File-naming — THREE standing schemas (deal files / financial models / ISO-dated outputs; ratified 2026-06-10, never unify)
 - **Review cadence.** Surface a reminder if ≥90 days since the last version; suggest either a v(N+0.1) refresh or an explicit "no changes needed" decision logged in the changelog.
 
 ## Outputs

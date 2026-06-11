@@ -1,6 +1,6 @@
 ---
 name: lease-abstraction-pipeline
-description: "Batch lease abstraction and rent roll data extraction for Oxford Realty Advisors. Use this skill whenever the user mentions: abstract leases, parse leases, extract lease data, process lease folder, batch lease, lease pipeline, lease data extraction, run lease abstraction, pull lease terms from folder, parse all leases, lease parsing, update rent roll from leases, scheduled lease scan, or any request to systematically extract structured data from multiple commercial lease documents stored in a folder, SharePoint directory, or Google Drive. Also trigger when the user says 'run the lease pipeline', 'process the leases', or 'update my rent roll'. Produces: master XLSX workbook (30 fields per lease, derived metrics, quality flags, portfolio analytics), Notion Tenant Database upsert, and email summary to ggoldberg@oxfordra.net. Designed for autonomous unattended operation — do not pause mid-run for individual lease clarifications. v1.2"
+description: 'Lease abstraction (single document or batch) and rent roll data extraction for Oxford Realty Advisors. Use this skill whenever the user mentions: abstract this lease, abstract leases, parse leases, extract lease data, extract lease terms, lease abstract, pull lease terms, summarize this lease, read this lease, review this lease, process lease folder, batch lease, lease pipeline, lease data extraction, run lease abstraction, parse all leases, lease parsing, update rent roll from leases, scheduled lease scan, or any request to systematically extract structured data from one or more commercial lease documents — uploaded directly, in a folder, in SharePoint, or in Google Drive. Also trigger when the user uploads a PDF or DOCX that appears to be a commercial lease, or says ''run the lease pipeline'', ''process the leases'', or ''update my rent roll''. Produces: structured 30-field abstract per lease (markdown for single-doc, master XLSX workbook for batch — fields, derived metrics, quality flags, portfolio analytics), Notion Tenant Database upsert, and email summary to [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (routing canon 2026-06-10). Designed for autonomous unattended operation — do not pause mid-run for individual lease clarifications. v2.1 (2026-06-11: COM-only send path, ggoldberg-only routing; subsumes lease-abstraction).'
 ---
 
 # Lease Abstraction Pipeline — Oxford Realty Advisors
@@ -11,207 +11,113 @@ Autonomous batch extraction of 30 structured data fields from every lease in a t
 
 ## OPERATING PRINCIPLES
 
-- **Never pause mid-run** for individual lease ambiguities. Mark the field `NOT FOUND`, flag it, and continue. This rule is absolute — do not pause even if more than 50% of a lease's fields are NOT FOUND; log the lease in Tab 6 with reason "Low extraction yield (<50% of fields)" and continue.
-- **Exact language preferred** over paraphrase for fields: Permitted Use, Early Termination, Assignment/Subletting, Environmental Responsibility. "Exact language" means verbatim quotation with a maximum length of 500 characters per field; if the provision exceeds 500 characters, extract the operative clause verbatim and append `[...TRUNCATED — see source document §X]`.
-- **Conflict rule:** If two conflicting values exist for the same field (e.g., rent in body vs. exhibit), extract both, flag discrepancy, note source of each. When both values are numeric, use the value from the most recent amendment as the primary value in Tab 1 Master Rent Roll and record the alternate in Tab 3 Quality Flags Dashboard.
-- **Date format:** MM/DD/YYYY throughout. If a lease expresses a date as "the first day of the month following Commencement," resolve it to an actual MM/DD/YYYY date using the Commencement Date as the anchor. If it cannot be resolved deterministically, enter `NOT FOUND` and flag.
-- **Currency:** Two decimal places, no rounding. Enter as numeric values (not strings with "$") so XLSX can aggregate.
-- **SF:** Integer with comma separator (e.g., 12,500). Store as integer in XLSX for aggregation; the comma is display formatting only.
-- **Notification:** Always email ggoldberg@oxfordra.net on completion (or failure). For manually triggered runs, draft the email and wait for approval before sending. For scheduled unattended runs (see Scheduled Task section), send automatically via the Outlook helper at `C:/Users/Owner/.claude/scheduled-tasks/_shared/send-via-outlook.ps1` (Gmail MCP is deprecated for ORA per Outlook-only policy; Gmail connector pending removal as of 2026-04-28).
+- **Never pause mid-run** for individual lease ambiguities. Mark the field `NOT FOUND`, flag it, and continue.
+- **Exact language preferred** over paraphrase for fields: Permitted Use, Early Termination, Assignment/Subletting, Environmental Responsibility.
+- **Conflict rule:** If two conflicting values exist for the same field (e.g., rent in body vs. exhibit), extract both, flag discrepancy, note source of each.
+- **Date format:** MM/DD/YYYY throughout.
+- **Currency:** Two decimal places, no rounding.
+- **SF:** Integer with comma separator (e.g., 12,500).
+- **Notification:** Always email [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (no cc — routing canon 2026-06-10) on completion (or failure). Draft the email — do NOT send without confirmation unless this is a scheduled unattended run (see Scheduled Task section).
 
 ---
 
 ## STEP 1 — FOLDER INVENTORY
 
-Locate the target folder. Default paths in strict priority order (use first available):
-1. Path explicitly specified by Ze in the trigger message (highest priority)
-2. `/mnt/user-data/uploads/` (if files uploaded directly in the current session)
-3. SharePoint: `Oxford Realty Advisors > Master Lease Database`
+Locate the target folder. Default paths in order of priority:
 
-If none of the three are accessible, fail fast: email ggoldberg@oxfordra.net with subject "Lease Pipeline — Folder Not Accessible" and halt.
+1. SharePoint: `Oxford Realty Advisors > Master Lease Database`
+2. Path specified by Gabriel in the trigger message
+3. `/mnt/uploads/` (if files uploaded directly to the current Cowork session) — see CLAUDE.md "Primary output path" for canonical mount conventions
 
-List all files. Log: total count, file types (PDF / DOCX / other), estimated scanned PDF count (defined as a PDF where pdfplumber yields <100 words on page 1). Print inventory summary before processing begins.
+List all files. Log: total count, file types (PDF / DOCX / other), estimated scanned PDF count. Print inventory summary before processing begins.
 
-Skip (and log in Tab 6): files that are not leases (detected by keyword absence — if none of "Lease", "Landlord", "Tenant", "Premises" appear in the first 2,000 characters, treat as non-lease), corrupted files (any file that raises an exception on open), password-protected files.
+Skip (and log in Tab 6): files that are not leases, corrupted files, password-protected files.
 
 ---
 
 ## STEP 2 — DOCUMENT INGESTION (per file)
 
-**Text PDF:** Extract via pdfplumber.
-**Scanned PDF:** Attempt pdfplumber first. If text yield < 100 words across the entire document, fall back to pytesseract OCR. Flag result as `OCR-EXTRACTED` in output — verify accuracy on flagged records.
-**DOCX:** Extract via python-docx.
-**Password-protected / corrupted:** Log in Tab 6 with error code. Skip.
+**Text PDF:** Extract via pdfplumber. **Scanned PDF:** Attempt pdfplumber first. If text yield &lt; 100 words, fall back to pytesseract OCR. Flag result as `OCR-EXTRACTED` in output — verify accuracy on flagged records. **DOCX:** Extract via python-docx. **Password-protected / corrupted:** Log in Tab 6 with error code. Skip.
 
 ---
 
 ## STEP 3 — 30-FIELD EXTRACTION (per lease)
 
-Extract every field. Mark `NOT FOUND` if absent — do not substitute market-standard assumptions for missing values.
+Extract every field. Mark `NOT FOUND` if absent.
 
 ### PARTIES & PREMISES
-| # | Field |
-|---|-------|
-| 1 | Landlord entity name (+ state of formation if stated) |
-| 2 | Tenant entity name (+ state of formation if stated) |
-| 3 | Guarantor(s) — names, entity type, full/limited scope, burn-off terms |
-| 4 | Property address — full street address |
-| 5 | Suite/unit number (or "entire building") |
-| 6 | Rentable square footage |
-| 7 | Permitted use — exact lease language |
+
+#Field1Landlord entity name (+ state of formation if stated)2Tenant entity name (+ state of formation if stated)3Guarantor(s) — names, entity type, full/limited scope, burn-off terms4Property address — full street address5Suite/unit number (or "entire building")6Rentable square footage7Permitted use — exact lease language
 
 ### TERM
-| # | Field |
-|---|-------|
-| 8 | Lease commencement date |
-| 9 | Lease expiration date |
-| 10 | Total term length — calculate in months and years |
-| 11 | Extension options — count, length each, notice period, rent mechanism (market/fixed/CPI) |
-| 12 | Early termination rights — exact conditions, notice requirement, penalty formula |
-| 13 | Holdover rate — % of base rent or "market rate" |
+
+#Field8Lease commencement date9Lease expiration date10Total term length — calculate in months and years11Extension options — count, length each, notice period, rent mechanism (market/fixed/CPI)12Early termination rights — exact conditions, notice requirement, penalty formula13Holdover rate — % of base rent or "market rate"
 
 ### ECONOMICS
-| # | Field |
-|---|-------|
-| 14 | Base rent schedule — full escalation table (period, monthly rent, annual rent, $/SF/yr) |
-| 15 | Escalation type — fixed %, CPI, market reset, flat |
-| 16 | Free rent / concessions — duration, conditions, abatement structure |
-| 17 | Security deposit — amount, form (cash/LOC), return conditions, interest accrual |
-| 18 | Lease type — NNN / modified gross / gross / industrial gross |
-| 19 | CAM structure — estimated annual CAM, mgmt fee cap, base year, controllable cap, exclusions |
-| 20 | Tenant improvement allowance — $/SF or lump sum, conditions, disbursement deadline |
-| 21 | Percentage rent — breakpoint, rate, reporting obligation (or N/A) |
-| 22 | Late fee — grace period (days), fee amount or % of monthly rent |
+
+#Field14Base rent schedule — full escalation table (period, monthly rent, annual rent, $/SF/yr)15Escalation type — fixed %, CPI, market reset, flat16Free rent / concessions — duration, conditions, abatement structure17Security deposit — amount, form (cash/LOC), return conditions, interest accrual18Lease type — NNN / modified gross / gross / industrial gross19CAM structure — estimated annual CAM, mgmt fee cap, base year, controllable cap, exclusions20Tenant improvement allowance — $/SF or lump sum, conditions, disbursement deadline21Percentage rent — breakpoint, rate, reporting obligation (or N/A)22Late fee — grace period (days), fee amount or % of monthly rent
 
 ### LEGAL & RISK
-| # | Field |
-|---|-------|
-| 23 | Personal guaranty — present/absent, full/limited, burn-off date or conditions |
-| 24 | Assignment/subletting — consent standard, recapture right, profit sharing (exact language) |
-| 25 | Insurance requirements — coverage types, minimum amounts, additional insured, waiver of subrogation |
-| 26 | Default cure periods — monetary (days), non-monetary (days), cross-default provisions |
-| 27 | ROFR/ROFO — on what space, on what terms |
-| 28 | SNDA/subordination — required/not required, non-disturbance language |
-| 29 | Environmental responsibility — tenant scope, landlord scope, pre-existing carveout (exact language) |
-| 30 | Condemnation/casualty — termination trigger, restoration obligation, rent abatement |
+
+#Field23Personal guaranty — present/absent, full/limited, burn-off date or conditions24Assignment/subletting — consent standard, recapture right, profit sharing (exact language)25Insurance requirements — coverage types, minimum amounts, additional insured, waiver of subrogation26Default cure periods — monetary (days), non-monetary (days), cross-default provisions27ROFR/ROFO — on what space, on what terms28SNDA/subordination — required/not required, non-disturbance language29Environmental responsibility — tenant scope, landlord scope, pre-existing carveout (exact language)30Condemnation/casualty — termination trigger, restoration obligation, rent abatement
 
 ---
 
 ## STEP 4 — DERIVED METRICS (per lease)
 
-| Metric | Formula |
-|--------|---------|
-| Rent PSF Year 1 | Annual base rent Yr 1 ÷ Rentable SF |
-| Rent PSF Final Year | Annual base rent final year ÷ Rentable SF |
-| Escalation CAGR | (Final yr rent / Yr 1 rent)^(1/(term yrs − 1)) − 1 |
-| Total undiscounted base rent | Sum of all monthly base rent payments |
-| NPV of base rent (8%) | PV of monthly payments discounted at 8%/yr |
-| Effective rent PSF | (Total rent − free rent value) ÷ (SF × term yrs) |
-| Months until expiration | From today → expiration date |
-
-If any input field is `NOT FOUND`, set the dependent derived metric to `NOT FOUND` and flag. Do not compute a derived metric using a zero or assumed substitute.
+MetricFormulaRent PSF Year 1Annual base rent Yr 1 ÷ Rentable SFRent PSF Final YearAnnual base rent final year ÷ Rentable SFEscalation CAGR(Final yr rent / Yr 1 rent)^(1/(term yrs − 1)) − 1Total undiscounted base rentSum of all monthly base rent paymentsNPV of base rent (8%)PV of monthly payments discounted at 8%/yrEffective rent PSF(Total rent − free rent value) ÷ (SF × term yrs)Months until expirationFrom today → expiration date
 
 ---
 
 ## STEP 5 — QUALITY FLAGS (per lease)
 
-| Severity | Flag Condition |
-|----------|---------------|
-| 🔴 CRITICAL | Rent < $4.00/SF NNN |
-| 🔴 CRITICAL | Missing personal guaranty on leases > $5,000/mo |
-| 🔴 CRITICAL | Assignment permitted without landlord consent |
-| 🔴 CRITICAL | No default cure period stated |
-| 🔴 CRITICAL | Environmental liability assigned entirely to landlord |
-| 🟡 WARNING | Rent > $12.00/SF NNN — verify market justification |
-| 🟡 WARNING | Escalation < 2%/yr — below inflation target |
-| 🟡 WARNING | Escalation > 4%/yr — verify tenant acceptance |
-| 🟡 WARNING | Extension notice period < 9 months |
-| 🟡 WARNING | Holdover rate < 150% of base rent |
-| 🟡 WARNING | Security deposit < 2 months rent |
-| 🟡 WARNING | No SNDA provision |
-| 🟡 WARNING | No late fee provision |
-| 🟡 WARNING | Lease term < 3 years |
-| 🟡 WARNING | Extension option without market rent reset |
-| 🔵 INFO | Any field = NOT FOUND — manual review required |
-| 🔵 INFO | Lease expires within 12 months — add to renewal pipeline |
-| 🔵 INFO | OCR-extracted document — verify accuracy |
-
-Flag thresholds compare against fully extracted values only. If the input field is `NOT FOUND`, do not trigger the CRITICAL or WARNING flag for that condition; trigger only the `NOT FOUND` INFO flag.
+SeverityFlag Condition🔴 CRITICALRent &lt; $4.00/SF NNN🔴 CRITICALMissing personal guaranty on leases &gt; $5,000/mo🔴 CRITICALAssignment permitted without landlord consent🔴 CRITICALNo default cure period stated🔴 CRITICALEnvironmental liability assigned entirely to landlord🟡 WARNINGRent &gt; $12.00/SF NNN — verify market justification🟡 WARNINGEscalation &lt; 2%/yr — below inflation target🟡 WARNINGEscalation &gt; 4%/yr — verify tenant acceptance🟡 WARNINGExtension notice period &lt; 9 months🟡 WARNINGHoldover rate &lt; 150% of base rent🟡 WARNINGSecurity deposit &lt; 2 months rent🟡 WARNINGNo SNDA provision🟡 WARNINGNo late fee provision🟡 WARNINGLease term &lt; 3 years🟡 WARNINGExtension option without market rent reset🔵 INFOAny field = NOT FOUND — manual review required🔵 INFOLease expires within 12 months — add to renewal pipeline🔵 INFOOCR-extracted document — verify accuracy
 
 ---
 
 ## STEP 6 — XLSX OUTPUT
 
-**File name:** `ORA_LeaseAbstract_Batch_[YYYYMMDD]_v1.0.xlsx` — replace `[YYYYMMDD]` with the current date in that format (e.g., `ORA_LeaseAbstract_Batch_20260416_v1.0.xlsx`).
-**Save to:** SharePoint `Oxford Realty Advisors > Lease Abstracts > [Year]` — replace `[Year]` with the current 4-digit year.
+**File naming:** Follow ORA File-Naming Standard v1.0+ — `YYYYMMDD_[Subject]_[DocType]_v##.ext` format. Canonical: `Claude_Workspace/00_Governance/References/Standards/ORA File-Naming Standard 2026-05-14.md`**Save to:** SharePoint `Oxford Realty Advisors > Lease Abstracts > [Year]`
 
-| Tab | Contents |
-|-----|----------|
-| **1 — Master Rent Roll** | One row/lease. All 30 fields + 7 derived metrics + flag counts. Freeze row 1. Auto-filter. Color: red fill = any CRITICAL, yellow = WARNING only (no CRITICAL), white = no CRITICAL or WARNING flags. |
-| **2 — Rent Schedules** | One block/tenant: name, property, suite, then full escalation table (Year, Period Start, Period End, Monthly, Annual, PSF). |
-| **3 — Quality Flags Dashboard** | One row/flag: File, Tenant, Property, Suite, Severity, Description. |
-| **4 — Expiration Heatmap** | Count of expirations by quarter, next 5 years (20 quarters from current quarter). Highlight quarters with 3 or more expirations. |
-| **5 — Portfolio Analytics** | WALT (by SF), avg rent PSF (weighted by SF), occupancy-weighted total rent, % with guaranty, % with ROFR, % NNN vs. gross, rent PSF std dev with outlier flags (any value >1.5 standard deviations from the SF-weighted mean). |
-| **6 — Skipped Files** | File name, reason, timestamp. |
+TabContents**1 — Master Rent Roll**One row/lease. All 30 fields + 7 derived metrics + flag counts. Freeze row 1. Auto-filter. Color: red fill = any CRITICAL, yellow = WARNING only, white = clean.**2 — Rent Schedules**One block/tenant: name, property, suite, then full escalation table (Year, Period Start, Period End, Monthly, Annual, PSF).**3 — Quality Flags Dashboard**One row/flag: File, Tenant, Property, Suite, Severity, Description.**4 — Expiration Heatmap**Count of expirations by quarter, next 5 years. Highlight quarters with 3+ expirations.**5 — Portfolio Analytics**WALT (by SF), avg rent PSF (weighted by SF), occupancy-weighted total rent, % with guaranty, % with ROFR, % NNN vs. gross, rent PSF std dev with outlier flags (&gt;1.5 SD).**6 — Skipped Files**File name, reason, timestamp.
 
 ---
 
 ## STEP 7 — NOTION UPSERT
 
-Target database: ORA Notion Tenant Database.
-Match logic: update record if tenant already exists (match criteria below); create new record if no match.
+Target database: ORA Notion Tenant Database. Logic: update record if tenant already exists (match on Tenant Name + Property + Suite); create new record if no match. Do not overwrite records where Notion shows a more recent modified date than the lease document, unless Gabriel explicitly instructs.
 
-**Match criteria (all three must match exactly, case-insensitive):**
-1. Tenant Name (Notion field) == Field 2 Tenant entity name
-2. Property (Notion field) == Field 4 Property address
-3. Suite (Notion field) == Field 5 Suite/unit
-
-**Overwrite rule:** If the Notion record's "Last Modified" timestamp is more recent than the source lease document's file modification date, DO NOT overwrite any field. Instead, log the conflict in Tab 6 with reason "Notion record newer than lease doc — manual review required." The only way to override this is an explicit instruction from Ze in the trigger message (e.g., "force overwrite Notion").
-
-| Notion Field | Source Field |
-|---|---|
-| Tenant Name | Field 2 — Tenant entity name |
-| Property | Field 4 — Property address |
-| Suite | Field 5 — Suite/unit |
-| Lease Start | Field 8 — Commencement date |
-| Lease End | Field 9 — Expiration date |
-| Current Rent (monthly) | Field 14 — Base rent Year 1, monthly |
-| Rent PSF | Derived — Rent PSF Year 1 |
-| Lease Type | Field 18 |
-| Renewal Options | Field 11 |
-| Guaranty | Field 23 — Yes/No |
-| Days Until Expiration | Derived — Months until expiration × 30 |
-| Flag Count | Total flags (all severities) |
-| Flag Status | Highest severity present: Critical / Warning / Clean |
+Notion FieldSource FieldTenant NameField 2 — Tenant entity namePropertyField 4 — Property addressSuiteField 5 — Suite/unitLease StartField 8 — Commencement dateLease EndField 9 — Expiration dateCurrent Rent (monthly)Field 14 — Base rent Year 1, monthlyRent PSFDerived — Rent PSF Year 1Lease TypeField 18Renewal OptionsField 11GuarantyField 23 — Yes/NoDays Until ExpirationDerived — Months until expiration × 30Flag CountTotal flags (all severities)Flag StatusHighest severity: Critical / Warning / Clean
 
 ---
 
 ## STEP 8 — COMPLETION NOTIFICATION
 
-After all processing is complete, generate an email to ggoldberg@oxfordra.net with the content below. For manually triggered runs, save as draft and wait for approval. For scheduled unattended runs, send automatically via the Outlook helper (`_shared/send-via-outlook.ps1`).
+After all processing is complete, draft (do NOT auto-send unless scheduled unattended run) an email to [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY:
 
-**Subject:** `ORA Lease Abstraction Complete — N leases processed — [DATE]` — replace `N` with the actual count and `[DATE]` with today's MM/DD/YYYY.
+**Subject:** `ORA Lease Abstraction Complete — [N] leases processed — [DATE]`
 
 **Body:**
-```
-Run completed: [timestamp — ISO 8601 format]
-Leases processed: [integer count]
-Skipped files: [integer count] (see Tab 6)
-Total fields NOT FOUND: [integer count] (requires manual review)
-Critical flags: [integer count]
-Warning flags: [integer count]
-Leases expiring within 12 months: [integer count]
 
-Output: [SharePoint URL to the XLSX file]
+```
+Run completed: [timestamp]
+Leases processed: [N]
+Skipped files: [N] (see Tab 6)
+Total fields NOT FOUND: [N] (requires manual review)
+Critical flags: [N]
+Warning flags: [N]
+Leases expiring within 12 months: [N]
+
+Output: [SharePoint link to XLSX]
 Notion: [N] records updated, [N] records created
 
 Top issues requiring your review:
-1. [Highest-severity CRITICAL flag summary — one line]
-2. [Second CRITICAL flag, or highest WARNING if fewer than 2 CRITICALs]
-3. [Third flag, in the same priority order; omit this line entirely if fewer than 3 flags exist]
+1. [Top CRITICAL flag summary]
+2. [Second issue if any]
+3. [Third issue if any]
 ```
 
-Any bracketed field in the body above must be replaced with an actual value before the email is saved/sent. If a required value is unavailable, enter `NOT AVAILABLE` — do not emit the literal bracket text.
+For **scheduled unattended runs**: send automatically without asking for confirmation via Outlook COM — the SOLE send path (Composio retired 2026-06-11; NO fallback): Desktop Commander `start_process` → `powershell -ExecutionPolicy Bypass -File "C:\Users\Owner\.claude\scheduled-tasks\_shared\send-via-outlook.ps1" -To "ggoldberg@oxfordra.net" -Subject "ORA Lease Abstraction Complete — [N] leases processed — [DATE]" -BodyFile "<temp body file>" -BodyFormat html`. Automated outputs route to ggoldberg@oxfordra.net ONLY (routing canon 2026-06-10 — no cc; the cc-Eric exception is the Daily Brief only). On non-zero exit: retry once, then flag loudly in the Notion completion record — do NOT halt. (Gmail is disabled on the ORA tenant; never use Gmail or any Composio/Rube tool.) For **manually triggered runs**: present draft to Gabriel and wait for approval.
 
 ---
 
@@ -227,13 +133,11 @@ NOT FOUND fields:      [N total across batch]
 🔴 Critical flags:     [N]
 🟡 Warning flags:      [N]
 🔵 Info flags:         [N]
-Expiring ≤12 months:   [N]
+Expiring ≤12 months:  [N]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-XLSX: [SharePoint URL]
+XLSX: [SharePoint link]
 Notion: [N] updated / [N] created
 ```
-
-Replace every `[N]` and `[SharePoint URL]` placeholder with actual values before printing. Do not emit the literal bracket text.
 
 ---
 
@@ -250,6 +154,7 @@ Replace every `[N]` and `[SharePoint URL]` placeholder with actual values before
 ## REFERENCE FILES
 
 See `references/extraction-edge-cases.md` for guidance on:
+
 - Leases with multiple amendment documents
 - Side letters and letter agreements
 - Leases referencing exhibits not included in the file
