@@ -20,9 +20,11 @@ Show all leases expiring in the next 6 months.
 ### Steps
 
 1. **Gather lease data:**
-   - Search Notion for the tenant/lease database
-   - Check local files in the Cowork OS folder for rent rolls, lease abstracts
-   - Cross-reference with any Excel rent roll files (glob for `*rent roll*`, `*lease*`)
+   - **Canonical source:** Notion Tenant Database, queried via the **Notion MCP** (`notion-fetch` / `notion-search`). The former Composio query path (`NOTION_QUERY_DATABASE_WITH_FILTER` against the wrapper ID, with the prefixed-cursor workaround in `references/notion_paginator.py`) is **RETIRED 2026-06-11** — the Composio connector was removed; do not route through it. The paginator is archived under `_archive/lease-renewal-pipeline_pre-notionmcp_2026-06-11/` for history only.
+   - **ID routing:** `notion-fetch` and schema introspection → **data source ID** `b12f4cfd-a995-4755-8341-6435ae8173b4` (`collection://b12f4cfd-a995-4755-8341-6435ae8173b4`). Calling `notion-fetch` on the wrapper ID returns `validation_error: "Aggregation property not found in data source"` — a misleading routing quirk, not a data problem (resolved 2026-04-27; see Database ID Map in Knowledge Base). The **database wrapper ID** `8dbbaec0-611a-4617-be07-6a77d0d0307a` remains valid only for browser URLs (`notion.so/{id}`).
+   - **Full portfolio scan:** `notion-fetch` on the data source ID, paginating until exhausted; filter client-side on Lease Status. For small targeted lookups (single tenant or property), `notion-search` is sufficient.
+   - **Active scope:** Lease Status ∈ {Active, Month-to-Month, Notice Given, Expired}. Exclude Vacant, blank-status stubs, and rows whose Tenant Name contains `⛔` or `DUPLICATE`.
+   - **Cross-reference** with rent roll files at `OneDrive\Claude_Workspace\01_Cowork_OS\Cowork_OS_Workspace\` (glob `*rent roll*`, `*lease*`) only when Notion fields are sparse for a given tenant.
 
 2. **Build the expiration pipeline:**
    - Sort by expiration date (soonest first)
