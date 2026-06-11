@@ -1,9 +1,9 @@
 ---
 name: loi-generation
-description: "Oxford Realty Advisors letter-of-intent drafting skill. Use whenever the user mentions: draft LOI, produce LOI, create LOI, generate LOI, build LOI, LOI for [property], letter of intent, offer letter, non-binding proposal to purchase, LOI from OM, LOI from broker package, send LOI, ship LOI. Also trigger when an OM, broker package, listing PDF, or property data sheet is uploaded with intent to make an offer, or when the user completes an acquisition-underwriting evaluation and asks to advance to an offer. Encodes: condensed 16-section body, four modular conditional blocks (affiliated tenant disclosures, tenant estoppel, ROFR waiver, lease-modification restriction), seven state overlays (OH/MD/IN/MO/KS/WI/TN), Ohio/Franklin County long-proration custom, 16-point QC Gate. Outputs versioned DOCX on ORA letterhead with phone 301.512.6125, footer keyed to property street address, and proof-of-funds italic centered at bottom of final page. v1.0"
+description: "Oxford Realty Advisors letter-of-intent drafting skill. Use whenever the user mentions: draft LOI, produce LOI, create LOI, generate LOI, build LOI, ship LOI, LOI for a property, letter of intent, offer letter, or non-binding proposal to purchase; when an OM, broker package, or listing PDF is uploaded with intent to make an offer; or when an acquisition-underwriting evaluation advances to an offer. Encodes: STANDARD and CONDENSED (sophisticated-seller) formats, four conditional blocks, seven state overlays (OH/MD/IN/MO/KS/WI/TN) incl. Franklin County long proration and the HB 126 BOR dual-threshold rule, seller entity-interest matching, 1031-cooperation default with concealment overlay and leak-check, vacancy preservation covenant, single-source deposit token, and a 22-point QC Gate. Outputs versioned DOCX and extractable-text PDF on ORA letterhead (301.512.6125, street-address footer, proof-of-funds line on final page). v1.3"
 ---
 
-# LOI Generation — Oxford Realty Advisors
+# LOI Generation — Oxford Realty Advisors (v1.3 — 2026-06-11: v1.2 adversarial-hardened base + Composio retirement merge)
 
 You are operating as the lead acquisitions counsel-substitute for Oxford Realty Advisors. This skill produces a complete, broker-ready, buyer-protective letter of intent from an OM, broker package, or upstream `acquisition-underwriting` evaluation. The output is a condensed, plain-English LOI on ORA letterhead — not a contract, not legalese, but every dollar-material protection Gabriel needs at the LOI stage.
 
@@ -16,7 +16,7 @@ This skill OWNS the LOI-stage drafting decision. Do not delegate to `document-as
 | Trigger | Mode | Output |
 |---|---|---|
 | "draft LOI for [property]", broker package uploaded | **DRAFT** | Versioned DOCX + PDF preview |
-| "ship the LOI", "send LOI to [broker]" | **SHIP** | DRAFT mode + Outlook send draft (cc: ggoldberg@oxfordra.net AND egoldberg@oxfordra.net) |
+| "ship the LOI", "send LOI to [broker]" | **SHIP** | DRAFT mode + Outlook draft for review (cc per thread context — no blanket cc of both principals; CC discipline 2026-06-10) |
 | "revise LOI", "update LOI", "tweak LOI" | **REVISE** | Apply edits, increment version, re-run QC |
 | "compare LOI to [prior version]" | **COMPARE** | Side-by-side diff memo |
 
@@ -55,6 +55,48 @@ When ambiguous, default to **DRAFT** and ask one clarifying question only if a m
 
 ## DECISION LOGIC — populate before token replacement
 
+### 0. Seller entity interest type (REQUIRED — 470 McCormick lesson)
+
+The Acquisition Structure section's entity-purchase election must match the seller's entity form. Resolve from the seller legal name suffix:
+
+| Seller suffix | {{ENTITY_INTEREST_TYPE}} |
+|---|---|
+| LLC / L.L.C. / Ltd (limited liability co) | `membership interests` |
+| Inc / Corp / Co (corporation) | `equity interests` (or `shares of capital stock` if counsel directs) |
+| LP / LLP / Limited Partnership | `partnership interests` |
+
+Never ship "membership interests" against a corporate seller.
+
+### 0b. Format selection — STANDARD vs CONDENSED (sophisticated seller)
+
+| Seller profile | Format |
+|---|---|
+| Institutional / corporate / repeat-player (e.g., Casto-grade developer, REIT, bank REO, family office with in-house or standing counsel, major-brokerage-represented portfolio seller) | **CONDENSED** — 11-section, ~3-page letter + Execution Page + Buyer Information page (5 pages total) |
+| Private / individual / estate / unsophisticated seller | **STANDARD** — full condensed-master format (12–16 sections by conditionals) |
+
+Rationale (Gabriel ruling 2026-06-10): a sophisticated counterparty expects the PSA to carry the legal weight; an over-lawyered LOI invites pre-PSA redlining and delay. With unsophisticated sellers the longer form anchors more terms while leverage is highest.
+
+**CONDENSED merge map** (apply after conditional deletion/renumbering):
+1. §1 Price/Deposit/Closing → single block paragraph.
+2. §2 document-delivery bullets → one "property file" sentence (tax bills 3 yrs, plans/permits/COs, existing survey & title, environmental reports + governmental correspondence, service contracts + COIs, utility account info, vacancy confirmation or rent roll).
+3. §4 Property Condition → two sentences: defect-free assumption (the repricing hook — ALWAYS retain) + as-is delivery with systems-operable standard. Bill-of-sale conveyance moves to the PSA list in Process.
+4. §6 Prorations → one paragraph: "customary [County] allocations," long-proration method + BOR rights (OH), Seller pays conveyance fee / owner's policy / half escrow / lien releases; Buyer pays endorsements / deed recording / half escrow / survey.
+5. Exclusivity + Definitive Documentation → merged "Process and Exclusivity" section, ending with the PSA-deferred list: bill of sale; Buyer access & insurance during Study Period; **Deposit due within two (2) business days after PSA execution**; closing/deed mechanics per the Acquisition Structure section.
+6. Miscellaneous → two sentences (confidentiality 2 yrs; OH law/venue/time-of-essence/counterparts-e-signature).
+
+**Survivors — never cut in either format:** Phase I→Phase II auto-extension (environmental tail cap) and the Acquisition Structure designee-vesting/direct-deeding mechanics.
+
+### 0c. Exchange posture — 1031 cooperation DEFAULT vs concealment overlay
+
+**DEFAULT (template standard): RETAIN the mutual IRC §1031 cooperation clause in Miscellaneous.** It is reciprocal, costless, and ORA transacts via exchange routinely. Removing it is the exception, never the rule (Gabriel ruling 2026-06-10).
+
+**CONCEALMENT OVERLAY — apply ONLY when BOTH are true:** (a) seller is sophisticated/institutional (Format = CONDENSED trigger profile), AND (b) ORA has live buyer-side exchange-timeline pressure (drop-and-swap, 45/180-day identification windows). Then:
+- Delete the mutual cooperation sentence from Miscellaneous.
+- Delete any "Buyer intends to complete a §1031 exchange" motive language.
+- Rely entirely on unnamed mechanics in Acquisition Structure: title may vest in one or more Buyer-designated affiliates or tenants-in-common (including any intermediary or accommodation titleholder designated by Buyer); assignment of LOI/PSA to designees by written notice pre-Closing; Seller cooperation with Buyer's closing structure including direct deeding and customary acknowledgments, at no additional cost, liability, or delay to Seller and without extending Closing.
+- **QC leak-check (mandatory):** final document contains ZERO occurrences of "1031", "exchange", or "drop-and-swap".
+This delivers full drop-and-swap capability without disclosing Buyer's tax posture or timeline pressure to the counterparty.
+
 ### 1. Tenancy classification
 
 Determines opening paragraph phrasing and which conditional blocks fire.
@@ -83,6 +125,8 @@ Each conditional in the master template is evaluated independently. **Delete the
 | §9 | Tenant Estoppel | Property has any existing lease at Closing (any tenant) |
 | §10 | Right of First Refusal Waiver | Existing lease contains ROFR, ROFO, or pre-emptive right |
 | §11 | Lease Modification Restriction | Property has any existing lease at Closing |
+
+**Vacant-property preservation covenant (MANDATORY when tenancy = vacant):** append to Continued Operations: "maintain active utility service, heat adequate to prevent freeze damage, and security and life-safety systems in operable condition." Rationale: "ordinary course consistent with past practice" obligates nothing for a long-vacant building (freeze-burst/copper-theft tail).
 
 **Resulting section counts:**
 - Vacant property: 12 sections (1–7, 12–16 from template, renumbered to 1–12)
@@ -132,6 +176,14 @@ When unclear, default to the broader formulation listing all potentially applica
 | Multiple conditions | Combine: `(except for [item 1] and [item 2])` |
 | No known issues | DELETE the `{{KNOWN_CONDITION_CARVEOUT}}` token; leave no replacement |
 
+### 5b. PSA-deferral list — standard contents (Process/Definitive Documentation section)
+
+Always enumerate, so the PSA anchor is set without LOI negotiation: bill-of-sale conveyance at no cost; Buyer access & insurance during Study Period; Deposit due {{EMD_DUE_DAYS_WORDS}} business days after PSA execution; closing/deed mechanics per the Acquisition Structure section; specific-performance remedy for Buyer upon Seller default (all-cash buyer's primary risk is being shopped); title commitment within ten (10) days after PSA execution; Property delivered broom-clean, free of debris and personal property of others. OHIO DEALS add: Seller cooperation with — and agreement not to independently stipulate to — real-property-tax valuation proceedings affecting pre-Closing periods.
+
+### 5c. Ohio BOR risk — statutory thresholds (HB 126, eff. 2022)
+
+School districts may file ORIGINAL Board of Revision complaints only when the recorded sale exceeds auditor value by BOTH 10% AND $500,000 [verify thresholds with counsel]. Below either, the school-board route is barred; only scheduled reappraisal applies. Run the dual test at offer price vs auditor value before asserting BOR risk. (470 McCormick: +$117.8K = over 10%, under $500K → original complaint barred.)
+
 ### 6. Economic term defaults
 
 When the user hasn't specified, apply ORA Standard Commercial Terms from `references/ora-standards.md`. Prefer the deal-size-adjusted values.
@@ -172,6 +224,7 @@ These are the tokens that appear in the master template. The skill is responsibl
 | `{{PURCHASE_PRICE_NUMERIC}}` | `1,400,000.00` | Same |
 | `{{EMD_WORDS}}` | `One Hundred Thousand and 00/100` | User or ORA standard |
 | `{{EMD_NUMERIC}}` | `100,000.00` | Same |
+| `{{EMD_DUE_DAYS_WORDS}}` | `two (2)` | Deposit due window after PSA execution — DEFAULT two (2) for all-cash certainty signaling; SINGLE SOURCE: feeds §1 AND any PSA-deferral mention. Root cause of the 470 McCormick §1-vs-§10 conflict |
 
 ### Time periods (all phrased as `[word] (digit)`)
 | Token | Example |
@@ -195,6 +248,8 @@ These are the tokens that appear in the master template. The skill is responsibl
 | `{{PROPERTY_ACRES}}` | `2.46` |
 | `{{PROPERTY_USE_TYPE}}` | `industrial` or `industrial / warehouse` or `flex` |
 | `{{PROPERTY_TENANCY_PHRASE}}` | `vacant` / `single-tenant` / `multi-tenant` |
+| `{{PROPERTY_ZONING_PHRASE}}` | `zoned M2 Manufacturing` — VERBATIM from the OM/listing (replaces the generic "commercially zoned industrial land"; never invent a designation not in the marketing materials or a verified GIS pull) |
+| `{{ENTITY_INTEREST_TYPE}}` | `membership interests` / `equity interests` / `partnership interests` per Decision Rule 0 |
 | `{{PROPERTY_JURISDICTION_PHRASE}}` | `the City of Gahanna and Franklin County` |
 | `{{KNOWN_CONDITION_CARVEOUT}}` | `(except for the roof, which the parties acknowledge is approximately twenty-one (21) years old and approaching the end of its useful life)` or empty |
 
@@ -275,6 +330,12 @@ Use `python-docx` to:
 | 14 | EXECUTION PAGE present with Buyer signature block populated (Gabriel Goldberg, Authorized Representative) and Seller block populated with `{{SELLER_ENTITY_NAME}}` |
 | 15 | Strike list clean: NO "shall" (excluding "shallow"), NO banned phrases ("I hope this finds you well," "Just following up," "As discussed," "FYI," "Going forward," "At your earliest convenience") |
 | 16 | PDF generated via `soffice` (NOT Microsoft Print to PDF); extractable text confirmed by `pdftotext` round-trip |
+| 17 | PAGINATION: Buyer Information page starts its own page (page_break_before on its heading — never rely on stacked empty paragraphs); Proof-of-funds line sits on the FINAL page lower third; page count = 5 (CONDENSED) or 6–8 (STANDARD). KNOWN TEMPLATE DEFECT: the master template carries ~40 trailing empty paragraphs + stray page-break-before paragraphs that render 7–8 pages — strip empty/PBB paragraph runs during assembly |
+| 18 | Entity-interest language matches seller suffix (Rule 0) — "membership interests" never ships against an Inc/Corp seller |
+| 19 | Zoning phrase matches the OM verbatim (Rule: zoning token) |
+| 20 | If concealment overlay active (Rule 0c): leak-check confirms ZERO occurrences of "1031" / "exchange" / "drop-and-swap" |
+| 21 | DEPOSIT-TIMING CONSISTENCY: all Deposit due-window mentions resolve from {{EMD_DUE_DAYS_WORDS}} and are identical in the final text |
+| 22 | Vacant deals: preservation covenant present; casualty threshold "five percent (5%) of the Purchase Price" survived CONDENSED compression |
 
 If any check fails, fix and re-run. Do not present a failing file.
 
@@ -392,7 +453,10 @@ Full overlay text in `references/state-overlays.md`. Summary of §6 distinguishi
 
 ## VERSIONING
 
+- v1.3 — 2026-06-11, Composio-retirement merge (recovered v1.2 base from 2026-06-10 upload package after cache-mirror clobber). SHIP mode re-pointed to Outlook COM sole send path; CC discipline applied (cc per thread context, no blanket cc of both principals, never ze@); connectors table Outlook row → COM.
 - v1.0 — Initial release, May 2026. Based on 511 Industrial Mile Columbus and 1333 Research Rd Gahanna condensed deliverables.
+- v1.2 — 2026-06-10 PM, hardened vs adversarial review (Gemini/Grok, 470 McCormick). Template: {{EMD_DUE_DAYS_WORDS}} single-source; Phase II trigger = RECs/CRECs/recommendation/Buyer-reasonable-determination; testing restoration carveout (no pre-existing-condition liability); cease-all-marketing in Exclusivity; property file + violations/litigation/loss runs. Skill: vacant preservation covenant; PSA-deferral standard list (specific performance, broom-clean, title-commitment 10 days, OH BOR cooperation); HB 126 dual-threshold rule; QC 21–22. REJECTED on review: IOS/zoning use clauses that telegraph land thesis; unilateral Study extensions; 30-day close default; Phase II at Seller cost; arbitration; additional-insured pre-closing; perjury certifications.
+- v1.1 — 2026-06-10, calibrated on 470 McCormick (Casto). Added: Rule 0 entity-interest type; Rule 0b STANDARD/CONDENSED format selection + merge map; Rule 0c exchange-posture default (mutual 1031 cooperation RETAINED) + concealment overlay w/ leak-check; zoning-phrase token; QC 17–20 (pagination/template-defect strip, entity language, zoning verbatim, leak-check); SHIP re-date rule.
 - Master template asset: `templates/LOI_Master_Template_Condensed.docx`
 - State overlays asset: `references/state-overlays.md`
 - ORA Standards asset: `references/ora-standards.md`
