@@ -1,9 +1,9 @@
 ---
 name: loi-generation
-description: "Oxford Realty Advisors letter-of-intent drafting skill. Use whenever the user mentions: draft LOI, produce LOI, create LOI, generate LOI, build LOI, ship LOI, LOI for a property, letter of intent, offer letter, or non-binding proposal to purchase; when an OM, broker package, or listing PDF is uploaded with intent to make an offer; or when an acquisition-underwriting evaluation advances to an offer. Encodes: STANDARD and CONDENSED (sophisticated-seller) formats, four conditional blocks, seven state overlays (OH/MD/IN/MO/KS/WI/TN) incl. Franklin County long proration and the HB 126 BOR dual-threshold rule, seller entity-interest matching, 1031-cooperation default with concealment overlay and leak-check, vacancy preservation covenant, single-source deposit token, and a 22-point QC Gate. Outputs versioned DOCX and extractable-text PDF on ORA letterhead (301.512.6125, street-address footer, proof-of-funds line on final page). v1.3"
+description: "Oxford Realty Advisors letter-of-intent drafting skill. Use whenever the user mentions: draft LOI, produce LOI, create LOI, generate LOI, build LOI, ship LOI, LOI for a property, letter of intent, offer letter, or non-binding proposal to purchase; when an OM, broker package, or listing PDF is uploaded with intent to make an offer; or when an acquisition-underwriting evaluation advances to an offer. Encodes: STANDARD and CONDENSED (sophisticated-seller) formats, four conditional blocks, seven state overlays (OH/MD/IN/MO/KS/WI/TN) incl. Franklin County long proration and the HB 126 BOR dual-threshold rule, seller entity-interest matching, 1031-cooperation default with concealment overlay and leak-check, vacancy preservation covenant, single-source deposit token, a 22-point QC Gate, and a mandatory deal-folder DEAL-TERMS-REGISTER (off-LOI terms tracked to the PSA). Outputs versioned DOCX and extractable-text PDF on ORA letterhead (301.512.6125, street-address footer, proof-of-funds line on final page). v1.4"
 ---
 
-# LOI Generation — Oxford Realty Advisors (v1.3 — 2026-06-11: v1.2 adversarial-hardened base + Composio retirement merge)
+# LOI Generation — Oxford Realty Advisors (v1.4 — 2026-06-11: + mandatory Deal Terms Register at draft + execution)
 
 You are operating as the lead acquisitions counsel-substitute for Oxford Realty Advisors. This skill produces a complete, broker-ready, buyer-protective letter of intent from an OM, broker package, or upstream `acquisition-underwriting` evaluation. The output is a condensed, plain-English LOI on ORA letterhead — not a contract, not legalese, but every dollar-material protection Gabriel needs at the LOI stage.
 
@@ -346,6 +346,18 @@ If any check fails, fix and re-run. Do not present a failing file.
 4. Present both files to user via `present_files`.
 5. Log to Notion Acquisition Pipeline Tracker (`bcfe4a03`): set deal status to "LOI Out" with link to file, expiration date, and a single-line summary of terms.
 
+### Phase 6b — Deal Terms Register (MANDATORY — at draft AND at execution)
+The register is the deal's tracking point for every material term — especially terms agreed OUTSIDE the LOI (easements, parcel exclusions, verbal agreements, strategy-driven omissions). Side-channel terms exist in NO binding document until the PSA captures them; the register is how they survive the LOI→PSA handoff. (Origin: 2026-06-11, 754 Old State — the deal's linchpin easement lived only in an IC memo and meeting notes, and was absent from counsel's PSA draft.)
+
+1. **At draft time**: create `DEAL-TERMS-REGISTER.md` in the deal folder (status DRAFT). Sections:
+   - **Off-LOI terms** — every term agreed in negotiation but deliberately or accidentally not in the LOI. ASK the user explicitly: "What was agreed with the seller that is NOT in this LOI?" Each item gets: source (memo/notes/call), **Must land in** (PSA / DD / closing docs), **Status** (OPEN/RESOLVED).
+   - **Strategy constraints** — positions to keep OUT of deal documents (e.g., no tenant-retention commitments, confidential rationales). Marked INTERNAL ONLY.
+   - **Tracking items** — facts that must reconcile through DD (SF discrepancies, stale title work, election deadlines that expire at PSA execution).
+2. **At execution** (when the countersigned LOI returns): update the register to EXECUTED status, re-confirm the off-LOI list against the final negotiation record, and date it.
+3. Header must carry: "INTERNAL ONLY — never share with seller, broker, or any counterparty."
+4. Downstream: deal-execution Workflow 2A reads this register at every PSA draft/redline round — every OPEN "Must land in: PSA" item missing from a draft is an automatic CRITICAL. psa-reconciliation validates the executed PSA against it.
+5. Confidential-deal overlay: for hook-protected deals, the register stays in the deal folder / approved staging paths only (rules.md §7a) — never in outputs/ trees bound for external surfaces.
+
 ### Phase 7 — Optional SHIP mode
 If user requested ship:
 1. Draft the email for Gabriel's review. (Composio `OUTLOOK_*` retired 2026-06-11 — connector removed, no fallback. The approved send, if Gabriel green-lights, runs via Outlook COM `C:\Users\Owner\.claude\scheduled-tasks\_shared\send-via-outlook.ps1`, the SOLE send path.)
@@ -453,6 +465,7 @@ Full overlay text in `references/state-overlays.md`. Summary of §6 distinguishi
 
 ## VERSIONING
 
+- v1.4 — 2026-06-11, Deal Terms Register: new mandatory Phase 6b writes DEAL-TERMS-REGISTER.md (off-LOI terms / strategy constraints / tracking items) to the deal folder at draft and execution; consumed by deal-execution Workflow 2A and psa-reconciliation. Origin: 754 Old State easement gap.
 - v1.3 — 2026-06-11, Composio-retirement merge (recovered v1.2 base from 2026-06-10 upload package after cache-mirror clobber). SHIP mode re-pointed to Outlook COM sole send path; CC discipline applied (cc per thread context, no blanket cc of both principals, never ze@); connectors table Outlook row → COM.
 - v1.0 — Initial release, May 2026. Based on 511 Industrial Mile Columbus and 1333 Research Rd Gahanna condensed deliverables.
 - v1.2 — 2026-06-10 PM, hardened vs adversarial review (Gemini/Grok, 470 McCormick). Template: {{EMD_DUE_DAYS_WORDS}} single-source; Phase II trigger = RECs/CRECs/recommendation/Buyer-reasonable-determination; testing restoration carveout (no pre-existing-condition liability); cease-all-marketing in Exclusivity; property file + violations/litigation/loss runs. Skill: vacant preservation covenant; PSA-deferral standard list (specific performance, broom-clean, title-commitment 10 days, OH BOR cooperation); HB 126 dual-threshold rule; QC 21–22. REJECTED on review: IOS/zoning use clauses that telegraph land thesis; unilateral Study extensions; 30-day close default; Phase II at Seller cost; arbitration; additional-insured pre-closing; perjury certifications.
@@ -468,7 +481,7 @@ Full overlay text in `references/state-overlays.md`. Summary of §6 distinguishi
 - **Owner-occupied property where ORA is selling, not buying** — wrong direction; use `deal-execution` skill for sale side
 - **Refinance proposal** — use `debt-management` skill
 - **Off-market lease proposal** (ORA leasing to a third party) — use `re-operations` skill
-- **PSA stage** — handoff to `deal-execution` skill once LOI is executed; this skill stops at LOI delivery
+- **PSA stage** — handoff to `deal-execution` skill once LOI is executed; this skill stops at LOI delivery (sole exception: Phase 6b register update to EXECUTED status when the countersigned LOI returns)
 
 ---
 
@@ -479,7 +492,8 @@ Every successful run of this skill produces:
 2. A PDF preview with extractable text
 3. A presented file pair via `present_files`
 4. A Notion log entry on the Acquisition Pipeline Tracker
-5. Zero "shall" usage, zero banned phrases, full 16-point QC Gate pass
+5. Zero "shall" usage, zero banned phrases, full 22-point QC Gate pass
 6. Phone 301.512.6125 in both top and bottom letterhead
 7. Footer keyed to property street address
 8. "Proof of funds available upon request." centered italic at bottom of final page
+9. `DEAL-TERMS-REGISTER.md` created (or updated) in the deal folder per Phase 6b

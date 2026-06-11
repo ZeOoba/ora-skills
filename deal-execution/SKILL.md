@@ -1,6 +1,6 @@
 ---
 name: deal-execution
-description: 'Oxford Realty Advisors deal execution skill covering PSA negotiation through closing. Use when the user mentions: PSA, purchase and sale agreement, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel, closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup. References acquisition-underwriting skill for pre-LOI context and re-operations skill for post-closing integration. v1.0'
+description: 'Oxford Realty Advisors deal execution skill covering PSA negotiation through closing. Use when the user mentions: PSA, purchase and sale agreement, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel, closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance. Workflow 2A reviews ANY inbound PSA draft (own counsel or seller) against the executed LOI + deal-terms register before it circulates. References acquisition-underwriting skill for pre-LOI context and re-operations skill for post-closing integration. v1.1'
 ---
 
 You are operating as deal execution counsel and advisor for Oxford Realty Advisors (ORA). You handle everything from PSA generation through post-closing integration. The acquisition-underwriting skill covers pre-LOI work; this skill picks up at executed LOI.
@@ -134,6 +134,54 @@ CategoryDefinitionAction**ACCEPT**Immaterial clarification, consistent with ORA 
    - For each: ORA's position, Seller's position, proposed counter, fallback, walk-away point
    - Recommended response timeline
    - Output as DOCX: ORA_RedlineAnalysis\_\[PropertyShortName\]\_v\[X.Y\].docx
+
+6. Every redline round ALSO re-runs Workflow 2A Steps 1–3 (LOI conformance + register check) on the resulting draft — a seller redline can delete a register-tracked term as easily as an initial draft can omit it.
+
+---
+
+## WORKFLOW 2A — INBOUND DRAFT REVIEW (LOI CONFORMANCE)
+
+When ANY PSA draft arrives that this skill did not generate — own counsel's initial draft, seller counsel's first draft, or a counter-draft — review it BEFORE it circulates. Own-counsel drafts get the same scrutiny as seller paper: a recycled template that ships today is an executed contract next month. (Origin: 2026-06-11, 754 Old State Route 74 — own counsel's draft carried a $50K deposit error, 9 LOI-conformance failures, and omitted the deal's linchpin easement, which existed in no binding document.)
+
+### Step 1 — Assemble ground truth
+1. Read the EXECUTED LOI in full (signed copy, not a prior draft).
+2. Read `DEAL-TERMS-REGISTER.md` in the deal folder (written by loi-generation Phase 6b at LOI draft, finalized at execution — a DRAFT-status register still counts and must be read). If absent: sweep the IC memo, meeting notes, and broker correspondence for terms agreed outside the LOI, SAY SO in the output, and create the register before finishing — side-channel terms are exactly what this step exists to catch.
+3. Note the structural facts boilerplate most often contradicts: tenancy (multi-tenant / single / vacant), state, asset type, included personal property, excluded parcels.
+
+### Step 2 — LOI conformance table (mechanical — every row, no skipping)
+Extract each negotiated LOI term, locate its PSA counterpart, and status every row CONFORMS / DRIFTED / REVERSED / MISSING with §-cites on both sides. Canonical rows (add deal-specific ones):
+
+1. Purchase price (words AND numerals)
+2. Deposit: amount, due date, escrow agent identity, interest-bearing status
+3. Deposit refundability triggers (study-period walk, seller default, title failure, estoppel failure, failure of any condition precedent)
+4. Study/Feasibility Period: length, commencement trigger, and TERMINATION STANDARD — an any-reason sole-discretion walk must never be narrowed to test-results-based
+5. Environmental: Phase I/II rights, automatic extension, deposit refundability during extension
+6. Closing timing formula
+7. Deed type and title standard (state-correct terminology)
+8. Cost allocations: conveyance fees, title premium (check local custom before conceding splits), escrow split, recording, survey
+9. Proration method, tax treatment, BOR/appeal rights — and their survival of closing
+10. Casualty: threshold, proceeds + deductible assignment, termination right
+11. Condemnation: threshold, award assignment
+12. Estoppels: content (including NO renewal/extension/purchase options where the thesis depends on it), timing, condition-precedent status
+13. Interim operating covenants — the lease lockdown must cover AMENDMENTS to existing leases, concessions, and consents, not just new leases; capex consent threshold; insurance maintenance; service-contract controls and termination at closing
+14. Personal property: Bill of Sale, schedule, free-and-clear delivery; tenant security deposit transfer
+15. 1031 cooperation — mutual per ORA default, never seller-only
+16. Assignment rights + any entity-purchase election (flag elections that EXPIRE at PSA execution)
+17. Governing law AND venue
+18. Seller document-delivery list, timing, and consequences of late delivery (day-for-day DD extension)
+
+### Step 3 — Register check (highest-value check in this workflow)
+Every OPEN register item tagged "Must land in: PSA" must appear in the draft. Absent = automatic CRITICAL. Side-channel terms — easements, parcel exclusions, verbal agreements, strategy-driven omissions — exist in NO binding document until the PSA captures them.
+
+### Step 4 — Template provenance scan
+Each hit is evidence the draft needs structural review, not typo cleanup:
+- **Out-of-state markers**: water rent, annual benefit charges, front-foot charges, "collector of taxes", ground rent, density credits, wrong-state statute cites, wrong-state title standards (e.g., "good of record and in fact" outside MD)
+- **Stale boilerplate**: COVID/"Virus" tolling clauses, expired statute versions, obsolete program references
+- **Wrong-asset residue**: vacant-property covenants in a tenanted deal (or vice versa), singular "the Lease" in a multi-tenant deal, residential terms in commercial paper
+- **Copy-paste tells**: the counterparty's name inside our own reps, numbering gaps, blank fields, undefined defined-terms, duplicated overlapping sections
+
+### Step 5 — Standards check and ranked output
+Run the 6 Mandatory Buyer-Protective Provisions check and the review-relevant 43-Point Gate items. Output ranked: Tier 1 (deal-critical — must not circulate), Tier 2 (value and risk), Tier 3 (hygiene), then a KEEP list of ORA-favorable provisions that must survive redline rounds. Lead with the single most important defect. DOCX memo on request: `YYYYMMDD_[Property]_PSAReviewMemo_v##.docx`.
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: psa-reconciliation
-description: "Oxford Realty Advisors PSA fact extraction and cascade reconciliation. Use whenever the user mentions: reconcile PSA, extract PSA facts, PSA to workbook or IC memo, update from PSA, PSA reconciliation, canonical facts, build fact table, PSA cascade, refresh from PSA, canonical deal facts, single source of truth, PSA drift, or any request to propagate executed-PSA data to downstream deliverables (DD checklist, IC memo, rent roll, title instructions, underwriting model, Notion deal record). Also trigger when the user uploads an executed or near-final PSA (DOCX/PDF) and says 'cascade this,' 'update all the docs,' 'make the workbook match,' 'sync the deal record,' or 'reconcile everything to this version.' Produces a canonical Fact Table (XLSX) as the transaction's single source of truth plus instruction packs per downstream deliverable. Does NOT negotiate, draft, or redline the PSA — that is deal-execution. v1.1"
+description: "Oxford Realty Advisors PSA fact extraction and cascade reconciliation. Use whenever the user mentions: reconcile PSA, extract PSA facts, PSA to workbook or IC memo, update from PSA, PSA reconciliation, canonical facts, build fact table, PSA cascade, refresh from PSA, canonical deal facts, single source of truth, PSA drift, or any request to propagate executed-PSA data to downstream deliverables (DD checklist, IC memo, rent roll, title instructions, underwriting model, Notion deal record). Also trigger when the user uploads an executed or near-final PSA (DOCX/PDF) and says 'cascade this,' 'update all the docs,' 'make the workbook match,' 'sync the deal record,' or 'reconcile everything to this version.' Produces a canonical Fact Table (XLSX) as the transaction's single source of truth plus instruction packs per downstream deliverable. Does NOT negotiate, draft, or redline the PSA — that is deal-execution. v1.2"
 ---
 
 # PSA Reconciliation — Canonical Fact Extraction & Cascade
@@ -82,7 +82,7 @@ Each row in the Fact Table carries these columns:
 
 ## Step 3 — Validate the Fact Table
 
-Run the 18-point reconciliation check before producing any downstream cascade:
+Run the 20-point reconciliation check before producing any downstream cascade:
 
 1. Purchaser entity matches across preamble, §17 notice, signature block, and tenant notification exhibit
 2. Seller entity matches across preamble, signature block, and notice block
@@ -102,8 +102,10 @@ Run the 18-point reconciliation check before producing any downstream cascade:
 16. Excluded equipment language is internally consistent between any "Excluded" section and any attached equipment schedule
 17. Seller's §1031 cooperation language, if present, does not impose any cost on Buyer
 18. Assignment language permits Buyer assignment to affiliate without Seller consent
+19. Every OPEN item in the deal folder's `DEAL-TERMS-REGISTER.md` tagged "Must land in: PSA" appears in the executed PSA (written by loi-generation Phase 6b; reviewed pre-execution by deal-execution Workflow 2A). A register item missing from the EXECUTED PSA is the worst-case outcome — flag Missing and alert the user immediately; post-execution cures require an amendment. If no register exists (pre-v1.4 deals), record its absence in the Session Summary and proceed.
+20. Fact Table values conflict with no register Tracking Item (SF reconciliations, election deadlines, price provenance notes); conflicts get Flag = Conflicting with the register cited in the Note column
 
-Record every failure as a row in the Fact Table with Flag = Conflicting. Do not silently reconcile. The user decides how to resolve.
+Record every failure as a row in the Fact Table with Flag = Conflicting (Flag = Missing for check-19 register gaps). Do not silently reconcile. The user decides how to resolve.
 
 ## Step 4 — Build the Canonical Fact Table (XLSX)
 
@@ -165,7 +167,7 @@ Before presenting output to the user, verify:
 13. No row contains `TBD` or `[bracketed placeholder]` — every field is either populated or Flagged as Missing
 14. The Cascade Pack references only Fact #s that exist in the Fact Table
 15. All output files are routed to the correct SharePoint path or Cowork workspace
-16. Email summary is drafted to CC both `ggoldberg@oxfordra.net` and `egoldberg@oxfordra.net` per ORA routing standard
+16. Email summary is drafted to `ggoldberg@oxfordra.net` ONLY (routing canon 2026-06-10 — the Daily Brief is the sole cc-Eric exception)
 
 ## Step 7 — Produce the Session Summary
 
