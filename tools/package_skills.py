@@ -10,18 +10,42 @@ RULE: never package skills with Compress-Archive; always use this script.
 Usage: python tools/package_skills.py <outdir> [skill ...]
        (no skill args = all top-level skill dirs containing SKILL.md)
 """
+import re
 import sys
 import zipfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SKIP = {'_archive', 'tools', '.git'}
+MAX_DESC = 1024  # platform limit: importer rejects 'description' > 1024 chars (hit 2026-06-11)
+
+
+def validate_frontmatter(skill: str, src: Path) -> None:
+    text = (src / 'SKILL.md').read_text(encoding='utf-8', errors='replace')
+    m = re.search(r'^---\s*\n(.*?)\n---', text, re.S)
+    if not m:
+        raise SystemExit(f'{skill}: SKILL.md has no YAML frontmatter')
+    fm = m.group(1)
+    nm = re.search(r'^name:\s*(\S+)', fm, re.M)
+    if not nm or nm.group(1).strip("'\"") != skill:
+        raise SystemExit(f"{skill}: frontmatter 'name' missing or != directory name")
+    dm = re.search(r"^description:\s*(.*?)(?=\n[a-zA-Z_-]+:|\Z)", fm, re.S | re.M)
+    if not dm:
+        raise SystemExit(f"{skill}: frontmatter has no 'description'")
+    desc = dm.group(1).strip().strip("'\"")
+    if len(desc) > MAX_DESC:
+        raise SystemExit(
+            f"{skill}: description is {len(desc)} chars — exceeds the {MAX_DESC}-char "
+            f"platform limit; the importer will reject it. Trim it before packaging."
+        )
+    print(f'{skill}: description {len(desc)}/{MAX_DESC} chars OK')
 
 
 def package(skill: str, outdir: Path) -> Path:
     src = REPO / skill
     if not (src / 'SKILL.md').is_file():
         raise SystemExit(f'{skill}: no SKILL.md at {src}')
+    validate_frontmatter(skill, src)
     dest = outdir / f'{skill}.skill'
     with zipfile.ZipFile(dest, 'w', zipfile.ZIP_DEFLATED) as z:
         for p in sorted(src.rglob('*')):
