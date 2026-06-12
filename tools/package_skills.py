@@ -30,6 +30,7 @@ def check_named_counts(skill: str, text: str) -> None:
     HEADER_PAT = re.compile(r'^(#{1,6})\s+.*?\b(\d+)-((?:[Pp]oint|[Ii]tem))\b', re.M)
     CHECKBOX = re.compile(r'^\s*-\s+(?:\\\[|\[)')   # - \[ \] or - [ ] (escaped or plain)
     NUMBERED = re.compile(r'^\s{0,3}\d+\.\s+\S')
+    TABLE_ITEM = re.compile(r'^\s*\|\s*\d+\s*\|')   # numbered table row: | 1 | ... |
     HRULE = re.compile(r'^-{3,}\s*$')
     lines = text.splitlines()
     errors = []
@@ -41,7 +42,7 @@ def check_named_counts(skill: str, text: str) -> None:
         for ln in lines[start + 1:]:
             if stop_hdr.match(ln) or HRULE.match(ln):
                 break
-            if CHECKBOX.match(ln) or NUMBERED.match(ln):
+            if CHECKBOX.match(ln) or NUMBERED.match(ln) or TABLE_ITEM.match(ln):
                 count += 1
         if count == 0:
             continue  # no checklist found under this header; skip silently
