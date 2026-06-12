@@ -1,6 +1,6 @@
 ---
 name: loi-generation
-description: "Oxford Realty Advisors letter-of-intent drafting skill. Use whenever the user mentions: draft LOI, produce LOI, create LOI, generate LOI, build LOI, ship LOI, LOI for a property, letter of intent, offer letter, or non-binding proposal to purchase; when an OM, broker package, or listing PDF is uploaded with intent to make an offer; or when an acquisition-underwriting evaluation advances to an offer. Encodes: STANDARD and CONDENSED (sophisticated-seller) formats, four conditional blocks, seven state overlays (OH/MD/IN/MO/KS/WI/TN) incl. Franklin County long proration and the HB 126 BOR dual-threshold rule, seller entity-interest matching, 1031-cooperation default with concealment overlay and leak-check, vacancy preservation covenant, single-source deposit token, a 22-point QC Gate, and a mandatory deal-folder DEAL-TERMS-REGISTER (off-LOI terms tracked to the PSA). Outputs versioned DOCX and extractable-text PDF on ORA letterhead (301.512.6125, street-address footer, proof-of-funds line on final page). v1.4"
+description: "Oxford Realty Advisors letter-of-intent drafting skill. Use whenever the user mentions: draft LOI, produce LOI, create LOI, generate LOI, build LOI, ship LOI, LOI for a property, letter of intent, offer letter, or non-binding proposal to purchase; when an OM, broker package, or listing PDF is uploaded with intent to make an offer; or when an acquisition-underwriting evaluation advances to an offer. Encodes: STANDARD and CONDENSED (sophisticated-seller) formats, four conditional blocks, seven state overlays (OH/MD/IN/MO/KS/WI/TN) incl. Franklin County long proration and the HB 126 BOR dual-threshold rule, seller entity-interest matching, 1031-cooperation default with concealment overlay and leak-check, vacancy preservation covenant, single-source deposit token, a 16-point QC Gate, and a mandatory deal-folder DEAL-TERMS-REGISTER (off-LOI terms tracked to the PSA). Outputs versioned DOCX and extractable-text PDF on ORA letterhead (301.512.6125, street-address footer, proof-of-funds line on final page). v1.4"
 ---
 
 # LOI Generation — Oxford Realty Advisors (v1.4 — 2026-06-11: + mandatory Deal Terms Register at draft + execution)
@@ -492,7 +492,7 @@ Every successful run of this skill produces:
 2. A PDF preview with extractable text
 3. A presented file pair via `present_files`
 4. A Notion log entry on the Acquisition Pipeline Tracker
-5. Zero "shall" usage, zero banned phrases, full 22-point QC Gate pass
+5. Zero "shall" usage, zero banned phrases, full 16-point QC Gate pass
 6. Phone 301.512.6125 in both top and bottom letterhead
 7. Footer keyed to property street address
 8. "Proof of funds available upon request." centered italic at bottom of final page
