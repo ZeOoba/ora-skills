@@ -75,7 +75,14 @@ def validate_frontmatter(skill: str, src: Path) -> None:
             f"platform limit; the importer will reject it. Trim it before packaging."
         )
     print(f'{skill}: description {len(desc)}/{MAX_DESC} chars OK')
-    check_named_counts(skill, text)
+    # Scan EVERY Markdown file under the skill dir, not just SKILL.md, so named-count
+    # headers in references/ are validated too (gap found 2026-06-11:
+    # loi-generation/references/qc-gate.md was silently unscanned). Label each finding
+    # with the relative path so the source file is obvious.
+    for md in sorted(src.rglob('*.md')):
+        rel = md.relative_to(src).as_posix()
+        md_text = text if rel == 'SKILL.md' else md.read_text(encoding='utf-8', errors='replace')
+        check_named_counts(f'{skill}/{rel}', md_text)
 
 
 def package(skill: str, outdir: Path) -> Path:
