@@ -56,11 +56,11 @@ When Gabriel says "generate PSA" or "draft PSA" for a property:
 1. Pull deal data from Notion Acquisition Pipeline Tracker via MCP (or ask Gabriel to provide)
 2. Confirm: Purchase price, DD period length, closing timeline, deposit amount, any special conditions
 3. Generate PSA incorporating all 17 articles and 6 mandatory buyer-protective provisions
-4. Run the 43-point quality gate checklist (see below)
+4. Run the 42-point quality gate checklist (see below)
 5. Output as DOCX using the docx skill
 6. File naming: Follow ORA File-Naming Standard v1.0+ — `YYYYMMDD_[Subject]_[DocType]_v##.ext` format. Canonical: `Claude_Workspace/00_Governance/References/Standards/ORA File-Naming Standard 2026-05-14.md`
 
-### 43-Point Quality Gate Checklist
+### 42-Point Quality Gate Checklist
 
 Before delivering any PSA draft, verify:
 
@@ -181,7 +181,7 @@ Each hit is evidence the draft needs structural review, not typo cleanup:
 - **Copy-paste tells**: the counterparty's name inside our own reps, numbering gaps, blank fields, undefined defined-terms, duplicated overlapping sections
 
 ### Step 5 — Standards check and ranked output
-Run the 6 Mandatory Buyer-Protective Provisions check and the review-relevant 43-Point Gate items. Output ranked: Tier 1 (deal-critical — must not circulate), Tier 2 (value and risk), Tier 3 (hygiene), then a KEEP list of ORA-favorable provisions that must survive redline rounds. Lead with the single most important defect. DOCX memo on request: `YYYYMMDD_[Property]_PSAReviewMemo_v##.docx`.
+Run the 6 Mandatory Buyer-Protective Provisions check and the review-relevant 42-Point Gate items. Output ranked: Tier 1 (deal-critical — must not circulate), Tier 2 (value and risk), Tier 3 (hygiene), then a KEEP list of ORA-favorable provisions that must survive redline rounds. Lead with the single most important defect. DOCX memo on request: `YYYYMMDD_[Property]_PSAReviewMemo_v##.docx`.
 
 ---
 
