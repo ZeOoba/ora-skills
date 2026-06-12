@@ -20,6 +20,42 @@ SKIP = {'_archive', 'tools', '.git'}
 MAX_DESC = 1024  # platform limit: importer rejects 'description' > 1024 chars (hit 2026-06-11)
 
 
+def check_named_counts(skill: str, text: str) -> None:
+    """Fail if any 'N-Point' / 'N-item' section header names the wrong item count.
+
+    Only fires on Markdown headers (lines starting with #) that contain the
+    pattern — inline prose references are ignored. Catches name-vs-count drift
+    like the 43-vs-42 discrepancy found 2026-06-11.
+    """
+    HEADER_PAT = re.compile(r'^(#{1,6})\s+.*?\b(\d+)-((?:[Pp]oint|[Ii]tem))\b', re.M)
+    CHECKBOX = re.compile(r'^\s*-\s+(?:\\\[|\[)')   # - \[ \] or - [ ] (escaped or plain)
+    NUMBERED = re.compile(r'^\s{0,3}\d+\.\s+\S')
+    HRULE = re.compile(r'^-{3,}\s*$')
+    lines = text.splitlines()
+    errors = []
+    for m in HEADER_PAT.finditer(text):
+        level, claimed, suffix = len(m.group(1)), int(m.group(2)), m.group(3)
+        start = text[:m.start()].count('\n')
+        stop_hdr = re.compile(r'^#{1,' + str(level) + r'}\s')
+        count = 0
+        for ln in lines[start + 1:]:
+            if stop_hdr.match(ln) or HRULE.match(ln):
+                break
+            if CHECKBOX.match(ln) or NUMBERED.match(ln):
+                count += 1
+        if count == 0:
+            continue  # no checklist found under this header; skip silently
+        if count != claimed:
+            errors.append(
+                f'  line {start + 1}: "{claimed}-{suffix}" claims {claimed}, '
+                f'found {count} items'
+            )
+        else:
+            print(f'{skill}: {claimed}-{suffix} ({count} items) OK')
+    if errors:
+        raise SystemExit(f'{skill}: named-count mismatch:\n' + '\n'.join(errors))
+
+
 def validate_frontmatter(skill: str, src: Path) -> None:
     text = (src / 'SKILL.md').read_text(encoding='utf-8', errors='replace')
     m = re.search(r'^---\s*\n(.*?)\n---', text, re.S)
@@ -39,6 +75,7 @@ def validate_frontmatter(skill: str, src: Path) -> None:
             f"platform limit; the importer will reject it. Trim it before packaging."
         )
     print(f'{skill}: description {len(desc)}/{MAX_DESC} chars OK')
+    check_named_counts(skill, text)
 
 
 def package(skill: str, outdir: Path) -> Path:
