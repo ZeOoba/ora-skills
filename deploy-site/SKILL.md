@@ -10,7 +10,7 @@ allowed-tools: Read Glob Grep Edit Write Bash WebFetch mcp__Claude_Preview__prev
 Build and deploy the Oxford RA website.
 
 1. Ensure Node.js is on PATH: `export PATH="/c/Program Files/nodejs:$PATH"`
-2. Navigate to the oxford-site directory in the Cowork OS folder
+2. Navigate to the oxford-site directory at `OneDrive\Claude_Workspace\01_Cowork_OS\Cowork_OS_Workspace\oxford-site\`
 3. Run `node build-and-deploy.js --local` to build
 4. Verify the build output in the deploy/ directory
 5. Run `node build-and-deploy.js --deploy` to push to Netlify (site ID: 95ac0a0f-a84d-4400-b919-b8d7a8526646)
