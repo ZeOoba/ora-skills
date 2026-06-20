@@ -1,11 +1,11 @@
 ---
 name: acquisition-underwriting
-description: Oxford Realty Advisors acquisition underwriting and deal evaluation skill — Buy Box & Scorecard v1.1 (Rulings 1–5 + Amendments A–G ratified 2026-06-09). Trigger on: underwriting, deal analysis, acquisition, screen this deal, LOI, PSA, due diligence, cap rate, pro forma, IRR model, yield on cost, replacement cost, broker package, offering memorandum, OM, buy box, scorecard, expected score, P(exec), evaluating a purchase, Crexi, LoopNet listing. Also trigger on: industrial/flex market research (Columbus, Cincinnati, Kansas City, Indianapolis, Maryland, Madison, Grand Rapids, Richmond, Des Moines), broker package or OM upload. Modes: SCREEN · SNAPSHOT · UNDERWRITE · COMPS · FULL. Computes pro-forma reassessed property tax and total carrying cost ($/SF) per a 10-state reassessment matrix; trigger also on: carrying cost, operating expense, OpEx per SF, property tax reassessment, reassessed taxes, transfer tax, controlling-interest, abatement, PILOT, drop-and-swap. v3.2
+description: Oxford Realty Advisors acquisition underwriting and deal evaluation skill — Buy Box & Scorecard v1.1 (Rulings 1–5 + Amendments A–G ratified 2026-06-09). Trigger on: underwriting, deal analysis, acquisition, screen this deal, LOI, PSA, due diligence, cap rate, pro forma, IRR model, yield on cost, replacement cost, broker package, offering memorandum, OM, buy box, scorecard, expected score, P(exec), evaluating a purchase, Crexi, LoopNet listing. Also trigger on: industrial/flex market research (Columbus, Cincinnati, Kansas City, Indianapolis, Maryland, Madison, Grand Rapids, Richmond, Des Moines), broker package or OM upload. Modes: SCREEN · SNAPSHOT · UNDERWRITE · COMPS · FULL. Computes pro-forma reassessed property tax and total carrying cost ($/SF) per a 10-state reassessment matrix; trigger also on: carrying cost, operating expense, OpEx per SF, property tax reassessment, reassessed taxes, transfer tax, controlling-interest, abatement, PILOT, drop-and-swap.
 ---
 
-# Acquisition Underwriting — Oxford Realty Advisors (v3.2 — Buy Box & Scorecard v1.1)
+# Acquisition Underwriting — Oxford Realty Advisors (v3.3 — Buy Box & Scorecard v1.1)
 
-You are the lead acquisitions analyst for Oxford Realty Advisors (ORA). This skill is the canonical entry point for every acquisition-side task. The Buy Box & Scorecard below is THE ONLY screening/scoring system — it supersedes the Quick Score (1–10), the scan Fit Score, the "18-criteria scorecard," and standalone portfolio-fit %. v3.2 encodes Calibration Rulings 1–5 and Amendments A–G (all ratified 2026-06-09), plus the carrying-cost/reassessed-tax metric, MI Prop A pre-mortem line, condo-structure DD sub-check, and owner-user-vacating named signal (all ratified 2026-06-20); scorecard weights are unchanged from v1.1.
+You are the lead acquisitions analyst for Oxford Realty Advisors (ORA). This skill is the canonical entry point for every acquisition-side task. The Buy Box & Scorecard below is THE ONLY screening/scoring system — it supersedes the Quick Score (1–10), the scan Fit Score, the "18-criteria scorecard," and standalone portfolio-fit %. v3.2 encodes Calibration Rulings 1–5 and Amendments A–G (all ratified 2026-06-09), plus the carrying-cost/reassessed-tax metric, MI Prop A pre-mortem line, condo-structure DD sub-check, and owner-user-vacating named signal (all ratified 2026-06-20); scorecard weights are unchanged from v1.1; v3.3 hardens all 12 structural gaps (RCT v02 table embedded, debt terms defined, IC memo 12-section structure, market-specific exit caps, bear-mode source resolved, dangling task refs reconciled, Edge/SNAPSHOT/COMPS completeness; no scorecard weights or governors changed).
 
 ## BODY TRIGGERS (supplemental routing terms — moved from frontmatter to preserve 1024-char budget)
 
@@ -41,12 +41,12 @@ A gate breach = prominent flag + screen/score as exception anyway; verdict label
 
 ## STAGE 1 — FLOORS (flags, not kills — Ruling 5; computed per v1.1-C)
 
-- **Basis floor:** all-in basis (price + 2% closing + CapEx + lease-up carry) discount to replacement, where replacement = **LOW end of the RCT band** (RCT v02+: every market is a point ± confidence band; basis points and floors compute at the low end). Floor = **linear vintage ramp: 30% at/below 1995 → 25% at/above 2005** (−0.5%/yr; replaces the 25/30 cliff). Cite RCT version on every screen. Apply the documented **adder schedule** (heavy office build-out, climate control, cranes, ESFR, excess site work) instead of ad-hoc overrides.
+- **Basis floor:** all-in basis (price + 2% closing + CapEx + lease-up carry) discount to replacement, where replacement = **LOW end of the RCT band** (RCT v02: every market is a point ± confidence band — see **Replacement Cost Table (RCT v02)** under UNDERWRITING CONVENTIONS; basis points and floors compute at the LOW end of that market's band). Floor = **linear vintage ramp: 30% at/below 1995 → 25% at/above 2005** (−0.5%/yr; replaces the 25/30 cliff). Cite RCT version on every screen. Apply the documented **adder schedule** (heavy office build-out, climate control, cranes, ESFR, excess site work) instead of ad-hoc overrides.
 - **DENOMINATOR-SENSITIVE flag (v1.1-C-iii):** any deal within ±5 discount-pts of its floor (at point or low end) OR whose floor verdict flips between point and low end → local replacement verification (insurance comp or contractor quote) REQUIRED pre-LOI.
 - **Yield floor:** stabilized YoC >8% on full all-in (prefer 10%+). **Ruling 1: at the walk price, score Yield as-is — 0 pts when the YoC floor binds; no midpoint adjustment.**
 - **IRR floor:** levered ≥15% (5-yr) / ≥12% (10-yr); interpolate; risk-adjust up.
 - **Carrying-cost floor (FLAG, not kill — per Ruling 5):** stabilized total OpEx ≤ **$4.00/SF/yr**, computed on the **pro-forma reassessed property tax at ORA's purchase price** (never the seller's in-place bill) per the State Reassessment Matrix below. Above $4.00/SF → label **CARRY-FLAGGED**; state which component drives the overage and how recovery structure (NNN vs. gross/MTM, vacancy carry) absorbs it. Reassessed tax flows through NOI → the Yield and IRR floors automatically (no double-count).
-- **Portfolios:** every building individually clears floors at allocated price; score the blend.
+- **Portfolios:** every building individually clears floors at its **allocated price**, then score the blend. **Allocation method (in priority order):** (1) if credible per-building NOI exists → allocate by **stabilized NOI share**; (2) if NOI is missing or unreliable → allocate by **replacement-cost-weighted GBA** (building SF × RCT v02 POINT for that market ÷ Σ across all buildings); (3) fall back to **raw GBA share** (building SF ÷ portfolio SF) only when construction quality is unknown. State which method was used. A vacant building in an otherwise-leased portfolio is always allocated by method (2) — method (1) would assign it near-zero basis, which is incorrect.
 - **Unpriced/no-NOI:** solve walk price to the 8% YoC floor; gap-to-ask = negotiability flag, not a score.
 - **Mezzanine (Ruling 2):** partial SF credit ONLY if conditioned + code-compliant egress + leasable; credit % = expected mezz rent ÷ ground-floor rent, **capped at 75%**; otherwise 0% + removal CapEx if dysfunctional.
 
@@ -58,7 +58,7 @@ A gate breach = prominent flag + screen/score as exception anyway; verdict label
 
 | # | Category | Pts | Mechanics |
 |---|---|---|---|
-| 1 | Basis | 25 | Linear: 0 at the vintage-ramp floor (at LOW-end RCT) → 25 at ≥55% discount |
+| 1 | Basis | 25 | Linear: 0 at the vintage-ramp floor (at LOW-end of **RCT v02** per-market band — see Replacement Cost Table under UNDERWRITING CONVENTIONS) → 25 at ≥55% discount |
 | 2 | Yield | 20 | Stabilized YoC spread only: 8.0% = 0 → ≥11.0% = 20, linear (IRR stays a floor, not scored) |
 | 3 | Product & Physical | 20 | Clear/loading adequacy 8 + product fit 5 + construction & condition 4 + site function 3 |
 | 4 | Market & Location | 12 | Cluster adjacency first: ORA-owned submarket max → established → entry → 30-min satellite (≤6); fundamentals adjust ± |
@@ -80,11 +80,11 @@ Signals also set offer aggressiveness, timing, and P(exec).
 
 ## STAGE 2.1 — TENANCY BEAR-MODE (v1.1-D; check on EVERY screen)
 
-When market-monitor shows the submarket with **vacancy up >100bps YoY OR two consecutive quarters of negative absorption**: (i) halve Tenancy upside points; (ii) add 12 months of downtime carry to lease-up assumptions (flows into all-in basis). **Report the trigger state (ON/OFF + source + date) on every screen.** Current states live in the ranking workbook's Bear-Mode Monitor tab.
+When market-monitor shows the submarket with **vacancy up >100bps YoY OR two consecutive quarters of negative absorption**: (i) halve Tenancy upside points; (ii) add 12 months of downtime carry to lease-up assumptions (flows into all-in basis). **Report the trigger state (ON/OFF + source + date) on every screen.** **Authoritative source = the `market-monitor` skill** (live vacancy/absorption from CoStar/CBRE/JLL/Colliers quarterly prints). The ranking workbook's Bear-Mode Monitor tab is a **convenience cache only** — if stale (>30 days) or absent, query `market-monitor` directly and cite the live print. On any conflict the live `market-monitor` print wins. **If BOTH sources are unavailable:** record bear-mode state as UNKNOWN, proceed with bear-mode OFF for scoring, but add a flag note that Tenancy upside pts may be overstated if the submarket is distressed — cap the screen at T2 WATCH pending resolution.
 
 ## STAGE 2.2 — P(EXEC) + EXPECTED SCORE (v1.1-B; pipeline sort)
 
-Assign P(execution) from already-collected seller signals. Starting bands (PROVISIONAL until the v1.1-E feedback loop accrues data):
+Assign P(execution) from already-collected seller signals. These are the **operative default bands** — apply on every screen. They remain **calibration-pending** (v1.1-E feedback loop refines them at the annual December back-test); do NOT hand-tune per deal beyond the within-band rule below. **Within-band placement:** start at the band MIDPOINT; +5 pts per additional independent motivation signal (estate, price cut, DOM>120, failed contract, owner-user-vacating, broker churn); −5 pts per friction (competitive process, financing contingency expected, widening gap). Clamp to band edges. A band change requires a structural change (price cut landing, going under LOI) — signals alone cannot push a deal into the next band.
 
 | Seller situation | P(exec) |
 |---|---|
@@ -107,6 +107,8 @@ Assign P(execution) from already-collected seller signals. Starting bands (PROVI
 
 ## STAGE 3 — EDGE SCAN (mandatory dedicated section in every screen and IC memo)
 
+**Minimum coverage — state each category as Present / Absent / Unknown; never silently omit:** every screen must address all four categories (Land & Entitlement · Income · Seller-Side · Infrastructure). **Screen floor = ≥3 named, deal-specific edge items total** OR an explicit "none identified — checked X, Y, Z" for each empty category. **IC memo floor = ≥1 named item per category (4 minimum)** — the higher bar applies because the IC memo is the decision document. Deal-type minimums: **vacant / owner-user-vacating** → MUST address lease-up income edge + IOS/yard conversion + tax-reassessment timing; **multi-tenant occupied** → MUST address gross→NNN conversion + tax-appeal delta (auditor vs price) + below-market renewal capture; **land-heavy / quasi-IOS** → MUST address excess-land/replat + assemblage-adjacent-to-ORA + infrastructure (power/yard/rail). A screen listing fewer than 3 items without per-category explicit negatives is INCOMPLETE.
+
 - **Land & entitlement:** excess/adjacent land, replat/variance paths, by-right zoning upside, expansion capacity, FAR headroom, assemblage — especially adjacent-to-ORA.
 - **Income:** billboard/cell-tower/solar ground lease, rail spur, IOS conversion, gross→NNN, tax-appeal delta (auditor vs price), TIF/abatement/OZ. Tax & carrying-cost edge: reassessment-cycle timing (buy early in cycle to defer step-up — strongest in TN's 4-yr freeze + OH/MD/MO multi-year cycles); abatement/PILOT eligibility (KS IRB/EDX up to 100%/10yr strongest in footprint); OH HB 126 school-board-chase protection; MO/KS non-disclosure (entity deal keeps price off-record); cap headroom (IN 3% GAV, IA 90% rollback).
 - **Seller-side:** assumable below-market debt, seller-financing appetite, $0-basis/1031 dynamics, estate timelines, broker mispricing vs auditor/comps.
@@ -118,17 +120,17 @@ Assign P(execution) from already-collected seller signals. Starting bands (PROVI
 
 ## EXCEPTION REGISTER + TRIPWIRE (v1.1-F)
 
-Every gate/floor exception MUST carry a one-sentence compensating factor, logged to the ranking workbook's Exception Register tab AND the Notion row ("Exception Compensating Factor" / "Exception Outcome" fields). Quarterly audit via the `ora-exception-audit` scheduled task. **HARD TRIPWIRE: exceptions >⅓ of new commitments over the trailing two quarters → mandatory gate-recalibration session with Gabriel.**
+Every gate/floor exception MUST carry a one-sentence compensating factor, logged to the ranking workbook's Exception Register tab AND the Notion row ("Exception Compensating Factor" / "Exception Outcome" fields). **Exception audit is performed at the annual December back-test** — a dedicated `ora-exception-audit` scheduled task is NOT currently registered; the Exception Register tab is the durable record between sessions. To add a standing quarterly cadence, use the `register-scheduled-task` skill. **HARD TRIPWIRE: exceptions >⅓ of new commitments over the trailing two quarters → mandatory gate-recalibration session with Gabriel.**
 
 ## OUTCOME FEEDBACK (v1.1-E)
 
 - Score snapshots at screen/LOI/PSA are IMMUTABLE in Notion — re-scores get new fields/rows, never overwrite history.
 - **Annual December back-test** (inside the annual-cycle skill rhythm): realized YoC, basis vs RCT, leasing pace vs score components at acquisition. **Weights move ONLY at that session.**
-- **Passed-deal tracking** via `ora-passed-deal-tracker` (monthly, 15th): when a passed/flagged deal trades, log clearing price vs ORA walk — calibrates RCT and the P(exec) bands without closing anything.
+- **Passed-deal tracking:** when a passed/flagged deal trades, log clearing price vs ORA walk to the Notion deal record ("Clearing Price" / "ORA Walk" fields) — calibrates RCT v02 and P(exec) bands. **No `ora-passed-deal-tracker` task is registered today;** the live `ora-deal-sourcing-scan` (weekly) already flags repeat-listed / price-cut properties and is the effective channel for catching a re-traded passed deal. Reconcile clearing prices at the annual December back-test. To add a dedicated monthly tracker, use `register-scheduled-task`.
 
 ## UNDERWRITING CONVENTIONS (all modes)
 
-- Exit cap 7.75% default, market-adjusted. Escalations 3% minimum. Structural vacancy 5%. Mgmt 4% EGI. Reserves $0.15/SF. Closing 2% of price.
+- **Exit cap (market-specific; reviewed 2026-06-20 — re-confirm at annual December back-test):** Columbus/Cincinnati/Indianapolis **7.50%** · Kansas City **7.75%** · Madison **7.25%** · Maryland/DC **7.00%** · Grand Rapids **8.00%** · Richmond/Des Moines **7.75%** · entry clusters not yet listed: use the nearest established peer **+25–50 bps** until deal-validated. These figures are the exit caps (already reflect the exit-vs-going-in spread); the "+25 bps" rule applies only when deriving an exit cap from a going-in not in this table. Default **7.75%** when no market match; flag if used. Escalations 3% minimum. Structural vacancy 5%. Mgmt 4% EGI. Reserves $0.15/SF. Closing 2% of price.
 - **Mgmt fee recoverable in NNN** — standing assumption; gross/MTM leases auto-disable recovery.
 - **Cost segregation + 100% bonus (standing):** 15% of building basis (price − land + capitalized CapEx) → ≤15-yr life, 100% bonus Yr1 (OBBBA, PIS after 1/19/2025). Every UNDERWRITE and IC memo carries after-tax returns alongside pre-tax (two IRR scenarios: generational hold/1031/step-up at death and 10-yr taxable sale). Tax never overrides the pre-tax Buy Box floors.
 - **Property tax = pro-forma reassessed at purchase price** per the State Reassessment Matrix — never trend the seller's in-place bill. MI: underwrite off SEV (uncapped Taxable Value = ~50% of market the year after transfer; a >50% entity-interest transfer also uncaps — MCL 211.27a(6)(h)); ignore the seller's capped TV. Cyclical states (OH/MD/IN/WI/MO/KS/TN/VA/IA): tax chases market on the assessment cycle regardless of title — an entity (LLC-interest) purchase saves only transfer tax + keeps price off the deed record (slows sales-chasing) and is generally a BAD trade (carryover basis forfeits cost-seg/100% bonus; assumes entity liabilities). "Drop-and-swap" is a §1031 income-tax technique — NOT a property-tax tool. Carrying-cost target ≤ $4.00/SF.
@@ -151,19 +153,60 @@ Abatement/PILOT levers (Edge scan; abate improvements, not basis): KS IRB/EDX (s
 
 **MI DEALS — mandatory Prop A pre-mortem line:** [MI deals only] Proposal A taxable-value UNCAP auto-flag: model go-forward tax off the year-after SEV (~50% of market), not the seller's capped Taxable Value. Carry the uncapped-vs-capped DELTA explicitly into NNN occupancy cost and lease-up downtime — it raises tenant occupancy cost and drags absorption even though NNN passes it through. Note the >50% controlling-interest trigger (MCL 211.27a(6)(h)) + ~0.86% deed transfer tax. Validation: 2196 REDACTED-119 — tax ~doubled ($33K→$68K/yr).
 
-- All-cash bid + refi post-close (65% LTV). 30-day study + 15-day close.
+- **All-cash bid + refi post-close (65% LTV).** 30-day study + 15-day close. **Refi debt assumptions (2026 defaults; re-confirm at annual December back-test):** fixed rate **7.00%** (band 6.75–7.25% for DSCR/agency-style industrial; +25 bps for sub-$2M or single-tenant, −25 bps for stabilized multi-tenant ≥1.40x DSCR) · **25-yr amortization** · **5-yr term** base case (model **10-yr** as second Returns scenario) · interest-only 0 months base (1 yr IO only if lender-quoted) · **1.0% financing cost** on loan amount · refi sized to the LESSER of 65% LTV (stabilized value at exit cap) **and 1.25x DSCR** (the governor — never exceed). Report the binding constraint explicitly. **NOTE: the IRR floor (levered ≥15% / ≥12%, Stage 1) is the ONE floor computed with debt layered in; the Yield and Basis floors are unlevered. Do not apply debt assumptions to the Yield or Basis floor tests.**
 - Zoning letter from municipality pre-LOI. Gahanna IM: front yard barred from parking/outdoor storage/ground solar.
 - Renewal economics: probability-weighted MTM, 50% capture to market, no LC, minimal TI.
 - NEVER fabricate figures — extract from source documents and reconcile (QC Gate); pour extracted values into a facts file; QC independently re-derives headline figures from the live source; auditor GIS as independent cross-check; scanned OMs get visual extraction + parcel-data verification.
 - EVERY IC memo includes a pre-mortem (deal-level: assume failure, rank reasons by probability-weighted damage); ranking workbooks carry the System Pre-Mortem tab.
 
+### Replacement Cost Table (RCT v02 — per-market shallow-bay industrial $/SF)
+
+**Version: RCT v02 · Basis: 2026 RSMeans City Cost Index–scaled all-in replacement for Class B/C shallow-bay / flex industrial (hard + soft + developer profit + financing; land EXCLUDED — land added separately in the basis test, set to $0 until any SFHA/FEMA determination clears per Ruling 4). LOW figures are the production parcel-screen constants from the `parcel-data-recovery` skill (RSMeans-CCI-derived); POINT/HIGH are derived ±~10% band for build-quality and site-work variance (provisional pending per-market deal validation). Cite "RCT v02" on every screen. Basis floor and Basis score divide by the LOW end (Stage 1).**
+
+| Market | LOW $/SF | POINT $/SF | HIGH $/SF |
+|---|---|---|---|
+| Columbus OH | 124.86 | 137.50 | 150.00 |
+| Cincinnati OH | 121.61 | 134.00 | 146.50 |
+| Kansas City MO/KS | 117.80 | 130.00 | 142.00 |
+| Indianapolis IN | 118.50 [est] | 130.50 | 143.00 |
+| Madison WI | 124.27 | 137.00 | 149.50 |
+| Maryland / Baltimore–DC | 150.45 | 165.00 | 180.00 |
+| Grand Rapids MI | 109.15 | 120.00 | 131.50 |
+| Richmond VA | 119.56 | 131.50 | 144.00 |
+| Des Moines IA | 117.80 [est] | 130.00 | 142.00 |
+
+*Indianapolis and Des Moines seeded from the KC cohort (RSMeans CCI Indy/DSM ≈ KC) pending deal-level validation. Indianapolis **always** triggers the DENOMINATOR-SENSITIVE flag — a local insurance comp or contractor quote is REQUIRED pre-LOI on every Indianapolis deal regardless of proximity to floor. All figures re-validated at the annual December RCT back-test.*
+
+**Adder schedule (apply to the POINT, re-derive LOW/HIGH ±10%; document each on screen):** heavy office build-out (>30% finish) **+$15/SF** · climate-controlled / conditioned warehouse **+$12/SF** · cranes / crane rails **+$18/SF** · ESFR sprinkler upgrade **+$4/SF** · excess site work (heavy yard, deep utilities, detention) **+$8/SF**. Apply only when the subject genuinely carries the feature.
+
+**Vintage-ramp note:** the linear floor ramp in Stage 1 (30% discount floor at ≤1995 → 25% at ≥2005) is the authoritative hand-screen formula; the `parcel-data-recovery` skill uses a simplified cliff (25%/30%) for batch processing only. On any conflict, the Stage 1 linear ramp governs IC memos and screens.
+
+**Reconciliation:** the platform engine (`config/replacement-cost.v1.json`) carries a ratified firm-wide flat $125/$137.50/$150 pending per-market refinement. This RCT v02 table is the skill-side per-market screening band; use it for hand screens and IC memos. When the engine score and a hand screen diverge on Basis, state both and cite the version each used.
+
 ## MODES
 
-SCREEN: intake rules (Stage -1) → gates → floors (low-end RCT + vintage ramp; walk-price if unpriced) → score (Quality / Economics / Combined) → bear-mode state → P(exec) + Expected Score → verdict; log to Notion Deal Sourcing Log (collection://9a6ae219-85a3-4621-899c-c757fd062f8b) including Quality Score, Economics Score, P(exec) %, Expected Score fields. End with a QUESTIONS FOR GABRIEL block for data gaps (broker email LAST resort, at his election).
-SNAPSHOT: NOI → cap/value + 3×3 sensitivity + back-of-envelope IRR at walk-price.
+SCREEN: intake rules (Stage -1) → gates → floors (low-end RCT + vintage ramp; walk-price if unpriced) → score (Quality / Economics / Combined) → bear-mode state → P(exec) + Expected Score → verdict; **Before logging: check BOTH the Deal Sourcing Log AND the Acquisition Pipeline Tracker for an existing record of this parcel/address — update in-place or supersede a stale entry; never create a duplicate.** Then log to the Notion Deal Sourcing Log (collection://9a6ae219-85a3-4621-899c-c757fd062f8b) including Quality Score, Economics Score, P(exec) %, Expected Score fields. End with a QUESTIONS FOR GABRIEL block for data gaps (broker email LAST resort, at his election).
+SNAPSHOT: verify the NOI denominator against a source document (Stage -1 Rule 2 applies) → NOI → cap/value + 3×3 sensitivity + back-of-envelope IRR at walk-price → report bear-mode state (ON/OFF + source + date, per Stage 2.1) → **if this is a real candidate, dedupe-check then log to the Deal Sourcing Log (per SCREEN dedup rule)**. End with a **QUESTIONS FOR GABRIEL block** for any data gap (unverified NOI, missing year-built, unknown reassessed tax).
 UNDERWRITE: 5-tab XLSX (Inputs w/ sources, Rent Roll, 10-yr Pro Forma, Returns, Sensitivity incl. Bear/Base/Bull); zero formula errors; file naming YYYYMMDD_[Address]_Model_v##.xlsx.
 COMPS: rent + sale comp grids per rent-comp skill; replacement-cost check cites RCT version + band.
-FULL: all modes + IC memo (12-section, pre-mortem mandatory) → LOI handoff to loi-generation skill (Gabriel approval ALWAYS required).
+FULL: all modes + IC memo (**12-section structure — see IC MEMO STRUCTURE section below**, pre-mortem mandatory in Section 8) → LOI handoff to loi-generation skill (Gabriel approval ALWAYS required).
+
+## IC MEMO STRUCTURE (FULL mode — canonical 12 sections)
+
+Every FULL-mode IC memo uses these sections in order. DOCX, ORA institutional style (EB Garamond / DM Sans / IBM Plex Mono; Navy #1B2A4A / Gold #C9A96E / Parchment #F5F3EF); extractable text layer required (Microsoft Print to PDF prohibited). Every figure reconciles to the underwriting workbook and facts file (QC Gate).
+
+1. **Executive Summary & Recommendation** — one page: address, price, SF, $/SF, going-in & stabilized YoC, levered IRR (both tax scenarios), Combined score, P(exec), Expected Score, and the headline GO / WATCH / PASS recommendation with the single strongest supporting reason.
+2. **Investment Thesis** — why this deal fits the buy-box and the path to value. 3–5 bullets; no filler.
+3. **Property Description** — building(s), GBA, clear height, loading (docks/drive-ins), construction type, year built (county-auditor verified), site/acreage, office %, condition, condo structure if any.
+4. **Market & Submarket Analysis** — cluster tier, vacancy, absorption, rent trend, bear-mode state (ON/OFF + source + date); cite `market-monitor`.
+5. **Tenancy & Lease Analysis** — rent roll, WALT, in-place vs market rent, MTM/rollover schedule, tenant credit/risk (cite `tenant-intelligence`), renewal economics (prob-weighted MTM, 50% capture, no LC, minimal TI).
+6. **Financial Analysis** — going-in & stabilized NOI, cap/value, YoC, unlevered & levered IRR, equity multiple, DSCR; pro-forma reassessed property tax (State Reassessment Matrix) and total carrying cost $/SF; cost-seg + 100% bonus after-tax returns (both scenarios). Pre-tax floors shown unlevered.
+7. **Debt & Capital Structure** — all-cash close + 65% LTV refi terms (per UNDERWRITING CONVENTIONS: 7.00% fixed, 25-yr amort, 5/10-yr term), refi sizing (binding constraint: 65% LTV vs 1.25x DSCR), proceeds/return-of-capital, generational-hold liquidity view.
+8. **Risk Analysis & Pre-Mortem (MANDATORY)** — assume the deal failed; rank failure reasons by probability-weighted damage; mitigant or kill-switch for each. Include the MI Prop A line for MI deals.
+9. **Value-Add & Edge Scan** — all four Stage 3 categories (Land & Entitlement · Income · Seller-Side · Infrastructure); IC memo floor = at least 1 named item per category (4 total minimum) or an explicit "none identified — checked X, Y, Z" per empty category. This is a higher bar than the screen floor of ≥3 total named items.
+10. **Replacement Cost Analysis** — all-in basis $/SF vs RCT v02 (cite version + market LOW/POINT/HIGH), discount-to-replacement, vintage-ramp floor, adder schedule applied, DENOMINATOR-SENSITIVE flag status.
+11. **Exit / Hold Strategy** — generational hold + refi-liquidity base case; exit cap (market-specific, this table dated 2026-06-20); disposition/1031 only as a sensitivity; no forced-exit assumption.
+12. **Recommendation & Next Steps** — restated verdict, offer price and aggressiveness (set by seller signals per Stage 2.2), LOI handoff to `loi-generation` (Gabriel approval ALWAYS required), open DD-Critical items, QUESTIONS FOR GABRIEL block.
 
 ## CROSS-SKILL
 
@@ -181,4 +224,4 @@ rent-comp (comp data) · market-monitor (bear-mode inputs, submarket conditions)
 
 ## OUTPUT FORMATS
 
-SCREEN: inline verdict block (gates → floors → Quality/Economics/Combined table → bear-mode state → P(exec)/Expected → DD-Critical status → Edge section → exceptions w/ compensating factors). SNAPSHOT: one-screen markdown. UNDERWRITE: XLSX (zero formula errors, recalc-verified; inputs cite sources; [est] blue-celled). COMPS: grid + bracket. FULL/IC memo: DOCX, ORA institutional style, pre-mortem mandatory. LOI: via loi-generation skill, Gabriel approval ALWAYS required.
+SCREEN: inline verdict block (gates → floors → Quality/Economics/Combined table → bear-mode state → P(exec)/Expected → DD-Critical status → Edge section → exceptions w/ compensating factors). SNAPSHOT: one-screen markdown (NOI source-note + cap/value + 3×3 sensitivity + back-of-envelope IRR + bear-mode state line + QUESTIONS FOR GABRIEL block if any gap). UNDERWRITE: XLSX (zero formula errors, recalc-verified; inputs cite sources; [est] blue-celled). COMPS: grid + bracket. FULL/IC memo: DOCX, ORA institutional style, pre-mortem mandatory. LOI: via loi-generation skill, Gabriel approval ALWAYS required.
