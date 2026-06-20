@@ -21,3 +21,6 @@ desktop.ini
 
 __pycache__/
 *.pyc
+
+# Generated skill packages — build artifacts; never tracked
+*.skill
