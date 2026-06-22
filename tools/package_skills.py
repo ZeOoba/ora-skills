@@ -75,6 +75,13 @@ def validate_frontmatter(skill: str, src: Path) -> None:
             f"{skill}: description is {len(desc)} chars — exceeds the {MAX_DESC}-char "
             f"platform limit; the importer will reject it. Trim it before packaging."
         )
+    tag = re.search(r'</?[A-Za-z][^>]*>', desc)
+    if tag:
+        raise SystemExit(
+            f"{skill}: description contains an XML-like tag {tag.group(0)!r} — the platform "
+            f"importer rejects angle-bracket tags in 'description' (hit 2026-06-22). Replace it "
+            f"(e.g. <skill> -> [skill]) before packaging."
+        )
     print(f'{skill}: description {len(desc)}/{MAX_DESC} chars OK')
     # Scan EVERY Markdown file under the skill dir, not just SKILL.md, so named-count
     # headers in references/ are validated too (gap found 2026-06-11:
