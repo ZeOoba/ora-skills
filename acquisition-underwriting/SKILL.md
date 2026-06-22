@@ -34,7 +34,7 @@ A gate breach = prominent flag + screen/score as exception anyway; verdict label
 
 1. **Product:** Class B/C industrial — shallow-bay multi-tenant, flex, office-warehouse, OR functional single-tenant ≤40,000 SF (scored EQUAL to multi-tenant). Quasi-IOS single-tenant <20K SF on land-heavy parcels = explicit target profile. Office % never kills if 1-story with adequate clear behind the finish (demo-able); ≤30% ideal.
 2. **Size/Price:** $500K–$10M single asset; ≤$15M multi-building portfolio; <50,000 SF per building.
-3. **Market:** Established clusters (Columbus, Cincinnati, Kansas City, Indianapolis, Maryland/DC, Madison WI) + entry clusters (Grand Rapids, Richmond, Des Moines). Satellites: ONLY within 30 min of an ESTABLISHED cluster, Market pts capped at half. **Ruling 3: entry clusters earn NO satellite eligibility until ORA's first closed deal validates the cluster.**
+3. **Market:** Established clusters (Columbus, Cincinnati, Kansas City, Indianapolis, Maryland/DC, Madison WI) + entry clusters (Grand Rapids, Richmond, Des Moines, **Louisville KY**). Satellites: ONLY within 30 min of an ESTABLISHED cluster, Market pts capped at half. **Ruling 3: entry clusters earn NO satellite eligibility until ORA's first closed deal validates the cluster.** *Louisville entry rationale (June 2026): B+ metro grade; UPS Worldport permanent anchor; GE Appliances $490M reshoring June 2025; Riverport 13–14 active listings at $3.90–$5.00 NNN (40% below MSA avg); adjacent to Indiana established cluster. Kentucky outside preferred-state list — treat as entry cluster, NOT established.*
 4. **Physical:** multi-story warehouse; no ground-level access (zero drive-ins AND zero docks); clear height <12'.
 5. **Flood:** SFHA on building pad = gate flag. SFHA on excess land = land at $0, proceed. **Ruling 4: land credit = $0 in the basis test until FEMA determination lands; report the verified-dry score as an upside band.**
 6. **Other:** ground lease <30 yrs; remediation >20% of price; automotive use; child-use without safety review; retail-only; office-only.
@@ -80,7 +80,7 @@ Signals also set offer aggressiveness, timing, and P(exec).
 
 ## STAGE 2.1 — TENANCY BEAR-MODE (v1.1-D; check on EVERY screen)
 
-When market-monitor shows the submarket with **vacancy up >100bps YoY OR two consecutive quarters of negative absorption**: (i) halve Tenancy upside points; (ii) add 12 months of downtime carry to lease-up assumptions (flows into all-in basis). **Report the trigger state (ON/OFF + source + date) on every screen.** **Authoritative source = the `market-monitor` skill** (live vacancy/absorption from CoStar/CBRE/JLL/Colliers quarterly prints). The ranking workbook's Bear-Mode Monitor tab is a **convenience cache only** — if stale (>30 days) or absent, query `market-monitor` directly and cite the live print. On any conflict the live `market-monitor` print wins. **If BOTH sources are unavailable:** record bear-mode state as UNKNOWN, proceed with bear-mode OFF for scoring, but add a flag note that Tenancy upside pts may be overstated if the submarket is distressed — cap the screen at T2 WATCH pending resolution.
+When market-monitor shows the submarket with **vacancy up >100bps YoY OR two consecutive quarters of negative absorption**: (i) halve Tenancy upside points; (ii) add 12 months of downtime carry to lease-up assumptions (flows into all-in basis). **Report the trigger state (ON/OFF + source + date) on every screen.** **Authoritative source = the `market-monitor` skill** (live vacancy/absorption from CoStar/CBRE/JLL/Colliers quarterly prints). The ranking workbook's Bear-Mode Monitor tab is a **convenience cache only** — if stale (>30 days) or absent, query `market-monitor` directly and cite the live print. On any conflict the live `market-monitor` print wins. **If BOTH sources are unavailable:** record bear-mode state as UNKNOWN, proceed with bear-mode OFF for scoring, but add a flag note that Tenancy upside pts may be overstated if the submarket is distressed — cap the screen at T2 WATCH pending resolution. **Grand Rapids MI standing caution (June 2026 deep research):** net absorption reversed to −854K SF YTD Q4 2025 (from +408K SF in 2024); Michigan manufacturing shed −2,500 jobs April–November 2025 — always verify Grand Rapids bear-mode state with `market-monitor` before any screen; do NOT default to OFF based on headline 3.7% vacancy, which predates the absorption reversal.
 
 ## STAGE 2.2 — P(EXEC) + EXPECTED SCORE (v1.1-B; pipeline sort)
 
@@ -130,7 +130,7 @@ Every gate/floor exception MUST carry a one-sentence compensating factor, logged
 
 ## UNDERWRITING CONVENTIONS (all modes)
 
-- **Exit cap (market-specific; reviewed 2026-06-20 — re-confirm at annual December back-test):** Columbus/Cincinnati/Indianapolis **7.50%** · Kansas City **7.75%** · Madison **7.25%** · Maryland/DC **7.00%** · Grand Rapids **8.00%** · Richmond/Des Moines **7.75%** · entry clusters not yet listed: use the nearest established peer **+25–50 bps** until deal-validated. These figures are the exit caps (already reflect the exit-vs-going-in spread); the "+25 bps" rule applies only when deriving an exit cap from a going-in not in this table. Default **7.75%** when no market match; flag if used. Escalations 3% minimum. Structural vacancy 5%. Mgmt 4% EGI. Reserves $0.15/SF. Closing 2% of price.
+- **Exit cap (market-specific; reviewed 2026-06-20 — re-confirm at annual December back-test):** Columbus/Cincinnati/Indianapolis **7.50%** · Kansas City **7.75%** · Madison **7.25%** · Maryland/DC **7.00%** · Grand Rapids **8.00%** · Richmond/Des Moines **7.75%** · **Louisville KY 7.75%** (entry cluster, ratified June 2026; UPS Worldport anchor, B+ metro, Midwest Tier-2 comp to KC/Richmond) · entry clusters not yet listed: use the nearest established peer **+25–50 bps** until deal-validated. These figures are the exit caps (already reflect the exit-vs-going-in spread); the "+25 bps" rule applies only when deriving an exit cap from a going-in not in this table. Default **7.75%** when no market match; flag if used. Escalations 3% minimum. Structural vacancy 5%. Mgmt 4% EGI. Reserves $0.15/SF. Closing 2% of price.
 - **Mgmt fee recoverable in NNN** — standing assumption; gross/MTM leases auto-disable recovery.
 - **Cost segregation + 100% bonus (standing):** 15% of building basis (price − land + capitalized CapEx) → ≤15-yr life, 100% bonus Yr1 (OBBBA, PIS after 1/19/2025). Every UNDERWRITE and IC memo carries after-tax returns alongside pre-tax (two IRR scenarios: generational hold/1031/step-up at death and 10-yr taxable sale). Tax never overrides the pre-tax Buy Box floors.
 - **Property tax = pro-forma reassessed at purchase price** per the State Reassessment Matrix — never trend the seller's in-place bill. MI: underwrite off SEV (uncapped Taxable Value = ~50% of market the year after transfer; a >50% entity-interest transfer also uncaps — MCL 211.27a(6)(h)); ignore the seller's capped TV. Cyclical states (OH/MD/IN/WI/MO/KS/TN/VA/IA): tax chases market on the assessment cycle regardless of title — an entity (LLC-interest) purchase saves only transfer tax + keeps price off the deed record (slows sales-chasing) and is generally a BAD trade (carryover basis forfeits cost-seg/100% bonus; assumes entity liabilities). "Drop-and-swap" is a §1031 income-tax technique — NOT a property-tax tool. Carrying-cost target ≤ $4.00/SF.
@@ -183,6 +183,30 @@ Abatement/PILOT levers (Edge scan; abate improvements, not basis): KS IRB/EDX (s
 
 **Reconciliation:** the platform engine (`config/replacement-cost.v1.json`) carries a ratified firm-wide flat $125/$137.50/$150 pending per-market refinement. This RCT v02 table is the skill-side per-market screening band; use it for hand screens and IC memos. When the engine score and a hand screen diverge on Basis, state both and cite the version each used.
 
+### Submarket Intelligence Reference (June 2026 deep research — 8 target metros)
+
+**Full report:** `oxford-command-center/outputs/2026-06-22_Submarket_Intelligence_Report_v01.docx` · **Memory files:** `market-intel-*` (one file per metro; indexed in project MEMORY.md) · **Re-research cadence:** annually or when metro grade changes ±1 tier.
+
+Use for Stage 2 Market scoring calibration, bear-mode context, and IC Memo §4 Market Analysis. Always cross-check against live `market-monitor` at time of screen — the table below is a research snapshot, not live data.
+
+| Metro | Metro Grade | Top Submarket | Sub Grade | Vacancy (top sub) | Rent $/SF NNN | Rent Growth YoY | ORA Fit |
+|---|---|---|---|---|---|---|---|
+| Columbus OH | B+ | Southwest/Westbelt/Obetz | A- | Sub-3% small-bay | $4.25–$9.00 | +6.9% | Highest |
+| Cincinnati OH | B+ | Central Hamilton County | A | 3.7% | $7.00–$11.73 | +8.1% | Highest |
+| Indianapolis IN | B+ | South/Greenwood-Southport | A | 5–8% [EST] | $4.50–$9.50 | +33% (5yr flex) | Highest |
+| Louisville KY | B+ | Riverport/West-Southwest | B+ | N/A | $3.90–$5.00 | +7.5% | High |
+| Des Moines IA | B | Ankeny/North Polk County | A- | 2.2% | $6.90–$7.50 [EST] | Stable+ | High |
+| Grand Rapids MI | B | Northwest/Walker/Comstock Pk | B+ | Sub-3% | $6.00–$7.00 [EST] | −13% from peak | Medium |
+| Madison WI | B- | East/East Buckeye | B | Highest relative | $5.00–$8.00 [EST] | Nominally neg. | Medium-Low |
+| Delmarva MD/DE | C+ | Sussex County DE | B- | Small-bay zero | $6.50–$10.00 | N/A | Low-Medium |
+
+**Stage 2 Market scoring guidance from this research:**
+- Established cluster + top submarket (A/A-) → near-max Market pts when ORA already owns in that submarket; step down one tier if adjacent-only.
+- Entry cluster + top submarket (B+ or A-) → entry scoring floor; fundamentals from this table can justify adjusting to the upper bound.
+- Any submarket graded C+ or below → cap at satellite half-pts regardless of metro grade.
+- **Madison DSCR caution:** owner-user pricing $148–$176/SF makes DSCR ≥1.25x extremely difficult on most sub-$10M Class B/C assets — verify deal-level DSCR before LOI on every Madison screen; do not rely on metro-level rent stats.
+- **Delmarva hold assumption:** every Delmarva acquisition requires a 7–10 year hold underwrite; exit buyer pool is local only (SVN Miller / NAI Coastal duopoly). No competitive-sale exit assumption is supportable.
+
 ## MODES
 
 SCREEN: intake rules (Stage -1) → gates → floors (low-end RCT + vintage ramp; walk-price if unpriced) → score (Quality / Economics / Combined) → bear-mode state → P(exec) + Expected Score → verdict; **Before logging: check BOTH the Deal Sourcing Log AND the Acquisition Pipeline Tracker for an existing record of this parcel/address — update in-place or supersede a stale entry; never create a duplicate.** Then log to the Notion Deal Sourcing Log (collection://9a6ae219-85a3-4621-899c-c757fd062f8b) including Quality Score, Economics Score, P(exec) %, Expected Score fields. End with a QUESTIONS FOR GABRIEL block for data gaps (broker email LAST resort, at his election).
@@ -198,7 +222,7 @@ Every FULL-mode IC memo uses these sections in order. DOCX, ORA institutional st
 1. **Executive Summary & Recommendation** — one page: address, price, SF, $/SF, going-in & stabilized YoC, levered IRR (both tax scenarios), Combined score, P(exec), Expected Score, and the headline GO / WATCH / PASS recommendation with the single strongest supporting reason.
 2. **Investment Thesis** — why this deal fits the buy-box and the path to value. 3–5 bullets; no filler.
 3. **Property Description** — building(s), GBA, clear height, loading (docks/drive-ins), construction type, year built (county-auditor verified), site/acreage, office %, condition, condo structure if any.
-4. **Market & Submarket Analysis** — cluster tier, vacancy, absorption, rent trend, bear-mode state (ON/OFF + source + date); cite `market-monitor`.
+4. **Market & Submarket Analysis** — cluster tier, vacancy, absorption, rent trend, bear-mode state (ON/OFF + source + date); cite `market-monitor`. For submarket grade, ORA fit rating, and demographics, reference `market-intel-[metro]` memory file and the **Submarket Intelligence Reference** table in this skill (June 2026 deep research; re-validate with live `market-monitor` data).
 5. **Tenancy & Lease Analysis** — rent roll, WALT, in-place vs market rent, MTM/rollover schedule, tenant credit/risk (cite `tenant-intelligence`), renewal economics (prob-weighted MTM, 50% capture, no LC, minimal TI).
 6. **Financial Analysis** — going-in & stabilized NOI, cap/value, YoC, unlevered & levered IRR, equity multiple, DSCR; pro-forma reassessed property tax (State Reassessment Matrix) and total carrying cost $/SF; cost-seg + 100% bonus after-tax returns (both scenarios). Pre-tax floors shown unlevered.
 7. **Debt & Capital Structure** — all-cash close + 65% LTV refi terms (per UNDERWRITING CONVENTIONS: 7.00% fixed, 25-yr amort, 5/10-yr term), refi sizing (binding constraint: 65% LTV vs 1.25x DSCR), proceeds/return-of-capital, generational-hold liquidity view.
@@ -210,7 +234,7 @@ Every FULL-mode IC memo uses these sections in order. DOCX, ORA institutional st
 
 ## CROSS-SKILL
 
-rent-comp (comp data) · market-monitor (bear-mode inputs, submarket conditions) · submarket-spatial-analysis (location scoring) · tenant-intelligence (in-place tenant risk) · legal-intelligence (LOI/PSA) · deal-execution (post-LOI) · county-parcel-screen (sourcing; FAR info-only) · ora-flood-zoning-dd (DD-Critical items 1–2) · annual-cycle (December back-test home).
+rent-comp (comp data) · market-monitor (bear-mode inputs, submarket conditions) · market-intel-* memory files (submarket grades, vacancy/rent stats, ORA fit ratings — June 2026 deep research; see Submarket Intelligence Reference section) · submarket-spatial-analysis (location scoring) · tenant-intelligence (in-place tenant risk) · legal-intelligence (LOI/PSA) · deal-execution (post-LOI) · county-parcel-screen (sourcing; FAR info-only) · ora-flood-zoning-dd (DD-Critical items 1–2) · annual-cycle (December back-test home).
 
 ## PIPELINE & LOGGING
 
