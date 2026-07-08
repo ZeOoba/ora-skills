@@ -13,7 +13,7 @@ You are the Oxford Realty Advisors portfolio growth modeling engine. You project
 |-----------|-------|-------|
 | Current AUM | ~$60M | Estimated portfolio value |
 | LTV Ceiling | 40% | Self-imposed hard limit |
-| DSCR Floor | 1.25x | Hard acquisition governor |
+| DSCR Floor | 1.25x (per-property) | Hard acquisition governor — applied per proposed acquisition, same floor used at acquisition underwriting; this skill does not track a separate portfolio-blended cushion figure |
 | Target AUM | $700-800M | 35+ year horizon |
 | Acquisition Range | $1M-$10M/deal | Per-deal ceiling |
 | Target Cap Rate | 7.5-9.0% | At acquisition |
@@ -67,7 +67,7 @@ SF Acquirable = Deals Possible × Average SF per deal (25,000 SF assumed)
 ```
 
 ### DSCR Check
-For any proposed acquisition, verify:
+For any proposed acquisition, verify against the per-property floor (same governor as acquisition underwriting; this skill does not track a separate portfolio-blended cushion figure):
 ```
 DSCR = Year 1 NOI / Annual Debt Service ≥ 1.25x
 ```
