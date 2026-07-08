@@ -10,7 +10,11 @@ description: >
   Trigger phrases: strategic audit, business audit, is the command center working,
   what should we build next, platform effectiveness, what's the ROI of the command center.
   Complementary to cc-audit-army (which reviews code correctness, not business value).
-  v1.0 — 2026-06-16
+  v1.1 — 2026-07-08 (Skill Text Audit remediation: dispatch step surface note added —
+  Code uses subagent-driven-development, Cowork uses the Agent tool directly; the six
+  `~/.claude/scheduled-tasks/` CC-fleet references flagged UNVERIFIED — not reachable
+  from this Cowork session, needs Code-surface confirmation; stale LAMS/Cowork fleet
+  count corrected from "5" to a live-pull instruction)
 ---
 
 # Oxford Command Center — Strategic Business Audit
@@ -102,8 +106,10 @@ C:\Users\Owner\oxford-command-center\server\alerts\conditions.ts
 
 ### Scheduled automation fleet
 
-From the session context, the live CC/MCP fleet has 17 scheduled tasks and the
-LAMS/Cowork fleet has 5. Read the SKILL.md for the most business-critical ones:
+From the session context, the live CC/MCP fleet has 17 scheduled tasks. The
+LAMS/Cowork fleet count of "5" below is STALE — `list_scheduled_tasks` on
+2026-07-08 returned 21 live LAMS/Cowork tasks; re-pull live before citing a count.
+Read the SKILL.md for the most business-critical ones:
 ```
 C:\Users\Owner\.claude\scheduled-tasks\ora-am-brief\SKILL.md
 C:\Users\Owner\.claude\scheduled-tasks\ora-financial-code-integrity-sweep\SKILL.md
@@ -112,6 +118,16 @@ C:\Users\Owner\.claude\scheduled-tasks\ora-open-sessions-board\SKILL.md
 C:\Users\Owner\.claude\scheduled-tasks\ora-pm-ledger\SKILL.md
 C:\Users\Owner\.claude\scheduled-tasks\ora-dashboard-refresh\SKILL.md
 ```
+> UNVERIFIED (Skill Text Audit finding 9, 2026-07-08): the six `~/.claude/scheduled-tasks/`
+> CC/MCP-fleet paths cited above and at lines ~356-358, ~272 (ora-financial-code-integrity-sweep,
+> ora-master-workbook-ingest, ora-open-sessions-board, ora-pm-ledger, ora-week-ahead-briefing,
+> ora-deal-sourcing-scan) could NOT be confirmed from this Cowork remediation session — the
+> `~/.claude/scheduled-tasks/` path is host-protected and not mountable from Cowork, and
+> `list_scheduled_tasks` only enumerates the LAMS/Cowork fleet (21 tasks, none of these six).
+> Note also `ora-am-brief` and `ora-dashboard-refresh` are cited here as CC-fleet but appear in
+> the live LAMS/Cowork registry instead — possible fleet-assignment drift, not confirmed either
+> way. Verify these seven task references from a Claude Code session with `~/.claude/` access
+> before relying on this section; do not treat it as current until re-verified.
 
 ### Acquisitions pipeline
 
@@ -125,7 +141,12 @@ C:\Users\Owner\oxford-command-center\src\contracts\acquisition.ts     (if it exi
 
 ## Phase 2 — Invoke Parallel Subagents for Goal Evaluations
 
-Use `dispatching-parallel-agents` to evaluate Goals 1–12 in parallel. Each subagent
+**Code surface:** dispatch parallel subagents per the Engineering OS dispatch canon
+(`subagent-driven-development` mode — appropriate here since this is >~4 independent,
+high-precision evaluation tasks). **Cowork surface (no CC dispatch canon here):** use the
+Agent tool directly — send one Agent tool call per goal (Goals 1–12) in a single message so
+they execute concurrently; do not attempt to invoke a `dispatching-parallel-agents` skill, it
+does not exist as an installed skill on either surface. Each subagent/agent call
 gets one goal and the recon data. Brief each agent:
 
 > "You are reviewing the Oxford Command Center — a local-first investment intelligence

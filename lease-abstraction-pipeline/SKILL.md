@@ -1,6 +1,6 @@
 ---
 name: lease-abstraction-pipeline
-description: 'Lease abstraction (single document or batch) and rent roll data extraction for Oxford Realty Advisors. Use whenever the user mentions: abstract this lease, abstract/parse leases, extract lease data or terms, lease abstract, summarize/read/review this lease, process lease folder, batch lease, lease pipeline, run lease abstraction, update rent roll from leases, or scheduled lease scan — for one or more commercial leases uploaded directly or in a folder, SharePoint, or Google Drive. Also trigger when an uploaded PDF/DOCX appears to be a commercial lease, or on "run the lease pipeline" / "process the leases" / "update my rent roll". Produces: 30-field abstract per lease (markdown single-doc; master XLSX batch with derived metrics, quality flags, portfolio analytics), Notion Tenant Database upsert, email summary to ggoldberg@oxfordra.net ONLY (routing canon 2026-06-10). Autonomous unattended operation — do not pause mid-run. v2.1 (2026-06-11: COM-only send, ggoldberg-only routing; subsumes lease-abstraction).'
+description: 'Lease abstraction (single document or batch) and rent roll data extraction for Oxford Realty Advisors. Use whenever the user mentions: abstract this lease, abstract/parse leases, extract lease data or terms, lease abstract, summarize/read/review this lease, process lease folder, batch lease, lease pipeline, run lease abstraction, update rent roll from leases, or scheduled lease scan — for one or more commercial leases uploaded directly or in a folder, SharePoint, or Google Drive. Also trigger when an uploaded PDF/DOCX appears to be a commercial lease, or on "run the lease pipeline" / "process the leases" / "update my rent roll". Produces: 30-field abstract per lease (markdown single-doc; master XLSX batch with derived metrics, quality flags, portfolio analytics), Notion Tenant Database upsert, email summary to ggoldberg@oxfordra.net ONLY (routing canon 2026-06-10). Autonomous unattended operation — do not pause mid-run. v2.2 (2026-07-08: file-naming citation repointed to ratified three-schema doctrine; companion SCHEDULED_TASK.md version stamp synced).'
 ---
 
 # Lease Abstraction Pipeline — Oxford Realty Advisors
@@ -77,7 +77,7 @@ SeverityFlag Condition🔴 CRITICALRent &lt; $4.00/SF NNN🔴 CRITICALMissing pe
 
 ## STEP 6 — XLSX OUTPUT
 
-**File naming:** Follow ORA File-Naming Standard v1.0+ — `YYYYMMDD_[Subject]_[DocType]_v##.ext` format. Canonical: `Claude_Workspace/00_Governance/References/Standards/ORA File-Naming Standard 2026-05-14.md`**Save to:** SharePoint `Oxford Realty Advisors > Lease Abstracts > [Year]`
+**File naming:** per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Settings v2.0, 2026-06-11 — do NOT unify). The master abstract workbook is a session/analysis output → use `YYYY-MM-DD_[Topic]_[DocType]_v##.ext` in an `/outputs/` subfolder. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.) **Save to:** SharePoint `Oxford Realty Advisors > Lease Abstracts > [Year]`
 
 TabContents**1 — Master Rent Roll**One row/lease. All 30 fields + 7 derived metrics + flag counts. Freeze row 1. Auto-filter. Color: red fill = any CRITICAL, yellow = WARNING only, white = clean.**2 — Rent Schedules**One block/tenant: name, property, suite, then full escalation table (Year, Period Start, Period End, Monthly, Annual, PSF).**3 — Quality Flags Dashboard**One row/flag: File, Tenant, Property, Suite, Severity, Description.**4 — Expiration Heatmap**Count of expirations by quarter, next 5 years. Highlight quarters with 3+ expirations.**5 — Portfolio Analytics**WALT (by SF), avg rent PSF (weighted by SF), occupancy-weighted total rent, % with guaranty, % with ROFR, % NNN vs. gross, rent PSF std dev with outlier flags (&gt;1.5 SD).**6 — Skipped Files**File name, reason, timestamp.
 
@@ -159,3 +159,7 @@ See `references/extraction-edge-cases.md` for guidance on:
 - Side letters and letter agreements
 - Leases referencing exhibits not included in the file
 - Ground leases and master lease structures
+
+## Changelog
+
+- v2.2 (2026-07-08): HIGH fix (Skill Text Audit finding 5) — Step 6 file-naming citation repointed from the superseded single "ORA File-Naming Standard 2026-05-14.md" to the ratified three-schema doctrine (ORA Cowork Global Settings v2.0, 2026-06-10/11); master workbook classified as a session/analysis output. Also (MEDIUM fix, finding 10): companion `SCHEDULED_TASK.md` version stamp (was 1.0 / 2026-04-04) synced to this file's version.
