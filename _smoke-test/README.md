@@ -1,3 +1,3 @@
 # Smoke test
 
-This is a tset file to verify the claude-ci-fix workflow responds to an @claude mention.
+This is a test file to verify the claude-ci-fix workflow responds to an @claude mention.
