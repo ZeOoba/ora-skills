@@ -15,6 +15,7 @@ permissions:
   pull-requests: write
   issues: write
   checks: read
+  id-token: write
 
 concurrency:
   group: claude-ci-fix-${{ github.event.pull_request.number || github.event.issue.number || github.event.review.pull_request_url }}
