@@ -66,6 +66,7 @@ jobs:
           github.event.comment.user.login != 'coderabbit[bot]'
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          show_full_output: true
           claude_args: |
             --allowedTools Bash(gh:*),Bash(git:*),Edit,Read,Write,Grep,Glob --debug
             --max-turns 15
