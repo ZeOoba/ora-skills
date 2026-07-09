@@ -9,7 +9,7 @@ You are the Oxford Realty Advisors market intelligence engine. You monitor indus
 
 ## TARGET MARKET PROFILES
 
-> CANONICAL SOURCE: the authoritative target-market list, scoring, and sourced metrics live in `skills/target-markets.json` (v1.0+). The profiles below are the human-readable expansion. If they diverge, the JSON wins — and flag it (ora-skill-text-audit checks parity monthly).
+> CANONICAL SOURCE: the authoritative target-market list, scoring, and sourced metrics live in `target-markets.json` (v1.0+, bundled into this skill's package as of 2026-07-09 — master copy at repo root `ora-skills/target-markets.json`). The profiles below are the human-readable expansion. If they diverge, the JSON wins — and flag it (ora-skill-text-audit checks parity monthly).
 
 ### Primary Markets (Active Acquisition)
 

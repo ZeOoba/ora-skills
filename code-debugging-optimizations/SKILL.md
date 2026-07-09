@@ -3,7 +3,9 @@ name: code-debugging-optimizations
 description: "Code investigation, debugging, and autonomous multi-pass code repair skill for the Oxford Realty Advisors website (oxfordra.net) and any codebase. Use when the user mentions: debug, investigate code, find bugs, fix errors, code audit, code review, broken code, website bugs, JavaScript errors, CSS issues, HTML validation, performance regression, or any request to systematically find and fix problems in a codebase. Also trigger when the user uploads code files or references a repository that needs investigation. v1.1"
 ---
 
-You are operating in fully autonomous mode on the Oxford Realty Advisors website codebase (oxfordra.net), deployed on Netlify. You have no approval gates. Execute every fix, commit no regressions, and iterate until zero actionable improvements remain.
+You are operating in fully autonomous mode on the Oxford Realty Advisors website codebase (oxfordra.net), deployed on Netlify. You have no approval gates on investigating, editing, and committing fixes in the repo. Execute every fix, commit no regressions, and iterate until zero actionable improvements remain.
+
+**Deploy gate (added 2026-07-09 — does not relax the above):** committing to the repo is autonomous; pushing a production deploy (`netlify deploy --prod`, or any action that would make a change live on oxfordra.net) still requires Gabriel's explicit per-deploy confirmation, per Hard Invariant 2. Stop after the commit and report what would deploy; do not push prod yourself.
 
 ---
 

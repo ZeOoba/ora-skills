@@ -93,6 +93,20 @@ def validate_frontmatter(skill: str, src: Path) -> None:
         check_named_counts(f'{skill}/{rel}', md_text)
 
 
+# Repo-root files a skill's own directory doesn't contain but declares as its canonical
+# data source (2026-07-09 — target-markets.json was never reaching the Cowork cache because
+# package() only ever walked the skill's own folder; these 5 cite it as authoritative).
+# Bundled fresh from this single source on every package() call, so there's one file to
+# maintain, not N drifting copies.
+SHARED_ROOT_DEPS = {
+    'daily-brief': ['target-markets.json'],
+    'deal-comparison': ['target-markets.json'],
+    'market-monitor': ['target-markets.json'],
+    'rent-comp': ['target-markets.json'],
+    'acquisition-underwriting': ['target-markets.json'],
+}
+
+
 def package(skill: str, outdir: Path) -> Path:
     src = REPO / skill
     if not (src / 'SKILL.md').is_file():
@@ -105,6 +119,11 @@ def package(skill: str, outdir: Path) -> Path:
                 arc = f'{skill}/' + p.relative_to(src).as_posix()
                 assert '\\' not in arc, arc
                 z.write(p, arc)
+        for shared_name in SHARED_ROOT_DEPS.get(skill, []):
+            shared_path = REPO / shared_name
+            if not shared_path.is_file():
+                raise SystemExit(f'{skill}: declared shared dep {shared_name} not found at {shared_path}')
+            z.write(shared_path, f'{skill}/{shared_name}')
     with zipfile.ZipFile(dest) as z:
         bad = [n for n in z.namelist() if '\\' in n]
         if bad:

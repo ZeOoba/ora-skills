@@ -45,7 +45,7 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 | Operational Leverage | 5 | Same PM platform=5; Known platform=3; New platform=1 |
 | Capital Efficiency | 4 | <$7M=4; $7-10M=3; >$10M=1 |
 
-**Market Cluster Fit — designated target markets (canonical source: `skills/target-markets.json` v1.0+; narrative twin: memory "ORA Target Markets / Primary Clusters", updated 2026-05-30):**
+**Market Cluster Fit — designated target markets (canonical source: `target-markets.json` v1.0+ (bundled into this skill's own package as of 2026-07-09 — master copy at repo root `ora-skills/target-markets.json`); narrative twin: memory "ORA Target Markets / Primary Clusters", updated 2026-05-30):**
 - Established clusters (score 6) = Columbus OH, Kansas City MO/KS, Indianapolis IN, Maryland, Cincinnati OH, Madison WI.
 - Entry/beachhead clusters (score **4 — "new target market," NOT "isolated=1"**) = Grand Rapids MI, Richmond VA, Des Moines IA. These are designated targets with no existing ORA exposure; a deal here earns the new-target-market credit and graduates to "existing cluster = 6" once a beachhead property closes. Operational Leverage will score "New platform=1" until a PM platform is established locally.
 

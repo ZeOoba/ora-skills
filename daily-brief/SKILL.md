@@ -80,7 +80,7 @@ Before generating any brief content, run this 60-second integrity probe. The che
 
 ## SECTION 1 — CRE NEWS
 
-> Geographic scope is governed by `skills/target-markets.json` (v1.0+). Keep the list below in parity with that file's clusters + acceptable_states.
+> Geographic scope is governed by `target-markets.json` (v1.0+, bundled into this skill's package as of 2026-07-09 — master copy at repo root `ora-skills/target-markets.json`). Keep the list below in parity with that file's clusters + acceptable_states.
 
 Search the last 24 hours for significant industrial/shallow-bay news in:
 
