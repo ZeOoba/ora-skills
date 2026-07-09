@@ -1,6 +1,6 @@
 ---
 name: tax-appeal
-description: "Property tax assessment analysis and appeal decision engine for Oxford Realty Advisors. Use this skill whenever the user mentions: property tax, tax assessment, tax appeal, assessed value, tax reduction, county assessor, millage rate, tax bill, reassessment, tax protest, tax grievance, income approach valuation, or any request to evaluate whether a property tax assessment should be appealed. Also trigger when the user uploads a property tax bill or assessment notice."
+description: "Property tax assessment analysis and appeal decision engine for Oxford Realty Advisors. Use this skill whenever the user mentions: property tax, tax assessment, tax appeal, assessed value, tax reduction, county assessor, millage rate, tax bill, reassessment, tax protest, tax grievance, income approach valuation, or any request to evaluate whether a property tax assessment should be appealed. Also trigger when the user uploads a property tax bill or assessment notice. v1.1 (2026-07-08: file-naming citations repointed from the superseded single 2026-05-14 standard to the ratified three-schema doctrine)"
 ---
 
 # Property Tax Appeal Decision Engine
@@ -132,7 +132,7 @@ Use the docx skill to produce an appeal letter including:
    - D: Market report excerpts supporting cap rate
    - E: Photos of deferred maintenance or functional obsolescence (if applicable)
 
-File naming: Follow ORA File-Naming Standard v1.0+ — `YYYYMMDD_[Subject]_[DocType]_v##.ext` format. Canonical: `Claude_Workspace/00_Governance/References/Standards/ORA File-Naming Standard 2026-05-14.md`
+File naming: per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Settings v2.0, 2026-06-11 — do NOT unify). This appeal package is a session/analysis output → use `YYYY-MM-DD_[Topic]_[DocType]_v##.ext` in an `/outputs/` subfolder. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
 
 ### Attorney Referral
 Reference the Gibbs Firm (Oxford's property tax counsel) for jurisdictions requiring legal representation. Include:
@@ -190,7 +190,11 @@ When requested, run the assessment analysis across the entire portfolio:
 5. Produce a priority list: which properties to appeal first
 6. Calculate total portfolio tax savings opportunity
 
-Output as XLSX following ORA File-Naming Standard v1.0+ — `YYYYMMDD_[Subject]_[DocType]_v##.ext` format. Canonical: `Claude_Workspace/00_Governance/References/Standards/ORA File-Naming Standard 2026-05-14.md`
+Output as XLSX per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Settings v2.0, 2026-06-11 — do NOT unify). This portfolio tax-savings workbook is a session/analysis output → use `YYYY-MM-DD_[Topic]_[DocType]_v##.ext` in an `/outputs/` subfolder. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
+
+## Changelog
+
+- v1.1 (2026-07-08): HIGH fix (beyond formal Skill Text Audit scope, same doctrine class as finding 5) — both file-naming citations (Appeal package, §4; Portfolio-wide XLSX, §6) repointed from the superseded single "ORA File-Naming Standard 2026-05-14.md" to the ratified three-schema doctrine (ORA Cowork Global Settings v2.0, 2026-06-10/11).
 
 ---
 

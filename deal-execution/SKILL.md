@@ -1,6 +1,6 @@
 ---
 name: deal-execution
-description: 'Oxford Realty Advisors deal execution skill covering PSA negotiation through closing. Use when the user mentions: PSA, purchase and sale agreement, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel, closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance. Workflow 2A reviews ANY inbound PSA draft (own counsel or seller) against the executed LOI + deal-terms register before it circulates. References acquisition-underwriting skill for pre-LOI context and re-operations skill for post-closing integration. v1.1'
+description: 'Oxford Realty Advisors deal execution skill covering PSA negotiation through closing. Use when the user mentions: PSA, purchase and sale agreement, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel, closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance. Workflow 2A reviews ANY inbound PSA draft (own counsel or seller) against the executed LOI + deal-terms register before it circulates. References acquisition-underwriting skill for pre-LOI context and re-operations skill for post-closing integration. v1.2 (2026-07-08: file-naming citations repointed from the superseded single 2026-05-14 standard to the ratified three-schema doctrine)'
 ---
 
 You are operating as deal execution counsel and advisor for Oxford Realty Advisors (ORA). You handle everything from PSA generation through post-closing integration. The acquisition-underwriting skill covers pre-LOI work; this skill picks up at executed LOI.
@@ -58,7 +58,7 @@ When Gabriel says "generate PSA" or "draft PSA" for a property:
 3. Generate PSA incorporating all 17 articles and 6 mandatory buyer-protective provisions
 4. Run the 42-point quality gate checklist (see below)
 5. Output as DOCX using the docx skill
-6. File naming: Follow ORA File-Naming Standard v1.0+ — `YYYYMMDD_[Subject]_[DocType]_v##.ext` format. Canonical: `Claude_Workspace/00_Governance/References/Standards/ORA File-Naming Standard 2026-05-14.md`
+6. File naming: per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Settings v2.0, 2026-06-11 — do NOT unify). PSA deliverables are deal-bound → use the deal-file schema `[Address] [Purpose] [MM-YYYY]`. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
 
 ### 42-Point Quality Gate Checklist
 
@@ -348,7 +348,7 @@ Trigger the re-operations skill for:
  1. Tenant notification letter (use document-assembly skill if available)
  2. PM platform setup (add property and all units to appropriate platform: Rent Manager for Columbus/KC/Indy, Yardi for MD)
  3. Insurance transfer (notify broker, update policy to new entity)
- 4. QB entity creation (new LLC → new class in QuickBooks)
+ 4. QuickBooks Desktop entity creation (new LLC → new class in QBD; manual step by Eric, not Cowork-automated)
  5. Utility transfer to new entity
  6. Bank account opening for new property entity
  7. Existing service contract assumption or termination
@@ -364,4 +364,8 @@ Trigger the re-operations skill for:
 - PSA: DOCX (use docx skill)
 - Redline Analysis: DOCX structured memo
 - Closing Checklist: Notion page or DOCX
-- File naming: Follow ORA File-Naming Standard v1.0+ — `YYYYMMDD_[Subject]_[DocType]_v##.ext` format. Canonical: `Claude_Workspace/00_Governance/References/Standards/ORA File-Naming Standard 2026-05-14.md`
+- File naming: per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Settings v2.0, 2026-06-11 — do NOT unify). Redline/closing deliverables are deal-bound → use the deal-file schema `[Address] [Purpose] [MM-YYYY]`. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
+
+## Changelog
+
+- v1.2 (2026-07-08): HIGH fix (Skill Text Audit finding 5) — both file-naming citations (PSA generation step, ~line 61; Redline/Closing deliverables, ~line 367) repointed from the superseded single "ORA File-Naming Standard 2026-05-14.md" to the ratified three-schema doctrine (ORA Cowork Global Settings v2.0, 2026-06-10/11) — deal-execution deliverables classified as deal-bound, using `[Address] [Purpose] [MM-YYYY]`.

@@ -1,6 +1,6 @@
 ---
 name: maintenance-analytics
-description: "Predictive maintenance and CapEx forecasting for Oxford Realty Advisors portfolio. Use this skill whenever the user mentions: maintenance forecast, CapEx budget, roof replacement schedule, HVAC lifecycle, repair history analysis, deferred maintenance, capital planning, reserve study, maintenance prediction, R&M analysis, expected useful life, or any request to analyze historical repair data and forecast future capital needs. Also trigger when the user uploads maintenance logs, vendor invoices, or R&M expense reports."
+description: "Predictive maintenance and CapEx forecasting for Oxford Realty Advisors portfolio. Use this skill whenever the user mentions: maintenance forecast, CapEx budget, roof replacement schedule, HVAC lifecycle, repair history analysis, deferred maintenance, capital planning, reserve study, maintenance prediction, R&M analysis, expected useful life, or any request to analyze historical repair data and forecast future capital needs. Also trigger when the user uploads maintenance logs, vendor invoices, or R&M expense reports. v1.1 (2026-07-08: file-naming citation repointed from the superseded single 2026-05-14 standard to the ratified three-schema doctrine)"
 ---
 
 # Predictive Maintenance & CapEx Forecasting
@@ -158,7 +158,11 @@ All items past expected useful life, sorted by priority score.
 ### Tab 6 — R&M History Analysis (if data provided)
 Trend charts, vendor summary, property benchmarking.
 
-File naming: Follow ORA File-Naming Standard v1.0+ — `YYYYMMDD_[Subject]_[DocType]_v##.ext` format. Canonical: `Claude_Workspace/00_Governance/References/Standards/ORA File-Naming Standard 2026-05-14.md`
+File naming: per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Settings v2.0, 2026-06-11 — do NOT unify). This CapEx forecast deliverable is a session/analysis output → use `YYYY-MM-DD_[Topic]_[DocType]_v##.ext` in an `/outputs/` subfolder. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
+
+## Changelog
+
+- v1.1 (2026-07-08): HIGH fix (beyond formal Skill Text Audit scope, same doctrine class as finding 5) — file-naming citation repointed from the superseded single "ORA File-Naming Standard 2026-05-14.md" to the ratified three-schema doctrine (ORA Cowork Global Settings v2.0, 2026-06-10/11).
 
 ---
 

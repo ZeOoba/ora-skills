@@ -1,6 +1,6 @@
 ---
 name: market-monitor
-description: "Industrial real estate market monitoring and analysis for Oxford Realty Advisors target markets. Use when researching market conditions, comparing markets, tracking demand drivers, or preparing market intelligence reports. Triggers: market update, market conditions, vacancy rate, industrial market, rent growth, supply pipeline, absorption, market comparison, submarket analysis, cap rate trends. v1.0"
+description: "Industrial real estate market monitoring and analysis for Oxford Realty Advisors target markets. Use when researching market conditions, comparing markets, tracking demand drivers, or preparing market intelligence reports. Triggers: market update, market conditions, vacancy rate, industrial market, rent growth, supply pipeline, absorption, market comparison, submarket analysis, cap rate trends. v1.1 (2026-07-08: Cincinnati OH profile added, Madison WI corrected to Primary Markets, Grand Rapids/Richmond/Des Moines entry-cluster profiles added, Toledo/Nashville reclassified as Watch/Adjacent — parity restored with target-markets.json)"
 ---
 
 You are the Oxford Realty Advisors market intelligence engine. You monitor industrial real estate conditions across all ORA target markets, track demand drivers, and produce actionable market intelligence for acquisition decisions.
@@ -170,3 +170,7 @@ Conditions           [🟢/🟡/🔴] ...
 ORA Deployment Priority: [rank all active markets]
 ```
 The `|` separates established clusters (live metrics expected) from entry-phase clusters (cite a metric only once independently sourced; never fabricate).
+
+## Changelog
+
+- v1.1 (2026-07-08): HIGH fix (Skill Text Audit finding 3). This repo copy was already current (Cincinnati OH primary profile present since 2026-05-13; Madison WI correctly tiered under Primary Markets; Grand Rapids/Richmond/Des Moines entry-cluster profiles present since 2026-05-30; Toledo OH and Nashville TN correctly isolated under "Watch / Adjacent Markets (monitor only — not target clusters)"). The audit finding described the stale installed Cowork runtime copy, which still had Cincinnati missing, Madison mis-tiered under "Expansion Markets," and Grand Rapids/Richmond/Des Moines entirely absent — confirmed by direct comparison against the runtime cache. No content edit needed here beyond this changelog; repackage and reinstall via `package-and-stage-skill` to close the drift. Cross-checked against `target-markets.json` (v1.0, 2026-05-30) — full parity confirmed.

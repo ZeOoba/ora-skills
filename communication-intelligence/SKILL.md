@@ -1,6 +1,6 @@
 ---
 name: communication-intelligence
-description: "Context-enriched communication drafting for Oxford Realty Advisors. Use this skill whenever the user mentions: write an email, draft a response, compose a message, reply to, reach out to, follow up with, send a letter to, communicate with, notify, or any request to produce a written communication to a tenant, broker, vendor, lender, attorney, or counterparty. Also trigger when the user receives an email and needs help crafting a response. This skill automatically enriches drafts with relationship context from Notion, HubSpot, and conversation history."
+description: "Context-enriched communication drafting for Oxford Realty Advisors. Use this skill whenever the user mentions: write an email, draft a response, compose a message, reply to, reach out to, follow up with, send a letter to, communicate with, notify, or any request to produce a written communication to a tenant, broker, vendor, lender, attorney, or counterparty. Also trigger when the user receives an email and needs help crafting a response. This skill automatically enriches drafts with relationship context from Notion, HubSpot, and conversation history. v1.1 (2026-07-08: standard signature block corrected — was signing outbound comms as 'Ze Ooba' / ze@oxfordra.net, a stale/incorrect identity; now Gabriel Goldberg / ggoldberg@oxfordra.net per routing canon)"
 ---
 
 # Communication Intelligence — Oxford Realty Advisors
@@ -203,3 +203,7 @@ When communication type matches a document-assembly template, use that template 
 ## TRIGGER PHRASES
 Activate this skill when Gabriel says:
 "write an email", "draft a response", "compose a letter", "reply to", "reach out to", "follow up with", "send a letter", "communicate with", "notify", "collections letter", "renewal offer", "broker outreach", "COI request", "demand letter", "tenant notice", "lender update", "vendor communication", "how should I respond to", "what should I say to"
+
+## Changelog
+
+- v1.1 (2026-07-08): CRITICAL fix (Skill Text Audit finding 1) — Standard Signature Block (§ Module 2) signed outbound comms as "Ze Ooba" / `ze@oxfordra.net`, an incorrect/retired identity never valid for this principal. Corrected to Gabriel Goldberg / `ggoldberg@oxfordra.net` per current routing canon. Entity Awareness logic immediately below (landlord mail signs as the property LLC, not the generic firm name) was reviewed and left intact — not regressed by this fix. Note: this repo copy already carried the correct block; the installed Cowork runtime copy did not (silent re-sync drift) — repackage and reinstall via `package-and-stage-skill` to close the gap.

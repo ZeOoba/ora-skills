@@ -1,6 +1,6 @@
 ---
 name: psa-reconciliation
-description: "Oxford Realty Advisors PSA fact extraction and cascade reconciliation. Use whenever the user mentions: reconcile PSA, extract PSA facts, PSA to workbook or IC memo, update from PSA, PSA reconciliation, canonical facts, build fact table, PSA cascade, refresh from PSA, canonical deal facts, single source of truth, PSA drift, or any request to propagate executed-PSA data to downstream deliverables (DD checklist, IC memo, rent roll, title instructions, underwriting model, Notion deal record). Also trigger when the user uploads an executed or near-final PSA (DOCX/PDF) and says 'cascade this,' 'update all the docs,' 'make the workbook match,' 'sync the deal record,' or 'reconcile everything to this version.' Produces a canonical Fact Table (XLSX) as the transaction's single source of truth plus instruction packs per downstream deliverable. Does NOT negotiate, draft, or redline the PSA — that is deal-execution. v1.2"
+description: "Oxford Realty Advisors PSA fact extraction and cascade reconciliation. Use whenever the user mentions: reconcile PSA, extract PSA facts, PSA to workbook or IC memo, update from PSA, PSA reconciliation, canonical facts, build fact table, PSA cascade, refresh from PSA, canonical deal facts, single source of truth, PSA drift, or any request to propagate executed-PSA data to downstream deliverables (DD checklist, IC memo, rent roll, title instructions, underwriting model, Notion deal record). Also trigger when the user uploads an executed or near-final PSA (DOCX/PDF) and says 'cascade this,' 'update all the docs,' 'make the workbook match,' 'sync the deal record,' or 'reconcile everything to this version.' Produces a canonical Fact Table (XLSX) as the transaction's single source of truth plus instruction packs per downstream deliverable. Does NOT negotiate, draft, or redline the PSA — that is deal-execution. v1.3 (2026-07-08: dropped orphaned lease-abstraction ref)"
 ---
 
 # PSA Reconciliation — Canonical Fact Extraction & Cascade
@@ -198,7 +198,7 @@ Start this skill without asking for confirmation when the user says any of:
 
 - Draft, negotiate, or redline the PSA → `deal-execution`
 - Underwrite the deal or build the pro forma → `acquisition-underwriting`, `underwrite`
-- Abstract leases → `lease-abstraction`, `lease-abstraction-pipeline`
+- Abstract leases → `lease-abstraction-pipeline`
 - QC the rent roll before delivery → `rent-roll-qc`
 - File Notion deal records from scratch → this skill updates, it does not create the record
 

@@ -204,7 +204,7 @@ Generate one actionable suggestion for improving ORA's software automation, file
 1. Zapier — new automation (specify trigger → filter → action)
 2. HubSpot — workflow, property, or view for pipeline visibility
 3. Notion — database improvement, formula, or view
-4. QuickBooks — report, memorized transaction, or class structure improvement
+4. QuickBooks Desktop — report, memorized transaction, or class structure improvement (manual access via SharePoint export; no live MCP)
 5. PM Platforms — Rent Manager, AppFolio, or Yardi feature to leverage
 6. Document management — naming convention, folder structure, or template
 7. Claude / AI — a script or automation buildable in one session

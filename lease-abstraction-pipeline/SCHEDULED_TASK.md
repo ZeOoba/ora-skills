@@ -2,7 +2,7 @@
 
 # Oxford Realty Advisors | Cowork Scheduled Task Configuration
 
-# Version: 1.0 | Created: 2026-04-04
+# Version: 2.2 | Created: 2026-04-04 | Synced to companion SKILL.md 2026-07-08 (Skill Text Audit finding 10 — previously stamped 1.0/2026-04-04 while SKILL.md had advanced to v2.1; this file is not versioned independently, it tracks SKILL.md)
 
 ---
 
@@ -39,7 +39,7 @@ SettingManual RunScheduled RunPause for individual lease ambiguityNeverNeverAuto
 1. **Inventory SharePoint Lease folder** — log file count, types, estimated scanned PDFs
 2. **Process each file** — ingest → extract 30 fields → compute derived metrics → apply quality flags
 3. **Build XLSX workbook** — all 6 tabs per [SKILL.md](http://SKILL.md) spec
-4. **Save XLSX to SharePoint** — folder: `Oxford Realty Advisors > Lease Abstracts > [Year]`. File naming follows ORA File-Naming Standard v1.0+ — `YYYYMMDD_[Subject]_[DocType]_v##.ext` format. Canonical: `Claude_Workspace/00_Governance/References/Standards/ORA File-Naming Standard 2026-05-14.md`
+4. **Save XLSX to SharePoint** — folder: `Oxford Realty Advisors > Lease Abstracts > [Year]`. File naming per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Settings v2.0, 2026-06-11 — do NOT unify). This is a session/analysis output → use `YYYY-MM-DD_[Topic]_[DocType]_v##.ext` in an `/outputs/` subfolder. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
 5. **Upsert Notion Tenant Database** — update existing, create new, skip newer records
 6. **Auto-send completion email** to [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) cc [egoldberg@oxfordra.net](mailto:egoldberg@oxfordra.net) (see template below)
 7. **Log run** in Notion Operations Hub — "Lease Pipeline Run — \[Date\]" page

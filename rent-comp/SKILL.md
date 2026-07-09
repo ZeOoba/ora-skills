@@ -1,6 +1,6 @@
 ---
 name: rent-comp
-description: "Automated rent comparable and sale comparable research for Oxford Realty Advisors target markets. Use this skill whenever the user mentions: rent comps, comparable rents, market rent, asking rent, comparable sales, sale comps, transaction comps, cap rate comps, price per SF comps, market analysis, rental rate research, or any request to find comparable lease rates or property sales in a specific submarket. Also trigger when underwriting a deal and market comps are needed."
+description: "Automated rent comparable and sale comparable research for Oxford Realty Advisors target markets. Use this skill whenever the user mentions: rent comps, comparable rents, market rent, asking rent, comparable sales, sale comps, transaction comps, cap rate comps, price per SF comps, market analysis, rental rate research, or any request to find comparable lease rates or property sales in a specific submarket. Also trigger when underwriting a deal and market comps are needed. v1.1 (2026-07-08: file-naming citation repointed from the superseded single 2026-05-14 standard to the ratified three-schema doctrine)"
 ---
 
 # Automated Rent & Sale Comparable Research
@@ -137,7 +137,7 @@ Use the xlsx skill to produce:
 - **Tab 4 — Market Context:** Vacancy, absorption, supply pipeline
 - **Tab 5 — Source Log:** All URLs and dates for audit trail
 
-File naming: Follow ORA File-Naming Standard v1.0+ — `YYYYMMDD_[Subject]_[DocType]_v##.ext` format. Canonical: `Claude_Workspace/00_Governance/References/Standards/ORA File-Naming Standard 2026-05-14.md`
+File naming: per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Settings v2.0, 2026-06-11 — do NOT unify). This comp-research deliverable is a session/analysis output → use `YYYY-MM-DD_[Topic]_[DocType]_v##.ext` in an `/outputs/` subfolder. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
 
 ### Notion Integration
 When comps are collected, offer to add them to the Comparable Data database in Notion for long-term tracking and portfolio-wide analysis.
@@ -175,3 +175,7 @@ Reference these Oxford portfolio benchmarks when contextualizing comps:
 - **tax-appeal:** Use sale comps for comparable sales approach in tax appeal analysis
 - **market-monitor:** Supplement with macro market data and trend analysis
 - **lease-abstraction-pipeline:** Compare extracted in-place rents against current market comps (skill renamed in v2.0; formerly `lease-abstraction`)
+
+## Changelog
+
+- v1.1 (2026-07-08): HIGH fix (Skill Text Audit finding 4) — added §6 benchmark rows for the 5 canonical markets missing from the table (Cincinnati OH, Madison WI, Grand Rapids MI, Richmond VA, Des Moines IA), sourced from `target-markets.json` and live 2026-05-30 brokerage research. This repo copy already carried the rows; the installed Cowork runtime copy did not (drift) — repackage and reinstall via `package-and-stage-skill`. Also (bonus, beyond audit scope): repointed the §-level file-naming citation from the superseded single "ORA File-Naming Standard 2026-05-14.md" to the ratified three-schema doctrine (see finding 5 handling).
