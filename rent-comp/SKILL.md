@@ -146,7 +146,7 @@ When comps are collected, offer to add them to the Comparable Data database in N
 
 ## 6. OXFORD MARKET BENCHMARKS
 
-> Target-market roster is governed by `skills/target-markets.json` (v1.0+); the entry-phase markets carry sourced metrics there too. Keep this table's market rows in parity with that file.
+> Target-market roster is governed by `target-markets.json` (v1.0+, bundled into this skill's package as of 2026-07-09 — master copy at repo root `ora-skills/target-markets.json`); the entry-phase markets carry sourced metrics there too. Keep this table's market rows in parity with that file.
 
 Reference these Oxford portfolio benchmarks when contextualizing comps:
 
