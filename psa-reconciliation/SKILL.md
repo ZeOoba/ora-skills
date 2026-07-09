@@ -1,6 +1,6 @@
 ---
 name: psa-reconciliation
-description: "Oxford Realty Advisors PSA fact extraction and cascade reconciliation. Use whenever the user mentions: reconcile PSA, extract PSA facts, PSA to workbook or IC memo, update from PSA, PSA reconciliation, canonical facts, build fact table, PSA cascade, refresh from PSA, canonical deal facts, single source of truth, PSA drift, or any request to propagate executed-PSA data to downstream deliverables (DD checklist, IC memo, rent roll, title instructions, underwriting model, Notion deal record). Also trigger when the user uploads an executed or near-final PSA (DOCX/PDF) and says 'cascade this,' 'update all the docs,' 'make the workbook match,' 'sync the deal record,' or 'reconcile everything to this version.' Produces a canonical Fact Table (XLSX) as the transaction's single source of truth plus instruction packs per downstream deliverable. Does NOT negotiate, draft, or redline the PSA — that is deal-execution. v1.3 (2026-07-08: dropped orphaned lease-abstraction ref)"
+description: "Oxford Realty Advisors PSA fact extraction and cascade reconciliation. Use whenever the user mentions: reconcile PSA, extract PSA facts, PSA to workbook or IC memo, update from PSA, PSA reconciliation, canonical facts, build fact table, PSA cascade, refresh from PSA, canonical deal facts, single source of truth, PSA drift, or any request to propagate executed-PSA data to downstream deliverables (DD checklist, IC memo, rent roll, title instructions, underwriting model, Notion deal record). Also trigger when the user uploads an executed or near-final PSA (DOCX/PDF) and says 'cascade this,' 'update all the docs,' 'make the workbook match,' 'sync the deal record,' or 'reconcile everything to this version.' Produces a canonical Fact Table (XLSX) as the transaction's single source of truth plus instruction packs per downstream deliverable. Does NOT negotiate, draft, or redline the PSA — that is deal-execution. v1.4 (2026-07-09: Step 4 title banner template-token fix — [PropertyShortName] replaces hardcoded E. Fulton Portfolio; no behavior change. Prior: v1.3 2026-07-08 dropped orphaned lease-abstraction ref)"
 ---
 
 # PSA Reconciliation — Canonical Fact Extraction & Cascade
@@ -111,7 +111,7 @@ Record every failure as a row in the Fact Table with Flag = Conflicting (Flag = 
 
 Produce the Fact Table as a single-tab workbook. Apply ORA Institutional Style Guide:
 
-- **Title banner** (merged, Row 1): "E. Fulton Portfolio — Canonical Fact Table (PSA Reconciliation)" — Oxford Navy fill `#1B2A4A`, white DM Sans 14pt Bold, centered.
+- **Title banner** (merged, Row 1): "[PropertyShortName] — Canonical Fact Table (PSA Reconciliation)" — Oxford Navy fill `#1B2A4A`, white DM Sans 14pt Bold, centered.
 - **Subtitle** (merged, Row 2): "PSA Effective Date: [date] · Produced: [today] · Single source of truth for all downstream deliverables" — italic DM Sans 10pt.
 - **Section bands** (full-row fill, Oxford Gold `#C9A96E` with Navy text, DM Sans 11pt Bold) at the start of each of the 12 schema sections.
 - **Headers** (Row 4): DM Sans 10pt Bold, white on Navy fill, centered, wrapped.
