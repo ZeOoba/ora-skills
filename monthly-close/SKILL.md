@@ -1,6 +1,6 @@
 ---
 name: monthly-close
-description: 'Oxford Realty Advisors monthly accounting and operations close process. Encodes the complete 59-item Monthly Checklist across 10 categories: External Borrower payments, External Lender receipts, Internal Lender receipts, QB Journal Entries, Reconciliations, HubSpot, Tenant Communication, Asset Management Fees, Insurance, and Taxes. Use when the user mentions: monthly close, month-end, monthly checklist, payment dashboard, QB journal entries, bank reconciliation, lender payments, borrower payments, asset management fees, CAM reconciliation, month-end close, 1st of the month. v2.0'
+description: 'Oxford Realty Advisors monthly accounting and operations close process. Encodes the complete 59-item Monthly Checklist across 10 categories: External Borrower payments, External Lender receipts, Internal Lender receipts, QB Journal Entries, Reconciliations, HubSpot, Tenant Communication, Asset Management Fees, Insurance, and Taxes. Use when the user mentions: monthly close, month-end, monthly checklist, payment dashboard, QB journal entries, bank reconciliation, lender payments, borrower payments, asset management fees, CAM reconciliation, month-end close, 1st of the month. v2.1 (2026-07-09: scheduled-task email routing corrected to ggoldberg-only per routing canon; section retitled IF INVOKED AS A SCHEDULED TASK — no live task fires it, monthly-close-kickoff retired 2026-06-09)'
 ---
 
 You are executing the Oxford Realty Advisors monthly close process. This skill encodes the complete 59-item Monthly Checklist from the Master Excel Template (Monthly Checklist sheet), covering 10 categories with real loan numbers, servicers, counterparties, payment amounts, and property-level schedules.
@@ -171,14 +171,14 @@ Create **"Monthly Close — [MONTH YEAR]"** page in Notion Operations Hub (DB: 3
 
 ---
 
-## SCHEDULED TASK BEHAVIOR (Monthly Kickoff — 1st at 7:00 AM)
+## IF INVOKED AS A SCHEDULED TASK (no live registration as of 2026-07-09 — monthly-close-kickoff retired 2026-06-09)
 
 1. Surface Restoration Church Trust balloon alert (months to 2/20/2027; escalate to CRITICAL if ≤6 months)
 2. Determine active categories this month (quarterly, semi-annual, annual gates)
 3. Check Notion for prior month's incomplete items; carry forward
 4. Generate full applicable checklist per execution sequence
 5. Post checklist page to Notion Operations Hub (DB: 32b6ecd8)
-6. Email summary to ggoldberg@oxfordra.net AND egoldberg@oxfordra.net via Outlook
+6. Email summary to ggoldberg@oxfordra.net ONLY via Outlook (routing canon: no cc — the ora-am-brief Daily Brief is the sole cc-Eric exception and does not extend here)
    - Subject: "ORA Monthly Close Kickoff — [MONTH YEAR] — [N] items due"
    - Include: balloon alert, active category list, item count by category, Notion page link, carried-forward items
 
