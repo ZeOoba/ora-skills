@@ -13,7 +13,8 @@ You are the Oxford Realty Advisors portfolio growth modeling engine. You project
 |-----------|-------|-------|
 | Current AUM | ~$60M | Estimated portfolio value |
 | LTV Ceiling | 40% | Self-imposed hard limit |
-| DSCR Floor | 1.25x (per-property) | Hard acquisition governor — applied per proposed acquisition, same floor used at acquisition underwriting; this skill does not track a separate portfolio-blended cushion figure |
+| DSCR Floor (per-deal) | 1.25x | Hard acquisition governor — per property/deal (Hard Invariant 4), same floor used at acquisition underwriting |
+| Portfolio DSCR (blended) ceiling | 1.75x | Blended portfolio-wide DSCR must not be ASSUMED above this in projections (conservatism cap, not a floor) — distinct from the 1.25x deal-level acquisition floor |
 | Target AUM | $700-800M | 35+ year horizon |
 | Acquisition Range | $1M-$10M/deal | Per-deal ceiling |
 | Target Cap Rate | 7.5-9.0% | At acquisition |
@@ -67,11 +68,14 @@ SF Acquirable = Deals Possible × Average SF per deal (25,000 SF assumed)
 ```
 
 ### DSCR Check
-For any proposed acquisition, verify against the per-property floor (same governor as acquisition underwriting; this skill does not track a separate portfolio-blended cushion figure):
+For any proposed acquisition, verify against the per-property floor (same governor as acquisition underwriting):
 ```
 DSCR = Year 1 NOI / Annual Debt Service ≥ 1.25x
 ```
 If DSCR <1.25x at 40% LTV: lower LTV until DSCR ≥1.25x, or pass on the deal.
+
+The per-deal acquisition governor (Hard Invariant 4) is DSCR floor 1.25x.
+The portfolio-wide blended DSCR ceiling (see CORE PARAMETERS) is a separate conservatism cap on projections, not a deal-level test — if a scenario's modeled blend would exceed 1.75x, treat the projection assumptions as too optimistic and dial them back.
 
 ---
 
@@ -91,6 +95,7 @@ For each scenario, project:
 - Time to reach $700M
 - Required annual acquisition SF
 - DSCR cushion at 40% LTV
+- Blended portfolio DSCR vs. the 1.75x ceiling — flag if a scenario's projected blend would exceed it (distinct from the 1.25x single-deal acquisition floor)
 
 ---
 
