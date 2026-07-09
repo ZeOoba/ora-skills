@@ -10,11 +10,8 @@ description: >
   Trigger phrases: strategic audit, business audit, is the command center working,
   what should we build next, platform effectiveness, what's the ROI of the command center.
   Complementary to cc-audit-army (which reviews code correctness, not business value).
-  v1.1 — 2026-07-08 (Skill Text Audit remediation: dispatch step surface note added —
-  Code uses subagent-driven-development, Cowork uses the Agent tool directly; the six
-  `~/.claude/scheduled-tasks/` CC-fleet references flagged UNVERIFIED — not reachable
-  from this Cowork session, needs Code-surface confirmation; stale LAMS/Cowork fleet
-  count corrected from "5" to a live-pull instruction)
+  v1.1 — 2026-07-08 (dispatch step: Code uses subagent-driven-development, Cowork uses
+  the Agent tool; six CC-fleet task refs flagged UNVERIFIED, needs Code-surface check)
 ---
 
 # Oxford Command Center — Strategic Business Audit
