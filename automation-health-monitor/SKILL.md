@@ -1,6 +1,6 @@
 ---
 name: automation-health-monitor
-description: 'Scheduled health check for all Oxford Realty Advisors Cowork automations. Runs every weekday at 11:00 AM. Enumerates the live dual-fleet scheduled-task registries (CC/MCP + LAMS/Cowork) via list_scheduled_tasks, checks each enabled task for evidence of recent execution, posts status report to Notion Operations Hub, and drafts failure notification email to [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (routing canon 2026-06-10 — no cc) if any task missed. Trigger phrases: automation health, task health, health check, scheduled task status, automation monitor, did my tasks run. v1.2 (2026-07-08: the v1.1 hardcoded legacy 9(+)-task table and task-named Remediation Guidance were never actually removed despite the v1.1 changelog claiming it — now genuinely replaced with an explicitly-illustrative, dated live-pull snapshot plus generic/current-task remediation; ora-lease-expiration-brief schedule slip corrected 8:20→8:30 AM)'
+description: 'Scheduled health check for all Oxford Realty Advisors Cowork automations. Runs every weekday at 11:00 AM. Enumerates the live dual-fleet scheduled-task registries (CC/MCP + LAMS/Cowork) via list_scheduled_tasks, checks each enabled task for evidence of recent execution, posts status report to Notion Operations Hub, and drafts failure notification email to [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (routing canon 2026-06-10 — no cc) if any task missed. Trigger phrases: automation health, task health, health check, scheduled task status, automation monitor, did my tasks run. v1.3 (2026-07-10: added Step 3.5 machine-offline correlation — collapse per-task alerts into one Notion note when a Task Scheduler gap / LAMS catch-up / git-fetch-unreachable signature spans multiple self-recovered tasks in the same window, instead of one Gabriel email per task; never applies to GATE CHECK FAILED/CRITICAL. Companion to deploy-mirror.ps1/lib/deploy-alert.ps1 offline-signature suppression in oxford-command-center. v1.2 2026-07-08: the v1.1 hardcoded legacy 9(+)-task table and task-named Remediation Guidance were never actually removed despite the v1.1 changelog claiming it — now genuinely replaced with an explicitly-illustrative, dated live-pull snapshot plus generic/current-task remediation; ora-lease-expiration-brief schedule slip corrected 8:20→8:30 AM)'
 ---
 
 You are the automation health monitor for Oxford Realty Advisors. Your job is to verify that all scheduled Cowork tasks ran as expected and alert Gabriel immediately if any failed silently.
@@ -52,9 +52,35 @@ Create or update a "Automation Health — \[Today's Date\]" page in the Notion O
 [Any auto-remediation steps or notifications sent]
 ```
 
+### Step 3.5 — Correlate against a known machine-offline window before alerting per-task
+
+Incident (2026-07-10): the machine was offline ~10:15–11:00 ET. Two hourly `deploy-mirror.ps1`
+runs each fired their own "Mirror deploy FAILED" email (queued in Outlook, both delivered at
+11:07 when connectivity returned), and this task then added a THIRD, separate ALARM addendum
+at 11:13 for the same incident — three alerts for one transient outage. `deploy-mirror.ps1` /
+`lib\deploy-alert.ps1` now self-suppresses repeat "git fetch/pull failed" alerts into one
+digest on its own (see that repo's `reference_command_center_mirror_deploy_gap.md`), but this
+task runs independently and can't see that state file — so apply the same judgment here:
+
+- Before drafting a per-task alert, check whether the missed/failed task(s) share a single
+  root-cause signature: a gap in Windows Task Scheduler history across MULTIPLE unrelated
+  tasks in the same window, a LAMS fleet catch-up firing, or a task's own output/log citing
+  `git fetch`/`git pull`/"network unreachable"/"could not resolve host". That pattern means
+  **the machine was offline**, not that N different automations independently broke.
+- If that pattern holds AND the affected task(s) show evidence of self-recovery (a successful
+  run after the gap closes), do NOT draft a separate Gabriel alert for each one — note it once
+  in the Notion status report as a single "machine offline HH:MM–HH:MM ET, N tasks affected,
+  all self-recovered" line, and skip Step 4 for those tasks entirely.
+- If a task in that same window did NOT show evidence of recovery once the outage window
+  closed, still alert individually for that task — the correlation covers the transient
+  blip, not a genuine independent failure that happens to overlap it.
+- This correlation NEVER applies to a GATE CHECK FAILED / CRITICAL confidential-exposure
+  signature — that alert class stays loud and per-incident regardless of what else is
+  happening on the machine.
+
 ### Step 4 — Alert Gabriel on any failures
 
-If any task shows ⚠️ or ❌:
+If any task shows ⚠️ or ❌ (and Step 3.5 didn't already fold it into a single offline-window note):
 
 1. Draft a notification email to [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (no cc — routing canon 2026-06-10; the cc-Eric exception applies solely to the ora-am-brief Daily Brief). Send path when running unattended: Outlook COM via `C:\Users\Owner\.claude\scheduled-tasks\_shared\send-via-outlook.ps1` — the SOLE send path. Include:
    - Subject: "⚠️ Cowork Automation Alert — \[Task Name\] missed \[date\]"
