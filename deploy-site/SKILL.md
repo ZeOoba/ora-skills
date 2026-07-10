@@ -31,18 +31,38 @@ corrupt the current site. Do not use it; do not "sync" from it.
    `npx -y netlify-cli deploy --cwd "C:/Users/Owner/website-canonical" --dir "C:/Users/Owner/website-canonical" --site 95ac0a0f-a84d-4400-b919-b8d7a8526646 --message "<branch@sha>"`
    Returns a `*.netlify.app` preview URL. Verify the change there —
    Claude_Preview or a manual click-through — before going further.
-5. **Ask Gabriel explicitly**, naming the branch/commit and exactly what
-   will change on prod. Do not proceed without that confirmation, live,
-   in this turn.
-6. Only after confirmation: create the 60-minute override sentinel at
+5. **Chat-regression gate (mandatory, every draft — no exceptions for
+   "just a CSS fix"):**
+   `node scripts/eval-chat.mjs --base=<draft-url>` from
+   `C:/Users/Owner/website-canonical`, where `<draft-url>` is the
+   `*.netlify.app` URL from step 4. This runs every fixture in
+   `evals/fixtures.json` against the draft's `/api/chat` endpoint and
+   writes `evals/results-<timestamp>.json`. Acceptance is the script's own
+   exit code (0 = pass: ≥95% overall AND 100% on every `Refusal*`
+   category) — trust the exit code, don't eyeball the printed
+   percentages. On a nonzero exit: STOP. Do not proceed to step 6. Report
+   the failing case IDs/categories from the `[acceptance]` summary line,
+   then either fix the regression on the branch and redeploy a fresh
+   draft (back to step 4), or surface the failure to Gabriel and wait —
+   never ask for prod confirmation on a draft that failed its own
+   regression gate, even if the failure looks unrelated to what the
+   branch changed.
+6. **Ask Gabriel explicitly**, naming the branch/commit, the eval-gate
+   result (pass, with the pct), and exactly what will change on prod. Do
+   not proceed without that confirmation, live, in this turn.
+7. Only after confirmation: create the 60-minute override sentinel at
    `~/.claude/hooks/overrides/allow-website-change` (never self-create this
    in a scheduled/headless session — flag and stop instead), then run the
    same command with `--prod` appended. Delete the sentinel immediately
    after the deploy completes.
-7. Post-verify: `curl -s -o /dev/null -w "%{http_code}" https://oxfordra.net/`
-   expect 200; spot-check the changed page(s) in Chrome.
-8. Append the release to `memory/event_log.md` (target, what shipped,
-   verification result).
+8. Post-verify: `curl -s -o /dev/null -w "%{http_code}" https://oxfordra.net/`
+   expect 200; spot-check the changed page(s) in Chrome. If the change
+   touched chat behavior, also run
+   `node scripts/eval-chat.mjs` (no `--base`, defaults to prod) once the
+   deploy is live, as a second confirmation the regression gate result
+   still holds against prod itself.
+9. Append the release to `memory/event_log.md` (target, what shipped,
+   eval-gate result, verification result).
 
 If the Netlify CLI reports 401/"could not retrieve project", the stored
 token is stale — `npx netlify-cli login` (interactive OAuth; the user
