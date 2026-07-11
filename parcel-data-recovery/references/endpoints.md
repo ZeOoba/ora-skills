@@ -1,48 +1,108 @@
-# Verified County Endpoints — ORA Parcel Data Recovery
-All verified live 2026-06-11 unless noted. Match rates from the v03 recovery run.
+# Verified County Endpoints — ORA Parcel Data Recovery (v2)
+Replaces `references/endpoints.md`. v2 corrections (2026-06-16): Jackson `total_sqft` relabeled LAND;
+added FEMA USA Structures fallback, Franklin OH, and the Indianapolis metro. Match rates from the runs noted.
 
-## Jackson County, MO (KC) — 98.3% (1,807/1,839)
-- **Endpoint:** `https://jcgis.jacksongov.org/arcgis/rest/services/ParcelViewer/ParcelsAscendRelate/MapServer/2` (table `Ascend_GisInfo`, Tyler/Ascend CAMA relate)
-- **Join:** `parcel_number`, dashed format exactly as screens ship (`29-320-30-03-00-0-00-000`)
-- **Fields:** `total_sqft` (assessor total bldg SF), `landuse_cd`/`landuse_cd_descr`; `year_built` ~unpopulated for commercial
-- **Caveats:** gis.jacksongov.org (no `jc` prefix) is NOT the same host and is unreachable. Underground/cave complexes carry multi-million SF — flag bldg_sf > 1M. Workbook "Assessed/Auditor $" for Jackson is FRACTIONAL assessED (32% statutory): market = assessed / 0.32.
+## ⚠️ v2 critical corrections
+- **Jackson MO `total_sqft` is LAND area, NOT building SF** (v1 was wrong — it equals the screen "Land
+  SF"; a 195,971 parcel survived the >50K-SF kill gate). Use FEMA USA Structures (below) for Jackson
+  building SF.
+- **Marion IN `ESTSQFT` is LOT square footage, not building** — never use as building SF.
+- Always run the **land-vs-building unit-assertion gate** (SKILL.md QC, Edit 2 above) before shipping
+  any recovered SF.
 
-## Wyandotte County, KS / UG KCK — SF 97.9% (779/796); values 75% (597/796, 2019 vintage)
-- **SF:** AGOL org `services1.arcgis.com/Qo2HHQp8vgPs2wg3` — `Building_Footprint/FeatureServer/1` footprints (Shape__Area, sq ft) intersected with parcels from `Parcel_py_Values/FeatureServer/0` (join `PARCEL_NBR`). Footprints drawn ≤2020-12; post-2020 construction missing.
-- **Values:** `Commercial_18_19/FeatureServer/1`, join `PARCEL` (string; `PARCEL_NBR` there is integer) — `AppraisedTotal2019` etc. **STALE 2019.**
-- **CRITICAL:** UG's published `SqFootage`/`SQFT` attributes are LAND area, not building area (verified ≈ ACRE × 43,560). Never use as building SF.
-- **Live CAMA:** `landsweb.wycokck.org` / `maps.wycokck.org` — DOWN at origin (521/timeout) 2026-06-11. Recheck before Wyandotte reprice; replace 2019 values when live.
+## FEMA USA Structures — universal building-SF fallback (NEW)
+For any county with no usable footprint/CAMA building source:
+- **Service:** `https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/USA_Structures_View/FeatureServer/0`
+  — field `SQFEET` (true building sq ft; vintage ~2016–2020, post-2020 construction missing).
+- **Method:** spatial-intersect FEMA structures with the county parcel polygon; FEMA-vs-county geometry
+  is misregistered, so use **Intersects + majority-in (>50%)**, not Contains; for straddlers,
+  area-proportional clip. Take area from `SQFEET`, never recompute from Web Mercator.
+- Footprint = ground-floor floor ⇒ multi-story understated; tag `method=fema_structures_majority_in`.
 
-## Clay County, MO (KC) — 97.9% (503/514)
-- **Endpoint:** `https://gisweb.claycountymo.gov/s/rest/services/InternetmapParcel2/MapServer` via the county's proxy `…/proxy/proxy.ashx?<url>` (injects required token). Layer 3 "Taxable Parcels" (CAMA attrs), layer 0 "Building Footprints" (geometry-only; st_area).
-- **Renumbered parcels:** assessor `/pub/rest/parcels?situs=` JSON API (needs Referer header).
-- **Caveats:** `actual_year_built`/`total_area` published for residential only ⇒ commercial SF = footprint-intersect. Workbook values are market-basis (median ~$30/SF) — no ratio conversion.
+## Franklin County, OH (Columbus) — land area + building SF (NEW) — 1,130/1,132 (99.8%)
+- **Endpoint:** `https://gis.franklincountyohio.gov/hosting/rest/services/ParcelFeatures/Parcel_Features/MapServer/0` (layer "Tax Parcel").
+- **Join:** `PARCELID`, dashed exactly as screens ship (`010-113471`).
+- **Fields:** `STATEDAREA` = land **square feet** (aliased "Legal Acres" but is sq ft — 24,107 = 0.55
+  ac); `BLDGAREA` (matches auditor bldg SF); `ACRES` (GIS) is null service-wide — use `STATEDAREA`.
+- **FAR:** Bldg SF ÷ `STATEDAREA` directly (STATEDAREA already sq ft — do NOT ×43,560).
 
-## Hamilton County, OH (Cincinnati) — 89.4% (1,840/2,058)
-- **Parcels+values:** CAGIS `https://cagisonline.hamilton-co.org/arcgis/rest/services/COUNTYWIDE/AuditorParcelInformation/MapServer/15`, join `PARCELID` (12-digit). Fields: `MKTLND`, `MKTIMP`, `MKT_TOTAL_VAL` (full market — fixes the impMktModeled improvements-only defect), `DELQ_TAXES`, `ANNUAL_TAXES`, `ACREDEED`, `SALAMT`, `SALDAT` (Excel serial), `LUCLASS`, `OWNNM1`.
-- **SF:** `COUNTYWIDE/PlanimetricLayers/MapServer/6` "Building Polygons" (`SQFT`, `EST_STORY`; `YEAR_BUILT` unpopulated) — spatial intersect with L15 parcel geometry, one POST per parcel (threaded ~12 workers; ~2,000 parcels ≈ 4 bash batches).
-- **Caveats:** L17 "Auditor Building Info" SQFT fields are residential-only (null for commercial). 811/1,840 parcels have EST_STORY > 1 — GBA understated by footprint.
+## Jackson County, MO (KC) — building SF via FEMA — 1,762/1,839 (95.8%)
+- **Building SF:** FEMA USA Structures (above) intersected (majority-in) with parcel polygons
+  `https://jcgis.jacksongov.org/arcgis/rest/services/ParcelViewer/ParcelsAscendRelate/MapServer/1`
+  (join `Name`, dashed). Jackson County GIS has NO native footprint/structure layer.
+- **Land area:** screen "Land SF" (= the Ascend `total_sqft`, which is LAND). **Do NOT use `total_sqft`
+  as building SF.**
+- **Caveats:** `gis.jacksongov.org` (no `jc`) is a different, unreachable host. Underground complexes
+  carry multi-million SF — flag >1M. Ascend "Assessed/Auditor $" is fractional (÷0.32 for market).
 
-## Butler County, OH — SF 89.6% (722/806); values 100%
-- **PIN match:** `https://maps.butlercountyauditor.org/arcgis/rest/services/PARCELSEARCH/MapServer/0` (PIN, LUC, YRBLT; value fields null).
-- **SF (GBA):** Tyler iasWorld datalet scrape `https://propertysearch.bcohio.gov/Datalets/Datalet.aspx?mode=commercial&UseSearch=no&pin=<PIN>` — sum `AREA` lines of "COMMERCIAL INTERIOR/EXTERIOR (ALL CARDS)".
-- **Values:** same host, `mode=profileall` — "Land/Building/Total Value (100%)", tax year 2025; prior-year delinquency from the tax table.
+## Clay County, MO (KC) — 447/514 (87.0%)
+- **Building SF:** footprint layer 0 (st_area) at `https://gisweb.claycountymo.gov/s/rest/services/InternetmapParcel2/MapServer`
+  via county proxy `…/proxy/proxy.ashx?<url>` (injects token); layer 3 "Taxable Parcels" for CAMA.
+  Renumbered parcels: assessor `/pub/rest/parcels?situs=` (needs Referer).
+- **Caveats:** `actual_year_built`/`total_area` residential-only ⇒ commercial SF = footprint. Values
+  market-basis (~$30/SF) — no ratio.
 
-## Clermont County, OH — SF 73.5% (241/328); values 97%
-- **Bulk CAMA:** `https://www.clermontauditor.org/wp-content/uploads/PublicAccess/CLERMONT_AA407.ZIP` (full iasWorld DAT tables). SF = Σ `COMINTEXT.AREA` per parcel (cross-check `COMDAT.AREASUM`); values = `APRVAL.DAT` APRLAND/APRBLDG/APRTOT (latest active TAXYR); delq = `CHARGE.DAT` NETDELQ; LUC = PARDAT.
-- **Footprint fallback:** `https://maps.clermontcountyohio.gov/server/rest/services/WMAS/BuildingOutlines/MapServer/0` (has `PIN`; `area` already sq ft).
-- **Caveats:** PINs carry trailing dots — preserve exactly. OBY.DAT yard items are paving-contaminated; never report as building SF.
+## Wyandotte County, KS / UG KCK — 733/797 (92.0%)
+- **Building SF:** AGOL `services1.arcgis.com/Qo2HHQp8vgPs2wg3` `Building_Footprint/FeatureServer/1`
+  (`Shape__Area`, sq ft) intersected with `Parcel_py_Values/FeatureServer/0` (join `PARCEL_NBR`).
+  Footprints ≤2020-12.
+- **CRITICAL:** UG's published `SqFootage`/`SQFT` are LAND (≈acre×43,560) — never building.
+- **Values:** `Commercial_18_19/FeatureServer/1` (join `PARCEL` string) `AppraisedTotal2019` — STALE
+  2019; KS commercial market = assessed/0.25. Live CAMA `landsweb.wycokck.org`/`maps.wycokck.org` was
+  down 2026-06-11 — recheck before any Wyandotte reprice.
 
-## Warren County, OH — SF 76.9% (319/415); values 99.3%
-- **Account map:** nightly export `https://auditor.warrencountyohio.gov/propertysearch/PublicDataExport/DownloadData` — SummaryData.csv maps ParcelNumber→AccountNumber. **Export strips leading zeros from parcel numbers** — normalize before joining.
-- **SF:** scrape `…/PropertySearch/Summary/Building?account_nbr=<acct>` (+`blg_nbr` per building; sum all buildings). CommercialBuildingData/FloorData CSVs in the export are header-only (county defect).
-- **Values:** ValuesData.csv LandMarketValue/BuildingMarketValue — **sum component rows per account-year** (TIF/exempt splits; single-row reads understate). Delq: scrape Summary/Index "Due" row.
-- **Caveats:** ~54 parcels carried at Area=0 (sound-value pricing) — no published SF; GIS folders token-locked.
+## Hamilton County, OH (Cincinnati) — ~185 (Top-150 + leads)
+- **Parcels+values:** CAGIS `…/COUNTYWIDE/AuditorParcelInformation/MapServer/15` (join `PARCELID`
+  12-digit; `MKT_TOTAL_VAL`, `DELQ_TAXES`, `ACREDEED`, `LUCLASS`).
+- **SF:** `COUNTYWIDE/PlanimetricLayers/MapServer/6` "Building Polygons" (`SQFT`, `EST_STORY`)
+  spatial-intersect with L15 geometry. L17 SQFT is residential-only.
 
-## Statutory assessment ratios (value-basis conversions)
-- MO commercial assessed = 32% of market → market = assessed / 0.32
-- KS commercial assessed = 25% of appraised → appraised = assessed / 0.25
-- OH auditor values are 100% market (35% assessed exists but screens ship market)
+## Butler County, OH — 206/206 (100%)
+- **PIN/LUC/YrBlt + ACRES:** `https://maps.butlercountyauditor.org/arcgis/rest/services/PARCELSEARCH/MapServer/0`
+  (value fields null).
+- **Building GBA (true, multi-story captured):** Tyler iasWorld datalet
+  `https://propertysearch.bcohio.gov/Datalets/Datalet.aspx?mode=commercial&UseSearch=no&pin=<PIN>` —
+  sum `AREA` of "COMMERCIAL INTERIOR/EXTERIOR (ALL CARDS)". No Butler footprint layer exists.
+- **Values:** same host `mode=profileall` (100% values, TY2025).
 
-## Not yet researched
-Indianapolis metro (Marion, Hendricks, Boone, Hamilton-IN, Johnson), Madison/Dane WI NO-SF rows, Baltimore SDAT name-recovery, Henrico mail addresses.
+## Clermont County, OH — 250/365 (68%)
+- **Building SF (fast):** footprint ArcGIS
+  `https://maps.clermontcountyohio.gov/server/rest/services/WMAS/BuildingOutlines/MapServer/0`
+  (`PIN`; `area` already sq ft), summed per PIN. PINs carry trailing dots — preserve.
+- **Bulk CAMA (alt):** `https://www.clermontauditor.org/wp-content/uploads/PublicAccess/CLERMONT_AA407.ZIP`
+  (iasWorld DAT: SF = Σ COMINTEXT.AREA; values APRVAL.DAT; delq CHARGE.DAT). Footprint-less
+  vacant/300-LUC = NO-SF.
+
+## Warren County, OH — 311/452 (68%)
+- **Account map + land + values:** nightly export
+  `https://auditor.warrencountyohio.gov/propertysearch/PublicDataExport/DownloadData` (SummaryData.csv
+  ParcelNumber→AccountNumber; **strips leading zeros** — normalize). ValuesData.csv — sum component
+  rows per account-year.
+- **Building SF:** scrape `…/PropertySearch/Summary/Building?account_nbr=<acct>` per building.
+- **v2 caveat (corrects v1):** the CommercialBuilding/FloorData export files carry rows but `AREA` is
+  **zero-filled** (still unusable); the per-building AJAX **zero-fills non-primary buildings** (server
+  defect) — scrape captures the PRIMARY building only ⇒ multi-building GBA UNDERSTATED. Tag
+  `scrape-primary-bldg(of N; total UNDERSTATED)`; SF-verify any multi-bldg row that screens IN before
+  LOI. ~54 Area=0 sound-value parcels = NO-SF.
+
+## Indianapolis metro (NEW)
+- **Marion:** parcels `https://gis.indy.gov/.../sde_Parcel/sde_Parcel/MapServer/5` (`ACREAGE`, join
+  `STATEPARCELNUMBER` dashed); buildings `…/sde_Buildings/sde_Buildings/MapServer/0` (join
+  `PARCEL_TAG`; `SHAPE.STArea()` sq ft, SR 2965). **Do NOT use parcel `ESTSQFT` — it is LOT SF.**
+  1,786/1,908 (93.3%).
+- **Hamilton-IN:** parcels `https://gis1.hamiltoncounty.in.gov/.../HamCoParcelsPublic/FeatureServer/0`
+  (`DEEDACRES`, `STPRCLNO`) + `HamCoBuildingFootprints/FeatureServer/6` (`Shape__Area`, SR 6459,
+  majority-in). 255/282 (90.4%).
+- **Boone / Hendricks / Johnson:** land from state parcels
+  `https://gisdata.in.gov/server/rest/services/Hosted/Parcel_Boundaries_of_Indiana_Current/FeatureServer/0`
+  (reproject to EPSG:2965; join `state_parcel_id`); building SF from **FEMA USA Structures**
+  (majority-in). 77–87%. Post-2020 construction beyond FEMA vintage = NO-SF; upgrade via
+  Schneider/Beacon scrape for true GBA + stories.
+
+## Statutory assessment ratios (value-basis)
+- MO commercial market = assessed / 0.32 · KS commercial appraised = assessed / 0.25 · OH auditor
+  values = 100% market.
+
+## Still not researched
+Baltimore-MD SDAT name-recovery; Henrico mail addresses; Madison/Dane WI NO-SF rows; Indianapolis
+collar true-GBA upgrade (Schneider/Beacon).
