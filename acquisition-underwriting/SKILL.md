@@ -165,7 +165,7 @@ Every gate/floor exception MUST carry a one-sentence compensating factor, logged
 ## OUTCOME FEEDBACK (v1.1-E)
 
 - Score snapshots at screen/LOI/PSA are IMMUTABLE in Notion — re-scores get new fields/rows, never overwrite history.
-- **Annual December back-test** (inside the annual-cycle skill rhythm): realized YoC, basis vs RCT, leasing pace vs score components at acquisition. **Weights move ONLY at that session.**
+- **Annual December back-test** (inside the annual-cycle skill rhythm): realized YoC, basis vs RCT, leasing pace vs score components at acquisition. **Weights move ONLY at that session.** This is also the designated session to decide whether levered IRR (v3.8 reporting-only addition) and/or the Stage 2.3 concentration thresholds (v3.8 proposed) should convert from reported/flagged to scored/ratified.
 - **Passed-deal tracking:** when a passed/flagged deal trades, log clearing price vs ORA walk to the Notion deal record ("Clearing Price" / "ORA Walk" fields) — calibrates RCT v02 and P(exec) bands. **No `ora-passed-deal-tracker` task is registered today;** the live `ora-deal-sourcing-scan` (weekly) already flags repeat-listed / price-cut properties and is the effective channel for catching a re-traded passed deal. Reconcile clearing prices at the annual December back-test. To add a dedicated monthly tracker, use `register-scheduled-task`.
 
 ## UNDERWRITING CONVENTIONS (all modes)
