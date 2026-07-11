@@ -1,6 +1,6 @@
 ---
 name: communication-intelligence
-description: "Context-enriched communication drafting for Oxford Realty Advisors. Use this skill whenever the user mentions: write an email, draft a response, compose a message, reply to, reach out to, follow up with, send a letter to, communicate with, notify, or any request to produce a written communication to a tenant, broker, vendor, lender, attorney, or counterparty. Also trigger when the user receives an email and needs help crafting a response. This skill automatically enriches drafts with relationship context from Notion, HubSpot, and conversation history. v1.1 (2026-07-08: standard signature block corrected — was signing outbound comms as 'Ze Ooba' / ze@oxfordra.net, a stale/incorrect identity; now Gabriel Goldberg / ggoldberg@oxfordra.net per routing canon)"
+description: "Context-enriched communication drafting for Oxford Realty Advisors. Use this skill whenever the user mentions: write an email, draft a response, compose a message, reply to, reach out to, follow up with, send a letter to, communicate with, notify, or any request to produce a written communication to a tenant, broker, vendor, lender, attorney, or counterparty. Also trigger when the user receives an email and needs help crafting a response. This skill automatically enriches drafts with relationship context from Notion, HubSpot, and conversation history. v1.1 (2026-07-08: standard signature block corrected — was signing outbound comms as 'Ze Ooba' / ze@oxfordra.net, a stale/incorrect identity; now Gabriel Goldberg / ggoldberg@oxfordra.net per routing canon). v1.2 (2026-07-11: added OM/Broker Package Request guidance — request native/text-layer PDF exports proactively, not Print-to-PDF scans)"
 ---
 
 # Communication Intelligence — Oxford Realty Advisors
@@ -156,6 +156,9 @@ Subject: Seeking Industrial Assets — [Market]
 - Offer quick timeline and clean execution
 - Do not disclose current pipeline or acquisition targets
 
+### OM / Broker Package Request (added 2026-07-11)
+When requesting an OM, broker package, or financial summary from a broker, include a line asking for the **native file or a text-layer PDF export** — not a "Print to PDF" rasterized scan. Rationale (proven this session): rasterized scans have no extractable text, forcing vision-based page-by-page reading and measurably slowing underwriting turnaround. Do not wait until a scanned package arrives to raise this — ask upfront on every OM request.
+
 ---
 
 ## MODULE 4: MULTI-CHANNEL FORMATTING
@@ -207,3 +210,4 @@ Activate this skill when Gabriel says:
 ## Changelog
 
 - v1.1 (2026-07-08): CRITICAL fix (Skill Text Audit finding 1) — Standard Signature Block (§ Module 2) signed outbound comms as "Ze Ooba" / `ze@oxfordra.net`, an incorrect/retired identity never valid for this principal. Corrected to Gabriel Goldberg / `ggoldberg@oxfordra.net` per current routing canon. Entity Awareness logic immediately below (landlord mail signs as the property LLC, not the generic firm name) was reviewed and left intact — not regressed by this fix. Note: this repo copy already carried the correct block; the installed Cowork runtime copy did not (silent re-sync drift) — repackage and reinstall via `package-and-stage-skill` to close the gap.
+- v1.2 (2026-07-11): added a new "OM / Broker Package Request" template under Module 3 — proactively ask brokers for native/text-layer PDF exports rather than Print-to-PDF rasterized scans, which force vision-based extraction and slow underwriting. Motivating incident this session: an entire OM/brochure set arrived rasterized with no text layer. No other content changed. Repackage and reinstall via `package-and-stage-skill` to reach the installed Cowork runtime copy.
