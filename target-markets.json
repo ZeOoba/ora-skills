@@ -1,7 +1,7 @@
 {
   "$schema_note": "Canonical single source of truth for Oxford Realty Advisors acquisition target markets. Skills, scheduled tasks, and the Notion Acquisition Pipeline 'Market' field must stay in parity with this file. If any skill body diverges from this list, THIS FILE WINS. Enforced monthly by the ora-skill-text-audit scheduled task (target-market parity pattern class).",
-  "version": "1.0",
-  "updated": "2026-05-30",
+  "version": "1.1",
+  "updated": "2026-07-12",
   "owner": "Gabriel Goldberg, Principal, Oxford Realty Advisors",
   "canonical_paths": [
     "skills/target-markets.json (authoritative, skills runtime)",
@@ -116,6 +116,7 @@
     "skill: daily-brief (news/transaction/law geographic scope)",
     "scheduled: ora-distress-signal-monitor (nine-market scope)",
     "scheduled: ora-daily-brief-6am (Section 1 & 7 scope)",
-    "notion: Acquisition Pipeline Tracker 'Market' select (bcfe4a03)"
+    "notion: Acquisition Pipeline Tracker 'Market' select (bcfe4a03)",
+    "notion: Owner Outreach Queue 'Metro' select (caa809b7) — added 2026-07-12 after a silent gap (Cincinnati/Kansas City missing for weeks, undetected because this database was outside ora-skill-text-audit class (j)'s scope); label convention differs from the canonical cluster names above (e.g. 'Baltimore-MD' not 'Maryland (Baltimore/DC)', 'Kansas City' not 'Kansas City MO/KS') — see ora-skill-text-audit SKILL.md class (j) for the alias mapping used when checking parity"
   ]
 }
