@@ -1,6 +1,6 @@
 ---
 name: automation-health-monitor
-description: 'Scheduled health check for all Oxford Realty Advisors Cowork automations. Runs every weekday at 11:00 AM. Enumerates the live dual-fleet scheduled-task registries (CC/MCP + LAMS/Cowork) via list_scheduled_tasks, checks each enabled task for evidence of recent execution, posts status report to Notion Operations Hub, and drafts failure notification email to [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (routing canon 2026-06-10 — no cc) if any task missed. Trigger phrases: automation health, task health, health check, scheduled task status, automation monitor, did my tasks run. v1.3 (2026-07-10: added Step 3.5 machine-offline correlation — collapse per-task alerts into one Notion note when a Task Scheduler gap / LAMS catch-up / git-fetch-unreachable signature spans multiple self-recovered tasks in the same window, instead of one Gabriel email per task; never applies to GATE CHECK FAILED/CRITICAL. Companion to deploy-mirror.ps1/lib/deploy-alert.ps1 offline-signature suppression in oxford-command-center. v1.2 2026-07-08: the v1.1 hardcoded legacy 9(+)-task table and task-named Remediation Guidance were never actually removed despite the v1.1 changelog claiming it — now genuinely replaced with an explicitly-illustrative, dated live-pull snapshot plus generic/current-task remediation; ora-lease-expiration-brief schedule slip corrected 8:20→8:30 AM)'
+description: 'Scheduled health check for all Oxford Realty Advisors Cowork automations. Runs every weekday at 11:00 AM. Enumerates the live dual-fleet scheduled-task registries (CC/MCP + LAMS/Cowork) via list_scheduled_tasks, checks each enabled task for evidence of recent execution, posts status report to Notion Operations Hub, and drafts failure notification email to [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (routing canon 2026-06-10 — no cc) if any task missed. Trigger phrases: automation health, task health, health check, scheduled task status, automation monitor, did my tasks run. v1.3 (2026-07-10)'
 ---
 
 You are the automation health monitor for Oxford Realty Advisors. Your job is to verify that all scheduled Cowork tasks ran as expected and alert Gabriel immediately if any failed silently.
@@ -110,3 +110,12 @@ If any task shows ⚠️ or ❌ (and Step 3.5 didn't already fold it into a sing
 - Always post to Notion Operations Hub (use Notion MCP)
 - Always present a summary to Gabriel in the Cowork chat
 - Keep the chat summary to 5 lines or fewer — Gabriel can see details in Notion
+
+---
+
+## Changelog
+
+- **v1.3 (2026-07-10):** added Step 3.5 machine-offline correlation — collapse per-task alerts into one Notion note when a Task Scheduler gap / LAMS catch-up / git-fetch-unreachable signature spans multiple self-recovered tasks in the same window, instead of one Gabriel email per task; never applies to GATE CHECK FAILED/CRITICAL. Companion to `deploy-mirror.ps1`/`lib/deploy-alert.ps1` offline-signature suppression in oxford-command-center.
+- **v1.2 (2026-07-08):** the v1.1 hardcoded legacy 9(+)-task table and task-named Remediation Guidance were never actually removed despite the v1.1 changelog claiming it — now genuinely replaced with an explicitly-illustrative, dated live-pull snapshot plus generic/current-task remediation; `ora-lease-expiration-brief` schedule slip corrected 8:20→8:30 AM.
+
+Moved out of the frontmatter `description` field (2026-07-12) — that field had drifted to 1,379 chars, exceeding the platform's 1,024-char limit and blocking `package_skills.py`. No content removed, only relocated; frontmatter now carries a short version tag only, matching `register-scheduled-task`'s convention. No v1.0/v1.1 changelog text existed in the source description to carry forward.
