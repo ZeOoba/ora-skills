@@ -1,6 +1,6 @@
 ---
 name: automation-health-monitor
-description: 'Scheduled health check for all Oxford Realty Advisors Cowork automations. Runs every weekday at 11:00 AM. Enumerates the live dual-fleet scheduled-task registries (CC/MCP + LAMS/Cowork) via list_scheduled_tasks, checks each enabled task for evidence of recent execution, posts status report to Notion Operations Hub, and drafts failure notification email to [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (routing canon 2026-06-10 — no cc) if any task missed. Trigger phrases: automation health, task health, health check, scheduled task status, automation monitor, did my tasks run. v1.3 (2026-07-10)'
+description: 'Scheduled health check for all Oxford Realty Advisors Cowork automations. Runs every weekday at 11:00 AM. Enumerates the live dual-fleet scheduled-task registries (CC/MCP + LAMS/Cowork) via list_scheduled_tasks, checks each enabled task for evidence of recent execution, posts status report to Notion Operations Hub, and drafts failure notification email to [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (routing canon 2026-06-10 — no cc) if any task missed. Trigger phrases: automation health, task health, health check, scheduled task status, automation monitor, did my tasks run. v1.4 (2026-07-12)'
 ---
 
 You are the automation health monitor for Oxford Realty Advisors. Your job is to verify that all scheduled Cowork tasks ran as expected and alert Gabriel immediately if any failed silently.
@@ -23,6 +23,20 @@ You are the automation health monitor for Oxford Realty Advisors. Your job is to
 ### Step 1 — Determine which tasks should have run
 
 Based on today's date and day of week, identify which of the LIVE-enumerated tasks (Step 0: `list_scheduled_tasks` + CC fleet read — not the illustrative snapshot above) were scheduled to have run today or since the last health check (yesterday 11:00 AM through today 11:00 AM).
+
+### Step 1.5 — Model-currency check (both fleets, ℹ️ informational)
+
+For each LIVE-enumerated task, verify its `[MODEL: ...]` tag. The current standard and the full mechanism live in `~/.claude/projects/.../memory/reference_scheduled_task_model_standard.md` — read its **Current standard** line at run time (do not hardcode a model id here). This check is ℹ️ **informational only** — it goes in the Notion status report, never a Gabriel alert email, because no forced-upgrade action exists (a model change is a manual disable→recreate cycle).
+
+The two fleets are checked differently, because their model is settable in one and server-pinned in the other:
+
+- **LAMS/Cowork tasks** — the model IS chosen at creation. Read the `[MODEL: <id> | set YYYY-MM-DD]` tag off each task's `description` (already returned by `list_scheduled_tasks` — no extra tool call). Flag `MODEL-STALE` any task whose `<id>` ≠ the current standard, or that carries no tag.
+- **CC/MCP tasks** — the model is server-pinned and NOT settable (there is no model field to choose; see the reference doc's "NOT settable, but IS observable" note). So this is a **presence + observation-freshness** check, not a match-the-standard check. Read the `[MODEL: ...]` tag from each task's `~/.claude/scheduled-tasks/<id>/SKILL.md` frontmatter `description` (the same file you already read to enumerate enabled state). Flag ℹ️:
+  - a CC/MCP task with **no `[MODEL]` tag at all** (the real gap — newer tasks were created without one);
+  - a tag whose `checked YYYY-MM-DD` date is stale (older than the last model release / the release-check cadence in [[reference_model_release_checklist]]).
+  - `[MODEL: UNVERIFIABLE | checked <recent-date>]` is ACCEPTABLE — it correctly documents the server-pinned limitation; only a stale or missing `checked` date is worth noting. A concrete id (e.g. `ora-cc-schematic-refresh`'s `[MODEL: claude-sonnet-5 | checked ...]`) is fine as an observation; do NOT flag it as "stale vs standard" (the model can't be forced on this fleet).
+
+Report the counts in the Notion status page (e.g. "Model tags: LAMS 20/20 on standard; CC/MCP 13/19 tagged (12 UNVERIFIABLE, 1 id-pinned), 6 untagged — ℹ️").
 
 ### Step 2 — Search Notion for evidence of execution
 
@@ -115,6 +129,7 @@ If any task shows ⚠️ or ❌ (and Step 3.5 didn't already fold it into a sing
 
 ## Changelog
 
+- **v1.4 (2026-07-12):** ADDED Step 1.5 model-currency check (both fleets). The methodology was documented in `reference_scheduled_task_model_standard.md` as an existing "Step 0.07" but had never actually been written into this SKILL.md body — this closes that doc-vs-skill gap. LAMS = match-standard; CC/MCP = presence+observation-freshness (model is server-pinned, not settable; the earlier "structurally uncoverable" claim was corrected — CC/MCP `[MODEL: ...]` frontmatter tags ARE readable, e.g. `ora-cc-schematic-refresh`). Informational-only (Notion report, never a Gabriel alert).
 - **v1.3 (2026-07-10):** added Step 3.5 machine-offline correlation — collapse per-task alerts into one Notion note when a Task Scheduler gap / LAMS catch-up / git-fetch-unreachable signature spans multiple self-recovered tasks in the same window, instead of one Gabriel email per task; never applies to GATE CHECK FAILED/CRITICAL. Companion to `deploy-mirror.ps1`/`lib/deploy-alert.ps1` offline-signature suppression in oxford-command-center.
 - **v1.2 (2026-07-08):** the v1.1 hardcoded legacy 9(+)-task table and task-named Remediation Guidance were never actually removed despite the v1.1 changelog claiming it — now genuinely replaced with an explicitly-illustrative, dated live-pull snapshot plus generic/current-task remediation; `ora-lease-expiration-brief` schedule slip corrected 8:20→8:30 AM.
 
