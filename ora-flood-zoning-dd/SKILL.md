@@ -1,6 +1,6 @@
 ---
 name: ora-flood-zoning-dd
-description: "Resolve the two hardest DD-Critical screen items for Oxford Realty Advisors acquisitions: FEMA flood determination and zoning/permitted-use verification. Use whenever the user mentions: flood zone, FEMA, SFHA, NFHL, floodplain, flood determination, zoning check, zoning designation, permitted use, zoning GIS, or when an acquisition screen/underwrite has unresolved flood or zoning DD-Critical items (Buy Box v1.0 caps any such deal at T2 WATCH). Produces a sourced determination block per parcel. v1.0 (endpoints verified 2026-06-09)"
+description: "Resolve the two hardest DD-Critical screen items for Oxford Realty Advisors acquisitions: FEMA flood determination and zoning/permitted-use verification. Use whenever the user mentions: flood zone, FEMA, SFHA, NFHL, floodplain, flood determination, zoning check, zoning designation, permitted use, zoning GIS, or when an acquisition screen/underwrite has unresolved flood or zoning DD-Critical items (Buy Box v1.0 caps any such deal at T2 WATCH). Produces a sourced determination block per parcel. v1.1 (endpoints verified 2026-06-09; batch-write safety rule added 2026-07-12)"
 ---
 
 # ORA Flood & Zoning DD-Critical Resolution
@@ -13,6 +13,7 @@ Purpose: convert "FEMA UNK" and "zoning UNK" into sourced determinations at SCRE
 - Zone X (shaded/unshaded) = no flood constraint; record panel + effective date anyway.
 - Zoning at screen = GIS designation + permitted-use check vs the municipal code. A **formal municipal zoning letter remains mandatory pre-LOI** — this skill does not substitute for it.
 - NEVER assert flood or zoning status without a named source and date. If every tier fails, report UNVERIFIED explicitly.
+- **Never write determinations into the source master in place (added v1.1, 2026-07-12).** When this skill's determinations are applied to an off-market/DD master workbook at batch scale (not a single ad hoc lookup), the writing script must load the CURRENT master, copy it to a NEW version (`YYYYMMDD_[Name]_v##.xlsx`) FIRST, and write all updates only to that copy — never `wb.save()` back onto the path it loaded from. Mirrors `parcel-data-recovery` Iron rule 6 (versioning) and Iron rule 2 (never overwrite shipped data). Precedent: 2026-07-12 Cincinnati/Hamilton-Butler-Clermont-Warren auto-DD flood pass (101 T2-QUEUE rows) wrote its DD-Critical updates directly into `v05` in place — caught after the fact, remediated by hand-copying to `v06`, no data lost, but the deviation should never have been possible. Any batch flood/zoning automation script must copy-then-write from the first line.
 
 ## Workflow
 
@@ -59,3 +60,7 @@ Log results to the Notion Deal Sourcing Log `DD-Critical Status` field for the d
 
 ## Maintenance
 Endpoint directory verified 2026-06-09 (see references/endpoints.md for per-URL status). Re-verify UNVERIFIED entries on first use in that market; entry markets (Grand Rapids, Richmond, Des Moines) are unverified wholesale. Suggest a quarterly verification pass alongside ora-replacement-cost-refresh.
+
+## Changelog
+- **v1.1 (2026-07-12):** Added the batch-write safety rule (Decision rules section) after a 2026-07-12 Cincinnati auto-DD flood pass wrote determinations directly into the source master workbook in place instead of a new version — caught and hand-remediated same-session, no data lost, but the skill previously gave batch automation no versioning guardrail of its own (unlike its sibling `parcel-data-recovery`, which has carried this as Iron rule 6 since v1.0). Any future batch-scale use of this skill's output against a master workbook must copy-then-write.
+- **v1.0:** initial (endpoints verified 2026-06-09).
