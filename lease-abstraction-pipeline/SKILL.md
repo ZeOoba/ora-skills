@@ -1,11 +1,11 @@
 ---
 name: lease-abstraction-pipeline
-description: 'Lease abstraction (single document or batch) and rent roll data extraction for Oxford Realty Advisors. Use whenever the user mentions: abstract this lease, abstract/parse leases, extract lease data or terms, lease abstract, summarize/read/review this lease, process lease folder, batch lease, lease pipeline, run lease abstraction, update rent roll from leases, or scheduled lease scan — for one or more commercial leases uploaded directly or in a folder, SharePoint, or Google Drive. Also trigger when an uploaded PDF/DOCX appears to be a commercial lease, or on "run the lease pipeline" / "process the leases" / "update my rent roll". Produces: 30-field abstract per lease (markdown single-doc; master XLSX batch with derived metrics, quality flags, portfolio analytics), Notion Tenant Database upsert, email summary to ggoldberg@oxfordra.net ONLY (routing canon 2026-06-10). Autonomous unattended operation — do not pause mid-run. v2.2 (2026-07-08: naming ref updated; SCHEDULED_TASK.md version synced).'
+description: 'Lease abstraction (single document or batch) and rent roll data extraction for Oxford Realty Advisors. Use whenever the user mentions: abstract this lease, abstract/parse leases, extract lease data or terms, lease abstract, summarize/read/review this lease, process lease folder, batch lease, lease pipeline, run lease abstraction, update rent roll from leases, or scheduled lease scan — for one or more commercial leases uploaded directly or in a folder, SharePoint, or Google Drive. Also trigger when an uploaded PDF/DOCX appears to be a commercial lease, or on "run the lease pipeline" / "process the leases" / "update my rent roll". Produces: 32-field abstract per lease (markdown single-doc; master XLSX batch with derived metrics, quality flags, portfolio analytics), Notion Tenant Database upsert, email summary to ggoldberg@oxfordra.net ONLY (routing canon 2026-06-10). Autonomous unattended operation — do not pause mid-run. v2.3 (2026-07-12: added CAM Recovery Type + Tenant Pro-Rata Share fields — closes the gap found during the FY2025 CAM reconciliation data-readiness review, see event_log.md).'
 ---
 
 # Lease Abstraction Pipeline — Oxford Realty Advisors
 
-Autonomous batch extraction of 30 structured data fields from every lease in a target folder. Outputs a master XLSX workbook, upserts Notion Tenant Database, and sends a completion summary. Designed for unattended execution.
+Autonomous batch extraction of 32 structured data fields from every lease in a target folder. Outputs a master XLSX workbook, upserts Notion Tenant Database, and sends a completion summary. Designed for unattended execution.
 
 ---
 
@@ -61,6 +61,10 @@ Extract every field. Mark `NOT FOUND` if absent.
 
 #Field23Personal guaranty — present/absent, full/limited, burn-off date or conditions24Assignment/subletting — consent standard, recapture right, profit sharing (exact language)25Insurance requirements — coverage types, minimum amounts, additional insured, waiver of subrogation26Default cure periods — monetary (days), non-monetary (days), cross-default provisions27ROFR/ROFO — on what space, on what terms28SNDA/subordination — required/not required, non-disturbance language29Environmental responsibility — tenant scope, landlord scope, pre-existing carveout (exact language)30Condemnation/casualty — termination trigger, restoration obligation, rent abatement
 
+### CAM RECOVERY (v2.3 addition — closes a gap found during the FY2025 CAM reconciliation review, 2026-07-12)
+
+#Field31CAM Recovery Type — classify from Field 19's CAM structure language plus Field 18's lease type into exactly one of: "Full CAM + Tax + Insurance", "Tax Only", "Capped CAM", "Uncapped CAM", "NNN — All Pass-Through", "Gross — No Recovery", "Partial Recovery" (these 7 values are the live options on the Notion Tenant Database's CAM Recovery Type field — do not invent a new option). Inference guide: Lease Type=Gross with no CAM/tax passthrough language -> Gross — No Recovery. Lease Type=NNN with full CAM+tax+insurance passthrough and no cap mentioned -> NNN — All Pass-Through (or Uncapped CAM if the lease frames it as CAM specifically, not full NNN). Any "controllable expense cap" or "cap of X% per year" language -> Capped CAM. Tenant pays only real estate tax reimbursement, no CAM -> Tax Only. Passthrough applies to only some categories (e.g. CAM but not insurance) -> Partial Recovery. If the language doesn't clearly map to one option, mark NOT FOUND and flag for manual review rather than guessing — same discipline as every other field.32Tenant Pro-Rata Share — the tenant's % share of building/project CAM pool (usually stated as "Tenant's Proportionate Share" or a ratio of Field 6 Rentable SF to total building/project SF). Extract the stated percentage if given; if only the ratio/SF figures are given, calculate it and flag as CALCULATED (not stated) in output. NOT FOUND if neither is present.
+
 ---
 
 ## STEP 4 — DERIVED METRICS (per lease)
@@ -87,7 +91,7 @@ TabContents**1 — Master Rent Roll**One row/lease. All 30 fields + 7 derived me
 
 Target database: ORA Notion Tenant Database. Logic: update record if tenant already exists (match on Tenant Name + Property + Suite); create new record if no match. Do not overwrite records where Notion shows a more recent modified date than the lease document, unless Gabriel explicitly instructs.
 
-Notion FieldSource FieldTenant NameField 2 — Tenant entity namePropertyField 4 — Property addressSuiteField 5 — Suite/unitLease StartField 8 — Commencement dateLease EndField 9 — Expiration dateCurrent Rent (monthly)Field 14 — Base rent Year 1, monthlyRent PSFDerived — Rent PSF Year 1Lease TypeField 18Renewal OptionsField 11GuarantyField 23 — Yes/NoDays Until ExpirationDerived — Months until expiration × 30Flag CountTotal flags (all severities)Flag StatusHighest severity: Critical / Warning / Clean
+Notion FieldSource FieldTenant NameField 2 — Tenant entity namePropertyField 4 — Property addressSuiteField 5 — Suite/unitLease StartField 8 — Commencement dateLease EndField 9 — Expiration dateCurrent Rent (monthly)Field 14 — Base rent Year 1, monthlyRent PSFDerived — Rent PSF Year 1Lease TypeField 18Renewal OptionsField 11GuarantyField 23 — Yes/NoDays Until ExpirationDerived — Months until expiration × 30Flag CountTotal flags (all severities)Flag StatusHighest severity: Critical / Warning / CleanCAM Recovery TypeField 31 (v2.3)Tenant Pro-Rata ShareField 32 (v2.3)
 
 ---
 
@@ -162,4 +166,5 @@ See `references/extraction-edge-cases.md` for guidance on:
 
 ## Changelog
 
+- v2.3 (2026-07-12): added Fields 31 (CAM Recovery Type) + 32 (Tenant Pro-Rata Share) — the FY2025 CAM reconciliation data-readiness review (ora-cam-reconciliation-annual, 2026-07-12) found these two fields blocking a defensible reconciliation (0/139 and 45/138 leases populated respectively) with no existing extraction path to backfill them. Notion Tenant Database's "CAM Recovery Type" select field already existed with 7 live options (unused); added a matching "Tenant Pro-Rata Share" number/percent property to the same data source. STEP 7 Notion mapping updated; frontmatter field-count bumped 30->32.
 - v2.2 (2026-07-08): HIGH fix (Skill Text Audit finding 5) — Step 6 file-naming citation repointed from the superseded single "ORA File-Naming Standard 2026-05-14.md" to the ratified three-schema doctrine (ORA Cowork Global Settings v2.0, 2026-06-10/11); master workbook classified as a session/analysis output. Also (MEDIUM fix, finding 10): companion `SCHEDULED_TASK.md` version stamp (was 1.0 / 2026-04-04) synced to this file's version.
