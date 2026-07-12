@@ -135,6 +135,9 @@ def package(skill: str, outdir: Path) -> Path:
 
 
 def main() -> None:
+    if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
+        print(__doc__.strip())
+        sys.exit(0)
     outdir = Path(sys.argv[1])
     outdir.mkdir(parents=True, exist_ok=True)
     skills = sys.argv[2:] or [
