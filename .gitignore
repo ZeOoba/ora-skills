@@ -24,3 +24,6 @@ __pycache__/
 
 # Generated skill packages — build artifacts; never tracked
 *.skill
+
+# Git worktree admin dirs (EnterWorktree / git worktree add convention, 2026-07-12)
+.claude/worktrees/
