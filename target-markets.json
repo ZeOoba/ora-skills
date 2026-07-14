@@ -1,7 +1,8 @@
 {
   "$schema_note": "Canonical single source of truth for Oxford Realty Advisors acquisition target markets. Skills, scheduled tasks, and the Notion Acquisition Pipeline 'Market' field must stay in parity with this file. If any skill body diverges from this list, THIS FILE WINS. Enforced monthly by the ora-skill-text-audit scheduled task (target-market parity pattern class).",
-  "version": "1.3",
+  "version": "1.4",
   "updated": "2026-07-14",
+  "changelog_1_4": "GABRIEL RATIFIED THE BASIS BENCHMARK (2026-07-14, governor-level, explicitly authorised). The basis hard floor now tests against C&W 2025 SMALL-TIER HARD COST, per metro, replacing the unsourced $140/$170/$150/$130 figures. Per-metro floors (75% of replacement): Columbus $97.88 · Cincinnati $107.36 · Kansas City $97.45 · Indianapolis $107.59 · Maryland $100.27 · Madison $97.54 · Grand Rapids $107.73 · Richmond $100.27 · Des Moines $98.59. Net effect: Maryland tightens 21%, Richmond 11%, Columbus/KC/Madison ~7%; Cincinnati/Indianapolis/Grand Rapids loosen ~2-3%; Des Moines flat. Re-screening all 28 priced candidates from the 2026-07-14 scan flipped exactly TWO — 700 Kane St and 2800 Annapolis Rd, both Baltimore, both PASS -> FAIL-BASIS. Rejected the all-in denominator: it would set the floor at ~$172/SF, which all 17 priced Midwest/MD deals clear — a floor that passes 17 of 17 is not a floor. The all-in figure ($200-240/SF true replacement) is retained as an IC-MEMO narrative point, not a gate.",
   "changelog_1_2": "Added replacement_cost_doctrine (top-level) + a per-cluster replacement_cost block to all 9 clusters. Driven by a 2026-07-14 finding that ORA's operative basis-floor benchmarks ($140 Midwest / $170 MD / $150 Richmond / $130 DSM) were NEVER SOURCED — and the basis floor is the primary acquisition gate. Sourcing pass produced defensible (DERIVED) hard-cost figures for only 3 of 9 metros; the other 6 are recorded as UNSOURCED rather than interpolated. Also added: KC flood-district DD flag, Montgomery County MD coverage downgrade (monthly), Madison thin-inventory confirmation.",
   "changelog_1_3": "GABRIEL SUPPLIED THE PRIMARY SOURCE — the Cushman & Wakefield 2025 Industrial Construction Cost Guide (46 Americas markets, March 2025 costs). Hard cost is now SOURCED for 5 of 9 ORA metros directly from its Local Market Data tables (Columbus $130.51, Cincinnati $143.15, Kansas City $129.94, Indianapolis $143.46, Baltimore $133.70); the other 4 (Madison, Grand Rapids, Richmond, Des Moines) are NOT in the guide and now carry explicit [PROXY] figures. THREE FINDINGS: (1) our $140 Midwest was a good hard-cost proxy (within ~7%); (2) our $170 MARYLAND was 27% TOO HIGH — Baltimore is a mid-priced market, and this error wrongly cleared two Baltimore deals on the 2026-07-14 scan; (3) the guide's own size curve (cost ~ size^-0.36, consistent across all 5 metros) PROVES the small-bay premium — extrapolated to a 40,000 SF ORA-sized building it implies ~+43%, independently matching the $160-220/SF band separate sources reported. The guide EXCLUDES land and soft costs, so it is a HARD-COST figure, not all-in. operative_benchmark_psf is DELIBERATELY UNCHANGED — swapping the basis gate is a governor-level decision requiring Gabriel's sign-off (see replacement_cost_doctrine.the_decision).",
   "owner": "Gabriel Goldberg, Principal, Oxford Realty Advisors",
@@ -18,7 +19,7 @@
     "note": "Entry-phase clusters score 4 ('new target market'), NOT 1 ('isolated'); they graduate to 6 once a beachhead property closes. No prior new-market penalty applies to any listed cluster."
   },
   "replacement_cost_doctrine": {
-    "status": "SOURCED, AWAITING GABRIEL'S RULING ON DEFINITION. Gabriel supplied the primary source (C&W 2025 Industrial Construction Cost Guide) on 2026-07-14; hard-cost figures below are now REAL for 5 of 9 metros. The operative_benchmark_psf has NOT been changed — changing the basis gate is a governor-level decision and needs Gabriel's explicit sign-off (see the_decision below).",
+    "status": "RATIFIED 2026-07-14 by Gabriel Goldberg. The basis floor tests against CUSHMAN & WAKEFIELD SMALL-TIER HARD COST, per metro (see operative_benchmark_psf). Governor-level change, explicitly authorised — do not alter without a further Gabriel ruling.",
     "why_this_matters": "The buy-box basis hard floor (>=25% discount to replacement cost) is the PRIMARY gate on every acquisition. The replacement-cost figure IS the gate.",
     "primary_source": {
       "name": "Cushman & Wakefield — 2025 Industrial Construction Cost Guide (Americas), Project & Development Services",
@@ -43,22 +44,32 @@
     },
     "the_decision": {
       "question": "What does the basis floor test AGAINST — hard cost, or all-in (hard + soft + land)?",
-      "the_trap": "All-in is the theoretically correct denominator (an existing building comes WITH its land, so the honest comparison includes land). BUT: modelling all-in at ~$230/SF Midwest makes the 25%-discount floor <=$172/SF, and EVERY ONE of the 17 priced Midwest/MD deals on the 2026-07-14 scan clears it. A floor that passes 17 of 17 is not a floor — it stops discriminating entirely, and the basis-buyer discipline evaporates.",
-      "recommendation": "Adopt the C&W SMALL-TIER HARD COST, per metro, as the operative benchmark. Rationale: (1) it is SOURCED and dated; (2) it is deliberately CONSERVATIVE — excluding land and soft costs, and priced for a larger building, it UNDERSTATES true replacement, so the floor is harder to clear and we never overpay on a bad basis; (3) it preserves continuity (close to the old $140 Midwest); (4) it fixes the one real error (Maryland was 27% too generous). The much larger true all-in figure is then an IC-NARRATIVE point — 'we are buying at 30-50% of true replacement' — NOT a screening threshold. Do not let a big denominator dissolve the screen.",
-      "status": "AWAITING GABRIEL. Until he rules, operative_benchmark_psf below is UNCHANGED and the scan keeps running on it."
+      "RULING": "GABRIEL RATIFIED HARD COST, 2026-07-14. The basis floor tests against C&W small-tier HARD COST, per metro.",
+      "the_trap_this_avoids": "All-in is the theoretically correct denominator (an existing building comes WITH its land). BUT modelling all-in at ~$230/SF Midwest sets the 25%-discount floor at <=$172/SF, which EVERY ONE of the 17 priced Midwest/MD deals on the 2026-07-14 scan clears. A floor that passes 17 of 17 is not a floor — it stops discriminating and the basis-buyer discipline evaporates.",
+      "why_hard_cost_is_the_right_gate": "It is SOURCED and dated; it is deliberately CONSERVATIVE (excluding land and soft costs, and priced for a building 1.4x-10x larger than ORA's, it UNDERSTATES true replacement — so the floor is HARDER to clear and we never overpay on a bad basis); it preserves week-over-week continuity; and it fixes the one real error (Maryland was 27% too generous).",
+      "the_all_in_number_is_still_true_but_it_is_NARRATIVE_not_a_GATE": "True all-in replacement for ORA product (small-bay premium + soft + land) is plausibly $200-240/SF Midwest. That is a legitimate IC-MEMO point — 'we are buying at 30-50% of true replacement cost' — and it should be USED in memos and lender packages. It is NOT the screening threshold. Do not let a big denominator dissolve the screen."
     },
     "operative_benchmark_psf": {
-      "midwest_OH_IN_KS_MO_WI_MI_IA": 140,
-      "maryland": 170,
-      "richmond": 150,
-      "des_moines": 130,
-      "provenance": "UNCHANGED PENDING RATIFICATION. Now known to be a decent hard-cost proxy for the Midwest and 27% too high for Maryland. Retained only so scoring stays continuous week-over-week; supersede on Gabriel's ruling in the_decision above.",
-      "if_ratified_replace_with": {
-        "columbus": 130.51, "cincinnati": 143.15, "kansas_city": 129.94, "indianapolis": 143.46,
-        "maryland_baltimore": 133.70,
-        "madison": 130.05, "grand_rapids": 143.64, "richmond": 133.70, "des_moines": 131.46,
-        "proxy_note": "The last four are NOT in the guide. Proxies: Madison<-Milwaukee, Grand Rapids<-Detroit, Richmond<-Baltimore, Des Moines<-Minneapolis. Flag them [PROXY] — they are the weakest figures here and should be replaced with a GC/lender quote when one is available."
-      }
+      "RATIFIED": "2026-07-14, Gabriel Goldberg. Basis floor = 75% of the per-metro figure below (i.e. >=25% discount to replacement).",
+      "basis": "C&W 2025 Industrial Construction Cost Guide, SMALL tier (109,200 rsf), HARD COST (excl. land and soft costs).",
+      "columbus": 130.51,
+      "cincinnati": 143.15,
+      "kansas_city": 129.94,
+      "indianapolis": 143.46,
+      "maryland_baltimore_dc": 133.70,
+      "madison": 130.05,
+      "grand_rapids": 143.64,
+      "richmond": 133.70,
+      "des_moines": 131.46,
+      "implied_basis_floor_psf": {
+        "columbus": 97.88, "cincinnati": 107.36, "kansas_city": 97.45, "indianapolis": 107.59,
+        "maryland_baltimore_dc": 100.27, "madison": 97.54, "grand_rapids": 107.73,
+        "richmond": 100.27, "des_moines": 98.59,
+        "note": "A deal clears the basis hard floor ONLY if its FUNCTIONAL $/SF (see the scan's Step 2.5 — multi-story/mezzanine/special-purpose SF earns 0% credit) is at or below these figures."
+      },
+      "proxy_warning": "Madison, Grand Rapids, Richmond and Des Moines are NOT in the C&W guide. Their figures are PROXIES (Milwaukee / Detroit / Baltimore / Minneapolis respectively). Grand Rapids is the weakest — Detroit is a high-cost union market and RSMeans shows Grand Rapids running well below the national average, so $143.64 is probably too HIGH (i.e. its floor is too generous). Replace all four with a GC/lender quote when one is available.",
+      "superseded": "The pre-2026-07-14 unsourced benchmarks were $140 Midwest / $170 Maryland / $150 Richmond / $130 Des Moines. Effect of ratification: Maryland floor TIGHTENS 21% ($127.50 -> $100.27), Richmond tightens 11%, Columbus/KC/Madison tighten ~7%; Cincinnati, Indianapolis and Grand Rapids loosen ~2-3%; Des Moines is flat.",
+      "rescreen_result": "Re-screening all 28 priced candidates from the 2026-07-14 scan against the ratified floors flipped exactly TWO, both Baltimore, both from PASS to FAIL-BASIS: 700 Kane St ($115.38/SF, clears only at <=$1.30M) and 2800 Annapolis Rd ($126.53/SF, clears only at <=$1.90M — and it already failed the >8% YoC floor at a 7.5% cap, so it fails BOTH floors). Every other verdict held. Corrected in the Notion Deal Sourcing Log 2026-07-14."
     },
     "remaining_gaps": "Even with the guide in hand, TWO of the three all-in components are still unsourced: (a) SOFT-COST percentage (assumed ~20%, never verified) and (b) LAND $/acre by submarket. If Gabriel rules for an all-in basis, both must be sourced before the floor can be trusted. A GC or lender quote per core market on a 30-50K SF shallow-bay build would settle hard cost, soft costs, and the small-bay premium in one stroke — still the highest-value two emails available.",
     "staleness_warning": "The C&W figures are MARCH 2025 costs. Construction cost has reaccelerated since: Turner Building Cost Index +4.87% YoY (Q1 2026); Mortenson +6.77% YoY; AGC nonresidential input PPI +8.4% YoY through May 2026 on tariff-driven steel (+20.7%), aluminum (+33.0%), copper (+20.9%). Expect the 2026 guide to print higher. Note the guide's OWN YoY moves were mostly NEGATIVE (Cincinnati -11.5%, Cleveland -14.3%, Columbus -7.7%) because the 2024->2025 industrial pipeline slowed — that trend has since reversed. RE-CHECK ANNUALLY on publication; inflate by a construction index in between.",
