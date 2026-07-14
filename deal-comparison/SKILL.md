@@ -11,23 +11,55 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 
 ## SCORING FRAMEWORK (100 points total)
 
-### Category 1 — Financial Metrics (40 pts)
+### Category 1 — Financial Metrics (35 pts)
 
 | Metric | Max | Scoring |
 |--------|-----|---------|
 | Going-In Cap Rate | 10 | ≥8.5%=10; 7.5-8.4%=8; 6.5-7.4%=5; <6.5%=2 |
 | Levered IRR (10-yr) | 10 | ≥18%=10; 15-17.9%=8; 12-14.9%=5; <12%=2 |
-| Price vs. Replacement Cost | 10 | ≤70%=10; 71-80%=8; 81-90%=5; >90%=2 |
+| Price vs. Replacement Cost | 5 | ≤55%=5; 56-65%=4; 66-75%=3; **>75%=0 — FAILS THE BASIS HARD FLOOR** |
 | DSCR at 40% LTV | 10 | ≥2.5x=10; 2.0-2.49x=8; 1.25-1.99x=5; <1.25x=0 (DISQUALIFIED) |
 
-### Category 2 — Physical & Market (25 pts)
+> **Price vs. Replacement changed 2026-07-14 (10 → 5 pts, bands re-cut).** Two fixes.
+> (1) *Bands now respect the hard floor.* The old bands awarded points to deals ABOVE
+> replacement (81-90%=5, >90%=2) — i.e. the matrix was scoring deals that FAIL the
+> ≥25%-discount basis hard floor. Anything over 75% of replacement now scores 0.
+> (2) *Weight halved.* Basis is a **gate**, not a preference. Carrying 10 score points
+> for it double-counted a fact the floor already decides. The freed 5 points fund the
+> Construction & Envelope factor below.
+> **Denominator:** replacement cost = the RATIFIED per-metro figures in
+> `target-markets.json` (`replacement_cost_doctrine.operative_benchmark_psf` —
+> C&W 2025 small-tier hard cost, ratified by Gabriel 2026-07-14). Do NOT use an
+> all-in (hard + soft + land) denominator; it was considered and rejected.
+
+### Category 2 — Physical & Market (30 pts)
 
 | Factor | Max | Scoring |
 |--------|-----|---------|
 | Building Age & Condition | 8 | Pre-1980 value-add=8; 1980-2000=6; 2000-2015=4; Post-2015=2 |
 | Market Demand | 8 | Primary ORA market, low vacancy=8; Secondary target=5; Untested=2 |
+| **Construction & Envelope** | **5** | Masonry / brick / CMU-block / tilt-up / precast=5; Hybrid (masonry walls + metal roof, or metal rear addition)=3; Pre-engineered metal (PEMB)=2; **Unknown=2** |
 | SF per Building | 5 | <20K=5; 20-35K=4; 35-50K=3; >50K=1 |
 | Tenant Count | 4 | ≥5=4; 3-4=3; 2=2; 1 (single-tenant)=0 |
+
+> **Construction & Envelope — added 2026-07-14 (Gabriel).** ORA prefers masonry /
+> brick / block / tilt-up over metal. This mirrors the convention already ratified in
+> `acquisition-underwriting` ("block/tilt-up/brick full credit; PEMB ≈ half, never
+> kills") — `deal-comparison` had simply never inherited it. **Never a disqualifier.**
+> **Unknown scores the same as PEMB, deliberately:** do not award credit you have not
+> verified, and never let "we didn't check" outrank "we checked and it's metal."
+> Confirming construction is 3 free points on a broker call — so ask.
+>
+> ⚠️ **METAL-BUILDING BASIS DISTORTION — this is not merely a taste preference.**
+> The ratified replacement-cost benchmark (C&W 2025) prices ground-up **distribution
+> centers — i.e. concrete/tilt-up product**. A pre-engineered metal building costs
+> materially LESS to build. So applying that benchmark to a metal building
+> **OVERSTATES its discount to replacement**: it looks cheap partly because it was
+> cheap to build, not because it is mispriced. Metal is flattered twice. When
+> comparing a masonry and a metal building at the same $/SF, **they are not the same
+> deal** — the masonry one is genuinely better. Flag any PEMB clearing the basis floor
+> by <15% as SUSPECT. We do not yet have a sourced PEMB $/SF, so no numeric adjustment
+> is applied — flag it, do not fabricate a multiplier.
 
 ### Category 3 — Risk Factors (20 pts)
 
@@ -83,14 +115,15 @@ DEAL COMPARISON MATRIX — [Date]
 ═══════════════════════════════════════════════════════
                             [Deal A]    [Deal B]
 ═══════════════════════════════════════════════════════
-FINANCIAL (40)
+FINANCIAL (35)
   Cap Rate                  X.X% [X]   X.X% [X]
   Levered IRR               X.X% [X]   X.X% [X]
-  Price/Replacement         XX%  [X]   XX%  [X]
+  Price/Replacement         XX%  [X]   XX%  [X]   <- 0 if >75% (FAILS BASIS FLOOR)
   DSCR @ 40% LTV            X.Xx [X]   X.Xx [X]
-  Subtotal                      /40        /40
+  Subtotal                      /35        /35
 
-PHYSICAL & MARKET (25)              /25        /25
+PHYSICAL & MARKET (30)              /30        /30
+  incl. Construction        [type] [X]  [type] [X]   <- flag PEMB; see basis distortion
 RISK FACTORS (20)                   /20        /20
 STRATEGIC FIT (15)                  /15        /15
 ───────────────────────────────────────────────────────
