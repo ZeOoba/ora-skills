@@ -1,7 +1,8 @@
 {
   "$schema_note": "Canonical single source of truth for Oxford Realty Advisors acquisition target markets. Skills, scheduled tasks, and the Notion Acquisition Pipeline 'Market' field must stay in parity with this file. If any skill body diverges from this list, THIS FILE WINS. Enforced monthly by the ora-skill-text-audit scheduled task (target-market parity pattern class).",
-  "version": "1.1",
-  "updated": "2026-07-12",
+  "version": "1.2",
+  "updated": "2026-07-14",
+  "changelog_1_2": "Added replacement_cost_doctrine (top-level) + a per-cluster replacement_cost block to all 9 clusters. Driven by a 2026-07-14 finding that ORA's operative basis-floor benchmarks ($140 Midwest / $170 MD / $150 Richmond / $130 DSM) were NEVER SOURCED — and the basis floor is the primary acquisition gate. Sourcing pass produced defensible (DERIVED) hard-cost figures for only 3 of 9 metros; the other 6 are recorded as UNSOURCED rather than interpolated. Operative benchmarks retained UNCHANGED for scoring continuity but flagged PROVISIONAL/UNRATIFIED and likely TOO LOW. Also added: KC flood-district DD flag, Montgomery County MD coverage downgrade (monthly), Madison thin-inventory confirmation.",
   "owner": "Gabriel Goldberg, Principal, Oxford Realty Advisors",
   "canonical_paths": [
     "skills/target-markets.json (authoritative, skills runtime)",
@@ -15,6 +16,27 @@
     "isolated_non_target": 1,
     "note": "Entry-phase clusters score 4 ('new target market'), NOT 1 ('isolated'); they graduate to 6 once a beachhead property closes. No prior new-market penalty applies to any listed cluster."
   },
+  "replacement_cost_doctrine": {
+    "status": "PROVISIONAL — UNRATIFIED. Added 2026-07-14 after a sourcing pass established that ORA's operative benchmarks were never sourced. DO NOT treat operative_benchmark_psf as ratified fact.",
+    "why_this_matters": "The buy-box basis hard floor (>=25% discount to replacement cost) is the PRIMARY gate on every acquisition. The replacement-cost figure IS the gate. An unsourced benchmark means an unsourced gate — deals are being passed and pursued on a number nobody verified.",
+    "definitions": {
+      "hard_cost_psf": "Shell (tilt-up or PEMB, 20-28ft clear) + site work + basic office finish. EXCLUDES land, soft costs, developer fee.",
+      "all_in_psf": "Hard cost + land + soft costs (A&E, permits, construction-period interest, insurance) + developer fee. THIS is the figure the basis test should use, because we compare it to a purchase price for an existing building ON ITS LAND. Conflating hard cost with all-in is the main failure mode.",
+      "which_one_do_we_use": "UNRESOLVED — Gabriel to rule. The operative benchmarks below were never labelled as either, which is itself the problem."
+    },
+    "operative_benchmark_psf": {
+      "midwest_OH_IN_KS_MO_WI_MI_IA": 140,
+      "maryland": 170,
+      "richmond": 150,
+      "des_moines": 130,
+      "provenance": "UNSOURCED. These are the figures the ora-deal-sourcing-scan has been running on. They are retained ONLY to keep scoring continuous week-over-week, NOT because they are validated.",
+      "known_bias": "LIKELY TOO LOW, not too high. Cushman & Wakefield's 2025 Industrial Construction Cost Guide prices a 'small' ground-up project at $139/SF — but its 'small' tier is a 109,200 SF building, more than 2x ORA's typical sub-50K SF target. Multiple sources (Bisnow Sept 2025 re: Penntex; NAIOP Spring 2026 small-bay coverage) put TRUE small-bay/multi-tenant flex construction at $160-220/SF, because small floor plates carry far more demising wall, HVAC zoning, and doors per SF than a bulk box. If the correct Midwest figure is ~$170 rather than $140, the basis floor moves from <=$105/SF to <=$127/SF and MULTIPLE DEALS PREVIOUSLY DECLINED ON BASIS WOULD CLEAR IT.",
+      "sensitivity_evidence": "On the 2026-07-14 scan, moving the Midwest benchmark from $140 to $170 flips 1885-1895 S High St ($119.32), 1100 W Town St ($112.98), 2450 Production Dr ($122.84), and 1401 Minnesota Ave ($116.14) from FAIL-BASIS to PASS. That is 4 deals turned by one unsourced assumption."
+    },
+    "how_to_ratify": "The authoritative primary source is the Cushman & Wakefield Industrial Construction Cost Guide (46-market table, published ~annually). It is behind a lead-gen download at cushmanwakefield.com/en/united-states/insights/industrial-construction-cost-guide and CANNOT be fetched by an agent. ACTION FOR GABRIEL: download it once, drop the metro table into this file, and the benchmarks become sourced. Secondary path: ask a GC or a lender in each core market for a current all-in $/SF on a 30-50K SF shallow-bay build — a two-email exercise that would beat every public source found.",
+    "staleness_warning": "Construction cost is reaccelerating hard in 2026: Turner Building Cost Index +4.87% YoY (Q1 2026); Mortenson +6.77% YoY (Q1 2026); AGC nonresidential input PPI +8.4% YoY through May 2026 — largest since the pandemic — on tariff-driven steel (+20.7%), aluminum (+33.0%), copper (+20.9%). Materials are moving faster than labor, which matters MORE for shallow-bay/PEMB product where materials are a larger share of shell cost. A benchmark older than ~12 months is understating current cost by high single digits. RE-CHECK QUARTERLY.",
+    "research_provenance": "9-metro sourcing pass run 2026-07-14 (59 tool calls). Defensible hard-cost figures were obtained for only 3 of 9 metros, all [DERIVED]. Six metros returned NO defensible source. Recorded honestly per-cluster below rather than interpolated — an explicit gap is more useful than a fabricated number."
+  },
   "acceptable_states": {
     "current_holdings": ["OH", "MD", "IN", "WI", "MO", "KS", "TN"],
     "target_activity_added_2026_05_30": ["MI", "VA", "IA"],
@@ -25,36 +47,93 @@
       "market": "Columbus OH", "state": "OH", "status": "established", "tier": "primary",
       "has_existing_exposure": true, "market_cluster_fit_score": 6,
       "demand_drivers": "Intel megafab (New Albany), Honda EV, Rickenbacker intermodal/air-cargo, central-OH distribution/e-commerce last-mile",
-      "notes": "Densest cluster (8+ properties)."
+      "notes": "Densest cluster (8+ properties).",
+      "replacement_cost": {
+        "hard_cost_psf": 129, "hard_cost_flag": "DERIVED",
+        "hard_cost_derivation": "$139/SF C&W 2025 national small-project baseline x 0.931 RSMeans/Gordian Columbus city cost index = $129/SF",
+        "all_in_psf": 170, "all_in_flag": "DERIVED — STACKS 3 APPROXIMATIONS, illustrative only",
+        "all_in_derivation": "$129 hard + ~20% soft costs = ~$155/SF; land $189,000/acre / ~13,000 buildable SF per acre (assumes ~30% site coverage — UNSOURCED assumption) = ~$14.50/SF; total ~$170/SF",
+        "land_psf_acre": 189000, "land_note": "Broad market Q4 2025; data-center-competing parcels reach ~$235,000/acre",
+        "confidence": "Medium (hard cost) / Low (all-in) / Medium (land, but demand-skewed)",
+        "source": "Cushman & Wakefield 2025 Industrial Construction Cost Guide (national baseline only — metro table gated); RSMeans/Gordian CCI; Newmark Ohio industrial land research",
+        "as_of": "2026-07-14"
+      }
     },
     {
       "market": "Kansas City MO/KS", "state": "MO", "status": "established", "tier": "primary",
       "has_existing_exposure": true, "market_cluster_fit_score": 6,
-      "demand_drivers": "BNSF Logistics Park KC intermodal, I-70/I-35 distribution crossroads, ag logistics"
+      "demand_drivers": "BNSF Logistics Park KC intermodal, I-70/I-35 distribution crossroads, ag logistics",
+      "replacement_cost": {
+        "hard_cost_psf": null, "hard_cost_flag": "UNSOURCED",
+        "all_in_psf": null, "all_in_flag": "UNSOURCED",
+        "land_psf_acre": null, "land_note": "NOT DEFENSIBLE — only a $978,582/acre 'average of current listings' aggregate was found, clearly distorted by small urban parcels. Unusable.",
+        "confidence": "None",
+        "fragmentary_lead": "A secondary press citation of the C&W guide describes KC as the 'most cost-effective' market at ~$108-114/SF, but the project-size tier is unclear and the citation could not be verified against the primary table. DO NOT UNDERWRITE ON THIS.",
+        "source": "No defensible primary source located 2026-07-14",
+        "as_of": "2026-07-14"
+      },
+      "flood_note": "STANDING DD FLAG (added 2026-07-14): the Kaw River bottoms districts — Fairfax Industrial Park, Armourdale, West Bottoms — sit behind the UG/USACE levee system and are the same districts devastated in the 1951 'Black Friday' flood; levee improvement is still active as of July 2026. Cheap $/SF in these submarkets frequently reflects flood exposure, not mispricing. Pull a FEMA flood-zone determination and a flood-insurance quote BEFORE underwriting any KCK/West Bottoms basis play."
     },
     {
       "market": "Indianapolis IN", "state": "IN", "status": "established", "tier": "primary",
       "has_existing_exposure": false, "market_cluster_fit_score": 6,
       "demand_drivers": "FedEx 2nd-largest national air hub, interstate convergence, auto-parts/healthcare distribution",
-      "notes": "Active pipeline; graduate-migration mature/flat (~3.5%/yr, decelerating to ~0 accel)."
+      "notes": "Active pipeline; graduate-migration mature/flat (~3.5%/yr, decelerating to ~0 accel).",
+      "replacement_cost": {
+        "hard_cost_psf": 129, "hard_cost_flag": "DERIVED",
+        "hard_cost_derivation": "$139/SF C&W 2025 national small-project baseline x 0.925 RSMeans/Gordian Indianapolis city cost index = $129/SF. NOTE a conflicting fragmentary C&W secondary citation suggests ~$114/SF — unresolved.",
+        "all_in_psf": null, "all_in_flag": "UNSOURCED — no defensible land figure, and all-in needs both halves",
+        "land_psf_acre": null, "land_note": "NOT DEFENSIBLE — LandSearch listings average $371,574/acre; a Marion County figure of $680,034/acre was rejected outright as skewed by small infill parcels.",
+        "confidence": "Medium-Low (hard cost) / None (all-in, land)",
+        "source": "RSMeans/Gordian CCI 0.925; C&W 2025 guide (national baseline)",
+        "as_of": "2026-07-14"
+      }
     },
     {
       "market": "Maryland (Baltimore/DC)", "state": "MD", "status": "established", "tier": "primary",
       "has_existing_exposure": true, "market_cluster_fit_score": 6,
       "demand_drivers": "Port of Baltimore, federal-contractor/biotech base, I-270 corridor",
-      "notes": "Slowest brain-gain of core markets (~2.3%/yr) — basis play."
+      "notes": "Slowest brain-gain of core markets (~2.3%/yr) — basis play.",
+      "replacement_cost": {
+        "hard_cost_psf": null, "hard_cost_flag": "UNSOURCED — a generic Mid-Atlantic multiplier implies $181-209/SF, but that bucket is describing urban DC/Philadelphia, NOT suburban Baltimore/DC industrial. Not MD-specific. Do not use.",
+        "all_in_psf": null, "all_in_flag": "UNSOURCED",
+        "land_psf_acre": null, "land_note": "NOT DEFENSIBLE — the range found is incoherent: Baltimore aggregate $75,429/acre; Anne Arundel $296,128/acre (single listing); PG County commercial (not industrial) $471,729/acre; DC proper $689,755/acre. No clean industrial-specific figure for the suburban submarkets ORA actually targets.",
+        "confidence": "None",
+        "warning": "THIS IS THE BENCHMARK TO TRUST LEAST, in either direction. The operative $170/SF has no primary source behind it and Maryland has the widest plausible range of any ORA market. Maryland deals turn on basis more than any other cluster (it is explicitly a 'basis play' per notes above) — so the least-sourced benchmark is gating the most basis-sensitive market.",
+        "source": "No defensible primary source located 2026-07-14",
+        "as_of": "2026-07-14"
+      },
+      "coverage_note": "Montgomery County (Rockville/Gaithersburg/Germantown/I-270/Silver Spring) was fetch-verified 2026-07-14 and returned ZERO in-box industrial for-sale inventory — both Yardi platforms show no industrial-for-sale listings county-wide. It is expensive, thin, and office/lab-skewed. DOWNGRADED to a MONTHLY check in the on-market scan; the better route into this geography is county-parcel-screen against Montgomery County assessor data (off-market), not repeated on-market scanning of a pool structurally priced above the buy-box."
     },
     {
       "market": "Cincinnati OH", "state": "OH", "status": "established", "tier": "primary",
       "has_existing_exposure": false, "market_cluster_fit_score": 6, "added": "2026-05-13",
       "demand_drivers": "CVG Amazon Air global hub + DHL, Ohio River logistics, advanced manufacturing",
-      "notes": "Weakest recent graduate momentum among ORA markets (~1.9%/yr, -1.5 ppt accel) — underwrite conservatively on human-capital axis."
+      "notes": "Weakest recent graduate momentum among ORA markets (~1.9%/yr, -1.5 ppt accel) — underwrite conservatively on human-capital axis.",
+      "replacement_cost": {
+        "hard_cost_psf": 127, "hard_cost_flag": "DERIVED",
+        "hard_cost_derivation": "$139/SF C&W 2025 national small-project baseline x 0.911 RSMeans/Gordian Cincinnati city cost index = $127/SF",
+        "all_in_psf": null, "all_in_flag": "UNSOURCED — credible hard-cost derivation exists but zero defensible land data, and an all-in figure needs both halves",
+        "land_psf_acre": null, "land_note": "NOT SOURCED",
+        "confidence": "Medium (hard cost) / None (all-in, land)",
+        "source": "Cushman & Wakefield 2025 guide (national baseline); RSMeans/Gordian CCI 0.911",
+        "as_of": "2026-07-14"
+      }
     },
     {
       "market": "Madison WI", "state": "WI", "status": "established", "tier": "primary",
       "has_existing_exposure": false, "market_cluster_fit_score": 6, "added": "2026-05-13",
       "demand_drivers": "State capital, UW-Madison, biotech/health-tech, strong small-business tenant base",
-      "notes": "Highest educated share but thin pure-industrial inventory — screen product fit carefully."
+      "notes": "Highest educated share but thin pure-industrial inventory — screen product fit carefully. CONFIRMED 2026-07-14: only ~4 industrial for-sale listings exist citywide; a nil result from a Madison scan is the normal, correct outcome, not a scan failure.",
+      "replacement_cost": {
+        "hard_cost_psf": null, "hard_cost_flag": "UNSOURCED",
+        "all_in_psf": null, "all_in_flag": "UNSOURCED",
+        "land_psf_acre": null, "land_note": "NOT SOURCED — Milwaukee County ($278,913/acre) is a different submarket and NOT a valid Madison proxy; the statewide WI average ($25,200/acre) is farmland-driven and unusable.",
+        "confidence": "None",
+        "only_datapoint": "RSMeans/Gordian shows Madison's Q2-2025 quarterly CHANGE (+1.20%) but no absolute level — a change without a baseline does not convert to a dollar figure.",
+        "source": "No defensible primary source located 2026-07-14",
+        "as_of": "2026-07-14"
+      }
     },
     {
       "market": "Grand Rapids MI", "state": "MI", "status": "entry_phase", "tier": "primary",
@@ -68,6 +147,15 @@
         "net_absorption_q4_2025_sf": -310000,
         "source": "Colliers West Michigan Q4 2025 (vacancy/rent/absorption); LoopNet/Crexi (sale psf); cap = aggregator",
         "as_of": "2026-05-30"
+      },
+      "replacement_cost": {
+        "hard_cost_psf": null, "hard_cost_flag": "UNSOURCED",
+        "all_in_psf": null, "all_in_flag": "UNSOURCED",
+        "land_psf_acre": null, "land_note": "NOT SOURCED",
+        "confidence": "None",
+        "only_datapoint": "RSMeans/Gordian shows a Q2-2025 quarterly CHANGE of -1.48% — the largest decrease in the entire change notice, so Grand Rapids is directionally BELOW the national average. No absolute $/SF level found.",
+        "source": "No defensible primary source located 2026-07-14",
+        "as_of": "2026-07-14"
       },
       "provenance": "ACS graduate-migration Tier 1 (5.1%/yr recent); see 20260530_Grad-Migration-Midwest-MidAtlantic-Ranking_Analysis_v01.xlsx"
     },
@@ -85,6 +173,16 @@
         "as_of": "2026-05-30",
         "watch": "10M+ SF supply pipeline (highest since Q2 2022) — monitor absorption before committing"
       },
+      "replacement_cost": {
+        "hard_cost_psf": null, "hard_cost_flag": "UNSOURCED — only a directional -1.45% quarterly CCI change found, not an absolute level",
+        "all_in_psf": null, "all_in_flag": "UNSOURCED",
+        "land_psf_acre": 255000, "land_flag": "SINGLE TRANSACTION — treat as directional, not a baseline",
+        "land_note": "One real deal: 40-acre industrial parcel, $10.2M, Nov 2025, Core Development Group / Magellan Parkway (near RIC airport — likely premium-located and infrastructure-ready, so probably ABOVE a true baseline).",
+        "confidence": "None (hard cost) / Medium (land, single transaction)",
+        "implication": "If Richmond hard cost is anywhere near the Midwest range, land at $255K/acre pushes all-in ABOVE the operative $150/SF benchmark — i.e. the current benchmark is more likely too LOW than too high.",
+        "source": "Traded.co deal record (traded.co/deals/virginia/industrial/sale/8555-magellan-parkway/)",
+        "as_of": "2026-07-14"
+      },
       "provenance": "ACS graduate-migration Tier 1 (4.1%/yr and accelerating, +0.9 ppt)"
     },
     {
@@ -99,6 +197,16 @@
         "net_absorption_ytd_2025_sf": 239427, "under_construction_sf": 300000,
         "source": "Colliers Des Moines Q4/Q1 2025 (vacancy/rent/absorption); LoopNet (sale psf); cap = aggregator/Matthews 2025",
         "as_of": "2026-05-30"
+      },
+      "replacement_cost": {
+        "hard_cost_psf": null, "hard_cost_flag": "UNSOURCED",
+        "all_in_psf": null, "all_in_flag": "UNSOURCED",
+        "land_psf_acre": null, "land_note": "NOT SOURCED",
+        "confidence": "None",
+        "only_datapoint": "RSMeans/Gordian shows a Q2-2025 quarterly CHANGE of +0.84%. No absolute level found.",
+        "note": "The operative $130/SF is PLAUSIBLE (Des Moines is generally among the lowest-cost Midwest markets) but that is a hunch, not a finding. Zero defensible data was located, hard cost or land. Deals here have been clearing the basis floor by razor-thin margins (2164 NW 108th St cleared by 0.4 pts on 2026-07-14) — meaning an unsourced benchmark is doing decisive work.",
+        "source": "No defensible primary source located 2026-07-14",
+        "as_of": "2026-07-14"
       },
       "provenance": "ACS graduate-migration Tier 2 stable hold (3.6%/yr)"
     }
