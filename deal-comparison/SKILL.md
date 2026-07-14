@@ -17,20 +17,30 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 |--------|-----|---------|
 | Going-In Cap Rate | 10 | ≥8.5%=10; 7.5-8.4%=8; 6.5-7.4%=5; <6.5%=2 |
 | Levered IRR (10-yr) | 10 | ≥18%=10; 15-17.9%=8; 12-14.9%=5; <12%=2 |
-| Price vs. Replacement Cost | 5 | ≤55%=5; 56-65%=4; 66-75%=3; **>75%=0 — FAILS THE BASIS HARD FLOOR** |
+| Price vs. Replacement Cost | 5 | ≤25%=5; 26-30%=4; 31-40%=3; **>40%=0 — FAILS THE BASIS HARD FLOOR** |
 | DSCR at 40% LTV | 10 | ≥2.5x=10; 2.0-2.49x=8; 1.25-1.99x=5; <1.25x=0 (DISQUALIFIED) |
 
-> **Price vs. Replacement changed 2026-07-14 (10 → 5 pts, bands re-cut).** Two fixes.
-> (1) *Bands now respect the hard floor.* The old bands awarded points to deals ABOVE
-> replacement (81-90%=5, >90%=2) — i.e. the matrix was scoring deals that FAIL the
-> ≥25%-discount basis hard floor. Anything over 75% of replacement now scores 0.
+> **Price vs. Replacement changed 2026-07-14 (10 → 5 pts, bands re-cut TWICE).** Fixes:
+> (1) *Bands now respect the hard floor.* The original bands awarded points to deals
+> ABOVE replacement (81-90%=5, >90%=2) — the matrix was scoring deals that FAIL the
+> basis hard floor outright.
 > (2) *Weight halved.* Basis is a **gate**, not a preference. Carrying 10 score points
-> for it double-counted a fact the floor already decides. The freed 5 points fund the
+> double-counted a fact the floor already decides. The freed 5 points fund the
 > Construction & Envelope factor below.
-> **Denominator:** replacement cost = the RATIFIED per-metro figures in
-> `target-markets.json` (`replacement_cost_doctrine.operative_benchmark_psf` —
-> C&W 2025 small-tier hard cost, ratified by Gabriel 2026-07-14). Do NOT use an
-> all-in (hard + soft + land) denominator; it was considered and rejected.
+> (3) *Bands re-cut again for **RCT v03**.* The `≤55% / 56-65% / 66-75%` bands were
+> still calibrated to an **understated denominator**. RCT v03 roughly DOUBLED the
+> replacement figure (see below), so the same selectivity now lives at a much deeper
+> discount. **ORA buys at ~35-40% of true all-in replacement cost** — the old
+> "25% discount" framing was an artifact of a wrong denominator, never the strategy.
+>
+> **DENOMINATOR — one, and only one: `RCT v03`** (per-metro LOW/POINT/HIGH table in
+> the `acquisition-underwriting` skill; **basis divides by LOW**). Ratified by Gabriel
+> 2026-07-14, rebuilt from the Cushman & Wakefield 2025 Industrial Construction Cost
+> Guide. **Floor = linear vintage ramp: 65% discount at ≤1995 → 60% at ≥2005.**
+> Basis = **all-in** (price + 2% closing + CapEx + lease-up carry), not price alone.
+> ⚠️ Do NOT use: the retired RCT v02 constants, the retired C&W-hard "operative
+> benchmark" briefly in `target-markets.json`, or the old $140/$170/$150/$130 scan
+> constants. **If you find a second denominator, it is a bug.**
 
 ### Category 2 — Physical & Market (30 pts)
 
