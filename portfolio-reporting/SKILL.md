@@ -1,6 +1,6 @@
 ---
 name: portfolio-reporting
-description: "Oxford Realty Advisors portfolio-level reporting and investor-ready output generation. Use this skill whenever the user mentions: portfolio report, quarterly report, annual report, investor report, portfolio summary, portfolio overview, portfolio performance, KPI report, management report, board presentation, portfolio PowerPoint, or any request to produce a summary of portfolio performance across all properties and markets. Also trigger when the user asks for a consolidated view of the entire Oxford portfolio."
+description: "Oxford Realty Advisors portfolio-level reporting and investor-ready output generation. Use this skill whenever the user mentions: portfolio report, quarterly report, annual report, investor report, portfolio summary, portfolio overview, portfolio performance, KPI report, management report, board presentation, portfolio PowerPoint, or any request to produce a summary of portfolio performance across all properties and markets. Also trigger when the user asks for a consolidated view of the entire Oxford portfolio. v1.1 (2026-07-15: LOW fix, ora-skill-text-audit — Parchment token corrected #F5F0E8 -> #F5F3EF to match ORA Institutional Style Guide v1.0+)"
 ---
 
 # Portfolio Reporting — Oxford Realty Advisors
@@ -108,7 +108,7 @@ Calculate and present all of the following in every report regardless of type:
 
 ### PPTX Reports
 - Read pptx SKILL.md before generating any presentation
-- Use Oxford design tokens: Navy #1B2A4A, Gold #C9A96E, Parchment #F5F0E8
+- Use Oxford design tokens: Navy #1B2A4A, Gold #C9A96E, Parchment #F5F3EF
 - EB Garamond for display headings, DM Sans for body text
 - Max 6 bullet points per slide; data-dense charts preferred over text
 
