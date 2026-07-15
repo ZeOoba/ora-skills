@@ -19,7 +19,7 @@ Triggered by a symptom (stale page, missing file, task not in either registry) r
 ## Inputs
 
 - The symptom: what's stale/missing, and its last-known-good timestamp if visible (e.g. a Notion page's `fetched_at`/`last_edited_time`).
-- Both scheduled-task registries (`fleet-status.py` output, or direct `list_scheduled_tasks` for the CC/MCP side).
+- Both scheduled-task registries — prefer `python C:\Users\Owner\.claude\maintenance\fleet-status.py --json`, which reads both fleets' `scheduled-tasks.json` directly off disk in one call from either surface (a genuine cross-fleet READ, unlike the `list_scheduled_tasks` MCP tool, which only sees the fleet its own app surface owns). Falling back to `list_scheduled_tasks` gets you one fleet only. Reserve an actual cross-surface handoff for WRITES (registry mutations), not for checking state.
 - `event_log.md` and any `_archive_*` folders under `~/.claude/scheduled-tasks/` and `…\Documents\Claude\Scheduled\` (candidate homes for a task that was archived rather than deleted outright).
 
 ## Standard Workflows
@@ -65,4 +65,5 @@ Use when a scheduled task's own `SKILL.md` (or a `SKILL.md`-adjacent script it d
 
 ## Changelog
 
+- v1.1 (2026-07-15): Inputs corrected — `fleet-status.py` genuinely reads BOTH registries from either surface (direct disk read, not MCP-scoped); don't treat the other fleet as unreachable for verification purposes, only for writes. Also: a registry-mutation completion claim in `event_log.md` is not itself proof — re-check live state before trusting one (see `feedback_verify_registry_mutation_claims` memory for the incident that surfaced this, `ora-tenant-db-dedup-remediation`).
 - v1.0 (2026-07-11): initial. Codifies a trace/recover/verify procedure previously improvised ad hoc at least 3-4 times (`ora-weekly-hygiene`, `ora-pm-ledger`, `ora-health-guard`, `ora-treasury-yield-prefetch` recoveries) — surfaced by a workflow-audit session mining recent Claude Code transcripts for repeated uncodified patterns.
