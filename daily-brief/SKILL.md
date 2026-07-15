@@ -1,6 +1,6 @@
 ---
 name: daily-brief
-description: 'Oxford Realty Advisors daily morning intelligence brief. Covers CRE news, industrial transactions, market rates, portfolio watch, ops tip, reading list, CRE law/regulatory watch, shallow bay case study, and competitive intelligence. Use when the user says: daily brief, news, morning brief, market update, CRE news, what''s happening today, what should I know. v2.5 (2026-06-11)'
+description: 'Oxford Realty Advisors daily morning intelligence brief. Covers CRE news, industrial transactions, market rates, portfolio watch, ops tip, reading list, CRE law/regulatory watch, shallow bay case study, and competitive intelligence. Use when the user says: daily brief, news, morning brief, market update, CRE news, what''s happening today, what should I know. v2.6 (2026-07-15)'
 ---
 
 You are generating the Oxford Realty Advisors daily intelligence brief. Execute all 9 sections in sequence and present as a structured report. Target length: concise but complete.
@@ -133,6 +133,8 @@ For each series below, call `web_fetch` on `https://fred.stlouisfed.org/graph/fr
 
 Label every FRED-sourced value inline with its release date, e.g. *"4.31% — FRED DGS10, 2026-04-24 close."* If a FRED fetch returns HTTP error or all-blank values, fall through to treasury.gov / NY Fed as fallback and mark the cell `[treasury.gov fallback]`. Both FRED and treasury.gov fail → mark `Unavailable as of [time]`.
 
+**Notion-outage mirror fallback (Patch 9, v2.6 — 2026-07-15):** If the FRED CSV fetch and the treasury.gov/NY Fed fallback both fail, or the "Rate Snapshot — Current" Notion page that feeds this section's `rate_status` context (published by `ora-am-brief` Block A) is unreachable at generation time: search Gabriel's mailbox (`outlook_email_search`) for that morning's `ora-health-guard` connector pre-flight email — subject beginning `✅ ORA Connector Pre-Flight — [today YYYY-MM-DD]` or `⚠️ ORA Connector Pre-Flight — [today YYYY-MM-DD]` — and parse the `rate_snapshot` JSON block from the body. Use it for this section's rate table. Carry its `confidence` field through verbatim — it will be exactly `PRIMARY` or `SECONDARY`, never any other value — and label every cell sourced from the mirror `[MIRROR FALLBACK — confidence: PRIMARY|SECONDARY]`. Keep any `n/a` cell in the mirror as `n/a`; never interpolate or estimate a value to fill it. If no such email exists for today, or it also lacks usable data, fall through to the `Unavailable as of [time]` rule above.
+
 Fetch current rates from [treasury.gov](http://treasury.gov), NY Fed SOFR page, CME FedWatch (as secondary confirmation only after FRED prologue above):
 
 RateCurrentChange (30-day)5-Year Treasury\[X.XX%\]\[+/- X bps\]10-Year Treasury\[X.XX%\]\[+/- X bps\]30-Day SOFR\[X.XX%\]\[+/- X bps\]Fed Funds Target\[X.XX–X.XX%\]
@@ -194,6 +196,12 @@ except validation_error("Aggregation property not found"):
 For querying tenant *rows* (not schema), use the Notion MCP (`notion-fetch` on the data source ID, paginating as needed). The former Composio wrapper-ID path is RETIRED (connector removed 2026-06-11) — `lease-renewal-pipeline` requires the same migration.
 
 **Database ID Map** for all ORA databases is maintained in the Knowledge Base sub-page `Database ID Map — v1.0` (created 2026-04-27). Resolve once and cache when adding new databases.
+
+**Notion-outage mirror fallback (Patch 9, v2.6 — 2026-07-15):** If Notion is unreachable for this section — Section 0's pre-flight probe failed, or any of the live 4a–4d queries above error out — search Gabriel's mailbox for the same `ora-health-guard` connector pre-flight email described in Section 3's fallback and parse its `portfolio_watch` JSON block (keyed `4a`/`4b`/`4c`/`4d`). Use it in place of the live queries and tag the whole section `[MIRROR FALLBACK]`. Apply these producer-documented caveats rather than presenting the mirror as live current data:
+- The block reflects state as of 05:15 ET that morning, not live at 06:00 — state this explicitly.
+- `4b` and `4c` may carry `null` — their producers are retired/stale (the Lease Expiration Dashboard refresh was retired 2026-06-09) — present as "not currently tracked," not as a fresh zero-flags result.
+- `4d` is a directional read only (deadline/stuck-stage snapshot, not confirmed live) — label it as such.
+- If `portfolio_watch` itself is `null` in the mirror email (Notion was already down at 05:15 when the mirror was captured), Section 4 has no fallback available today — state plainly "Section 4 unavailable — Notion down at both 05:15 and 06:00 checkpoints" rather than fabricating content or silently dropping the section.
 
 ---
 
@@ -324,6 +332,7 @@ Minimum 3 items; maximum 6. Prioritize items requiring action within 72 hours.
 
 ## CHANGELOG
 
+- **v2.6 (2026-07-15):** Added Patch 9 — Notion-outage mirror fallback for Sections 3 and 4. Implements the contract `ora-health-guard` Block B.3 has emailed every morning since it was written but that this skill never actually consumed: on a Notion read failure at 06:00, Section 3 now uses the health-guard's `rate_snapshot` mirror (carrying its `PRIMARY`/`SECONDARY` `confidence` label through verbatim, `n/a` cells kept as `n/a`, never interpolated) and Section 4 now uses its `portfolio_watch` mirror (tagged `[MIRROR FALLBACK]`, with the 4b/4c null-producer and 4d directional-read caveats preserved) — rather than degrading to a live-fallback attempt or a bare "DATA UNAVAILABLE."
 - **v2.5 (2026-06-11):** Composio fully retired (connector removed; Gabriel-ratified 2026-06-11 — no fallback). All sends repointed to Outlook COM via `_shared/send-via-outlook.ps1`: Section 0 Step B alert (now ggoldberg-only per 2026-06-10 routing canon), scheduled-task brief send (keeps the sanctioned cc to egoldberg — the sole exception), Notion ID-routing table (Composio NOTION_* rows retired; row queries via Notion MCP). Description version re-synced with changelog (closes the v2.2-desc/v2.4-changelog drift from the 2026-06-09 skill-text audit). Resolves that audit CRITICAL #1.
 - **v2.4 (2026-05-15):** Rube sunset reached — Patch 5 EOL warning superseded; routing bullet rewritten in past tense to reflect Composio Platform as canonical MCP path (itself superseded by v2.5: Composio retired 2026-06-11). Light clarification added that the `tenant-db-schema-integrity` standalone task referenced in v2.2 was never deployed (folded into Section 0 instead).
 - **v2.3 (2026-04-28):** Added Patch 8 — FRED Rates Prologue for Section 3. Replaces treasury.gov as the primary rate source with FRED CSV API (fredgraph.csv endpoint, no API key required). Resolves treasury.gov token-cap fetch failures. FRED series: DGS5, DGS10, SOFR, DFEDTARU, DFEDTARL. treasury.gov retained as fallback. Fed Funds table row updated to show DFEDTARU–DFEDTARL range format.
