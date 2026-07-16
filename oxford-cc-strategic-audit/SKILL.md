@@ -103,9 +103,16 @@ C:\Users\Owner\oxford-command-center\server\alerts\conditions.ts
 
 ### Scheduled automation fleet
 
-From the session context, the live CC/MCP fleet has 17 scheduled tasks. The
-LAMS/Cowork fleet count of "5" below is STALE — `list_scheduled_tasks` on
-2026-07-08 returned 21 live LAMS/Cowork tasks; re-pull live before citing a count.
+> VERIFIED (2026-07-16, via `python ~/.claude/maintenance/fleet-status.py` — dual-fleet read
+> direct from both registries on disk, works from any surface): as of 2026-07-16 the CC/MCP
+> fleet has 24 live tasks and LAMS/Cowork has 23 (47 total) — re-pull live before citing either
+> count, this will drift. All six originally-cited CC/MCP paths below plus `ora-deal-sourcing-scan`
+> (~line 272) and `ora-am-brief` are confirmed genuinely CC-fleet — no fleet-assignment drift,
+> contrary to the 2026-07-08 UNVERIFIED note's suspicion. `ora-dashboard-refresh` and
+> `ora-week-ahead-briefing` are confirmed DEAD on BOTH fleets (not a fleet-assignment issue —
+> they simply no longer exist) and have been removed from the read-list below and from Goal 12's
+> file list (~line 365-368). Resolved via ora-skill-text-audit v1.6's 2026-07-16 full run,
+> findings F22 / class-k.
 Read the SKILL.md for the most business-critical ones:
 ```
 C:\Users\Owner\.claude\scheduled-tasks\ora-am-brief\SKILL.md
@@ -113,18 +120,7 @@ C:\Users\Owner\.claude\scheduled-tasks\ora-financial-code-integrity-sweep\SKILL.
 C:\Users\Owner\.claude\scheduled-tasks\ora-master-workbook-ingest\SKILL.md
 C:\Users\Owner\.claude\scheduled-tasks\ora-open-sessions-board\SKILL.md
 C:\Users\Owner\.claude\scheduled-tasks\ora-pm-ledger\SKILL.md
-C:\Users\Owner\.claude\scheduled-tasks\ora-dashboard-refresh\SKILL.md
 ```
-> UNVERIFIED (Skill Text Audit finding 9, 2026-07-08): the six `~/.claude/scheduled-tasks/`
-> CC/MCP-fleet paths cited above and at lines ~356-358, ~272 (ora-financial-code-integrity-sweep,
-> ora-master-workbook-ingest, ora-open-sessions-board, ora-pm-ledger, ora-week-ahead-briefing,
-> ora-deal-sourcing-scan) could NOT be confirmed from this Cowork remediation session — the
-> `~/.claude/scheduled-tasks/` path is host-protected and not mountable from Cowork, and
-> `list_scheduled_tasks` only enumerates the LAMS/Cowork fleet (21 tasks, none of these six).
-> Note also `ora-am-brief` and `ora-dashboard-refresh` are cited here as CC-fleet but appear in
-> the live LAMS/Cowork registry instead — possible fleet-assignment drift, not confirmed either
-> way. Verify these seven task references from a Claude Code session with `~/.claude/` access
-> before relying on this section; do not treat it as current until re-verified.
 
 ### Acquisitions pipeline
 
@@ -364,8 +360,6 @@ searching for information?*
 
 Files to read:
 - `~/.claude/scheduled-tasks/ora-am-brief/SKILL.md`
-- `~/.claude/scheduled-tasks/ora-dashboard-refresh/SKILL.md`
-- `~/.claude/scheduled-tasks/ora-week-ahead-briefing/SKILL.md`
 - `~/.claude/scheduled-tasks/ora-financial-code-integrity-sweep/SKILL.md`
 - `server/ai/` — AI agent
 
