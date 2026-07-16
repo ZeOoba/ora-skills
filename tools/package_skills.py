@@ -115,7 +115,11 @@ def package(skill: str, outdir: Path) -> Path:
     dest = outdir / f'{skill}.skill'
     with zipfile.ZipFile(dest, 'w', zipfile.ZIP_DEFLATED) as z:
         for p in sorted(src.rglob('*')):
-            if p.is_file():
+            # PACKAGING-NOTE.md is repo-reader documentation (e.g. "target-markets.json is
+            # injected from the repo root, not tracked here" — 2026-07-16 false-missing-file
+            # incident). Never bundled: bundling it would flip every consumer skill to
+            # repo-newer on drift checks and force needless reimports.
+            if p.is_file() and p.name != 'PACKAGING-NOTE.md':
                 arc = f'{skill}/' + p.relative_to(src).as_posix()
                 assert '\\' not in arc, arc
                 z.write(p, arc)
