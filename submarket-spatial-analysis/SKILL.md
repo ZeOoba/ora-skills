@@ -1,6 +1,6 @@
 ---
 name: submarket-spatial-analysis
-description: Submarket and spatial analysis for ORA properties and acquisition candidates. Use when the user mentions: submarket, spatial analysis, drive time, isochrone, intermodal proximity, highway access, last-mile, demographics, employment density, population growth, MSA, micropolitan, traffic count, locational benchmark, location quality score, GIS, mapping, or any task requiring geographic analysis of properties relative to demand drivers. v1.0
+description: Submarket and spatial analysis for ORA properties and acquisition candidates. Use when the user mentions: submarket, spatial analysis, drive time, isochrone, intermodal proximity, highway access, last-mile, demographics, employment density, population growth, MSA, micropolitan, traffic count, locational benchmark, location quality score, GIS, mapping, or any task requiring geographic analysis of properties relative to demand drivers. v1.1 (2026-07-16: removed references to mcp__places/ESRI/Mapbox/OSRM — none are connected tools; drive-time and nearby-anchor steps now state the actual method used)
 license: ORA Internal
 ---
 
@@ -21,9 +21,8 @@ Acquisition candidate location scoring, submarket comparison, intermodal proximi
 - Notion property database (lat/long for each ORA property)
 - Census ACS data (demographics, employment) — public APIs
 - BTS NTAD (highway, rail, intermodal) — public data
-- Places search (mcp__places...) for nearby anchors
+- Web search / Firecrawl for nearby anchor tenants and points of interest (no dedicated places/POI API is connected — this is a manual lookup, not a live query)
 - Web search for submarket reports (CBRE, Cushman, JLL)
-- ESRI / Mapbox via places_search where available
 
 ## Standard Workflows
 
@@ -63,7 +62,7 @@ Acquisition candidate location scoring, submarket comparison, intermodal proximi
 
 - Forecasts of demographic change marked [FORECAST].
 - Census data lag is acknowledged (typically 12–24 months).
-- Drive-time calculations use OSRM or Mapbox where available; assumptions stated explicitly.
+- No routing API (OSRM/Mapbox/etc.) is currently connected — drive-time figures are estimated (straight-line distance + assumed speed, or a manual web-mapping lookup) and must state the estimation method used. If a routing MCP connector is ever added, update this line and tech.md together.
 
 ## Dependencies
 
