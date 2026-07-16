@@ -1,0 +1,15 @@
+#!/bin/sh
+# ora-skills pre-commit (canonical, versioned; core.hooksPath=tools/hooks — set locally per clone).
+# Rule (2026-07-16): any staged change to the repo-root target-markets.json — the canonical
+# shared data source injected into 5 skills at package time — must bump its "version" field.
+# Motivation: two contradictory v1.5 copies circulated (Notion 'Market' rename-executed vs
+# rename-rejected) because the root copy was edited without a version bump.
+# Emergency bypass: git commit --no-verify
+if git diff --cached --name-only | grep -qx 'target-markets.json'; then
+  if ! git diff --cached -U0 -- target-markets.json | grep '^+' | grep -q '"version"'; then
+    echo 'BLOCKED: target-markets.json changed without a "version" bump.' >&2
+    echo 'Bump "version" (and "updated") in the file, or --no-verify to override.' >&2
+    exit 1
+  fi
+fi
+exit 0

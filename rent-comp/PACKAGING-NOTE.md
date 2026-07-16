@@ -8,6 +8,6 @@ daily-brief, deal-comparison, market-monitor, rent-comp.
 Rules:
 1. Do NOT copy target-markets.json into this directory -- it creates a duplicate zip entry
    at package time (2026-07-16 incident: false-missing-file alarm led to exactly that).
-2. Edit ONLY the repo-root copy; the runtime-cache copy is a read-only mirror.
+2. Edit ONLY the repo-root copy; the runtime-cache copy is a read-only mirror. Any edit to the root copy MUST bump its `version` and `updated` fields (enforced by the repo pre-commit hook, tools/hooks/pre-commit, 2026-07-16).
 3. This note file is excluded from packaging by package_skills.py and must stay named
    PACKAGING-NOTE.md for that exclusion to hold.
