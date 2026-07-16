@@ -25,5 +25,8 @@ __pycache__/
 # Generated skill packages — build artifacts; never tracked
 *.skill
 
+# post-commit PENDING-REIMPORT ledger — machine-local pending state, not history (2026-07-16)
+_staging/PENDING_REIMPORT.md
+
 # Git worktree admin dirs (EnterWorktree / git worktree add convention, 2026-07-12)
 .claude/worktrees/
