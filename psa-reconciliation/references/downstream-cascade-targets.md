@@ -294,7 +294,7 @@ Do not cascade to a target that does not yet exist. If the user asks for a DD wo
 
 ## Email summary (final step)
 
-After the full cascade, draft an email to the user (CC both `ggoldberg@oxfordra.net` and `egoldberg@oxfordra.net` per ORA routing standard) summarizing:
+After the full cascade, draft an email to the user (`ggoldberg@oxfordra.net` ONLY, per ORA routing canon — the sole egoldberg cc exception is the ora-am-brief Daily Brief, which does not apply here) summarizing:
 
 1. Which targets were cascaded (numbered list).
 2. Any facts flagged Ambiguous / Conflicting / Missing that the user must resolve.
