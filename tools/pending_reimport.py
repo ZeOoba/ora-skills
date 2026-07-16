@@ -30,7 +30,7 @@ from pathlib import Path
 # so this helper and package_skills.py can never disagree about which skills bundle
 # a repo-root dependency.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from package_skills import REPO, SKIP, SHARED_ROOT_DEPS  # noqa: E402
+from package_skills import REPO, SKIP, SHARED_ROOT_DEPS, is_bundled  # noqa: E402
 
 LEDGER = REPO / '_staging' / 'PENDING_REIMPORT.md'
 
@@ -75,9 +75,11 @@ def affected_skills(files: list[str]) -> dict[str, set[str]]:
     for f in files:
         parts = f.split('/')
         top = parts[0]
-        # (a) a bundled file inside a skill directory (everything except PACKAGING-NOTE.md,
-        #     which package_skills.py deliberately never bundles).
-        if len(parts) > 1 and is_skill_dir(top) and parts[-1] != 'PACKAGING-NOTE.md':
+        # (a) a bundled file inside a skill directory. is_bundled() (imported from the
+        #     packager) is the shared rule for what ships — excludes PACKAGING-NOTE.md and
+        #     top-level versions/ archives, so a versions/-only commit never falsely flags
+        #     a reimport (2026-07-16: cowork-settings/versions/ snapshot did exactly that).
+        if len(parts) > 1 and is_skill_dir(top) and is_bundled('/'.join(parts[1:])):
             hits.setdefault(top, set()).add(f)
         # (b) a repo-root shared dependency fans out to every consumer skill.
         if '/' not in f and f in SHARED_CONSUMERS:
