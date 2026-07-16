@@ -107,6 +107,27 @@ SHARED_ROOT_DEPS = {
 }
 
 
+def is_bundled(rel_posix: str) -> bool:
+    """Single source of truth for 'does this skill-relative file ship in the .skill?'.
+
+    rel_posix is a forward-slash path relative to the skill dir (e.g. 'SKILL.md',
+    'references/qc-gate.md', 'versions/20260716_...md'). Excluded from every bundle:
+      - PACKAGING-NOTE.md (any level): repo-reader documentation only (2026-07-16 false-
+        missing-file incident) — bundling it flips consumers to repo-newer on drift checks.
+      - a top-level versions/ directory: dated version archives (only cowork-settings uses
+        one today) — historical snapshots, never shippable skill content. The drift-check
+        has always SKIPped cowork-settings\versions; excluding it here keeps packager, the
+        post-commit hook (tools/pending_reimport.py imports this), and the drift-check in
+        agreement so a versions/-only commit never falsely flags a reimport (2026-07-16).
+    """
+    parts = rel_posix.split('/')
+    if parts[-1] == 'PACKAGING-NOTE.md':
+        return False
+    if parts[0] == 'versions':
+        return False
+    return True
+
+
 def package(skill: str, outdir: Path) -> Path:
     src = REPO / skill
     if not (src / 'SKILL.md').is_file():
@@ -115,11 +136,11 @@ def package(skill: str, outdir: Path) -> Path:
     dest = outdir / f'{skill}.skill'
     with zipfile.ZipFile(dest, 'w', zipfile.ZIP_DEFLATED) as z:
         for p in sorted(src.rglob('*')):
-            # PACKAGING-NOTE.md is repo-reader documentation (e.g. "target-markets.json is
-            # injected from the repo root, not tracked here" — 2026-07-16 false-missing-file
-            # incident). Never bundled: bundling it would flip every consumer skill to
-            # repo-newer on drift checks and force needless reimports.
-            if p.is_file() and p.name != 'PACKAGING-NOTE.md':
+            # is_bundled() is the single source of truth for what ships (PACKAGING-NOTE.md
+            # and top-level versions/ archives are excluded); tools/pending_reimport.py
+            # imports the same function so the post-commit hook and the packager can never
+            # disagree about which file changes warrant a reimport.
+            if p.is_file() and is_bundled(p.relative_to(src).as_posix()):
                 arc = f'{skill}/' + p.relative_to(src).as_posix()
                 assert '\\' not in arc, arc
                 z.write(p, arc)
