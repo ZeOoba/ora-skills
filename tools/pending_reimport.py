@@ -47,7 +47,9 @@ from pathlib import Path
 # so this helper and package_skills.py can never disagree about which skills bundle
 # a repo-root dependency.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from package_skills import REPO, SKIP, SHARED_ROOT_DEPS, is_bundled, plugin_of  # noqa: E402
+from package_skills import (  # noqa: E402
+    REPO, SKIP, SHARED_ROOT_DEPS, is_bundled, plugin_of, skill_source_files,
+)
 
 LEDGER = REPO / '_staging' / 'PENDING_REIMPORT.md'
 
@@ -164,23 +166,6 @@ def _normalized_hash(path: Path) -> str:
     return _normalized_hash_bytes(path.read_bytes())
 
 
-def _skill_source_files(repo_root: Path, skill: str) -> dict[str, Path]:
-    """{relative posix path: absolute path} for every file package_skills.py
-    would ship for this skill -- its own bundled files plus any repo-root
-    SHARED_ROOT_DEPS fan-out, the same two sources package() zips together."""
-    src = repo_root / skill
-    files = {
-        p.relative_to(src).as_posix(): p
-        for p in sorted(src.rglob('*'))
-        if p.is_file() and is_bundled(p.relative_to(src).as_posix())
-    }
-    for dep in SHARED_ROOT_DEPS.get(skill, []):
-        dep_path = repo_root / dep
-        if dep_path.is_file():
-            files[dep] = dep_path
-    return files
-
-
 def skill_drifted(repo_root: Path, cache_root: Path, skill: str) -> bool:
     """True if the skill is installed (has a cache dir) AND any shipped file
     differs (EOL-normalized) or is missing under it.
@@ -198,7 +183,7 @@ def skill_drifted(repo_root: Path, cache_root: Path, skill: str) -> bool:
     cache_dir = cache_root / skill
     if not cache_dir.is_dir():
         return False
-    for rel, src_path in _skill_source_files(repo_root, skill).items():
+    for rel, src_path in skill_source_files(skill, repo_root).items():
         cache_file = cache_dir / rel
         if not cache_file.is_file():
             return True
