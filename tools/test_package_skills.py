@@ -10,11 +10,11 @@ taught it to count Markdown TABLE rows (e.g. loi-generation/references/
 qc-gate.md presents its gate as a numbered table, not a checkbox list).
 """
 import io
+import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
-from unittest.mock import patch
 
 from package_skills import (
     REPO,
@@ -122,6 +122,42 @@ class ValidateSkillFrontmatter(unittest.TestCase):
             errors = validate_skill_frontmatter(skill_dir)
             self.assertTrue(any("!= directory name" in e for e in errors))
 
+    def test_missing_description_field_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / 'fixture-skill'
+            skill_dir.mkdir()
+            (skill_dir / 'SKILL.md').write_text(
+                '---\nname: fixture-skill\n---\n\n# x\n', encoding='utf-8',
+            )
+            errors = validate_skill_frontmatter(skill_dir)
+            self.assertTrue(any("no 'description'" in e for e in errors))
+
+    def test_xml_tag_in_description_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / 'fixture-skill'
+            skill_dir.mkdir()
+            (skill_dir / 'SKILL.md').write_text(
+                '---\nname: fixture-skill\ndescription: "Use <skill> for X"\n---\n\n# x\n',
+                encoding='utf-8',
+            )
+            errors = validate_skill_frontmatter(skill_dir)
+            self.assertTrue(any('XML-like tag' in e for e in errors))
+
+    def test_read_text_and_md_files_override(self):
+        """The read_text/md_files hooks let a caller (check_staged) supply STAGED content
+        instead of disk content — skill_dir need not even exist on disk when both are given."""
+        calls = []
+
+        def fake_read(rel):
+            calls.append(rel)
+            return {'SKILL.md': '---\nname: fixture-skill\ndescription: "ok"\n---\n\n# x\n'}[rel]
+
+        errors = validate_skill_frontmatter(
+            Path('nonexistent') / 'fixture-skill', read_text=fake_read, md_files=['SKILL.md'],
+        )
+        self.assertEqual(errors, [])
+        self.assertIn('SKILL.md', calls)
+
 
 class StagedSkillMapping(unittest.TestCase):
     """staged_skill_dirs() takes an explicit `files` list in tests so it never shells
@@ -136,28 +172,81 @@ class StagedSkillMapping(unittest.TestCase):
         roots = staged_skill_dirs(files=['psa-reconciliation/SKILL.md', 'psa-reconciliation/references/x.md'])
         self.assertEqual(roots, [REPO / 'psa-reconciliation'])
 
+    def test_files_none_uses_real_git_staged_diff(self):
+        """Exercises the live `git diff --cached` subprocess path (files=None), not just the
+        injected-list path every other test uses."""
+        result = staged_skill_dirs()
+        self.assertIsInstance(result, list)
+
+
+class CheckStagedLiveGitIndex(unittest.TestCase):
+    """check_staged() must validate the STAGED git-index content, not the working tree —
+    a stage-then-edit-without-restaging gap found in code review (2026-07-17). Exercises the
+    real `git add`/`git show :path`/`git ls-files --cached` machinery against a throwaway
+    fixture skill inside THIS worktree's own repo (never the shared main checkout), cleaned
+    up in tearDown even on failure.
+    """
+
+    FIXTURE_NAME = '_fixture-review-skill'
+
+    def setUp(self):
+        self.fixture_dir = REPO / self.FIXTURE_NAME
+
+    def tearDown(self):
+        subprocess.run(
+            ['git', '-C', str(REPO), 'reset', '--', self.FIXTURE_NAME],
+            capture_output=True,
+        )
+        if self.fixture_dir.is_dir():
+            for p in sorted(self.fixture_dir.rglob('*'), reverse=True):
+                p.unlink()
+            self.fixture_dir.rmdir()
+
+    def _stage(self, description: str) -> None:
+        self.fixture_dir.mkdir(exist_ok=True)
+        (self.fixture_dir / 'SKILL.md').write_text(
+            f'---\nname: {self.FIXTURE_NAME}\ndescription: "{description}"\n---\n\n# x\n',
+            encoding='utf-8',
+        )
+        subprocess.run(
+            ['git', '-C', str(REPO), 'add', f'{self.FIXTURE_NAME}/SKILL.md'], check=True,
+        )
+
+    def _run_check(self) -> tuple[int, str]:
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            rc = check_staged(files=[f'{self.FIXTURE_NAME}/SKILL.md'])
+        return rc, buf.getvalue()
+
+    def test_blocks_on_staged_overlength_description(self):
+        self._stage('x' * 1100)
+        rc, err = self._run_check()
+        self.assertEqual(rc, 1)
+        self.assertIn('exceeds the 1024-char', err)
+
+    def test_passes_on_staged_valid_description(self):
+        self._stage('a short valid description')
+        rc, _ = self._run_check()
+        self.assertEqual(rc, 0)
+
+    def test_reads_staged_content_not_dirtied_working_tree(self):
+        """Stage a GOOD description, then dirty the working tree with a BAD one WITHOUT
+        restaging. check_staged() must validate the staged (good) blob, not the dirtied
+        (bad) working-tree file — this is the exact gap the code review flagged."""
+        self._stage('a short valid description')
+        (self.fixture_dir / 'SKILL.md').write_text(
+            f'---\nname: {self.FIXTURE_NAME}\ndescription: "{"x" * 1100}"\n---\n\n# x\n',
+            encoding='utf-8',
+        )
+        rc, _ = self._run_check()
+        self.assertEqual(rc, 0, 'must validate the staged blob, not the dirtied working tree')
+
 
 class CheckStaged(unittest.TestCase):
     """check_staged() is what tools/hooks/pre-commit invokes directly."""
 
     def test_noop_for_non_skill_files(self):
         self.assertEqual(check_staged(files=['README.md']), 0)
-
-    def test_blocks_and_prints_overlength_description(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            skill_dir = _make_skill(Path(tmp), 'fixture-skill', 'x' * 1100)
-            with patch('package_skills.staged_skill_dirs', return_value=[skill_dir]):
-                buf = io.StringIO()
-                with redirect_stderr(buf):
-                    rc = check_staged()
-            self.assertEqual(rc, 1)
-            self.assertIn('exceeds the 1024-char', buf.getvalue())
-
-    def test_passes_for_valid_skill(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            skill_dir = _make_skill(Path(tmp), 'fixture-skill', 'a short valid description')
-            with patch('package_skills.staged_skill_dirs', return_value=[skill_dir]):
-                self.assertEqual(check_staged(), 0)
 
 
 if __name__ == '__main__':
