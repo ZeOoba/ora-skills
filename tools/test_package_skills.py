@@ -18,6 +18,7 @@ from pathlib import Path
 
 from package_skills import (
     REPO,
+    _staged_content,
     check_named_counts,
     check_staged,
     staged_skill_dirs,
@@ -158,6 +159,41 @@ class ValidateSkillFrontmatter(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertIn('SKILL.md', calls)
 
+    def test_unreadable_secondary_md_file_reported_not_raised(self):
+        """A staged file `md_files` names but `read_text` can't retrieve (e.g. a
+        merge-conflicted file with no stage-0 git index entry -- `git show :path`
+        exits non-zero) must surface as a validation error, not propagate as a raw
+        exception (code review finding, 2026-07-17: only the SKILL.md read was
+        exception-guarded; every other _read(rel) call in the loop was not)."""
+        def flaky_read(rel):
+            if rel == 'SKILL.md':
+                return '---\nname: fixture-skill\ndescription: "ok"\n---\n\n# x\n'
+            raise subprocess.CalledProcessError(128, ['git', 'show'])
+
+        errors = validate_skill_frontmatter(
+            Path('nonexistent') / 'fixture-skill', read_text=flaky_read,
+            md_files=['SKILL.md', 'references/conflicted.md'],
+        )
+        self.assertTrue(
+            any('references/conflicted.md' in e and 'could not read' in e for e in errors),
+            f'expected a clean could-not-read error naming the file, got: {errors}',
+        )
+
+    def test_unreadable_secondary_md_file_does_not_block_other_findings(self):
+        """The unreadable-file error must be appended alongside other real findings,
+        not swallow them or short-circuit the scan."""
+        def flaky_read(rel):
+            if rel == 'SKILL.md':
+                return '---\nname: wrong-name\ndescription: "ok"\n---\n\n# x\n'
+            raise FileNotFoundError(rel)
+
+        errors = validate_skill_frontmatter(
+            Path('nonexistent') / 'fixture-skill', read_text=flaky_read,
+            md_files=['SKILL.md', 'references/missing.md'],
+        )
+        self.assertTrue(any('!= directory name' in e for e in errors))
+        self.assertTrue(any('references/missing.md' in e and 'could not read' in e for e in errors))
+
 
 class StagedSkillMapping(unittest.TestCase):
     """staged_skill_dirs() takes an explicit `files` list in tests so it never shells
@@ -247,6 +283,35 @@ class CheckStaged(unittest.TestCase):
 
     def test_noop_for_non_skill_files(self):
         self.assertEqual(check_staged(files=['README.md']), 0)
+
+
+class StagedContentEncoding(unittest.TestCase):
+    """_staged_content() must decode staged git-index blobs as UTF-8 explicitly, not
+    whatever subprocess.run's text=True falls back to (commonly cp1252 on Windows) --
+    code review finding, 2026-07-17. Exercises the real git index against a throwaway
+    fixture inside THIS worktree's own repo, cleaned up in tearDown even on failure."""
+
+    FIXTURE_PATH = '_fixture-encoding-check.md'
+
+    def tearDown(self):
+        subprocess.run(
+            ['git', '-C', str(REPO), 'reset', '--', self.FIXTURE_PATH],
+            capture_output=True,
+        )
+        p = REPO / self.FIXTURE_PATH
+        if p.is_file():
+            p.unlink()
+
+    def test_multibyte_utf8_content_round_trips_exactly(self):
+        # Every one of these characters is multi-byte in UTF-8 and would mis-decode
+        # (mojibake) or raise UnicodeDecodeError under cp1252, the common Windows
+        # locale fallback subprocess.run(text=True) uses without an explicit encoding.
+        content = 'café — β 中文 description\n'
+        p = REPO / self.FIXTURE_PATH
+        p.write_text(content, encoding='utf-8')
+        subprocess.run(['git', '-C', str(REPO), 'add', self.FIXTURE_PATH], check=True)
+
+        self.assertEqual(_staged_content(self.FIXTURE_PATH), content)
 
 
 if __name__ == '__main__':

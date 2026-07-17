@@ -143,7 +143,19 @@ def validate_skill_frontmatter(skill_dir: Path, *, read_text=None, md_files=None
         p.relative_to(skill_dir).as_posix() for p in skill_dir.rglob('*.md')
     )
     for rel in rel_paths:
-        md_text = text if rel == 'SKILL.md' else _read(rel)
+        if rel == 'SKILL.md':
+            md_text = text
+        else:
+            try:
+                md_text = _read(rel)
+            except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+                # A staged/working file `rel_paths` names but `_read` can't retrieve --
+                # e.g. a merge-conflicted file with no stage-0 index entry (git show
+                # exits non-zero). Surface it as a validation error (commit stays
+                # blocked, same as today) instead of letting the exception propagate
+                # as a raw traceback (code review finding, 2026-07-17).
+                errors.append(f'{skill}/{rel}: could not read content to scan ({exc})')
+                continue
         _, mismatches = _scan_named_counts(md_text)
         if mismatches:
             errors.append(f'{skill}/{rel}: named-count mismatch:\n' + '\n'.join(mismatches))
@@ -185,10 +197,17 @@ def staged_skill_dirs(files: list[str] | None = None) -> list[Path]:
 
 def _staged_content(repo_rel_path: str) -> str:
     """Content of a repo-relative posix path from the git INDEX (staged), not the working
-    tree. `git show :path` — a bare ':' before the path means the index, not HEAD."""
+    tree. `git show :path` — a bare ':' before the path means the index, not HEAD.
+
+    Explicit encoding='utf-8', errors='replace' matches every disk-based reader in this
+    file (e.g. validate_skill_frontmatter's default _read). Without it, subprocess.run's
+    text=True decodes with the locale encoding -- commonly cp1252 on Windows -- which can
+    both decode malformed bytes differently than the disk path would and raise an uncaught
+    UnicodeDecodeError on some byte sequences, breaking the guarantee that packaging-time
+    and commit-time validation can never disagree (code review finding, 2026-07-17)."""
     return subprocess.run(
         ['git', '-C', str(REPO), 'show', f':{repo_rel_path}'],
-        capture_output=True, text=True, check=True,
+        capture_output=True, text=True, encoding='utf-8', errors='replace', check=True,
     ).stdout
 
 
