@@ -65,10 +65,10 @@ def shipped_manifest(build_manifest: dict) -> dict:
     return {k: v for k, v in build_manifest.items() if k not in BUILD_ONLY_KEYS}
 
 
-def plugin_entries(plugin: str, repo_root: Path = REPO) -> dict[str, bytes]:
+def plugin_entries(plugin: str, repo_root: Path = REPO, bm: dict | None = None) -> dict[str, bytes]:
     """{zip arcname (forward-slash): file bytes} for the whole bundle, assembled in
     memory. Validates name kebab-case, description length, member skills present."""
-    bm = load_manifest(plugin)
+    bm = bm if bm is not None else load_manifest(plugin)
     name = bm.get('name', plugin)
     if not KEBAB.match(name):
         raise SystemExit(f'{plugin}: plugin name {name!r} is not kebab-case')
@@ -102,14 +102,23 @@ def plugin_entries(plugin: str, repo_root: Path = REPO) -> dict[str, bytes]:
 
 def build_plugin(plugin: str, outdir: Path, bump: str | None = None,
                  repo_root: Path = REPO) -> Path:
+    bm = load_manifest(plugin)
+    # Validate + assemble against the CURRENT (pre-bump) manifest first, so a
+    # validation failure (bad kebab name, oversized description, a member
+    # skill's SKILL.md missing) never touches the tracked plugin-build.json --
+    # and a retry after fixing the real problem doesn't compound a phantom
+    # version bump from the failed attempt.
+    entries = plugin_entries(plugin, repo_root, bm=bm)
+
     if bump:
         mf = manifest_path(plugin)
-        bm = json.loads(mf.read_text(encoding='utf-8'))
         bm['version'] = bump_version(bm.get('version', '0.0.0'), bump)
         mf.write_text(json.dumps(bm, indent=2) + '\n', encoding='utf-8')
         print(f'{plugin}: version bumped -> {bm["version"]}')
+        entries['.claude-plugin/plugin.json'] = (
+            json.dumps(shipped_manifest(bm), indent=2).encode('utf-8')
+        )
 
-    entries = plugin_entries(plugin, repo_root)
     outdir.mkdir(parents=True, exist_ok=True)
     dest = outdir / f'{plugin}.plugin'
     with zipfile.ZipFile(dest, 'w', zipfile.ZIP_DEFLATED) as z:
