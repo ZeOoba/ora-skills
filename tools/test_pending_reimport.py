@@ -378,5 +378,39 @@ class SharedDepGitIntegration(FixtureTestCase):
         self.assertEqual(all_hist, set())
 
 
+class LedgerLineRouting(unittest.TestCase):
+    """format_ledger_line() — plugin-bundled skills must be tagged with the
+    plugin-rebuild remedy, never left to imply a standalone Save-skill install
+    (the deal-retirement / submarket-spatial-analysis wrong-target, 2026-07-16)."""
+
+    def test_standalone_skill_has_no_plugin_tag(self):
+        line = pr.format_ledger_line(
+            'acquisition-underwriting', '2026-07-16T23:00Z', 'abc1234',
+            'fix something', 'acquisition-underwriting/SKILL.md', owner=None)
+        self.assertIn('- acquisition-underwriting', line)
+        self.assertNotIn('plugin:', line)
+        self.assertNotIn('remedy:', line)
+
+    def test_plugin_member_is_tagged_with_rebuild_remedy(self):
+        line = pr.format_ledger_line(
+            'deal-retirement', '2026-07-16T23:00Z', 'abc1234',
+            'wire workflows', 'deal-retirement/SKILL.md',
+            owner='ora-operations-extensions')
+        self.assertIn('plugin: ora-operations-extensions', line)
+        self.assertIn('build_plugin.py', line)
+        self.assertIn('NOT a standalone Save-skill', line)
+
+    def test_live_membership_routes_real_bundled_skill(self):
+        # End-to-end with the real membership map: a bundled skill gets the tag,
+        # a standalone one does not.
+        bundled = pr.format_ledger_line(
+            'submarket-spatial-analysis', 'now', 'h', 's', 't',
+            pr.plugin_of('submarket-spatial-analysis'))
+        standalone = pr.format_ledger_line(
+            'daily-brief', 'now', 'h', 's', 't', pr.plugin_of('daily-brief'))
+        self.assertIn('plugin: ora-operations-extensions', bundled)
+        self.assertNotIn('plugin:', standalone)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

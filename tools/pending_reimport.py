@@ -47,7 +47,9 @@ from pathlib import Path
 # so this helper and package_skills.py can never disagree about which skills bundle
 # a repo-root dependency.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from package_skills import REPO, SKIP, SHARED_ROOT_DEPS, is_bundled  # noqa: E402
+from package_skills import (  # noqa: E402
+    REPO, SKIP, SHARED_ROOT_DEPS, is_bundled, plugin_of, skill_source_files,
+)
 
 LEDGER = REPO / '_staging' / 'PENDING_REIMPORT.md'
 
@@ -164,23 +166,6 @@ def _normalized_hash(path: Path) -> str:
     return _normalized_hash_bytes(path.read_bytes())
 
 
-def _skill_source_files(repo_root: Path, skill: str) -> dict[str, Path]:
-    """{relative posix path: absolute path} for every file package_skills.py
-    would ship for this skill -- its own bundled files plus any repo-root
-    SHARED_ROOT_DEPS fan-out, the same two sources package() zips together."""
-    src = repo_root / skill
-    files = {
-        p.relative_to(src).as_posix(): p
-        for p in sorted(src.rglob('*'))
-        if p.is_file() and is_bundled(p.relative_to(src).as_posix())
-    }
-    for dep in SHARED_ROOT_DEPS.get(skill, []):
-        dep_path = repo_root / dep
-        if dep_path.is_file():
-            files[dep] = dep_path
-    return files
-
-
 def skill_drifted(repo_root: Path, cache_root: Path, skill: str) -> bool:
     """True if the skill is installed (has a cache dir) AND any shipped file
     differs (EOL-normalized) or is missing under it.
@@ -198,7 +183,7 @@ def skill_drifted(repo_root: Path, cache_root: Path, skill: str) -> bool:
     cache_dir = cache_root / skill
     if not cache_dir.is_dir():
         return False
-    for rel, src_path in _skill_source_files(repo_root, skill).items():
+    for rel, src_path in skill_source_files(skill, repo_root).items():
         cache_file = cache_dir / rel
         if not cache_file.is_file():
             return True
@@ -393,6 +378,23 @@ def shared_dep_problems(report):
     ]
 
 
+def format_ledger_line(skill, when, shorthash, subject, trig, owner=None):
+    """Build one ledger line. PURE (no I/O) so the plugin-routing branch is unit-
+    tested without a git fixture. A plugin-bundled skill (owner not None) must NOT
+    be routed to the standalone Save-skill remedy — that installs a shadow copy
+    while the plugin's loaded copy stays stale (deal-retirement /
+    submarket-spatial-analysis, 2026-07-16). It is tagged with its owning plugin
+    and the plugin-rebuild remedy so package-and-stage-skill Entry A routes to
+    tools/build_plugin.py instead."""
+    line = f'- {skill} | pending since {when} | commit {shorthash} "{subject}" | trigger: {trig}'
+    if owner:
+        line += (
+            f' | plugin: {owner} | remedy: rebuild plugin '
+            f'(python tools/build_plugin.py {owner} <outdir>) — NOT a standalone Save-skill'
+        )
+    return line
+
+
 def cmd_record(commit: str) -> None:
     files = changed_files(commit)
     hits = affected_skills(files)
@@ -404,8 +406,8 @@ def cmd_record(commit: str) -> None:
     entries = read_entries()
     for skill, triggers in hits.items():
         trig = ', '.join(sorted(triggers))
-        entries[skill] = (
-            f'- {skill} | pending since {now} | commit {shorthash} "{subject}" | trigger: {trig}'
+        entries[skill] = format_ledger_line(
+            skill, now, shorthash, subject, trig, plugin_of(skill)
         )
     write_entries(entries)
     print(f'pending_reimport: recorded {len(hits)} skill(s) -> {LEDGER}')
