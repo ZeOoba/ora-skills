@@ -2,7 +2,7 @@
 name: deploy-site
 description: Build and deploy the oxfordra.net website to Netlify. Use when making site changes or deploying updates.
 user-invocable: true
-allowed-tools: Read Glob Grep Edit Write Bash WebFetch mcp__Claude_Preview__preview_start mcp__Claude_Preview__preview_screenshot mcp__a66aaa4a-ffcd-4066-b2af-79c4ce807809__netlify-deploy-services-reader mcp__a66aaa4a-ffcd-4066-b2af-79c4ce807809__netlify-deploy-services-updater
+allowed-tools: Read Glob Grep Edit Write Bash WebFetch mcp__Claude_Browser__preview_start mcp__Claude_Browser__computer mcp__a66aaa4a-ffcd-4066-b2af-79c4ce807809__netlify-deploy-services-reader mcp__a66aaa4a-ffcd-4066-b2af-79c4ce807809__netlify-deploy-services-updater
 ---
 
 ## Instructions
@@ -30,7 +30,7 @@ corrupt the current site. Do not use it; do not "sync" from it.
 4. **Draft deploy (default, no gate trip):**
    `npx -y netlify-cli deploy --cwd "C:/Users/Owner/website-canonical" --dir "C:/Users/Owner/website-canonical" --site 95ac0a0f-a84d-4400-b919-b8d7a8526646 --message "<branch@sha>"`
    Returns a `*.netlify.app` preview URL. Verify the change there —
-   Claude_Preview or a manual click-through — before going further.
+   Claude_Browser or a manual click-through — before going further.
 5. **Chat-regression gate (mandatory, every draft — no exceptions for
    "just a CSS fix"):**
    `node scripts/eval-chat.mjs --base=<draft-url>` from

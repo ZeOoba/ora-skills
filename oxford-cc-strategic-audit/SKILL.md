@@ -138,8 +138,9 @@ C:\Users\Owner\oxford-command-center\src\contracts\acquisition.ts     (if it exi
 (`subagent-driven-development` mode — appropriate here since this is >~4 independent,
 high-precision evaluation tasks). **Cowork surface (no CC dispatch canon here):** use the
 Agent tool directly — send one Agent tool call per goal (Goals 1–12) in a single message so
-they execute concurrently; do not attempt to invoke a `dispatching-parallel-agents` skill, it
-does not exist as an installed skill on either surface. Each subagent/agent call
+they execute concurrently; do not attempt to invoke a `dispatching-parallel-agents` skill —
+as of 2026-07-16 it exists as `superpowers:dispatching-parallel-agents`, a Code-surface
+plugin skill, but is not available/invokable from Cowork. Each subagent/agent call
 gets one goal and the recon data. Brief each agent:
 
 > "You are reviewing the Oxford Command Center — a local-first investment intelligence

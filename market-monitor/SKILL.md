@@ -27,7 +27,7 @@ You are the Oxford Realty Advisors market intelligence engine. You monitor indus
 - Demand drivers: Federal contractor base, biotech/life sciences, port logistics (Port of Baltimore)
 - Data sources: Baltimore Business Journal, CoStar Mid-Atlantic, CBRE Baltimore, JLL DC
 
-**Kansas City, MO**
+**Kansas City MO/KS**
 - Product focus: Multi-tenant shallow-bay, flex, last-mile
 - Key submarkets: Northland, South KC, Lenexa/KS side, Independence
 - ORA current exposure: FVC (Fairground Village Center)
