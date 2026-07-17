@@ -7,6 +7,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_plugin as bp  # noqa: E402
@@ -91,6 +92,50 @@ class BuildRoundTrip(unittest.TestCase):
                 self.assertFalse([n for n in names if '\\' in n])
                 pj = json.loads(z.read('.claude-plugin/plugin.json'))
                 self.assertEqual(pj['name'], PLUGIN)
+
+
+class BumpOrdering(unittest.TestCase):
+    """Regression coverage for the validate-before-bump reorder in build_plugin():
+    a failed build must never leave a phantom version increment on the tracked
+    plugin-build.json, and a successful --bump build must land the new version
+    in both the shipped plugin.json and the on-disk manifest."""
+
+    def _make_plugin(self, td, skill_has_skillmd):
+        root = Path(td)
+        plugins_dir = root / 'plugins'
+        pdir = plugins_dir / PLUGIN
+        pdir.mkdir(parents=True)
+        skill_name = 'fake-skill'
+        skill_dir = root / skill_name
+        skill_dir.mkdir()
+        if skill_has_skillmd:
+            (skill_dir / 'SKILL.md').write_text('---\nname: fake-skill\n---\nbody')
+        manifest = {
+            'name': PLUGIN, 'version': '0.1.0',
+            'description': 'test plugin', 'skills': [skill_name],
+        }
+        (pdir / 'plugin-build.json').write_text(json.dumps(manifest))
+        return root, plugins_dir
+
+    def test_failed_build_does_not_bump_manifest_on_disk(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, plugins_dir = self._make_plugin(td, skill_has_skillmd=False)
+            with mock.patch.object(bp, 'PLUGINS_DIR', plugins_dir):
+                with self.assertRaises(SystemExit):
+                    bp.build_plugin(PLUGIN, root / 'out', bump='patch', repo_root=root)
+            on_disk = json.loads((plugins_dir / PLUGIN / 'plugin-build.json').read_text())
+            self.assertEqual(on_disk['version'], '0.1.0')
+
+    def test_successful_bump_lands_in_shipped_and_disk_manifest(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, plugins_dir = self._make_plugin(td, skill_has_skillmd=True)
+            with mock.patch.object(bp, 'PLUGINS_DIR', plugins_dir):
+                dest = bp.build_plugin(PLUGIN, root / 'out', bump='patch', repo_root=root)
+                with zipfile.ZipFile(dest) as z:
+                    pj = json.loads(z.read('.claude-plugin/plugin.json'))
+                on_disk = json.loads((plugins_dir / PLUGIN / 'plugin-build.json').read_text())
+            self.assertEqual(pj['version'], '0.1.1')
+            self.assertEqual(on_disk['version'], '0.1.1')
 
 
 if __name__ == '__main__':
