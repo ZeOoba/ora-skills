@@ -352,9 +352,17 @@ Trigger the re-operations skill for:
  5. Utility transfer to new entity
  6. Bank account opening for new property entity
  7. Existing service contract assumption or termination
- 8. HubSpot deal marked Closed Won; Notion pipeline updated to Closed
+ 8. HubSpot deal marked Closed Won; Notion pipeline updated to Closed (set Stage = Closed Won **and `Last Activity` = today**)
  9. Physical key and access credential transfer
 10. Lender notification (if existing debt assumed)
+
+---
+
+## NOTION PIPELINE STAMPING (standing rule — added 2026-07-17)
+
+Any time this skill acts on a deal that has an Acquisition Pipeline Tracker row (`bcfe4a03`) — generating a PSA (Workflow 1), reviewing an inbound PSA draft or processing a redline round (Workflow 2A), or completing closing (post-closing checklist above) — update that row: advance PSA Status / Stage as the action warrants **and set `Last Activity` = today (date-only)**.
+
+This is load-bearing for the weekly `ora-deal-command-board`, which reads `Last Activity` (not Notion's system last-edited timestamp) to decide staleness. PSA negotiation that happens off-Notion must still bump `Last Activity`, or the deal false-flags STALLED while under active work. **Origin: 754 Old State Route 74, 2026-07-17 — the row sat at a frozen 6/11 timestamp through weeks of live PSA negotiation and false-flagged STALLED on the Monday board.** Do NOT rely on the board to stamp this itself — the board is read-only by charter (a board that stamped activity would reset its own stall clock merely by surfacing a deal).
 
 ---
 

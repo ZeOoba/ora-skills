@@ -344,7 +344,7 @@ If any check fails, fix and re-run. Do not present a failing file.
 2. Save to outputs folder.
 3. Generate PDF preview via `soffice --headless --convert-to pdf`.
 4. Present both files to user via `present_files`.
-5. Log to Notion Acquisition Pipeline Tracker (`bcfe4a03`): set deal status to "LOI Out" with link to file, expiration date, and a single-line summary of terms.
+5. Log to Notion Acquisition Pipeline Tracker (`bcfe4a03`): set deal status to "LOI Out" with link to file, expiration date, and a single-line summary of terms. **Also set `Last Activity` = today (date-only).** This field — not Notion's system last-edited timestamp — is what the weekly `ora-deal-command-board` reads to decide staleness; stamping it here keeps the stall flag honest (added 2026-07-17).
 
 ### Phase 6b — Deal Terms Register (MANDATORY — at draft AND at execution)
 The register is the deal's tracking point for every material term — especially terms agreed OUTSIDE the LOI (easements, parcel exclusions, verbal agreements, strategy-driven omissions). Side-channel terms exist in NO binding document until the PSA captures them; the register is how they survive the LOI→PSA handoff. (Origin: 2026-06-11, 754 Old State — the deal's linchpin easement lived only in an IC memo and meeting notes, and was absent from counsel's PSA draft.)
