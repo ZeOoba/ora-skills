@@ -47,7 +47,7 @@ from pathlib import Path
 # so this helper and package_skills.py can never disagree about which skills bundle
 # a repo-root dependency.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from package_skills import REPO, SKIP, SHARED_ROOT_DEPS, is_bundled  # noqa: E402
+from package_skills import REPO, SKIP, SHARED_ROOT_DEPS, is_bundled, plugin_of  # noqa: E402
 
 LEDGER = REPO / '_staging' / 'PENDING_REIMPORT.md'
 
@@ -393,6 +393,23 @@ def shared_dep_problems(report):
     ]
 
 
+def format_ledger_line(skill, when, shorthash, subject, trig, owner=None):
+    """Build one ledger line. PURE (no I/O) so the plugin-routing branch is unit-
+    tested without a git fixture. A plugin-bundled skill (owner not None) must NOT
+    be routed to the standalone Save-skill remedy — that installs a shadow copy
+    while the plugin's loaded copy stays stale (deal-retirement /
+    submarket-spatial-analysis, 2026-07-16). It is tagged with its owning plugin
+    and the plugin-rebuild remedy so package-and-stage-skill Entry A routes to
+    tools/build_plugin.py instead."""
+    line = f'- {skill} | pending since {when} | commit {shorthash} "{subject}" | trigger: {trig}'
+    if owner:
+        line += (
+            f' | plugin: {owner} | remedy: rebuild plugin '
+            f'(python tools/build_plugin.py {owner} <outdir>) — NOT a standalone Save-skill'
+        )
+    return line
+
+
 def cmd_record(commit: str) -> None:
     files = changed_files(commit)
     hits = affected_skills(files)
@@ -404,8 +421,8 @@ def cmd_record(commit: str) -> None:
     entries = read_entries()
     for skill, triggers in hits.items():
         trig = ', '.join(sorted(triggers))
-        entries[skill] = (
-            f'- {skill} | pending since {now} | commit {shorthash} "{subject}" | trigger: {trig}'
+        entries[skill] = format_ledger_line(
+            skill, now, shorthash, subject, trig, plugin_of(skill)
         )
     write_entries(entries)
     print(f'pending_reimport: recorded {len(hits)} skill(s) -> {LEDGER}')
