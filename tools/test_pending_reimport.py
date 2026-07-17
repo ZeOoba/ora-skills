@@ -13,6 +13,7 @@ or the real AppData runtime cache) so they're deterministic regardless of live
 drift state.
 """
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -249,6 +250,132 @@ class SharedDepClassify(unittest.TestCase):
     def test_in_sync_wins_even_when_git_history_is_unavailable(self):
         self.assertEqual(
             pr.classify_shared_copy('same', 'same', None, None), 'IN-SYNC')
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(['git', '-C', str(repo), *args], check=True,
+                    capture_output=True, text=True)
+
+
+def _git_commit(repo: Path, dep: str, content: str, message: str) -> None:
+    (repo / dep).write_text(content, encoding='utf-8', newline='')
+    _git(repo, 'add', dep)
+    _git(repo, 'commit', '-m', message)
+
+
+class SharedDepGitIntegration(FixtureTestCase):
+    """End-to-end coverage for the git-integration layer behind `shared-deps`:
+    _git_text / _git_blob_bytes / _file_history_hashes / shared_dep_report /
+    shared_dep_problems, exercised against a REAL git repo (not just the pure
+    classify_shared_copy() branch logic already covered above). Guards the
+    reviewer-flagged gap: the pure classifier was tested, but nothing exercised
+    the subprocess plumbing that actually feeds it live git history."""
+
+    DEP = 'target-markets.json'
+    # A real SHARED_ROOT_DEPS consumer name -- shared_dep_report() walks the
+    # module-level SHARED_CONSUMERS reverse-map built from package_skills.py,
+    # so the cache fixture must use one of the real consumer skill names.
+    CONSUMER = 'acquisition-underwriting'
+
+    def setUp(self):
+        super().setUp()
+        _git(self.repo, 'init', '-q', '-b', 'main')
+        _git(self.repo, 'config', 'user.email', 'test@example.com')
+        _git(self.repo, 'config', 'user.name', 'Test')
+
+    def _cache_file(self, content: str) -> None:
+        _write(self.cache / self.CONSUMER / self.DEP, content)
+
+    def _report_status(self) -> str:
+        report = pr.shared_dep_report(repo_root=self.repo, cache_root=self.cache)
+        return report[self.DEP][self.CONSUMER]
+
+    def test_in_sync_end_to_end(self):
+        _git_commit(self.repo, self.DEP, 'v1\n', 'add')
+        self._cache_file('v1\n')
+
+        self.assertEqual(self._report_status(), 'IN-SYNC')
+        self.assertEqual(pr.shared_dep_problems(
+            pr.shared_dep_report(repo_root=self.repo, cache_root=self.cache)), [])
+
+    def test_repo_ahead_end_to_end(self):
+        # cache holds an OLDER committed version of the file -- reimport upgrades it.
+        _git_commit(self.repo, self.DEP, 'v1\n', 'add v1')
+        _git_commit(self.repo, self.DEP, 'v2\n', 'bump v2')
+        self._cache_file('v1\n')
+
+        self.assertEqual(self._report_status(), 'REPO-AHEAD')
+
+    def test_cache_ahead_end_to_end(self):
+        # cache holds content that was NEVER committed anywhere -- the dangerous
+        # case a reimport would silently downgrade (the 2026-07-16 incident).
+        _git_commit(self.repo, self.DEP, 'repo-content\n', 'add')
+        self._cache_file('runtime-only-content\n')
+
+        self.assertEqual(self._report_status(), 'CACHE-AHEAD')
+
+    def test_divergent_end_to_end(self):
+        # cache matches a commit that exists in history but is OFF HEAD's own
+        # ancestry (a different branch) -- must never auto-reimport.
+        _git_commit(self.repo, self.DEP, 'v1\n', 'add v1')
+        _git(self.repo, 'checkout', '-q', '-b', 'other')
+        _git_commit(self.repo, self.DEP, 'branch-only\n', 'branch edit')
+        _git(self.repo, 'checkout', '-q', 'main')
+        _git_commit(self.repo, self.DEP, 'v2\n', 'main bump v2')
+        self._cache_file('branch-only\n')
+
+        self.assertEqual(self._report_status(), 'DIVERGENT')
+
+    def test_missing_in_cache_end_to_end(self):
+        _git_commit(self.repo, self.DEP, 'v1\n', 'add')
+        (self.cache / self.CONSUMER).mkdir(parents=True, exist_ok=True)
+        # cache dir exists (skill is installed) but never got the shared dep file.
+
+        self.assertEqual(self._report_status(), 'MISSING-IN-CACHE')
+
+    def test_not_installed_end_to_end(self):
+        _git_commit(self.repo, self.DEP, 'v1\n', 'add')
+        # no cache dir at all for the consumer skill.
+
+        self.assertEqual(self._report_status(), 'NOT-INSTALLED')
+
+    def test_repo_missing_end_to_end(self):
+        _git_commit(self.repo, self.DEP, 'v1\n', 'add')
+        (self.repo / self.DEP).unlink()  # working-tree file gone, never committed as a delete
+        self._cache_file('v1\n')
+
+        self.assertEqual(self._report_status(), 'REPO-MISSING')
+
+    def test_git_unavailable_degrades_to_unknown_not_a_guess(self):
+        # A repo_root with no .git at all (e.g. untracked path) must degrade to
+        # UNKNOWN rather than fabricating a direction -- never raises.
+        non_git_root = self.tmp / 'not-a-repo'
+        _write(non_git_root / self.DEP, 'content\n')
+        self._cache_file('different-content\n')
+
+        report = pr.shared_dep_report(repo_root=non_git_root, cache_root=self.cache)
+
+        self.assertEqual(report[self.DEP][self.CONSUMER], 'UNKNOWN')
+
+    def test_git_text_returns_none_for_non_repo(self):
+        non_git_root = self.tmp / 'not-a-repo-2'
+        non_git_root.mkdir()
+
+        self.assertIsNone(pr._git_text(non_git_root, 'rev-list', 'HEAD', '--', self.DEP))
+
+    def test_git_blob_bytes_returns_none_for_missing_rev(self):
+        _git_commit(self.repo, self.DEP, 'v1\n', 'add')
+
+        self.assertIsNone(pr._git_blob_bytes(self.repo, 'deadbeef', self.DEP))
+
+    def test_file_history_hashes_none_none_when_file_never_committed(self):
+        _git(self.repo, 'commit', '--allow-empty', '-q', '-m', 'empty init')
+        # repo has commits, but self.DEP was never added -- 'git rev-list HEAD -- DEP'
+        # succeeds with empty output, which must not be conflated with git-unavailable.
+        ancestor, all_hist = pr._file_history_hashes(self.repo, self.DEP)
+
+        self.assertEqual(ancestor, set())
+        self.assertEqual(all_hist, set())
 
 
 if __name__ == '__main__':
