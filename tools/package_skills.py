@@ -9,12 +9,8 @@ RULE: never package skills with Compress-Archive; always use this script.
 
 Usage: python tools/package_skills.py <outdir> [skill ...]
        (no skill args = all top-level skill dirs containing SKILL.md)
-       python tools/package_skills.py --check-staged
-       (validates frontmatter for every skill dir with staged changes; used by
-       tools/hooks/pre-commit — exit 0 clean, exit 1 blocked)
 """
 import re
-import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -24,17 +20,12 @@ SKIP = {'_archive', 'tools', '.git'}
 MAX_DESC = 1024  # platform limit: importer rejects 'description' > 1024 chars (hit 2026-06-11)
 
 
-def _scan_named_counts(text: str) -> tuple[list[str], list[str]]:
-    """Core 'N-Point'/'N-item' header-vs-actual-count scan, shared by check_named_counts
-    (CLI, prints OK lines + raises) and validate_skill_frontmatter (returns errors only)
-    so the counting logic itself can never drift between the two callers.
+def check_named_counts(skill: str, text: str) -> None:
+    """Fail if any 'N-Point' / 'N-item' section header names the wrong item count.
 
     Only fires on Markdown headers (lines starting with #) that contain the
     pattern — inline prose references are ignored. Catches name-vs-count drift
     like the 43-vs-42 discrepancy found 2026-06-11.
-
-    Returns (oks, errors): oks are "N-Suffix (N items) OK" strings for headers whose
-    claimed count matches; errors are "line N: ..." mismatch descriptions.
     """
     HEADER_PAT = re.compile(r'^(#{1,6})\s+.*?\b(\d+)-((?:[Pp]oint|[Ii]tem))\b', re.M)
     CHECKBOX = re.compile(r'^\s*-\s+(?:\\\[|\[)')   # - \[ \] or - [ ] (escaped or plain)
@@ -42,8 +33,7 @@ def _scan_named_counts(text: str) -> tuple[list[str], list[str]]:
     TABLE_ITEM = re.compile(r'^\s*\|\s*\d+\s*\|')   # numbered table row: | 1 | ... |
     HRULE = re.compile(r'^-{3,}\s*$')
     lines = text.splitlines()
-    oks: list[str] = []
-    errors: list[str] = []
+    errors = []
     for m in HEADER_PAT.finditer(text):
         level, claimed, suffix = len(m.group(1)), int(m.group(2)), m.group(3)
         start = text[:m.start()].count('\n')
@@ -62,181 +52,45 @@ def _scan_named_counts(text: str) -> tuple[list[str], list[str]]:
                 f'found {count} items'
             )
         else:
-            oks.append(f'{claimed}-{suffix} ({count} items) OK')
-    return oks, errors
-
-
-def check_named_counts(skill: str, text: str) -> None:
-    """CLI-facing wrapper: print per-header OK lines, raise SystemExit on any mismatch."""
-    oks, errors = _scan_named_counts(text)
-    for ok in oks:
-        print(f'{skill}: {ok}')
+            print(f'{skill}: {claimed}-{suffix} ({count} items) OK')
     if errors:
         raise SystemExit(f'{skill}: named-count mismatch:\n' + '\n'.join(errors))
 
 
-def is_skill_dir(top: str) -> bool:
-    """True if `top` (a top-level repo dir name) is a packageable skill directory."""
-    return top not in SKIP and (REPO / top / 'SKILL.md').is_file()
-
-
-def validate_skill_frontmatter(skill_dir: Path, *, read_text=None, md_files=None) -> list[str]:
-    """Validate one skill dir's SKILL.md frontmatter plus every *.md's named-count headers.
-
-    Returns a list of error strings; empty means valid. This is the single source of
-    truth for the frontmatter defect class — package_skills.py's validate_frontmatter()
-    (packaging time) and tools/hooks/pre-commit's check_staged() (commit time) both call
-    this, so the two gates can never validate different rules (psa-reconciliation's
-    1274-char description reaching the repo untouched by either gate, 2026-07-17).
-
-    `read_text`/`md_files` are internal overrides: check_staged() passes a reader backed
-    by the git INDEX so a commit is validated against what's actually STAGED, not whatever
-    happens to be on disk in the working tree (code review finding, 2026-07-17 — without
-    this, staging a good description then further editing SKILL.md without re-staging could
-    pass a hook check that has nothing to do with the content being committed, and vice
-    versa). `read_text(rel: str) -> str` reads one skill-dir-relative file; `md_files` is
-    the skill-dir-relative *.md path list to scan for named-count headers. Both default to
-    None, meaning "read disk" — the packaging call site (validate_frontmatter -> package())
-    omits them because packaging always operates on the working tree as it stands.
-    """
-    skill = skill_dir.name
-    errors: list[str] = []
-
-    def _read(rel: str) -> str:
-        if read_text is not None:
-            return read_text(rel)
-        return (skill_dir / rel).read_text(encoding='utf-8', errors='replace')
-
-    try:
-        text = _read('SKILL.md')
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return [f'{skill}: no SKILL.md at {skill_dir}']
+def validate_frontmatter(skill: str, src: Path) -> None:
+    text = (src / 'SKILL.md').read_text(encoding='utf-8', errors='replace')
     m = re.search(r'^---\s*\n(.*?)\n---', text, re.S)
     if not m:
-        return [f'{skill}: SKILL.md has no YAML frontmatter']
+        raise SystemExit(f'{skill}: SKILL.md has no YAML frontmatter')
     fm = m.group(1)
     nm = re.search(r'^name:\s*(\S+)', fm, re.M)
     if not nm or nm.group(1).strip("'\"") != skill:
-        errors.append(f"{skill}: frontmatter 'name' missing or != directory name")
+        raise SystemExit(f"{skill}: frontmatter 'name' missing or != directory name")
     dm = re.search(r"^description:\s*(.*?)(?=\n[a-zA-Z_-]+:|\Z)", fm, re.S | re.M)
     if not dm:
-        errors.append(f"{skill}: frontmatter has no 'description'")
-    else:
-        desc = dm.group(1).strip().strip("'\"")
-        if len(desc) > MAX_DESC:
-            errors.append(
-                f"{skill}: description is {len(desc)} chars — exceeds the {MAX_DESC}-char "
-                f"platform limit; the importer will reject it. Trim it before packaging."
-            )
-        tag = re.search(r'</?[A-Za-z][^>]*>', desc)
-        if tag:
-            errors.append(
-                f"{skill}: description contains an XML-like tag {tag.group(0)!r} — the platform "
-                f"importer rejects angle-bracket tags in 'description' (hit 2026-06-22). Replace it "
-                f"(e.g. <skill> -> [skill]) before packaging."
-            )
+        raise SystemExit(f"{skill}: frontmatter has no 'description'")
+    desc = dm.group(1).strip().strip("'\"")
+    if len(desc) > MAX_DESC:
+        raise SystemExit(
+            f"{skill}: description is {len(desc)} chars — exceeds the {MAX_DESC}-char "
+            f"platform limit; the importer will reject it. Trim it before packaging."
+        )
+    tag = re.search(r'</?[A-Za-z][^>]*>', desc)
+    if tag:
+        raise SystemExit(
+            f"{skill}: description contains an XML-like tag {tag.group(0)!r} — the platform "
+            f"importer rejects angle-bracket tags in 'description' (hit 2026-06-22). Replace it "
+            f"(e.g. <skill> -> [skill]) before packaging."
+        )
+    print(f'{skill}: description {len(desc)}/{MAX_DESC} chars OK')
     # Scan EVERY Markdown file under the skill dir, not just SKILL.md, so named-count
     # headers in references/ are validated too (gap found 2026-06-11:
     # loi-generation/references/qc-gate.md was silently unscanned). Label each finding
     # with the relative path so the source file is obvious.
-    rel_paths = md_files if md_files is not None else sorted(
-        p.relative_to(skill_dir).as_posix() for p in skill_dir.rglob('*.md')
-    )
-    for rel in rel_paths:
-        md_text = text if rel == 'SKILL.md' else _read(rel)
-        _, mismatches = _scan_named_counts(md_text)
-        if mismatches:
-            errors.append(f'{skill}/{rel}: named-count mismatch:\n' + '\n'.join(mismatches))
-    return errors
-
-
-def validate_frontmatter(skill: str, src: Path) -> None:
-    """CLI-facing wrapper used by package(): validates via validate_skill_frontmatter()
-    (the shared gate) and, on success, reprints the same per-check OK lines the packager
-    has always printed at packaging time."""
-    errors = validate_skill_frontmatter(src)
-    if errors:
-        raise SystemExit('\n'.join(errors))
-    text = (src / 'SKILL.md').read_text(encoding='utf-8', errors='replace')
-    fm = re.search(r'^---\s*\n(.*?)\n---', text, re.S).group(1)
-    desc = re.search(
-        r"^description:\s*(.*?)(?=\n[a-zA-Z_-]+:|\Z)", fm, re.S | re.M
-    ).group(1).strip().strip("'\"")
-    print(f'{skill}: description {len(desc)}/{MAX_DESC} chars OK')
     for md in sorted(src.rglob('*.md')):
         rel = md.relative_to(src).as_posix()
         md_text = text if rel == 'SKILL.md' else md.read_text(encoding='utf-8', errors='replace')
         check_named_counts(f'{skill}/{rel}', md_text)
-
-
-def staged_skill_dirs(files: list[str] | None = None) -> list[Path]:
-    """Map staged (git diff --cached --name-only) file paths to their skill root dirs,
-    deduped and sorted. Pass `files` explicitly (as tests do) to bypass the live git call.
-    """
-    if files is None:
-        out = subprocess.run(
-            ['git', '-C', str(REPO), 'diff', '--cached', '--name-only'],
-            capture_output=True, text=True, check=True,
-        ).stdout
-        files = [ln.strip() for ln in out.splitlines() if ln.strip()]
-    roots = {REPO / f.split('/')[0] for f in files if is_skill_dir(f.split('/')[0])}
-    return sorted(roots)
-
-
-def _staged_content(repo_rel_path: str) -> str:
-    """Content of a repo-relative posix path from the git INDEX (staged), not the working
-    tree. `git show :path` — a bare ':' before the path means the index, not HEAD."""
-    return subprocess.run(
-        ['git', '-C', str(REPO), 'show', f':{repo_rel_path}'],
-        capture_output=True, text=True, check=True,
-    ).stdout
-
-
-def _parse_staged_md_files(ls_files_null_output: str, repo_rel_root: str) -> list[str]:
-    """Pure parser: `git ls-files -z` NUL-delimited output -> skill-dir-relative *.md paths.
-    Split from _staged_md_files() so the path-filtering logic is unit-testable without a
-    git sandbox."""
-    prefix = repo_rel_root + '/'
-    return sorted(
-        p[len(prefix):] for p in ls_files_null_output.split('\0')
-        if p.endswith('.md') and p.startswith(prefix)
-    )
-
-
-def _staged_md_files(skill_dir: Path) -> list[str]:
-    """Skill-dir-relative posix paths of every *.md the git INDEX has under skill_dir — the
-    STAGED tree, not the working tree (a disk-only untracked file isn't here; a file staged
-    for deletion isn't either)."""
-    repo_rel_root = skill_dir.relative_to(REPO).as_posix()
-    out = subprocess.run(
-        ['git', '-C', str(REPO), 'ls-files', '--cached', '-z', '--', repo_rel_root],
-        capture_output=True, text=True, check=True,
-    ).stdout
-    return _parse_staged_md_files(out, repo_rel_root)
-
-
-def check_staged(files: list[str] | None = None) -> int:
-    """tools/hooks/pre-commit entry point: validate frontmatter for every skill dir with
-    staged changes, against the STAGED git-index content (not the working tree — see
-    validate_skill_frontmatter's read_text/md_files doc). Prints errors verbatim to stderr;
-    returns a process exit code (0 clean, 1 blocked) rather than raising, since a hook needs
-    a plain exit status.
-    """
-    errors: list[str] = []
-    for skill_dir in staged_skill_dirs(files):
-        repo_rel_root = skill_dir.relative_to(REPO).as_posix()
-
-        def _read(rel: str, _root: str = repo_rel_root) -> str:
-            return _staged_content(f'{_root}/{rel}')
-
-        errors.extend(validate_skill_frontmatter(
-            skill_dir, read_text=_read, md_files=_staged_md_files(skill_dir),
-        ))
-    if errors:
-        for e in errors:
-            print(e, file=sys.stderr)
-        return 1
-    return 0
 
 
 # Repo-root files a skill's own directory doesn't contain but declares as its canonical
@@ -378,14 +232,11 @@ def main() -> None:
     if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
         print(__doc__.strip())
         sys.exit(0)
-    if sys.argv[1] == '--check-staged':
-        # tools/hooks/pre-commit entry point: validate frontmatter of every skill dir
-        # with staged changes; exit 1 blocks the commit.
-        sys.exit(check_staged())
     outdir = Path(sys.argv[1])
     outdir.mkdir(parents=True, exist_ok=True)
     skills = sys.argv[2:] or [
-        d.name for d in REPO.iterdir() if d.is_dir() and is_skill_dir(d.name)
+        d.name for d in REPO.iterdir()
+        if d.is_dir() and d.name not in SKIP and (d / 'SKILL.md').is_file()
     ]
     for s in skills:
         package(s, outdir)

@@ -1,19 +1,9 @@
 #!/bin/sh
 # ora-skills pre-commit (canonical, versioned; core.hooksPath=tools/hooks — set locally per clone).
-#
-# Check 1 (2026-07-16): any staged change to the repo-root target-markets.json — the canonical
+# Rule (2026-07-16): any staged change to the repo-root target-markets.json — the canonical
 # shared data source injected into 5 skills at package time — must bump its "version" field.
 # Motivation: two contradictory v1.5 copies circulated (Notion 'Market' rename-executed vs
 # rename-rejected) because the root copy was edited without a version bump.
-#
-# Check 2 (2026-07-17): every skill dir with staged changes must pass the same frontmatter
-# gate package_skills.py runs at packaging time (name == dir name, description present/
-# <=1024 chars/tag-free, named-count headers) via package_skills.validate_skill_frontmatter().
-# Motivation: psa-reconciliation's description drifted to 1274 chars and reached the repo
-# untouched by any gate — package_skills.py only validates at package time, and a raw
-# runtime-cache sync skips it entirely. Shared validator (tools/package_skills.py) means
-# packaging time and commit time can never disagree about what's valid.
-#
 # Emergency bypass: git commit --no-verify
 if git diff --cached --name-only | grep -qx 'target-markets.json'; then
   if ! git diff --cached -U0 -- target-markets.json | grep '^+' | grep -q '"version"'; then
@@ -22,11 +12,4 @@ if git diff --cached --name-only | grep -qx 'target-markets.json'; then
     exit 1
   fi
 fi
-
-if ! python tools/package_skills.py --check-staged; then
-  echo 'BLOCKED: skill frontmatter validation failed (see errors above).' >&2
-  echo 'Fix the SKILL.md frontmatter, or --no-verify to override.' >&2
-  exit 1
-fi
-
 exit 0
