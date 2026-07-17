@@ -146,17 +146,17 @@ When comps are collected, offer to add them to the Comparable Data database in N
 
 ## 6. OXFORD MARKET BENCHMARKS
 
-> Target-market roster is governed by `target-markets.json` (v1.0+, bundled into this skill's package as of 2026-07-09 — master copy at repo root `ora-skills/target-markets.json`); the entry-phase markets carry sourced metrics there too. Keep this table's market rows in parity with that file.
+> Target-market roster is governed by `target-markets.json` (v1.6, bundled into this skill's package as of 2026-07-09 — master copy at repo root `ora-skills/target-markets.json`); the entry-phase markets carry sourced metrics there too. Keep this table's market rows in parity with that file.
 
 Reference these Oxford portfolio benchmarks when contextualizing comps:
 
 | Market | Avg Rent PSF (NNN) | Avg Cap Rate | Avg Price/SF | Typical Clear Height |
 |--------|--------------------|--------------|--------------|--------------------|
 | Columbus OH | $4.50-6.50 | 7.0-8.5% | $45-75 | 14-18' |
-| Kansas City MO | $4.00-6.00 | 7.5-9.0% | $40-65 | 14-16' |
+| Kansas City MO/KS | $4.00-6.00 | 7.5-9.0% | $40-65 | 14-16' |
 | Indianapolis IN | $4.00-5.50 | 7.5-9.0% | $40-60 | 14-18' |
-| Baltimore/MD | $6.00-9.00 | 6.5-8.0% | $60-100 | 14-20' |
-| DC Metro | $8.00-12.00 | 6.0-7.5% | $80-150 | 14-20' |
+| Maryland (Baltimore/DC) — Baltimore submarket | $6.00-9.00 | 6.5-8.0% | $60-100 | 14-20' |
+| Maryland (Baltimore/DC) — DC submarket | $8.00-12.00 | 6.0-7.5% | $80-150 | 14-20' |
 | Cincinnati OH | $4.50-6.50 | 7.0-8.5% | $45-70 | 14-18' |
 | Madison WI | $6.00-8.50 | 6.5-8.0% | $60-95 | 14-18' |
 | Grand Rapids MI | $6.40-10.00 | 7.5-9.0%* | $130-160 | 16-24'† |
