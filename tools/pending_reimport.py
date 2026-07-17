@@ -34,6 +34,7 @@ Usage:
   python tools/pending_reimport.py list                  # ledger only (raw)
   python tools/pending_reimport.py candidates             # ledger UNION full sweep (always-verify; read-only)
   python tools/pending_reimport.py backfill                # sweep + persist any drift missing from the ledger
+  python tools/pending_reimport.py shared-deps             # reconcile shared repo-root deps, direction-aware (reimport vs commit)
   python tools/pending_reimport.py clear <skill> [...]    # after confirmed reimport
 """
 import hashlib
@@ -141,6 +142,17 @@ def write_entries(entries: dict[str, str], ledger_path: Path = LEDGER) -> None:
     ledger_path.write_text(HEADER + body, encoding='utf-8')
 
 
+def _normalized_hash_bytes(data: bytes) -> str:
+    """SHA256 of content, CRLF->LF normalized when it decodes as text. Bytes form
+    (see _normalized_hash) so a git blob's content can be hashed the same way a
+    working-tree/cache file is, for the shared-dep direction check."""
+    try:
+        data = data.decode('utf-8').replace('\r\n', '\n').encode('utf-8')
+    except UnicodeDecodeError:
+        pass  # binary file: compare raw bytes, EOL normalization doesn't apply
+    return hashlib.sha256(data).hexdigest()
+
+
 def _normalized_hash(path: Path) -> str:
     """SHA256 of a file's content, CRLF->LF normalized when the file decodes as text.
 
@@ -149,12 +161,7 @@ def _normalized_hash(path: Path) -> str:
     while the platform import stores LF, so a raw-byte hash reads perpetually
     "drifted" on line endings alone. A raw-only mismatch is in-sync, not drift.
     """
-    data = path.read_bytes()
-    try:
-        data = data.decode('utf-8').replace('\r\n', '\n').encode('utf-8')
-    except UnicodeDecodeError:
-        pass  # binary file: compare raw bytes, EOL normalization doesn't apply
-    return hashlib.sha256(data).hexdigest()
+    return _normalized_hash_bytes(path.read_bytes())
 
 
 def _skill_source_files(repo_root: Path, skill: str) -> dict[str, Path]:
@@ -255,6 +262,137 @@ def backfill(
     return seeded
 
 
+# ---------------------------------------------------------------------------
+# Shared repo-root dependency reconciliation (2026-07-16).
+#
+# sweep_drift() already SEES a shared-dep mismatch, but reports it once per
+# consuming skill with no direction -- so a reader can't tell a stale cache
+# (fix = repackage + reimport) from runtime-only content that was never
+# committed (fix = commit it back; a reimport would DOWNGRADE the runtime).
+# That ambiguity is exactly what made the 2026-07-16 target-markets.json
+# episode read the wrong way round by eye. This block reconciles each shared
+# file ONCE and labels it with a git-history-derived direction.
+# ---------------------------------------------------------------------------
+
+# Actionable one-liner per direction, keyed by the classify_shared_copy() label.
+SHARED_DEP_ACTION = {
+    'IN-SYNC': 'in sync',
+    'REPO-AHEAD': 'repackage + reimport (cache is a stale older version)',
+    'CACHE-AHEAD': 'commit the runtime content back to the repo — do NOT reimport (would DOWNGRADE the runtime)',
+    'DIVERGENT': 'manual review — cache matches an off-HEAD commit; do NOT auto-reimport',
+    'REPO-MISSING': 'stale shared-dep declaration — repo file is gone (fix SHARED_ROOT_DEPS)',
+    'MISSING-IN-CACHE': 'repackage + reimport (shared file absent from an installed skill)',
+    'NOT-INSTALLED': 'consumer skill has no cache dir — never installed (not drift)',
+    'UNKNOWN': 'git history unavailable — verify direction by hand',
+}
+
+# States that need no action: cache agrees with repo, or the skill was never installed.
+SHARED_DEP_CLEAN = {'IN-SYNC', 'NOT-INSTALLED'}
+
+
+def classify_shared_copy(cache_hash, repo_hash, ancestor_hashes, all_history_hashes):
+    """Direction of ONE cached shared-dep copy vs the repo. PURE — no I/O, so the
+    branch logic is unit-tested without a git fixture.
+
+    ancestor_hashes/all_history_hashes are EOL-normalized content hashes of the
+    repo file at, respectively, every commit on HEAD's ancestry and every commit
+    on any branch. Passing ancestor_hashes=None means git was unavailable.
+
+      IN-SYNC       cache == repo working file                     -> nothing to do
+      REPO-AHEAD    cache is an older point on HEAD's own history   -> REIMPORT upgrades it
+      CACHE-AHEAD   cache content was never committed anywhere      -> UPDATE REPO (reimport downgrades)
+      DIVERGENT     cache matches a commit OFF HEAD's ancestry      -> manual; do not auto-reimport
+      REPO-MISSING  repo has no such file                           -> shared-dep declaration is stale
+      UNKNOWN       git history unavailable                         -> verify by hand
+    """
+    if repo_hash is None:
+        return 'REPO-MISSING'
+    if cache_hash == repo_hash:
+        return 'IN-SYNC'
+    if ancestor_hashes is None:
+        return 'UNKNOWN'
+    if cache_hash in ancestor_hashes:
+        return 'REPO-AHEAD'
+    if all_history_hashes and cache_hash in all_history_hashes:
+        return 'DIVERGENT'
+    return 'CACHE-AHEAD'
+
+
+def _git_text(repo_root: Path, *args: str):
+    """Run git in repo_root; stdout str, or None if git is missing or the command
+    fails (untracked path, not a repo). Never raises -- callers degrade to UNKNOWN."""
+    try:
+        r = subprocess.run(['git', '-C', str(repo_root), *args],
+                           capture_output=True, text=True)
+    except (OSError, ValueError):
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+def _git_blob_bytes(repo_root: Path, rev: str, relpath: str):
+    try:
+        r = subprocess.run(['git', '-C', str(repo_root), 'show', f'{rev}:{relpath}'],
+                           capture_output=True)
+    except (OSError, ValueError):
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+def _file_history_hashes(repo_root: Path, relpath: str):
+    """(ancestor_hashes, all_history_hashes) EOL-normalized content hashes of
+    relpath across HEAD's ancestry and across all branches. (None, None) when git
+    is unavailable or the file is untracked, so classify_shared_copy -> UNKNOWN."""
+    head = _git_text(repo_root, 'rev-list', 'HEAD', '--', relpath)
+    if head is None:
+        return None, None
+
+    def _hashes(rev_text):
+        out = set()
+        for rev in rev_text.split():
+            data = _git_blob_bytes(repo_root, rev, relpath)
+            if data is not None:
+                out.add(_normalized_hash_bytes(data))
+        return out
+
+    all_text = _git_text(repo_root, 'rev-list', '--all', '--', relpath) or ''
+    return _hashes(head), _hashes(all_text)
+
+
+def shared_dep_report(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT):
+    """Reconcile every shared repo-root dependency (SHARED_ROOT_DEPS, reversed into
+    SHARED_CONSUMERS) against each consumer skill's cached copy. Returns
+    {dep_filename: {consumer_skill: STATUS}}, deduped to one shared file per row."""
+    report: dict[str, dict[str, str]] = {}
+    for dep in sorted(SHARED_CONSUMERS):
+        repo_file = repo_root / dep
+        repo_hash = _normalized_hash(repo_file) if repo_file.is_file() else None
+        ancestor_hashes, all_history_hashes = _file_history_hashes(repo_root, dep)
+        rows: dict[str, str] = {}
+        for skill in sorted(SHARED_CONSUMERS[dep]):
+            if not (cache_root / skill).is_dir():
+                rows[skill] = 'NOT-INSTALLED'
+            elif not (cache_root / skill / dep).is_file():
+                rows[skill] = 'MISSING-IN-CACHE'
+            else:
+                rows[skill] = classify_shared_copy(
+                    _normalized_hash(cache_root / skill / dep),
+                    repo_hash, ancestor_hashes, all_history_hashes,
+                )
+        report[dep] = rows
+    return report
+
+
+def shared_dep_problems(report):
+    """Flatten a shared_dep_report() into [(dep, skill, status)] for every copy that
+    isn't clean -- the actionable rows a drift audit should surface."""
+    return [
+        (dep, skill, status)
+        for dep, rows in report.items()
+        for skill, status in sorted(rows.items())
+        if status not in SHARED_DEP_CLEAN
+    ]
+
+
 def cmd_record(commit: str) -> None:
     files = changed_files(commit)
     hits = affected_skills(files)
@@ -292,10 +430,13 @@ def cmd_candidates() -> None:
     result = candidates()
     if not result:
         print('pending_reimport: no candidates (ledger empty and full sweep found no drift)')
-        return
-    print(f'pending_reimport: {len(result)} candidate(s) (ledger UNION full sweep):')
-    for skill in sorted(result):
-        print(f'   {result[skill]}')
+    else:
+        print(f'pending_reimport: {len(result)} candidate(s) (ledger UNION full sweep):')
+        for skill in sorted(result):
+            print(f'   {result[skill]}')
+    # A shared-dep mismatch shows up in the sweep once per consumer with no direction;
+    # append the deduped, direction-aware view so the audit says reimport vs commit.
+    _print_shared_dep_advisory()
 
 
 def cmd_backfill() -> None:
@@ -319,6 +460,37 @@ def cmd_clear(skills: list[str]) -> None:
         print(f'pending_reimport: not pending (nothing to clear): {", ".join(missing)}')
 
 
+def cmd_shared_deps() -> None:
+    """Reconcile shared repo-root deps against the runtime cache, one row per file,
+    with a direction so a reader never guesses reimport-vs-commit by eye."""
+    report = shared_dep_report()
+    problems = shared_dep_problems(report)
+    print('pending_reimport: shared repo-root dependency reconciliation')
+    for dep, rows in report.items():
+        clean = all(s in SHARED_DEP_CLEAN for s in rows.values())
+        print(f'  {dep}: {"OK" if clean else "DRIFT"}')
+        for skill, status in sorted(rows.items()):
+            if status in SHARED_DEP_CLEAN:
+                continue
+            print(f'     {skill}: {status} -> {SHARED_DEP_ACTION.get(status, status)}')
+        in_sync = sorted(s for s, v in rows.items() if v == 'IN-SYNC')
+        if in_sync:
+            print(f'     in sync: {", ".join(in_sync)}')
+    if not problems:
+        print('  all shared-dep copies reconcile with the repo')
+
+
+def _print_shared_dep_advisory() -> None:
+    """Terse shared-dep drift block appended to `candidates` so the drift audit
+    surfaces shared-file direction inline (dedup of the per-skill sweep rows)."""
+    problems = shared_dep_problems(shared_dep_report())
+    if not problems:
+        return
+    print(f'pending_reimport: {len(problems)} shared-dep advisory row(s) (direction-aware):')
+    for dep, skill, status in problems:
+        print(f'   {dep} @ {skill}: {status} -> {SHARED_DEP_ACTION.get(status, status)}')
+
+
 def main() -> None:
     argv = sys.argv[1:]
     cmd = argv[0] if argv else 'list'
@@ -330,6 +502,8 @@ def main() -> None:
         cmd_candidates()
     elif cmd == 'backfill':
         cmd_backfill()
+    elif cmd == 'shared-deps':
+        cmd_shared_deps()
     elif cmd == 'clear':
         if len(argv) < 2:
             raise SystemExit('usage: pending_reimport.py clear <skill> [...]')
