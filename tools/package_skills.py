@@ -80,7 +80,7 @@ def is_skill_dir(top: str) -> bool:
     return top not in SKIP and (REPO / top / 'SKILL.md').is_file()
 
 
-def validate_skill_frontmatter(skill_dir: Path) -> list[str]:
+def validate_skill_frontmatter(skill_dir: Path, *, read_text=None, md_files=None) -> list[str]:
     """Validate one skill dir's SKILL.md frontmatter plus every *.md's named-count headers.
 
     Returns a list of error strings; empty means valid. This is the single source of
@@ -88,13 +88,29 @@ def validate_skill_frontmatter(skill_dir: Path) -> list[str]:
     (packaging time) and tools/hooks/pre-commit's check_staged() (commit time) both call
     this, so the two gates can never validate different rules (psa-reconciliation's
     1274-char description reaching the repo untouched by either gate, 2026-07-17).
+
+    `read_text`/`md_files` are internal overrides: check_staged() passes a reader backed
+    by the git INDEX so a commit is validated against what's actually STAGED, not whatever
+    happens to be on disk in the working tree (code review finding, 2026-07-17 — without
+    this, staging a good description then further editing SKILL.md without re-staging could
+    pass a hook check that has nothing to do with the content being committed, and vice
+    versa). `read_text(rel: str) -> str` reads one skill-dir-relative file; `md_files` is
+    the skill-dir-relative *.md path list to scan for named-count headers. Both default to
+    None, meaning "read disk" — the packaging call site (validate_frontmatter -> package())
+    omits them because packaging always operates on the working tree as it stands.
     """
     skill = skill_dir.name
     errors: list[str] = []
-    md_path = skill_dir / 'SKILL.md'
-    if not md_path.is_file():
+
+    def _read(rel: str) -> str:
+        if read_text is not None:
+            return read_text(rel)
+        return (skill_dir / rel).read_text(encoding='utf-8', errors='replace')
+
+    try:
+        text = _read('SKILL.md')
+    except (FileNotFoundError, subprocess.CalledProcessError):
         return [f'{skill}: no SKILL.md at {skill_dir}']
-    text = md_path.read_text(encoding='utf-8', errors='replace')
     m = re.search(r'^---\s*\n(.*?)\n---', text, re.S)
     if not m:
         return [f'{skill}: SKILL.md has no YAML frontmatter']
@@ -123,9 +139,11 @@ def validate_skill_frontmatter(skill_dir: Path) -> list[str]:
     # headers in references/ are validated too (gap found 2026-06-11:
     # loi-generation/references/qc-gate.md was silently unscanned). Label each finding
     # with the relative path so the source file is obvious.
-    for md in sorted(skill_dir.rglob('*.md')):
-        rel = md.relative_to(skill_dir).as_posix()
-        md_text = text if rel == 'SKILL.md' else md.read_text(encoding='utf-8', errors='replace')
+    rel_paths = md_files if md_files is not None else sorted(
+        p.relative_to(skill_dir).as_posix() for p in skill_dir.rglob('*.md')
+    )
+    for rel in rel_paths:
+        md_text = text if rel == 'SKILL.md' else _read(rel)
         _, mismatches = _scan_named_counts(md_text)
         if mismatches:
             errors.append(f'{skill}/{rel}: named-count mismatch:\n' + '\n'.join(mismatches))
@@ -165,14 +183,55 @@ def staged_skill_dirs(files: list[str] | None = None) -> list[Path]:
     return sorted(roots)
 
 
+def _staged_content(repo_rel_path: str) -> str:
+    """Content of a repo-relative posix path from the git INDEX (staged), not the working
+    tree. `git show :path` — a bare ':' before the path means the index, not HEAD."""
+    return subprocess.run(
+        ['git', '-C', str(REPO), 'show', f':{repo_rel_path}'],
+        capture_output=True, text=True, check=True,
+    ).stdout
+
+
+def _parse_staged_md_files(ls_files_null_output: str, repo_rel_root: str) -> list[str]:
+    """Pure parser: `git ls-files -z` NUL-delimited output -> skill-dir-relative *.md paths.
+    Split from _staged_md_files() so the path-filtering logic is unit-testable without a
+    git sandbox."""
+    prefix = repo_rel_root + '/'
+    return sorted(
+        p[len(prefix):] for p in ls_files_null_output.split('\0')
+        if p.endswith('.md') and p.startswith(prefix)
+    )
+
+
+def _staged_md_files(skill_dir: Path) -> list[str]:
+    """Skill-dir-relative posix paths of every *.md the git INDEX has under skill_dir — the
+    STAGED tree, not the working tree (a disk-only untracked file isn't here; a file staged
+    for deletion isn't either)."""
+    repo_rel_root = skill_dir.relative_to(REPO).as_posix()
+    out = subprocess.run(
+        ['git', '-C', str(REPO), 'ls-files', '--cached', '-z', '--', repo_rel_root],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    return _parse_staged_md_files(out, repo_rel_root)
+
+
 def check_staged(files: list[str] | None = None) -> int:
     """tools/hooks/pre-commit entry point: validate frontmatter for every skill dir with
-    staged changes. Prints errors verbatim to stderr; returns a process exit code
-    (0 clean, 1 blocked) rather than raising, since a hook needs a plain exit status.
+    staged changes, against the STAGED git-index content (not the working tree — see
+    validate_skill_frontmatter's read_text/md_files doc). Prints errors verbatim to stderr;
+    returns a process exit code (0 clean, 1 blocked) rather than raising, since a hook needs
+    a plain exit status.
     """
     errors: list[str] = []
     for skill_dir in staged_skill_dirs(files):
-        errors.extend(validate_skill_frontmatter(skill_dir))
+        repo_rel_root = skill_dir.relative_to(REPO).as_posix()
+
+        def _read(rel: str, _root: str = repo_rel_root) -> str:
+            return _staged_content(f'{_root}/{rel}')
+
+        errors.extend(validate_skill_frontmatter(
+            skill_dir, read_text=_read, md_files=_staged_md_files(skill_dir),
+        ))
     if errors:
         for e in errors:
             print(e, file=sys.stderr)
@@ -257,8 +316,7 @@ def main() -> None:
     outdir = Path(sys.argv[1])
     outdir.mkdir(parents=True, exist_ok=True)
     skills = sys.argv[2:] or [
-        d.name for d in REPO.iterdir()
-        if d.is_dir() and d.name not in SKIP and (d / 'SKILL.md').is_file()
+        d.name for d in REPO.iterdir() if d.is_dir() and is_skill_dir(d.name)
     ]
     for s in skills:
         package(s, outdir)
