@@ -293,6 +293,75 @@ def is_bundled(rel_posix: str) -> bool:
     return True
 
 
+# ---------------------------------------------------------------------------
+# Plugin membership (2026-07-16). Some skills reach the Cowork runtime as members
+# of a plugin BUNDLE (plugins/<name>/plugin-build.json), not as standalone
+# Save-skill installs. A standalone .skill install of a bundled skill is the WRONG
+# target — it lands a shadow copy while the plugin's loaded copy stays stale
+# (deal-retirement / submarket-spatial-analysis, 2026-07-16). This block is the
+# single source of truth for "is this skill plugin-bundled?" so the packager, the
+# post-commit ledger (tools/pending_reimport.py imports plugin_of), and
+# tools/build_plugin.py can never disagree. Defensive: no plugins/ dir -> empty
+# maps -> zero behavior change to standalone packaging.
+# ---------------------------------------------------------------------------
+PLUGINS_DIR = REPO / 'plugins'
+
+
+def load_plugin_manifests() -> dict[str, dict]:
+    """{plugin_name: manifest dict} from every plugins/*/plugin-build.json.
+    Never raises on a malformed/missing manifest — a broken build manifest must
+    not break standalone .skill packaging or the commit hook that imports this."""
+    import json
+    manifests: dict[str, dict] = {}
+    if not PLUGINS_DIR.is_dir():
+        return manifests
+    for mf in sorted(PLUGINS_DIR.glob('*/plugin-build.json')):
+        try:
+            d = json.loads(mf.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            continue
+        name = d.get('name') or mf.parent.name
+        manifests[name] = d
+    return manifests
+
+
+def _build_plugin_members(manifests: dict[str, dict]) -> dict[str, str]:
+    members: dict[str, str] = {}
+    for name, d in manifests.items():
+        for skill in d.get('skills', []):
+            members[skill] = name
+    return members
+
+
+PLUGIN_MANIFESTS: dict[str, dict] = load_plugin_manifests()
+# reverse map: member skill -> owning plugin name
+PLUGIN_MEMBERS: dict[str, str] = _build_plugin_members(PLUGIN_MANIFESTS)
+
+
+def plugin_of(skill: str) -> str | None:
+    """Owning plugin name if `skill` is bundled in a version-controlled plugin,
+    else None (skill installs standalone via Save-skill)."""
+    return PLUGIN_MEMBERS.get(skill)
+
+
+def skill_source_files(skill: str, repo_root: Path = REPO) -> dict[str, Path]:
+    """{skill-relative posix path: absolute path} for every file this skill ships:
+    its own bundled files (is_bundled) plus repo-root SHARED_ROOT_DEPS fan-out.
+    Shared by the .skill packager and tools/build_plugin.py so a plugin bundle and
+    a standalone .skill agree byte-for-byte on a skill's shipped content."""
+    src = repo_root / skill
+    files = {
+        p.relative_to(src).as_posix(): p
+        for p in sorted(src.rglob('*'))
+        if p.is_file() and is_bundled(p.relative_to(src).as_posix())
+    }
+    for dep in SHARED_ROOT_DEPS.get(skill, []):
+        dep_path = repo_root / dep
+        if dep_path.is_file():
+            files[dep] = dep_path
+    return files
+
+
 def package(skill: str, outdir: Path) -> Path:
     src = REPO / skill
     if not (src / 'SKILL.md').is_file():
