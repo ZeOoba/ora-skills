@@ -204,5 +204,52 @@ class Backfill(FixtureTestCase):
         self.assertFalse(ledger_path.is_file())
 
 
+class SharedDepClassify(unittest.TestCase):
+    """classify_shared_copy() — the pure direction logic behind `shared-deps`.
+
+    Guards the 2026-07-16 lesson: sweep_drift() flags a shared-dep mismatch once
+    per consumer with no direction, so a stale cache (fix = reimport) reads the
+    same as runtime-only content (fix = commit; a reimport would DOWNGRADE). This
+    classifier must never conflate the two. No git needed — history is passed in."""
+
+    def test_identical_content_is_in_sync(self):
+        self.assertEqual(
+            pr.classify_shared_copy('h1', 'h1', {'h1'}, {'h1'}), 'IN-SYNC')
+
+    def test_cache_is_an_older_committed_version_is_repo_ahead(self):
+        # cache 'old' sits on HEAD's ancestry; repo working file is 'new' -> reimport.
+        self.assertEqual(
+            pr.classify_shared_copy('old', 'new', {'old', 'new'}, {'old', 'new'}),
+            'REPO-AHEAD')
+
+    def test_cache_content_never_committed_is_cache_ahead(self):
+        # The dangerous case: cache 'runtime' exists nowhere in history. A reimport
+        # would overwrite it with the repo's 'repo' content -> must say CACHE-AHEAD.
+        self.assertEqual(
+            pr.classify_shared_copy('runtime', 'repo', {'repo'}, {'repo'}),
+            'CACHE-AHEAD')
+
+    def test_cache_matches_off_head_commit_is_divergent(self):
+        # 'branchonly' is in all-history but not on HEAD's ancestry -> don't auto-reimport.
+        self.assertEqual(
+            pr.classify_shared_copy('branchonly', 'head', {'head'}, {'head', 'branchonly'}),
+            'DIVERGENT')
+
+    def test_git_unavailable_degrades_to_unknown_not_a_guess(self):
+        # ancestor_hashes=None (git missing/untracked) and content differs -> UNKNOWN,
+        # never a fabricated REPO-AHEAD/CACHE-AHEAD direction.
+        self.assertEqual(
+            pr.classify_shared_copy('x', 'y', None, None), 'UNKNOWN')
+
+    def test_missing_repo_file_is_repo_missing(self):
+        # repo_hash None means the declared shared dep no longer exists in the repo.
+        self.assertEqual(
+            pr.classify_shared_copy('x', None, {'x'}, {'x'}), 'REPO-MISSING')
+
+    def test_in_sync_wins_even_when_git_history_is_unavailable(self):
+        self.assertEqual(
+            pr.classify_shared_copy('same', 'same', None, None), 'IN-SYNC')
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
