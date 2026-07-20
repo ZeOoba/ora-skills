@@ -1,6 +1,6 @@
 ---
 name: submarket-spatial-analysis
-description: Submarket and spatial analysis for ORA properties and acquisition candidates. Use when the user mentions: submarket, spatial analysis, drive time, isochrone, intermodal proximity, highway access, last-mile, demographics, employment density, population growth, MSA, micropolitan, traffic count, locational benchmark, location quality score, GIS, mapping, or any task requiring geographic analysis of properties relative to demand drivers. v1.1 (2026-07-16: removed references to mcp__places/ESRI/Mapbox/OSRM — none are connected tools; drive-time and nearby-anchor steps now state the actual method used)
+description: Submarket and spatial analysis for ORA properties and acquisition candidates. Use when the user mentions: submarket, spatial analysis, drive time, isochrone, intermodal proximity, highway access, last-mile, demographics, employment density, population growth, MSA, micropolitan, traffic count, locational benchmark, location quality score, GIS, mapping, or any task requiring geographic analysis of properties relative to demand drivers. v1.2 (2026-07-20: Location Score step 4 now calls census-acs-extract for a CONFIRMED metro labor-quality sub-finding)
 license: ORA Internal
 ---
 
@@ -30,7 +30,7 @@ Acquisition candidate location scoring, submarket comparison, intermodal proximi
 1. Distance to nearest interstate (weight 25%).
 2. Distance to nearest intermodal (BNSF, NS, CSX) — for industrial (weight 20%).
 3. 30-min drive-time population (weight 15%).
-4. 30-min drive-time labor pool of relevant occupations (weight 15%).
+4. 30-min drive-time labor pool of relevant occupations (weight 15%). Mandatory sub-step: call census-acs-extract's `extract_metro_attainment(year)` for the subject property's metro CBSA, for the most recent available year AND a 5-year-prior anchor year (2024 vs 2019, or the nearest available anchor pair per that skill's own ANCHORS dict), and report the bachelor's+-attainment level, share, and 5-year delta as a CONFIRMED sub-finding within this weighted component. Cite it explicitly: "CONFIRMED (Census ACS 1yr Summary File B15003, FTP, no key)" so it reads as visually distinct from the [est] figures around it. This upgrades only the labor-quality/human-capital dimension of the component — see Boundaries.
 5. Submarket vacancy and rent growth trend (weight 15%).
 6. Major employer / anchor tenant proximity (weight 10%).
 7. Output: location score memo (DOCX) with composite score and component breakdown.
@@ -63,6 +63,7 @@ Acquisition candidate location scoring, submarket comparison, intermodal proximi
 - Forecasts of demographic change marked [FORECAST].
 - Census data lag is acknowledged (typically 12–24 months).
 - No routing API (OSRM/Mapbox/etc.) is currently connected — drive-time figures are estimated (straight-line distance + assumed speed, or a manual web-mapping lookup) and must state the estimation method used. If a routing MCP connector is ever added, update this line and tech.md together.
+- census-acs-extract closes the labor-quality/attainment sub-gap at the metro level; the drive-time population ring remains [est] pending a routing/isochrone connector. Don't conflate the two: a CONFIRMED attainment figure does not mean the drive-time population gap is closed.
 
 ## Dependencies
 
@@ -70,3 +71,4 @@ Acquisition candidate location scoring, submarket comparison, intermodal proximi
 - market-monitor skill (submarket trends)
 - rent-comp skill (rental rate inputs)
 - docx skill (memo deliverables)
+- census-acs-extract skill (metro-level labor-quality/attainment confirmation, Location Score component 4)
