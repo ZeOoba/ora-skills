@@ -1,10 +1,17 @@
 {
   "name": "ora-operations-extensions",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Seven institutional skills extending Oxford Realty Advisors' Cowork environment: investor relations, capex budgeting, vendor management, cash position monitoring, submarket spatial analysis, annual cycle, and deal retirement.",
-  "author": { "name": "Oxford Realty Advisors" },
+  "author": {
+    "name": "Oxford Realty Advisors"
+  },
   "license": "Proprietary",
-  "keywords": ["real-estate", "industrial", "operations", "ora"],
+  "keywords": [
+    "real-estate",
+    "industrial",
+    "operations",
+    "ora"
+  ],
   "skills": [
     "annual-cycle",
     "capex-budgeting",
