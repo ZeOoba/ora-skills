@@ -1,6 +1,6 @@
 ---
 name: lease-renewal-pipeline
-description: Flag upcoming lease expirations across the portfolio and draft renewal templates.
+description: Flag upcoming lease expirations across the portfolio and draft renewal templates. v1.0
 user-invocable: true
 allowed-tools: Read Glob Grep Write WebSearch WebFetch mcp__c5f4869f-7d3a-4472-a66a-8e61315feb51__notion-search mcp__c5f4869f-7d3a-4472-a66a-8e61315feb51__notion-fetch mcp__a3e380ce-2ea9-4b42-92d9-37c588a4b760__search_crm_objects mcp__c0ea3c01-b8f1-4371-aa06-08a1449f59fc__outlook_email_search
 ---

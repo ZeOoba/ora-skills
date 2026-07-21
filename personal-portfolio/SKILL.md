@@ -1,6 +1,6 @@
 ---
 name: personal-portfolio
-description: "Gabriel's personal investment portfolio analysis, rebalancing, and financial planning. Use this skill whenever the user mentions: personal portfolio, Roth IRA, Simple IRA, HSA, brokerage account, Rarig, American Funds, AMCPX, NEWFX, IGAAX, SMCWX, AWSHX, UNP, index funds, VTI, VOO, 529, rebalancing, tax loss harvesting, backdoor Roth, retirement accounts, personal net worth, asset allocation, private lending, or any discussion of personal (non-Oxford) investments. Also trigger when the user uploads a brokerage statement, discusses a cash-out refinance on Rarig, or asks about personal financial planning."
+description: "Gabriel's personal investment portfolio analysis, rebalancing, and financial planning. Use this skill whenever the user mentions: personal portfolio, Roth IRA, Simple IRA, HSA, brokerage account, Rarig, American Funds, AMCPX, NEWFX, IGAAX, SMCWX, AWSHX, UNP, index funds, VTI, VOO, 529, rebalancing, tax loss harvesting, backdoor Roth, retirement accounts, personal net worth, asset allocation, private lending, or any discussion of personal (non-Oxford) investments. Also trigger when the user uploads a brokerage statement, discusses a cash-out refinance on Rarig, or asks about personal financial planning. v1.0"
 ---
 
 # Personal Portfolio — Gabriel Goldberg
