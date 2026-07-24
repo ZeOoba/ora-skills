@@ -94,6 +94,44 @@ class BuildRoundTrip(unittest.TestCase):
                 self.assertEqual(pj['name'], PLUGIN)
 
 
+class OutdirCollision(unittest.TestCase):
+    """Regression coverage for the 2026-07-24 outdir-collision guard, mirrored from
+    package_skills.py's resolve_outdir_collision into build_plugin() (build_plugin.py
+    <plugin-name> <outdir> has the same swapped-argument footgun, with outdir landing
+    on a skill's own source directory)."""
+
+    def _make_plugin(self, td):
+        root = Path(td)
+        plugins_dir = root / 'plugins'
+        pdir = plugins_dir / PLUGIN
+        pdir.mkdir(parents=True)
+        skill_dir = root / 'fake-skill'
+        skill_dir.mkdir()
+        (skill_dir / 'SKILL.md').write_text('---\nname: fake-skill\n---\nbody')
+        manifest = {
+            'name': PLUGIN, 'version': '0.1.0',
+            'description': 'test plugin', 'skills': ['fake-skill'],
+        }
+        (pdir / 'plugin-build.json').write_text(json.dumps(manifest))
+        return root, plugins_dir, skill_dir
+
+    def test_outdir_matching_skill_dir_is_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, plugins_dir, skill_dir = self._make_plugin(td)
+            with mock.patch.object(bp, 'PLUGINS_DIR', plugins_dir):
+                with self.assertRaises(SystemExit):
+                    bp.build_plugin(PLUGIN, skill_dir, repo_root=root)
+            # Guard must fire before any bundle is written into the colliding dir.
+            self.assertFalse(list(skill_dir.glob('*.plugin')))
+
+    def test_genuine_outside_outdir_is_unaffected(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, plugins_dir, _skill_dir = self._make_plugin(td)
+            with mock.patch.object(bp, 'PLUGINS_DIR', plugins_dir):
+                dest = bp.build_plugin(PLUGIN, root / 'out', repo_root=root)
+            self.assertTrue(dest.is_file())
+
+
 class BumpOrdering(unittest.TestCase):
     """Regression coverage for the validate-before-bump reorder in build_plugin():
     a failed build must never leave a phantom version increment on the tracked

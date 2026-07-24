@@ -22,8 +22,9 @@ desktop.ini
 __pycache__/
 *.pyc
 
-# Generated skill packages — build artifacts; never tracked
+# Generated skill/plugin packages — build artifacts; never tracked
 *.skill
+*.plugin
 
 # post-commit PENDING-REIMPORT ledger — machine-local pending state, not history (2026-07-16)
 _staging/PENDING_REIMPORT.md
