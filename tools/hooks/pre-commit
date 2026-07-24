@@ -29,4 +29,18 @@ if ! python tools/package_skills.py --check-staged; then
   exit 1
 fi
 
+# Check 3 (2026-07-24): no *.skill or *.plugin build artifact may sit inside a skill's
+# own source directory. Motivation: a swapped outdir/skill argument to package_skills.py
+# dumped 44 sibling packages into register-scheduled-task/, and one of them recursively
+# rebundled the others and ballooned to 15GB before anyone noticed. Both extensions are
+# gitignored, so git status alone never surfaces this class of contamination — this
+# check runs regardless of what's staged, since the disk damage can predate/outlive any
+# one commit. build_plugin.py's *.plugin output shares the identical risk (same
+# rglob('*')-based source assembly, same outdir.mkdir(exist_ok=True) collision path).
+if ! python tools/package_skills.py --check-tree-hygiene; then
+  echo 'BLOCKED: stray .skill/.plugin package(s) found inside a skill source directory (see above).' >&2
+  echo 'Move them out of the repo, or --no-verify to override.' >&2
+  exit 1
+fi
+
 exit 0

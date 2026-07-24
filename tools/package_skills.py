@@ -258,6 +258,91 @@ def check_staged(files: list[str] | None = None) -> int:
     return 0
 
 
+def check_tree_hygiene(repo: Path = REPO, max_bytes: int = 5 * 1024 * 1024) -> list[str]:
+    """Flag build-artifact contamination in skill source directories.
+
+    A *.skill or *.plugin file has no business living inside a skill's own top-level
+    directory — packaged output belongs outside the repo entirely. `repo` is
+    parameterized (rather than always using the global REPO) so this is unit-testable
+    against a scratch directory tree; real callers use the default.
+
+    Motivation (2026-07-24): a swapped outdir/skill argument to package_skills.py dumped
+    44 sibling .skill packages into register-scheduled-task/, and because that directory
+    is 'r'-alphabetically late among top-level dirs, by the time register-scheduled-task
+    itself was packaged most of its siblings' output already sat beside it — rglob('*')
+    picked those up as bundleable source content, so register-scheduled-task.skill
+    recursively rebundled them and ballooned to 15GB before anyone noticed. *.skill is
+    gitignored (never tracked), so git status alone never surfaces this class of
+    contamination — hence a dedicated tree-hygiene check independent of what's staged.
+    *.plugin (tools/build_plugin.py's output) is the identical risk one level up: it is
+    built via the same skill_source_files() -> rglob('*') -> is_bundled() path shared
+    with the .skill packager, and build_plugin()'s outdir.mkdir(exist_ok=True) has the
+    same silent-success-against-an-existing-skill-dir behavior — so both extensions are
+    scanned here rather than just the one the original incident happened to produce.
+    Every hit is reported regardless of size; hits at/above `max_bytes` are called out as
+    especially urgent so runaway growth surfaces immediately rather than silently filling
+    the disk.
+    """
+    errors: list[str] = []
+    if not repo.is_dir():
+        return errors
+    for d in sorted(repo.iterdir()):
+        if not d.is_dir() or d.name in SKIP or not (d / 'SKILL.md').is_file():
+            continue
+        strays = sorted(d.rglob('*.skill')) + sorted(d.rglob('*.plugin'))
+        for stray in strays:
+            size = stray.stat().st_size
+            rel = stray.relative_to(repo).as_posix()
+            kind = stray.suffix.lstrip('.')
+            if size >= max_bytes:
+                errors.append(
+                    f'{rel}: {size / (1024 * 1024):.1f} MB .{kind} package found inside a '
+                    f'skill source directory — almost certainly outdir/skill argument '
+                    f'contamination (usage: package_skills.py <outdir> [skill ...] / '
+                    f'build_plugin.py <plugin-name> <outdir>, never a skill\'s own dir as '
+                    f'the outdir). Move it out of the repo.'
+                )
+            else:
+                errors.append(
+                    f'{rel}: .{kind} package found inside a skill source directory — '
+                    f'packaged output must never live beside its source. Move it out of '
+                    f'the repo.'
+                )
+    return errors
+
+
+def check_hygiene_cli() -> int:
+    """tools/hooks/pre-commit entry point (Check 3): exit 1 if any skill source
+    directory contains a stray .skill build artifact; prints findings to stderr."""
+    errors = check_tree_hygiene()
+    if errors:
+        for e in errors:
+            print(e, file=sys.stderr)
+        return 1
+    return 0
+
+
+def resolve_outdir_collision(outdir: Path, repo: Path = REPO) -> str | None:
+    """If `outdir` resolves to `repo` itself or to one of its skill directories, return a
+    human-readable description of the collision; else None. `repo` is parameterized for
+    unit-testing against a scratch tree; real callers use the default.
+
+    Guards the 2026-07-24 footgun: package_skills.py's usage is
+    `<outdir> [skill ...]`, not `<skill> [outdir]`. Swapping the two args sets outdir to a
+    skill's own directory; since that path already exists, `outdir.mkdir(exist_ok=True)`
+    silently succeeds, and with no skill filter the run packages EVERY skill straight into
+    that skill's source tree (see check_tree_hygiene for how that then compounds).
+    """
+    resolved = outdir.resolve()
+    if resolved == repo.resolve():
+        return f'the repo root ({repo})'
+    for d in sorted(repo.iterdir()):
+        if d.is_dir() and d.name not in SKIP and (d / 'SKILL.md').is_file():
+            if resolved == d.resolve():
+                return f"the '{d.name}' skill's own source directory"
+    return None
+
+
 # Repo-root files a skill's own directory doesn't contain but declares as its canonical
 # data source (2026-07-09 — target-markets.json was never reaching the Cowork cache because
 # package() only ever walked the skill's own folder; these 5 cite it as authoritative).
@@ -401,7 +486,21 @@ def main() -> None:
         # tools/hooks/pre-commit entry point: validate frontmatter of every skill dir
         # with staged changes; exit 1 blocks the commit.
         sys.exit(check_staged())
+    if sys.argv[1] == '--check-tree-hygiene':
+        # tools/hooks/pre-commit entry point (Check 3): flag stray .skill build
+        # artifacts sitting inside skill source directories; exit 1 blocks the commit.
+        sys.exit(check_hygiene_cli())
     outdir = Path(sys.argv[1])
+    collision = resolve_outdir_collision(outdir)
+    if collision:
+        sys.exit(
+            f'error: outdir {outdir} resolves to {collision}. This is almost certainly a '
+            f'swapped argument — usage is package_skills.py <outdir> [skill ...], not '
+            f'<skill> [outdir]. Refusing to dump .skill packages into a skill source '
+            f'directory (2026-07-24 incident: this exact mistake packaged all skills into '
+            f'register-scheduled-task/, and one output recursively rebundled the others, '
+            f'ballooning to 15GB). Pick an outdir outside the repo.'
+        )
     outdir.mkdir(parents=True, exist_ok=True)
     skills = sys.argv[2:] or [
         d.name for d in REPO.iterdir() if d.is_dir() and is_skill_dir(d.name)

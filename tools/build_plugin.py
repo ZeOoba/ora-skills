@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from package_skills import (  # noqa: E402
-    REPO, PLUGINS_DIR, MAX_DESC, skill_source_files,
+    REPO, PLUGINS_DIR, MAX_DESC, skill_source_files, resolve_outdir_collision,
 )
 
 KEBAB = re.compile(r'^[a-z0-9]+(-[a-z0-9]+)*$')
@@ -102,6 +102,20 @@ def plugin_entries(plugin: str, repo_root: Path = REPO, bm: dict | None = None) 
 
 def build_plugin(plugin: str, outdir: Path, bump: str | None = None,
                  repo_root: Path = REPO) -> Path:
+    # Mirrors package_skills.py's resolve_outdir_collision guard (2026-07-24 incident):
+    # build_plugin() writes into `outdir` via the same skill_source_files() ->
+    # rglob('*') -> is_bundled() path shared with the .skill packager, and
+    # outdir.mkdir(exist_ok=True) below would silently succeed against an existing
+    # skill's own source directory. Checked before load_manifest()/plugin_entries()
+    # so a swapped-argument call fails before doing any work.
+    collision = resolve_outdir_collision(outdir, repo=repo_root)
+    if collision:
+        raise SystemExit(
+            f'{plugin}: outdir {outdir} resolves to {collision}. This is almost certainly '
+            f'a swapped argument — usage is build_plugin.py <plugin-name> <outdir>, not '
+            f'<outdir> <plugin-name>. Refusing to dump a .plugin bundle into a skill '
+            f'source directory. Pick an outdir outside the repo.'
+        )
     bm = load_manifest(plugin)
     # Validate + assemble against the CURRENT (pre-bump) manifest first, so a
     # validation failure (bad kebab name, oversized description, a member
