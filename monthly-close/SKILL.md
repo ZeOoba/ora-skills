@@ -1,6 +1,6 @@
 ---
 name: monthly-close
-description: 'Oxford Realty Advisors monthly accounting and operations close process. Encodes the complete 59-item Monthly Checklist across 10 categories: External Borrower payments, External Lender receipts, Internal Lender receipts, QB Journal Entries, Reconciliations, HubSpot, Tenant Communication, Asset Management Fees, Insurance, and Taxes. Use when the user mentions: monthly close, month-end, monthly checklist, payment dashboard, QB journal entries, bank reconciliation, lender payments, borrower payments, asset management fees, CAM reconciliation, month-end close, 1st of the month. v2.1 (2026-07-09: scheduled-task email routing corrected to ggoldberg-only per routing canon; section retitled IF INVOKED AS A SCHEDULED TASK — no live task fires it, monthly-close-kickoff retired 2026-06-09)'
+description: 'Oxford Realty Advisors monthly accounting and operations close process. Encodes the complete 59-item Monthly Checklist across 10 categories: External Borrower payments, External Lender receipts, Internal Lender receipts, QB Journal Entries, Reconciliations, HubSpot, Tenant Communication, Asset Management Fees, Insurance, and Taxes. Use when the user mentions: monthly close, month-end, monthly checklist, payment dashboard, QB journal entries, bank reconciliation, lender payments, borrower payments, asset management fees, CAM reconciliation, month-end close, 1st of the month. v2.2 (2026-07-24: fixed Restoration Church Trust balloon direction-trap — Oxford is the LENDER, not borrower; capped at WARNING, matches conditions.ts #217. v2.1: routing corrected to ggoldberg-only)'
 ---
 
 You are executing the Oxford Realty Advisors monthly close process. This skill encodes the complete 59-item Monthly Checklist from the Master Excel Template (Monthly Checklist sheet), covering 10 categories with real loan numbers, servicers, counterparties, payment amounts, and property-level schedules.
@@ -11,7 +11,7 @@ You are executing the Oxford Realty Advisors monthly close process. This skill e
 
 **Frequency:** Monthly (all items due on the 1st unless otherwise noted) **Quarterly items:** Asset Management Fees — January, April, July, October only **Semi-annual items:** Most property taxes — see Tax schedule below **Annual items:** See Tax schedule below **Systems involved:** QuickBooks Desktop (\~20 LLC entities), Rent Manager (Columbus/KC/Toledo), Yardi CRC (2 MD properties), Yardi standalone (1 property), AppFolio (Northwood/MD) **RowID scheme:** Each checklist row has a stable RowID (columns S–T in the workbook) for Notion/query references.
 
-**⚠ ACTIVE BALLOON ALERT:** Restoration Church Trust — \~$982,753 balloon due **February 20, 2027**. Refinance or payoff strategy must be in motion. Flag this at the top of every monthly close checklist until resolved.
+**⚠ ACTIVE BALLOON WATCH:** Restoration Church Trust — \~$982,753 balloon due **February 20, 2027**. Oxford is the **lender** on this note (Category 2) — confirm the borrower's repayment or extension terms are on track; this is not an Oxford refinance/payoff obligation. Flag this at the top of every monthly close checklist until resolved, capped at WARNING severity (never CRITICAL — direction fixed per conditions.ts #217).
 
 ---
 
@@ -35,7 +35,7 @@ RowIDBorrowerCounterpartyTypeMonthly PmtNotesEXT-LEN-1100RARIG1100 Rarig (Fenton
 
 **Aggregate external monthly inflow: \~$12,534**
 
-**Verification:** Confirm receipt by the 5th. Post to QB entity. Flag any payment &gt;5 days late for Gabriel review. **Monthly: check Restoration Church Trust refinance/payoff status.**
+**Verification:** Confirm receipt by the 5th. Post to QB entity. Flag any payment &gt;5 days late for Gabriel review. **Monthly: confirm Restoration Church Trust borrower's repayment/extension-term status (Oxford is the lender — not a refinance/payoff item for Oxford).**
 
 ---
 
@@ -141,7 +141,7 @@ Current month: [MONTH YEAR]
 Quarterly month (Jan/Apr/Jul/Oct)?   [YES → include Cat 8 AMF]
 Tax RowIDs due this month:           [from Cat 10 schedule]
 Insurance renewal RowIDs this month: [from Cat 9 schedule]
-Restoration Church Trust balloon:    [months to 2/20/2027; refinance status]
+Restoration Church Trust balloon:    [months to 2/20/2027; borrower's repayment/extension status]
 ```
 
 ### Step 2 — Generate prioritized checklist
@@ -173,7 +173,7 @@ Create **"Monthly Close — [MONTH YEAR]"** page in Notion Operations Hub (DB: 3
 
 ## IF INVOKED AS A SCHEDULED TASK (no live registration as of 2026-07-09 — monthly-close-kickoff retired 2026-06-09)
 
-1. Surface Restoration Church Trust balloon alert (months to 2/20/2027; escalate to CRITICAL if ≤6 months)
+1. Surface Restoration Church Trust balloon watch (months to 2/20/2027; capped at WARNING — Oxford is the lender, confirm the borrower's repayment/extension terms; never escalate to CRITICAL)
 2. Determine active categories this month (quarterly, semi-annual, annual gates)
 3. Check Notion for prior month's incomplete items; carry forward
 4. Generate full applicable checklist per execution sequence
