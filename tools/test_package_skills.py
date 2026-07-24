@@ -21,6 +21,8 @@ from package_skills import (
     _staged_content,
     check_named_counts,
     check_staged,
+    check_tree_hygiene,
+    resolve_outdir_collision,
     staged_skill_dirs,
     validate_skill_frontmatter,
 )
@@ -312,6 +314,91 @@ class StagedContentEncoding(unittest.TestCase):
         subprocess.run(['git', '-C', str(REPO), 'add', self.FIXTURE_PATH], check=True)
 
         self.assertEqual(_staged_content(self.FIXTURE_PATH), content)
+
+
+class ResolveOutdirCollision(unittest.TestCase):
+    """Regression tests for the 2026-07-24 register-scheduled-task incident: a swapped
+    outdir/skill argument to package_skills.py <outdir> [skill ...] must be caught before
+    outdir.mkdir()/package() ever run, not discovered after 15GB of contamination."""
+
+    def test_outdir_matching_skill_dir_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _make_skill(root, 'register-scheduled-task', 'ok')
+            collision = resolve_outdir_collision(root / 'register-scheduled-task', repo=root)
+            self.assertIsNotNone(collision)
+            self.assertIn('register-scheduled-task', collision)
+
+    def test_outdir_matching_repo_root_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _make_skill(root, 'some-skill', 'ok')
+            collision = resolve_outdir_collision(root, repo=root)
+            self.assertIsNotNone(collision)
+            self.assertIn('repo root', collision)
+
+    def test_genuine_outside_outdir_is_not_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / 'repo'
+            root.mkdir()
+            _make_skill(root, 'some-skill', 'ok')
+            outdir = Path(tmp) / 'outputs'
+            self.assertIsNone(resolve_outdir_collision(outdir, repo=root))
+
+    def test_skip_listed_dirs_never_collide(self):
+        """tools/, _archive/, .git/ are not skills — swapping outdir to one of those is
+        a different (and much less dangerous) mistake, not this guard's job."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'tools').mkdir()
+            (root / 'tools' / 'SKILL.md').write_text('placeholder', encoding='utf-8')
+            self.assertIsNone(resolve_outdir_collision(root / 'tools', repo=root))
+
+
+class CheckTreeHygiene(unittest.TestCase):
+    """Regression tests for the pre-commit Check 3 tripwire: *.skill/*.plugin build
+    artifacts (gitignored, so invisible to git status) must never sit inside a skill's
+    own source directory, at any size."""
+
+    def test_clean_tree_has_no_findings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _make_skill(root, 'some-skill', 'ok')
+            self.assertEqual(check_tree_hygiene(repo=root), [])
+
+    def test_small_stray_skill_file_is_still_flagged(self):
+        """Presence alone is the signal — a tiny stray file indicates the same class of
+        mistake as a 15GB one, just caught earlier."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skill_dir = _make_skill(root, 'some-skill', 'ok')
+            (skill_dir / 'other-skill.skill').write_bytes(b'PK\x03\x04tiny')
+            errors = check_tree_hygiene(repo=root)
+            self.assertTrue(any('other-skill.skill' in e for e in errors))
+            self.assertFalse(any('MB' in e for e in errors), 'small file should not be size-flagged')
+
+    def test_oversized_stray_skill_file_calls_out_size(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skill_dir = _make_skill(root, 'some-skill', 'ok')
+            big = skill_dir / 'other-skill.skill'
+            with big.open('wb') as f:
+                f.seek(6 * 1024 * 1024 - 1)
+                f.write(b'\0')
+            errors = check_tree_hygiene(repo=root, max_bytes=5 * 1024 * 1024)
+            self.assertTrue(any('MB' in e and 'other-skill.skill' in e for e in errors))
+
+    def test_stray_plugin_file_is_flagged_same_as_skill(self):
+        """build_plugin.py's .plugin output is the identical contamination class one
+        level up (same rglob('*') -> is_bundled() source-assembly path) — must be
+        caught by the same tripwire, not just the extension the original incident
+        happened to produce."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skill_dir = _make_skill(root, 'some-skill', 'ok')
+            (skill_dir / 'some-plugin.plugin').write_bytes(b'PK\x03\x04tiny')
+            errors = check_tree_hygiene(repo=root)
+            self.assertTrue(any('some-plugin.plugin' in e for e in errors))
 
 
 if __name__ == '__main__':
