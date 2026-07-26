@@ -26,8 +26,8 @@ __pycache__/
 *.skill
 *.plugin
 
-# post-commit PENDING-REIMPORT ledger — machine-local pending state, not history (2026-07-16)
-_staging/PENDING_REIMPORT.md
+# Skill-development scratch tree — machine-local pending state, not history (broadened 2026-07-26; was PENDING_REIMPORT.md only)
+_staging/
 
 # Git worktree admin dirs (EnterWorktree / git worktree add convention, 2026-07-12)
 .claude/worktrees/
