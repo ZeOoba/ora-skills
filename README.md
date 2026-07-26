@@ -180,10 +180,16 @@ and `rent-comp`. Not duplicated into any skill folder — see "Conventions" belo
   `skill-audit-YYYYMMDD-HHMMSS/` snapshots are produced by audit/install passes and are
   `.gitignore`d — git history is the durable version-control layer; sidecars are for
   mid-session rollback only.
-- **Dual-write discipline:** changes here must also land in the AppData runtime cache
-  (`C:/Users/Owner/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/.../skills/`).
-  That cache is a rebuildable mirror, never the source of truth — if the two diverge,
-  this repo wins.
+- **Dual-write discipline (automated 2026-07-26):** `tools/hooks/pre-commit` Check 4 runs
+  `tools/sync_appdata_mirror.py --check-staged`, which copies every staged skill's shipped
+  files into whichever AppData runtime-cache mirror(s) already have it installed
+  (`.../skills-plugin/<uuid>/<uuid>/skills/<skill>/` — discovered by glob, not a hardcoded
+  path; a skill only has a mirror once it's been imported into Cowork at least once via
+  "Save skill"/Settings → Capabilities). That cache is a rebuildable mirror, never the
+  source of truth — this repo wins on divergence — and the sync is additive-only (never
+  deletes anything already in the mirror) and never blocks a commit on a copy failure.
+  Previously this was a manual convention only; it had "drifted stale before (once for a
+  full month)" per this file's own prior wording.
 - **Single-writer git discipline:** this repo is edited from multiple concurrent
   sessions/surfaces (Code + Cowork). Per `KNOWN_ISSUES.md`, run `git fetch origin` +
   `git status -sb` and inspect `git diff --cached --stat` before any commit; stage
