@@ -43,4 +43,11 @@ if ! python tools/package_skills.py --check-tree-hygiene; then
   exit 1
 fi
 
+# Check 4 (2026-07-26): sync every staged skill's shipped files into whichever AppData
+# runtime-cache mirror(s) already have it installed. Previously a manual "dual-write
+# discipline" the README documented but nothing enforced. Additive-only, never blocks
+# the commit (a copy hiccup is a mirror-availability problem, not a content-quality one)
+# -- see tools/sync_appdata_mirror.py for the full design.
+python tools/sync_appdata_mirror.py --check-staged
+
 exit 0
