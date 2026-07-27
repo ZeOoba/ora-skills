@@ -1,6 +1,6 @@
 ---
 name: communication-intelligence
-description: "Context-enriched communication drafting for Oxford Realty Advisors. Use this skill whenever the user mentions: write an email, draft a response, compose a message, reply to, reach out to, follow up with, send a letter to, communicate with, notify, or any request to produce a written communication to a tenant, broker, vendor, lender, attorney, or counterparty. Also trigger when the user receives an email and needs help crafting a response. This skill automatically enriches drafts with relationship context from Notion, HubSpot, and conversation history. v1.2 (2026-07-11)"
+description: "Context-enriched communication drafting for Oxford Realty Advisors. Use this skill whenever the user mentions: write an email, draft a response, compose a message, reply to, reach out to, follow up with, send a letter to, communicate with, notify, or any request to produce a written communication to a tenant, broker, vendor, lender, attorney, or counterparty. Also trigger when the user receives an email and needs help crafting a response. This skill automatically enriches drafts with relationship context from Notion, HubSpot, and conversation history. v1.3 (2026-07-24: Entity Awareness now points to the ratified LLC roster and requires the signature block as literal draft text, not Outlook's picker — closes the recurring Outbox QC Check D defect)"
 ---
 
 # Communication Intelligence — Oxford Realty Advisors
@@ -105,9 +105,10 @@ oxfordra.net
 
 ### Entity Awareness
 When drafting landlord communications, use the correct entity:
-- Verify which LLC holds the subject property from memory context or Notion Entity Structure DB
-- Sign as: "[Property LLC Name], by Oxford Realty Advisors, its Manager"
+- Resolve which LLC holds the subject property from `Claude_Workspace/00_Governance/References/Voice/ORA_Property-LLC-Signature-Roster_v01.md` (VERIFIED vs PENDING status — never invent a legal name for a PENDING entity per Hard Invariant 7; memory context / Notion Entity Structure DB as fallback only if the roster doesn't yet cover the property)
+- Sign as: "[Property LLC Name], by Oxford Realty Advisors LLC, its Manager"
 - Do not sign as "Oxford Realty Advisors" if the actual landlord is a separate property LLC
+- Embed this block as literal text in the draft body — do NOT rely on Outlook's Insert Signature picker or its default-signature-on-new-message setting. Relying on the picker is the recurring Outbox QC Check D defect (correct per-LLC Outlook signatures exist but selection is manual, so drafts keep landing with the generic firm signature). If the draft is later opened/finished in Outlook and a default signature auto-populates on top of this block, delete the auto-inserted one before send.
 
 ---
 
@@ -211,3 +212,4 @@ Activate this skill when Gabriel says:
 
 - v1.1 (2026-07-08): CRITICAL fix (Skill Text Audit finding 1) — Standard Signature Block (§ Module 2) signed outbound comms as "Ze Ooba" / `ze@oxfordra.net`, an incorrect/retired identity never valid for this principal. Corrected to Gabriel Goldberg / `ggoldberg@oxfordra.net` per current routing canon. Entity Awareness logic immediately below (landlord mail signs as the property LLC, not the generic firm name) was reviewed and left intact — not regressed by this fix. Note: this repo copy already carried the correct block; the installed Cowork runtime copy did not (silent re-sync drift) — repackage and reinstall via `package-and-stage-skill` to close the gap.
 - v1.2 (2026-07-11): added a new "OM / Broker Package Request" template under Module 3 — proactively ask brokers for native/text-layer PDF exports rather than Print-to-PDF rasterized scans, which force vision-based extraction and slow underwriting. Motivating incident this session: an entire OM/brochure set arrived rasterized with no text layer. No other content changed. Repackage and reinstall via `package-and-stage-skill` to reach the installed Cowork runtime copy.
+- v1.3 (2026-07-24): Entity Awareness (§ Module 2) pointed at a vague "memory context or Notion Entity Structure DB" lookup with no literal-text mandate — Check D (Outbox QC) kept flagging landlord mail signed with the generic firm/personal block despite 21 per-LLC Outlook signatures already existing, because drafts relied on Outlook's manual signature picker instead of carrying the correct block as body text. Now resolves the LLC from the ratified roster (`ORA_Property-LLC-Signature-Roster_v01.md`) and requires the block as literal draft text; same fix applied to `tenant-email` v1.1, the higher-volume landlord-mail producer. Root-caused this session while investigating a "session-hygiene" punch list.
