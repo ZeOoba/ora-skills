@@ -1,6 +1,6 @@
 ---
 name: deploy-site
-description: Build and deploy the oxfordra.net website to Netlify. Use when making site changes or deploying updates.
+description: Build and deploy the oxfordra.net website to Netlify. Use when making site changes or deploying updates. v1.0
 user-invocable: true
 allowed-tools: Read Glob Grep Edit Write Bash WebFetch mcp__Claude_Browser__preview_start mcp__Claude_Browser__computer mcp__a66aaa4a-ffcd-4066-b2af-79c4ce807809__netlify-deploy-services-reader mcp__a66aaa4a-ffcd-4066-b2af-79c4ce807809__netlify-deploy-services-updater
 ---
