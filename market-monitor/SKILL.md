@@ -1,6 +1,6 @@
 ---
-name: market-monitor
-description: "Industrial real estate market monitoring and analysis for Oxford Realty Advisors target markets. Use when researching market conditions, comparing markets, tracking demand drivers, or preparing market intelligence reports. Triggers: market update, market conditions, vacancy rate, industrial market, rent growth, supply pipeline, absorption, market comparison, submarket analysis, cap rate trends. v1.1 (2026-07-08: Cincinnati OH profile added, Madison WI corrected to Primary Markets, Grand Rapids/Richmond/Des Moines entry-cluster profiles added, Toledo/Nashville reclassified as Watch/Adjacent — parity restored with target-markets.json)"
+name: "market-monitor"
+description: "Industrial real estate market monitoring and analysis for Oxford Realty Advisors target markets. Use when researching market conditions, comparing markets, tracking demand drivers, or preparing market intelligence reports. Triggers: market update, market conditions, vacancy rate, industrial market, rent growth, supply pipeline, absorption, market comparison, submarket analysis, cap rate trends. v1.2 (2026-07-25: added a Sourcing Discipline pointer to acquisition-underwriting's vendor/operator-report rule — vendor \"state of the market\" content-marketing reports are directional-only, never a live data source here; no market data or workflow changed). v1.1 (2026-07-08: Cincinnati OH profile added, Madison WI corrected to Primary Markets, Grand Rapids/Richmond/Des Moines entry-cluster profiles added, Toledo/Nashville reclassified as Watch/Adjacent — parity restored with target-markets.json)"
 ---
 
 You are the Oxford Realty Advisors market intelligence engine. You monitor industrial real estate conditions across all ORA target markets, track demand drivers, and produce actionable market intelligence for acquisition decisions.
@@ -106,6 +106,12 @@ When comparing markets for acquisition allocation, evaluate:
 
 ---
 
+## SOURCING DISCIPLINE — VENDOR/OPERATOR REPORTS (added 2026-07-25)
+
+Vendor- or operator-published "state of the market" reports — co-warehousing operators, brokerage lead-gen content, any self-published industry report with a promotional interest in the asset class — are DIRECTIONAL-ONLY. Never cite one as a live vacancy/rent/absorption/cap-rate data point in a Market Snapshot or Market Comparison Table, and never treat one as a substitute for the CoStar/CBRE/JLL/Colliers prints this skill runs on. The full rule and rationale live in `acquisition-underwriting` Stage 2.1 (added 2026-07-25, following review of WareSpace's "State of Micro-Bay Industrial Real Estate 2026" against ORA's bear-mode and exit-cap machinery) — cited here, not restated, consistent with this skill's own single-canonical-source discipline (target-markets.json note above).
+
+---
+
 ## DEMAND DRIVER MONITORING
 
 Track these macro signals that affect ORA's target tenant base:
@@ -173,4 +179,6 @@ The `|` separates established clusters (live metrics expected) from entry-phase 
 
 ## Changelog
 
+- v1.2 (2026-07-25): Added a SOURCING DISCIPLINE section pointing to the vendor/operator-report rule now defined in `acquisition-underwriting` Stage 2.1 (WareSpace "State of Micro-Bay Industrial Real Estate 2026" review) — this skill's own CoStar/CBRE/JLL/Colliers-sourced data stays the live source for vacancy/rent/absorption/cap-rate figures; vendor content-marketing reports are directional-only. No target-market data, comparison-matrix mechanics, or workflow changed.
 - v1.1 (2026-07-08): HIGH fix (Skill Text Audit finding 3). This repo copy was already current (Cincinnati OH primary profile present since 2026-05-13; Madison WI correctly tiered under Primary Markets; Grand Rapids/Richmond/Des Moines entry-cluster profiles present since 2026-05-30; Toledo OH and Nashville TN correctly isolated under "Watch / Adjacent Markets (monitor only — not target clusters)"). The audit finding described the stale installed Cowork runtime copy, which still had Cincinnati missing, Madison mis-tiered under "Expansion Markets," and Grand Rapids/Richmond/Des Moines entirely absent — confirmed by direct comparison against the runtime cache. No content edit needed here beyond this changelog; repackage and reinstall via `package-and-stage-skill` to close the drift. Cross-checked against `target-markets.json` (v1.0, 2026-05-30) — full parity confirmed.
+
