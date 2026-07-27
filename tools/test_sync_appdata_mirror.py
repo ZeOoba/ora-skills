@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+"""Regression tests for sync_appdata_mirror.py -- automates the dual-write
+discipline the README previously documented as manual-only. Verifies: mirror
+discovery is glob-based (not a hardcoded uuid pair), a skill with no
+installed mirror is reported informationally rather than erroring, sync is
+additive-only (a pre-existing untracked file in the mirror survives), and
+check_staged() never propagates a copy failure into a non-zero exit (a
+mirror-sync hiccup must never block a commit).
+
+Stdlib only — run with `python tools/test_sync_appdata_mirror.py`.
+"""
+import shutil
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from sync_appdata_mirror import check_staged, discover_mirror_dirs, sync_skill
+
+
+class DiscoverMirrorDirsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def test_no_appdata_root_returns_empty(self):
+        self.assertEqual(discover_mirror_dirs('some-skill', appdata=None), [])
+
+    def test_missing_skills_plugin_dir_returns_empty(self):
+        # self.tmp exists but has no Claude/local-agent-mode-sessions/skills-plugin subtree.
+        self.assertEqual(discover_mirror_dirs('some-skill', appdata=self.tmp), [])
+
+    def test_finds_skill_under_any_uuid_pair_not_a_hardcoded_one(self):
+        base = self.tmp / 'Claude' / 'local-agent-mode-sessions' / 'skills-plugin'
+        mirror1 = base / 'uuid-a' / 'uuid-1' / 'skills' / 'my-skill'
+        mirror2 = base / 'uuid-b' / 'uuid-2' / 'skills' / 'my-skill'
+        mirror1.mkdir(parents=True)
+        mirror2.mkdir(parents=True)
+        (base / 'uuid-a' / 'uuid-1' / 'skills' / 'other-skill').mkdir(parents=True)
+
+        found = discover_mirror_dirs('my-skill', appdata=self.tmp)
+        self.assertEqual(found, sorted([mirror1, mirror2]))
+
+    def test_skill_not_installed_anywhere_returns_empty(self):
+        base = self.tmp / 'Claude' / 'local-agent-mode-sessions' / 'skills-plugin'
+        (base / 'uuid-a' / 'uuid-1' / 'skills' / 'other-skill').mkdir(parents=True)
+        self.assertEqual(discover_mirror_dirs('my-skill', appdata=self.tmp), [])
+
+
+class SyncSkillTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.repo_root = self.tmp / 'repo'
+        self.skill_dir = self.repo_root / 'my-skill'
+        (self.skill_dir / 'references').mkdir(parents=True)
+        (self.skill_dir / 'SKILL.md').write_text('---\nname: my-skill\ndescription: x\n---\nbody v1', encoding='utf-8')
+        (self.skill_dir / 'references' / 'notes.md').write_text('note v1', encoding='utf-8')
+        self.appdata = self.tmp / 'appdata'
+
+    def test_no_installed_mirror_reports_informational_line_only(self):
+        lines = sync_skill(self.skill_dir, appdata=self.appdata)
+        self.assertEqual(len(lines), 1)
+        self.assertIn('no local AppData mirror installed yet', lines[0])
+
+    def test_syncs_into_an_existing_mirror(self):
+        mirror_root = self.appdata / 'Claude' / 'local-agent-mode-sessions' / 'skills-plugin' / 'u1' / 'u2' / 'skills' / 'my-skill'
+        mirror_root.mkdir(parents=True)
+
+        lines = sync_skill(self.skill_dir, appdata=self.appdata)
+
+        self.assertEqual(len(lines), 1)
+        self.assertIn('synced 2 file(s)', lines[0])
+        self.assertEqual(
+            (mirror_root / 'SKILL.md').read_text(encoding='utf-8'),
+            '---\nname: my-skill\ndescription: x\n---\nbody v1',
+        )
+        self.assertEqual((mirror_root / 'references' / 'notes.md').read_text(encoding='utf-8'), 'note v1')
+
+    def test_sync_overwrites_stale_content_in_the_mirror(self):
+        mirror_root = self.appdata / 'Claude' / 'local-agent-mode-sessions' / 'skills-plugin' / 'u1' / 'u2' / 'skills' / 'my-skill'
+        mirror_root.mkdir(parents=True)
+        (mirror_root / 'SKILL.md').write_text('STALE body from a prior install', encoding='utf-8')
+
+        sync_skill(self.skill_dir, appdata=self.appdata)
+
+        self.assertEqual(
+            (mirror_root / 'SKILL.md').read_text(encoding='utf-8'),
+            '---\nname: my-skill\ndescription: x\n---\nbody v1',
+        )
+
+    def test_sync_is_additive_only_leaves_untracked_mirror_files_alone(self):
+        mirror_root = self.appdata / 'Claude' / 'local-agent-mode-sessions' / 'skills-plugin' / 'u1' / 'u2' / 'skills' / 'my-skill'
+        mirror_root.mkdir(parents=True)
+        # Simulates installer-owned metadata this module has no visibility into.
+        (mirror_root / '.install-manifest.json').write_text('{"installed": true}', encoding='utf-8')
+
+        sync_skill(self.skill_dir, appdata=self.appdata)
+
+        self.assertTrue((mirror_root / '.install-manifest.json').exists())
+        self.assertEqual(
+            (mirror_root / '.install-manifest.json').read_text(encoding='utf-8'),
+            '{"installed": true}',
+        )
+
+    def test_syncs_into_every_installed_mirror_when_more_than_one_exists(self):
+        base = self.appdata / 'Claude' / 'local-agent-mode-sessions' / 'skills-plugin'
+        mirror1 = base / 'u1' / 'u2' / 'skills' / 'my-skill'
+        mirror2 = base / 'u3' / 'u4' / 'skills' / 'my-skill'
+        mirror1.mkdir(parents=True)
+        mirror2.mkdir(parents=True)
+
+        lines = sync_skill(self.skill_dir, appdata=self.appdata)
+
+        expected = '---\nname: my-skill\ndescription: x\n---\nbody v1'
+        self.assertEqual(len(lines), 2)
+        self.assertEqual((mirror1 / 'SKILL.md').read_text(encoding='utf-8'), expected)
+        self.assertEqual((mirror2 / 'SKILL.md').read_text(encoding='utf-8'), expected)
+
+
+class CheckStagedNeverBlocksTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.skill_dir = self.tmp / 'my-skill'
+        self.skill_dir.mkdir()
+        (self.skill_dir / 'SKILL.md').write_text('---\nname: my-skill\ndescription: x\n---\nbody', encoding='utf-8')
+
+    def test_a_copy_failure_is_reported_but_never_raises_or_blocks(self):
+        with patch('sync_appdata_mirror.staged_skill_dirs', return_value=[self.skill_dir]):
+            with patch('sync_appdata_mirror.sync_skill', side_effect=OSError('disk full')):
+                code = check_staged(files=[])
+        self.assertEqual(code, 0)
+
+    def test_no_staged_skill_dirs_is_a_clean_noop(self):
+        with patch('sync_appdata_mirror.staged_skill_dirs', return_value=[]):
+            code = check_staged(files=[])
+        self.assertEqual(code, 0)
+
+
+if __name__ == '__main__':
+    unittest.main()
