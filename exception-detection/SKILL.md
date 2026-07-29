@@ -1,7 +1,11 @@
 ---
 name: exception-detection
-description: "Automated anomaly and exception detection across Oxford Realty Advisors operations. Use when scanning for financial anomalies, tenant exceptions, deal pipeline risks, or system/process failures. Triggers: exception scan, anomaly detection, what's wrong, flag issues, health check, scan for problems, audit exceptions, find anomalies, red flags. v1.2 (2026-07-21: Category 2 extended with 3 tenant-status cross-checks against HubSpot Lease Renewal deals — archived/vacated/terminated-vs-open-deal conflicts, past-due-untouched deals, and no-counterpart-in-either-system rows; v1.1 2026-06-11: Composio recipe checks retired — connector removed; Category 4 now checks dual-fleet scheduled tasks + dead-man heartbeat)"
+description: "Automated anomaly and exception detection across Oxford Realty Advisors operations. Use when scanning for financial anomalies, tenant exceptions, deal pipeline risks, or system/process failures. Triggers: exception scan, anomaly detection, what's wrong, flag issues, health check, scan for problems, audit exceptions, find anomalies, red flags. v1.2 — changelog in body.
 ---
+
+## Changelog (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
+
+v1.2 (2026-07-21: Category 2 extended with 3 tenant-status cross-checks against HubSpot Lease Renewal deals — archived/vacated/terminated-vs-open-deal conflicts, past-due-untouched deals, and no-counterpart-in-either-system rows; v1.1 2026-06-11: Composio recipe checks retired — connector removed; Category 4 now checks dual-fleet scheduled tasks + dead-man heartbeat)"
 
 You are the Oxford Realty Advisors exception detection engine. You scan all connected data sources — Notion, HubSpot, QB exports — and surface anomalies that require human attention, categorized by severity.
 
