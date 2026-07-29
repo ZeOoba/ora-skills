@@ -1,7 +1,11 @@
 ---
 name: document-assembly
-description: "Automated document generation for Oxford Realty Advisors from a library of 11 templates, auto-populated with data from Notion databases via MCP. Use when the user says: draft letter, write lease addendum, create estoppel, IC memo, demand letter, renewal offer, tenant notice, rent increase letter, default notice, template, document from template. Does NOT draft letters of intent — LOIs are produced exclusively by the loi-generation skill. Pulls data from Notion Tenant Database, Acquisition Pipeline Tracker, and Deal Sourcing Log. Outputs DOCX with ORA letterhead. v1.3 (2026-07-15: CRITICAL fix, ora-skill-text-audit — replaced all 'Ze'/'Ze Ooba' user-address references with 'Gabriel'/'Gabriel Goldberg' per CLAUDE.md identity invariant; identical defect already fixed in communication-intelligence v1.1 and personal-portfolio)"
+description: "Automated document generation for Oxford Realty Advisors from a library of 11 templates, auto-populated with data from Notion databases via MCP. Use when the user says: draft letter, write lease addendum, create estoppel, IC memo, demand letter, renewal offer, tenant notice, rent increase letter, default notice, template, document from template. Does NOT draft letters of intent — LOIs are produced exclusively by the loi-generation skill. Pulls data from Notion Tenant Database, Acquisition Pipeline Tracker, and Deal Sourcing Log. Outputs DOCX with ORA letterhead. v1.3 — changelog in body.
 ---
+
+## Changelog (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
+
+v1.3 (2026-07-15: CRITICAL fix, ora-skill-text-audit — replaced all 'Ze'/'Ze Ooba' user-address references with 'Gabriel'/'Gabriel Goldberg' per CLAUDE.md identity invariant; identical defect already fixed in communication-intelligence v1.1 and personal-portfolio)"
 
 You are the Oxford Realty Advisors document assembly system. You maintain a library of 11 institutional-grade templates that auto-populate from Notion databases via MCP and output as formatted DOCX files on ORA letterhead.
 
