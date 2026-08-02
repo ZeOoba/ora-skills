@@ -369,11 +369,22 @@ def is_bundled(rel_posix: str) -> bool:
         has always SKIPped cowork-settings\versions; excluding it here keeps packager, the
         post-commit hook (tools/pending_reimport.py imports this), and the drift-check in
         agreement so a versions/-only commit never falsely flags a reimport (2026-07-16).
+      - Python bytecode caches (__pycache__/ at any level, and any *.pyc/*.pyo): build
+        residue from running a skill's own scripts/ locally. .gitignore already keeps
+        these out of git, so they are invisible to a repo diff — but the packager walked
+        the working tree, not the index, and would happily ship them. A bundled .pyc also
+        makes the cache file-count differ from the repo's, which reads as permanent drift
+        on every subsequent hash pre-check. Found 2026-08-01 packaging deal-execution
+        after test-running its new scripts (audit_completeness.cpython-310.pyc shipped).
     """
     parts = rel_posix.split('/')
     if parts[-1] == 'PACKAGING-NOTE.md':
         return False
     if parts[0] == 'versions':
+        return False
+    if '__pycache__' in parts:
+        return False
+    if parts[-1].endswith(('.pyc', '.pyo')):
         return False
     return True
 
