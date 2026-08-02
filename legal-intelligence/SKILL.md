@@ -1,6 +1,6 @@
 ---
 name: legal-intelligence
-description: "Oxford Realty Advisors legal document analysis, clause library, and contract intelligence. Use this skill whenever the user mentions: lease review, PSA review, contract analysis, redline, clause comparison, lease clause, indemnification, default provisions, personal guaranty, environmental indemnity, estoppel, SNDA, tenant improvement, CAM clause, assignment and subletting, insurance requirements, memorandum of lease, deed of trust, promissory note, loan document, solar lease, vendor contract, or any request to analyze, compare, draft, or negotiate a legal document. Also trigger when the user uploads a PDF or DOCX that appears to be a lease, contract, PSA, loan document, or legal agreement. v1.1 (2026-06-11: dead title-commitment-redline deferral removed; title commitments handled in-skill)."
+description: "Oxford Realty Advisors legal document analysis, clause library, and contract intelligence. Use this skill whenever the user mentions: lease review, PSA review, contract analysis, redline, clause comparison, compare two versions, blackline, Litera, Workshare, DeltaView, lease clause, indemnification, default provisions, personal guaranty, environmental indemnity, estoppel, SNDA, tenant improvement, CAM clause, assignment and subletting, insurance requirements, memorandum of lease, deed of trust, promissory note, loan document, solar lease, vendor contract, or any request to analyze, compare, draft, or negotiate a legal document. Also trigger when the user uploads a PDF or DOCX that appears to be a lease, contract, PSA, loan document, or legal agreement. Module 6 Step 0 detects whether a marked-up file carries real tracked changes or compare-tool formatting before parsing. v1.2"
 ---
 
 # Legal Intelligence — Oxford Realty Advisors
@@ -84,6 +84,8 @@ For any Purchase and Sale Agreement:
 - **Willful default carve-out:** Seller must not be able to simply walk away on a default — ensure seller's deposit obligation or specific performance remedy is available for willful default
 - **Memorandum of contract recording right:** Oxford's right to record notice of contract in public record as cloud against title
 - **MAC clause:** Material Adverse Change provision giving Oxford termination right if material adverse change to property between execution and closing
+
+**Check these three by their operative language, not by section number, and check them on OUTBOUND drafts as well as inbound.** They are ORA-added rather than template-native, so nothing in the underlying document complains when they are missing — they disappear far more often through an ORA-side drafting round than through a seller deletion. Where the document is a PSA in an active deal, this check belongs to `deal-execution` Workflow 2B; run it there rather than duplicating it.
 
 ### PSA RED FLAGS
 - Seller representations limited to "actual knowledge" without deemed knowledge of property manager
@@ -171,7 +173,27 @@ Oxford can offer without significant risk:
 
 ## MODULE 6: DOCUMENT COMPARISON ENGINE
 
-When asked to compare two versions of the same document type:
+### Step 0 — Establish how revisions are encoded (run FIRST, every time)
+
+A marked-up document arrives in one of three encodings, and only the first is what "tracked changes" means:
+
+| Encoding | How it looks in the XML |
+|---|---|
+| **OOXML tracked changes** | `<w:ins>` / `<w:del>` elements, with author and date |
+| **Compare-tool formatting** | NO `<w:ins>`/`<w:del>` at all — revisions are ordinary runs carrying strikethrough (deletions) and coloured underline (insertions), produced by Litera Compare / DeltaView / Change-Pro, Workshare Compare, or Word's own Compare Documents |
+| **Clean** | No revisions of any kind |
+
+**Never conclude "no changes" from the absence of `<w:ins>`/`<w:del>`.** On a compare-tool file that test returns zero and the correct answer is "twenty-nine changes." Underlining alone does not identify insertions either — section headings and hyperlinks are underlined and frequently coloured, so treating "underlined and coloured" as an insertion reports a clean document as a redline. A compare output is identified by the presence of strikethrough *deletions*; colours vary by vendor and Litera's red/blue is not universal.
+
+Counsel COMMENTS are a fourth case and are equally invisible to a tracked-change parse: they live in `word/comments.xml`, so a commented-but-unrevised draft reads as clean.
+
+**Detection is owned by the `deal-execution` skill.** Invoke its Workflow 2 Step 0 (`scripts/extract_revisions.py`), which detects all four cases, reports every encoding present when a document carries more than one, and hard-stops when a file reads clean but its name or content says it should not. Do not reimplement the detection here and do not reference the script by relative path — the two skills install independently, so `deal-execution`'s files are not reachable from this one at runtime. If `deal-execution` is not installed on the current surface, say so rather than guessing at the encoding by eye.
+
+**Read the compare-tool summary block first when one is present.** It names the BASE document the counterparty compared against and gives the tool's own change tally. The base is what determines which provisions were *accepted* as opposed to merely uncommented — and if it names anything other than the draft ORA actually sent, the counterparty reviewed stale paper and the round must be re-based before any analysis. Cite the tool's tally externally, not the script's run counts; the two count differently and the tool's number is the one opposing counsel will quote.
+
+> Origin: 2026-07-31, 754 Old State Route 74 — seller's counsel delivered a Litera Compare output with 0 tracked changes and 29 real revisions.
+
+### Then produce the comparison
 
 1. Produce a structured discrepancy table in this format:
    | Section | Version A Language | Version B Language | Classification | Beneficiary | Oxford Impact |
@@ -190,7 +212,14 @@ When asked to compare two versions of the same document type:
 
 6. Output format: offer both inline markdown table AND .docx file via document-assembly skill
 
+7. **State the detected encoding at the top of the comparison output**, alongside the document type from Module 1. A reader must be able to tell whether "no changes in Article 8" means the counterparty left it alone or means the parse never saw the changes.
+
 ---
+
+## Changelog
+
+- v1.2 (2026-08-01): Module 6 gains **Step 0 — revision-encoding detection**, run before any comparison. The engine implicitly assumed OOXML tracked changes; Litera Compare / Workshare / Word-compare outputs contain none and encode revisions as strikethrough and coloured-underline formatting, so the prior approach returned "no changes" on a fully redlined document (754 Old State Route 74, 2026-07-31 — 0 tracked changes, 29 real revisions). Step 0 routes to `deal-execution/scripts/extract_revisions.py`, requires the compare summary's BASE document be read and validated against what ORA actually sent, and warns that underline alone does not identify insertions (headings are underlined too — the discriminator is an explicit non-neutral colour, derived from the document's own palette). New Module 6 output rule 7: state the detected encoding alongside the document type. Module 3's three critical provisions now carry an instruction to check them by operative language and on OUTBOUND drafts, deferring to `deal-execution` Workflow 2B in an active deal.
+- v1.1 (2026-06-11): dead title-commitment-redline deferral removed; title commitments handled in-skill.
 
 ## TRIGGER PHRASES
 Activate this skill automatically when Gabriel says:

@@ -1,6 +1,6 @@
 ---
 name: deal-execution
-description: 'Oxford Realty Advisors deal execution skill covering PSA negotiation through closing. Use when the user mentions: PSA, purchase and sale agreement, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel, closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance. Workflow 2A reviews ANY inbound PSA draft (own counsel or seller) against the executed LOI + deal-terms register before it circulates. References acquisition-underwriting skill for pre-LOI context and re-operations skill for post-closing integration. v1.2 (2026-07-08: file-naming citations repointed from the superseded single 2026-05-14 standard to the ratified three-schema doctrine)'
+description: 'Oxford Realty Advisors deal execution skill covering PSA negotiation through closing. Use when the user mentions: PSA, purchase and sale agreement, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel, closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance. Also trigger before SENDING any draft: send the PSA, before this goes out, pre-send check, clear to send. Workflow 2A reviews ANY inbound draft against the executed LOI + deal-terms register; Workflow 2B gates every OUTBOUND draft against prior review memos, the LOI, the register, and the 6 mandatory buyer protections. Handles Litera/Workshare compare files, which carry no tracked changes. v1.3'
 ---
 
 You are operating as deal execution counsel and advisor for Oxford Realty Advisors (ORA). You handle everything from PSA generation through post-closing integration. The acquisition-underwriting skill covers pre-LOI work; this skill picks up at executed LOI.
@@ -56,11 +56,11 @@ When Gabriel says "generate PSA" or "draft PSA" for a property:
 1. Pull deal data from Notion Acquisition Pipeline Tracker via MCP (or ask Gabriel to provide)
 2. Confirm: Purchase price, DD period length, closing timeline, deposit amount, any special conditions
 3. Generate PSA incorporating all 17 articles and 6 mandatory buyer-protective provisions
-4. Run the 42-point quality gate checklist (see below)
+4. Run the 46-point quality gate checklist (see below)
 5. Output as DOCX using the docx skill
 6. File naming: per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Settings v2.0, 2026-06-11 — do NOT unify). PSA deliverables are deal-bound → use the deal-file schema `[Address] [Purpose] [MM-YYYY]`. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
 
-### 42-Point Quality Gate Checklist
+### 46-Point Quality Gate Checklist
 
 Before delivering any PSA draft, verify:
 
@@ -77,6 +77,10 @@ Before delivering any PSA draft, verify:
 - \[ \] Closing date specified or formula clear
 - \[ \] Broker disclosure matches actual broker(s) on deal
 - \[ \] All exhibits referenced in body are attached: Exhibit A (legal description), Exhibit B (rent roll), Exhibit C (personal property), Exhibit D (form of deed), Exhibit E (form of assignment of leases)
+- \[ \] **Every exhibit is POPULATED, not merely present** — run `scripts/audit_completeness.py`. "Attached" and "has content" are different questions, and only the second one matters. An empty exhibit passes a visual check indefinitely: at 754 Old State Route 74, Exhibit B (Rent Roll) was a heading and nothing else across four drafting rounds and two law firms, while §7 defined "Leases" by reference to it and §15.1.2 confirmed the absence of renewal and purchase options "except as expressly set forth on" it
+- \[ \] Exhibit A carries an actual legal description, not just a parcel or tax-ID number — a deed and a title policy cannot be drafted from a parcel number
+- \[ \] No unfilled blanks in the body, and specifically: the **knowledge-party definition** in the representations article names a real individual and title (an open blank there unbounds or voids every knowledge-qualified representation in the document)
+- \[ \] Every section cross-reference resolves to a section that exists
 - \[ \] Survival period for representations specified (typically 12 months post-closing)
 - \[ \] Title standard specified (marketable title, ALTA)
 - \[ \] Survey type specified (ALTA/NSPS)
@@ -113,8 +117,45 @@ Before delivering any PSA draft, verify:
 
 When Seller returns a redlined PSA:
 
-1. Ask Gabriel to upload the redlined document (DOCX with tracked changes)
-2. Parse every tracked change and categorize:
+### Step 0 — Detect the revision encoding BEFORE parsing (never skip)
+
+**Do not assume the file carries OOXML tracked changes.** Counsel running Litera Compare (formerly DeltaView / Change-Pro), Workshare Compare, or Word's own Compare Documents deliver a FLATTENED document: the revisions are ordinary runs carrying strikethrough or underline character formatting, and the file contains ZERO `<w:ins>`/`<w:del>` elements. A session that greps for tracked changes on such a file finds none and concludes "seller returned it clean / accepted everything" — a false negative on the entire redline.
+
+Run the detector first, on every inbound marked-up document:
+
+```
+python scripts/extract_revisions.py "<file>.docx"
+```
+
+It reports every encoding present:
+
+| Encoding | What it is |
+|---|---|
+| `ooxml-tracked-changes` | Real `<w:ins>`/`<w:del>` — in the body, headers, footers, footnotes and endnotes; authors and dates available |
+| `compare-tool-formatting` | Litera/Workshare/Word compare output; revisions are strikethrough and coloured underline |
+| `comments` | Counsel comments in `word/comments.xml`. A commented draft carries no revisions at all and must never be reported as clean |
+| `clean` | None of the above |
+
+Exit codes: **0** revisions and/or comments found · **1** genuinely clean · **2** AMBIGUOUS · **3** unreadable.
+
+**Exit 2 is a stop, not a warning.** It fires when a document reads clean but its filename or its own content says it should not. Never report such a document as clean or fully accepted without opening it by eye.
+
+**A document can carry more than one encoding at once** — a compare output that counsel then tracked-edited before sending. The script reports all of them and warns on the mix; never analyse one and assume it is the whole redline.
+
+Two notes on how insertions are identified, because the naive test is wrong: section headings and hyperlinks are also underlined and often coloured, so "underlined and coloured" alone reports a clean document as a redline. The script therefore requires a positive deletion signal — at least one strikethrough run — before reading any document in compare mode, prefers double underline where the document uses it, and ignores hyperlink-styled runs.
+
+**Read the compare-tool summary block before anything else.** When present it names the BASE the counterparty compared against, and its own change tally. Two consequences:
+
+- **The base defines what was accepted.** Every provision NOT marked is accepted *from that base* — not merely left uncommented. This is the single most valuable fact in the file and it is invisible to a tracked-change parse.
+- **Confirm the base is the draft ORA actually sent.** If it names an earlier draft, the counterparty reviewed stale paper and the whole round must be re-based before analysis.
+- Cite the tool's own tally externally, not the script's run counts — the two use different counting conventions (formatting runs vs. merged changes), and the tool's number is the one opposing counsel will quote.
+
+> Origin: 2026-07-31, 754 Old State Route 74. KMK Law delivered a Litera Compare output with 0 tracked changes and 29 real revisions. Its summary block named the base as ORA's own 07-22 clean draft — which is what established that seller had accepted the entire package (estoppel article, uncapped monetary-lien release, BOR rights, all sixteen representations) rather than simply not responding.
+
+Then:
+
+1. Confirm which encoding was detected and state it at the top of the analysis
+2. Parse every revision and categorize:
 
 CategoryDefinitionAction**ACCEPT**Immaterial clarification, consistent with ORA intentAccept without negotiation**NEGOTIATE**Adverse change but has acceptable middle groundPropose counter-language**REJECT**Directly contrary to ORA's interests; no acceptable compromiseReject with written explanation**CRITICAL**Deletes or weakens mandatory buyer-protective provisionsReject + flag for Gabriel + require explanation from Seller
 
@@ -136,6 +177,8 @@ CategoryDefinitionAction**ACCEPT**Immaterial clarification, consistent with ORA 
    - Output as DOCX: ORA_RedlineAnalysis\_\[PropertyShortName\]\_v\[X.Y\].docx
 
 6. Every redline round ALSO re-runs Workflow 2A Steps 1–3 (LOI conformance + register check) on the resulting draft — a seller redline can delete a register-tracked term as easily as an initial draft can omit it.
+
+7. **A quiet round is a finding, not an absence of one.** When the counterparty returns few or no substantive changes, say so explicitly and enumerate what they ACCEPTED — particularly provisions a counterparty would ordinarily contest. That list is the KEEP list for every subsequent round, and it is the strongest available read on counterparty motivation. Do not let a light redline produce a light memo.
 
 ---
 
@@ -181,7 +224,60 @@ Each hit is evidence the draft needs structural review, not typo cleanup:
 - **Copy-paste tells**: the counterparty's name inside our own reps, numbering gaps, blank fields, undefined defined-terms, duplicated overlapping sections
 
 ### Step 5 — Standards check and ranked output
-Run the 6 Mandatory Buyer-Protective Provisions check and the review-relevant 42-Point Gate items. Output ranked: Tier 1 (deal-critical — must not circulate), Tier 2 (value and risk), Tier 3 (hygiene), then a KEEP list of ORA-favorable provisions that must survive redline rounds. Lead with the single most important defect. DOCX memo on request: `YYYYMMDD_[Property]_PSAReviewMemo_v##.docx`.
+Run the 6 Mandatory Buyer-Protective Provisions check and the review-relevant 46-Point Gate items. Run `scripts/audit_completeness.py` (see Workflow 2B Check D) — exhibits, cross-references, and unfilled blanks are mechanical checks that must not be done by eye. Output ranked: Tier 1 (deal-critical — must not circulate), Tier 2 (value and risk), Tier 3 (hygiene), then a KEEP list of ORA-favorable provisions that must survive redline rounds. Lead with the single most important defect. DOCX memo on request: `YYYYMMDD_[Property]_PSAReviewMemo_v##.docx`.
+
+**Every review memo produced under this workflow is an input to Workflow 2B.** Write recommendations so they can be checked mechanically later: cite the § being changed, and state the change as a concrete before/after, not as advice. A recommendation phrased as "consider strengthening the remedies section" cannot be verified in an outbound draft; "§11.3.2 — add willful-default carve-out permitting actual damages" can.
+
+---
+
+## WORKFLOW 2B — OUTBOUND DRAFT GATE (run before ANY draft leaves ORA)
+
+Workflow 2A guards paper coming IN. Nothing guarded paper going OUT — and that is where the larger loss occurred.
+
+> Origin: 2026-08-01, 754 Old State Route 74. The 7/21 review memo recommended fifteen changes across four severity tiers. The draft transmitted to seller's counsel on 7/22 carried the §4.1/§31 restructure and the estoppel article — and dropped **nine** of the remaining recommendations: the willful-default carve-out, the MAC clause, the minimum-occupancy condition, the memorandum-of-contract right, interest-bearing escrow, the 5% casualty threshold, the 30-day Phase II extension with deposit refundability, the expanded §2.5 refund grounds, and 12-month representation survival. **Four** were ORA's own mandatory buyer-protective provisions (MAC, vacancy delivery cross-default, memorandum of contract, willful default carve-out — the bring-down certificate and interim operating covenants did survive); three were executed-LOI terms; two were ORA standing positions. **Seller never rejected any of them — they were never put to seller.** The 7/22 draft also still carried a July 1 offer-expiration date that had lapsed three weeks earlier; seller's counsel corrected it unilaterally. A review that produces recommendations nobody verifies is indistinguishable from no review at all.
+
+Run this gate on any draft ORA is about to send — whether ORA drafted it, own counsel drafted it, or it is ORA's markup of seller paper. It takes minutes and is not optional.
+
+### Check A — Prior-memo delta (the check that would have caught 754)
+For EVERY prior review memo on this deal, in order, enumerate each recommendation and status it against the outbound draft:
+
+- **LANDED** — present in the draft, in substance
+- **DROPPED** — absent, with no recorded decision. **Automatic STOP.** A dropped item is either reinstated or consciously waived on the record; it is never silently omitted.
+- **WAIVED** — absent, but Gabriel decided not to pursue it. Requires a one-line reason in the deal-terms register. A waiver made once carries forward; it does not need re-litigating each round.
+- **SUPERSEDED** — overtaken by a later development. State what superseded it.
+
+Report as a table with a §-cite and the memo/date each recommendation came from. **Never grade this from memory of the memo — reopen the memo file and work down it line by line.** The failure mode is not disagreement about a recommendation; it is a recommendation nobody looked at again.
+
+### Check B — The 6 Mandatory Buyer-Protective Provisions
+Confirm all six are present and unmodified in the outbound draft: bring-down certificate, MAC clause, vacancy delivery cross-default, memorandum of contract recording right, interim operating covenants, willful default carve-out. Absent = STOP.
+
+These are the provisions most likely to vanish quietly, because they are ORA-added rather than template-native — nothing in the underlying document complains when they are missing. Grep the draft for each by its operative language, not by section number.
+
+### Check C — LOI conformance and register re-check
+Re-run Workflow 2A Steps 2 and 3 (LOI conformance table + register check) against the OUTBOUND draft. An ORA-side drafting round can reverse an executed LOI term as easily as seller's can: at 754, interest-bearing escrow, the 5% casualty threshold, and the 30-day Phase II extension were all agreed in the executed LOI and all three were non-conformant in ORA's own outbound draft.
+
+Frame every Check C finding to the counterparty as a **conformance correction, not a new ask** — it costs the counterparty nothing to restore a term it already agreed to in the LOI, and framing it as a fresh negotiation invites a trade that was already made.
+
+### Check D — Mechanical completeness sweep
+```
+python scripts/audit_completeness.py "<outbound draft>.docx"
+```
+Non-zero exit = STOP. The script checks three things reviewers reliably miss because they read the body and skim the back matter:
+
+1. **Exhibit population** — an exhibit can be present, correctly titled, referenced throughout, and completely EMPTY. Trace what depends on each empty exhibit before dismissing it; definitions, representation carve-outs, and delivery obligations routinely hang off exhibits and fail silently when blank. A `THIN` exhibit (a bare image or a parcel number) is not automatically a defect, but ask whether a third party could draft from it — a recordable instrument cannot be prepared from an aerial markup, and a deed cannot be prepared from a parcel number.
+2. **Cross-references** — exhibits cited but absent, exhibits present but never cited, and section references that do not resolve.
+3. **Unfilled blanks** — placeholder runs and open definitions. Body blanks are defects; signature-block blanks are expected but must be completed consistently at execution. Pay particular attention to an unfilled **knowledge-party definition**: it silently voids or unbounds every knowledge-qualified representation in the document.
+
+### Check E — Self-expiring terms
+Scan for anything that has gone stale since the draft was written, and for anything that will expire before the next round-trip completes:
+
+- Offer-expiration / acceptance-deadline dates that have already passed — a contract that declares its own offer withdrawn on its face is a gift to opposing counsel
+- Effective Date blanks, and every deadline keyed to the Effective Date (document-delivery, title commitment, contingency filings, outside dates, closing) — confirm they are internally consistent and that the schedule is achievable
+- Elections that expire AT execution (entity-purchase elections, structure elections) — silence is a decision; make it a deliberate one and close the register item
+- Any date that will lapse before the counterparty can realistically respond
+
+### Output
+A short pre-send memo — no more than a page — with a single verdict line: **CLEAR TO SEND** or **HOLD**, followed by the Check A table and any STOPs. Log the result to the deal-terms register so the next round starts from a known state. Then stamp the Notion pipeline row per the standing rule below.
 
 ---
 
@@ -374,6 +470,19 @@ This is load-bearing for the weekly `ora-deal-command-board`, which reads `Last 
 - Closing Checklist: Notion page or DOCX
 - File naming: per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Settings v2.0, 2026-06-11 — do NOT unify). Redline/closing deliverables are deal-bound → use the deal-file schema `[Address] [Purpose] [MM-YYYY]`. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
 
+## SCRIPTS
+
+Both are stdlib-only (`zipfile` + `ElementTree`); no python-docx, no lxml. Run from the skill directory.
+
+| Script | Purpose | Used by |
+|---|---|---|
+| `scripts/extract_revisions.py` | Detects revision encoding (OOXML tracked changes / compare-tool formatting / clean) and extracts revisions from all three. Parses the compare-tool summary block for the BASE document and the tool's own change tally. Exit 2 = ambiguous, hard stop. | Workflow 2 Step 0; legal-intelligence Module 6 |
+| `scripts/audit_completeness.py` | Exhibit population, exhibit/section cross-reference resolution, unfilled-blank detection (body vs. signature block). Exit 1 = blocking defect. | Workflow 2A Step 5; Workflow 2B Check D; 46-Point Gate |
+
 ## Changelog
 
+- v1.3 (2026-08-01): three fixes from the 754 Old State Route 74 seller-redline round.
+  1. **Workflow 2 Step 0 — revision-encoding detection.** The workflow assumed "DOCX with tracked changes." Litera/Workshare/Word compare outputs carry ZERO `<w:ins>`/`<w:del>` and encode revisions as strikethrough and coloured underline formatting, so a tracked-change parse returns nothing and reads as "seller accepted everything." New `scripts/extract_revisions.py` detects all three encodings, hard-stops (exit 2) on a clean file whose name says redline, and surfaces the compare summary's BASE document — the fact that establishes what the counterparty accepted rather than merely left uncommented. Also new Step 7: a quiet round is a finding; enumerate what was accepted.
+  2. **New Workflow 2B — outbound draft gate.** 2A guarded inbound paper only. On 7/22 an outbound draft dropped nine of the fifteen recommendations from the 7/21 review memo — four of them ORA's own mandatory buyer-protective provisions, three of them executed-LOI terms, two ORA standing positions — and seller never rejected them because they were never sent. 2B runs five checks before any draft leaves ORA: prior-memo delta (LANDED/DROPPED/WAIVED/SUPERSEDED), the mandatory 6, LOI + register re-check, mechanical completeness sweep, and self-expiring terms. Workflow 2A Step 5 now also requires review-memo recommendations be written so they can be mechanically verified later.
+  3. **Exhibit population in the 46-Point Gate (was 42).** The gate asked whether exhibits were "attached," which an empty exhibit satisfies. At 754, Exhibit B (Rent Roll) was heading-only across four rounds and two firms while the body's definition of "Leases" and the no-renewal-option representation both depended on it; Exhibit A had a parcel number and no legal description; the §15.1 knowledge-party definition was an open blank. New `scripts/audit_completeness.py` plus four gate items covering population, legal description, body blanks, and cross-reference resolution.
 - v1.2 (2026-07-08): HIGH fix (Skill Text Audit finding 5) — both file-naming citations (PSA generation step, ~line 61; Redline/Closing deliverables, ~line 367) repointed from the superseded single "ORA File-Naming Standard 2026-05-14.md" to the ratified three-schema doctrine (ORA Cowork Global Settings v2.0, 2026-06-10/11) — deal-execution deliverables classified as deal-bound, using `[Address] [Purpose] [MM-YYYY]`.

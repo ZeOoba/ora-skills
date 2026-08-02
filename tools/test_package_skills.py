@@ -22,6 +22,7 @@ from package_skills import (
     check_named_counts,
     check_staged,
     check_tree_hygiene,
+    is_bundled,
     resolve_outdir_collision,
     staged_skill_dirs,
     validate_skill_frontmatter,
@@ -399,6 +400,38 @@ class CheckTreeHygiene(unittest.TestCase):
             (skill_dir / 'some-plugin.plugin').write_bytes(b'PK\x03\x04tiny')
             errors = check_tree_hygiene(repo=root)
             self.assertTrue(any('some-plugin.plugin' in e for e in errors))
+
+
+class IsBundledExclusions(unittest.TestCase):
+    """is_bundled() is the single source of truth for what ships in a .skill.
+
+    The __pycache__/*.pyc rules were added 2026-08-01: .gitignore already keeps
+    bytecode out of git, so it is invisible to a repo diff — but the packager walks
+    the WORKING TREE, and shipped a stale audit_completeness.cpython-310.pyc into
+    deal-execution.skill after its scripts were run locally. A bundled .pyc also makes
+    the runtime cache's file count differ from the repo's, which reads as permanent
+    drift on every subsequent hash pre-check.
+    """
+
+    def test_excludes_pycache_dir_at_any_depth(self):
+        self.assertFalse(is_bundled('scripts/__pycache__/audit.cpython-310.pyc'))
+        self.assertFalse(is_bundled('__pycache__/x.pyc'))
+        self.assertFalse(is_bundled('a/b/__pycache__/c.pyc'))
+
+    def test_excludes_loose_bytecode(self):
+        self.assertFalse(is_bundled('scripts/compiled.pyc'))
+        self.assertFalse(is_bundled('scripts/compiled.pyo'))
+
+    def test_still_bundles_real_skill_content(self):
+        for rel in ('SKILL.md', 'scripts/extract_revisions.py',
+                    'references/qc-gate.md', 'templates/loi.docx',
+                    'scripts/pycache_helper.py', 'target-markets.json'):
+            self.assertTrue(is_bundled(rel), rel)
+
+    def test_prior_exclusions_unchanged(self):
+        self.assertFalse(is_bundled('PACKAGING-NOTE.md'))
+        self.assertFalse(is_bundled('references/PACKAGING-NOTE.md'))
+        self.assertFalse(is_bundled('versions/20260716_snapshot.md'))
 
 
 if __name__ == '__main__':
