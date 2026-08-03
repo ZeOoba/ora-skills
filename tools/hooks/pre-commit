@@ -43,6 +43,17 @@ if ! python tools/package_skills.py --check-tree-hygiene; then
   exit 1
 fi
 
+# Check 5 (2026-08-03): detect a runtime cache that is AHEAD of the repo BEFORE Check 4
+# overwrites it. Check 4 copies repo -> cache unconditionally, so a skill edited
+# platform-side and never committed (a REPO-FIRST violation) is silently clobbered by the
+# next commit touching it -- the sync destroys the evidence of the very drift it exists to
+# prevent. Four such violations surfaced in the nine days to 2026-08-03 (acquisition-
+# underwriting v4.5 and v4.6; disposition-analysis and parcel-data-recovery), every one of
+# them caught late and by hand. This runs first, warns loudly, and rescues the
+# about-to-be-clobbered cache copy to _staging/repo-first-rescue/. Advisory only -- exits 0
+# on every path, including its own errors, so it can never block a commit.
+python tools/repo_first_check.py --check-staged
+
 # Check 4 (2026-07-26): sync every staged skill's shipped files into whichever AppData
 # runtime-cache mirror(s) already have it installed. Previously a manual "dual-write
 # discipline" the README documented but nothing enforced. Additive-only, never blocks
