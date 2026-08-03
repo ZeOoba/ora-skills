@@ -476,6 +476,68 @@ class ReviewFindingsRemediation(FixtureTestCase):
         for stock in ('docx', 'xlsx', 'pdf'):
             self.assertNotIn(stock, rep['skills'])
 
+    # --- YAML scalar quoting is serialization, not content ----------------
+    def test_name_quoting_difference_alone_is_in_sync(self):
+        """The platform re-serializes frontmatter on install and its quoting style
+        VARIES over time: acquisition-underwriting's `name` was pulled from the
+        cache QUOTED on 2026-07-27 (commit 20a936e) and the same cache served it
+        UNQUOTED on 2026-08-03. That is a serialization delta with identical YAML
+        meaning -- reporting it as drift is the same false-positive family as CRLF."""
+        repo = '---\nname: "demo"\ndescription: d\n---\n\nBODY\n'
+        cache = '---\nname: demo\ndescription: d\n---\n\nBODY\n'
+        _write(self.repo / 'demo' / 'SKILL.md', repo)
+        _write(self.cache / 'demo' / 'SKILL.md', cache)
+        r = self._report_for()
+        self.assertEqual(r['verdict'], sdr.IN_SYNC)
+        self.assertEqual(r['findings'], [])
+
+    def test_single_and_double_quoting_agree(self):
+        _write(self.repo / 'demo' / 'SKILL.md', "---\nname: 'demo'\ndescription: d\n---\n\nB\n")
+        _write(self.cache / 'demo' / 'SKILL.md', '---\nname: "demo"\ndescription: d\n---\n\nB\n')
+        self.assertEqual(self._report_for()['verdict'], sdr.IN_SYNC)
+
+    def test_quoting_normalization_never_masks_a_real_value_change(self):
+        _write(self.repo / 'demo' / 'SKILL.md', '---\nname: "demo"\ndescription: OLD\n---\n\nB\n')
+        _write(self.cache / 'demo' / 'SKILL.md', '---\nname: demo\ndescription: NEW\n---\n\nB\n')
+        r = self._report_for()
+        self.assertNotEqual(r['verdict'], sdr.IN_SYNC)
+        self.assertNotEqual(r['parts']['frontmatter']['relation'], sdr.IDENTICAL)
+
+    def test_block_scalar_frontmatter_survives_quoting_normalization(self):
+        """The `>` indicator must not be mistaken for a quoted scalar, and indented
+        continuation lines are not top-level keys."""
+        fm = '---\nname: demo\ndescription: >\n  folded line one\n  folded line two\n---\n\nB\n'
+        _write(self.repo / 'demo' / 'SKILL.md', fm)
+        _write(self.cache / 'demo' / 'SKILL.md', fm)
+        r = self._report_for()
+        self.assertEqual(r['verdict'], sdr.IN_SYNC)
+
+    def test_quoting_difference_is_ignored_in_ancestry_too(self):
+        """History hashes are split the same way, so a quoting-only change in an
+        older commit must not read as a real ancestral revision."""
+        self._init_git()
+        _write(self.repo / 'demo' / 'SKILL.md', '---\nname: "demo"\ndescription: d\n---\n\nB\n')
+        self._commit()
+        _write(self.repo / 'demo' / 'SKILL.md', '---\nname: demo\ndescription: d\n---\n\nB\nADDED\n')
+        _write(self.cache / 'demo' / 'SKILL.md', '---\nname: demo\ndescription: d\n---\n\nB\n')
+        r = self._report_for()
+        self.assertEqual(r['parts']['frontmatter']['relation'], sdr.IDENTICAL)
+        self.assertEqual(r['verdict'], sdr.REPO_NEWER)
+
+    def test_reported_description_chars_come_from_RAW_frontmatter(self):
+        """Compare-only normalization must never reach the reporting path. Unquoting
+        a scalar discards the leading/trailing whitespace YAML quotes exist to
+        protect, which silently shaved a char off the reported length (caught live
+        by the replayed parcel-data-recovery fixture: 203 -> 202)."""
+        desc = 'ends with a space '            # 18 chars, trailing space significant
+        _write(self.repo / 'demo' / 'SKILL.md',
+               f'---\nname: demo\ndescription: "{desc}"\n---\n\nB\n')
+        _write(self.cache / 'demo' / 'SKILL.md',
+               f'---\nname: demo\ndescription: "{desc}"\n---\n\nB\n')
+        pit = self._report_for()['point_in_time']
+        self.assertEqual(pit['repo_desc_chars'], len(desc))
+        self.assertEqual(pit['cache_desc_chars'], len(desc))
+
     def test_platform_stock_skills_are_excluded_by_name(self):
         """STOCK_SKILLS is the boundary between 'ORA owns this and it is missing
         from the repo' and 'the platform ships this'. Pinned because capturing a
