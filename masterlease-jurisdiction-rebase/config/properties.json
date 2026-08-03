@@ -1,0 +1,36 @@
+{
+  "_comment": "Property configs. Provenance: entities from executed leases (2026-08-03); SF from Portfolio Basis workbook; PM blocks from executed-lease practice. Unknown facts stay bracketed tokens — never invent.",
+  "MD-EAS": {
+    "state_code": "MD",
+    "entity": "29000 INFORMATION LANE, LLC",
+    "label": "MD-Easton-29000InformationLane",
+    "premises": "29000 Information Lane, Technology Commons, Easton, Maryland (Suite [SUITE NUMBER])",
+    "building_def": "the building known as 29000 Information Lane, Easton, Maryland, containing 48,000 square feet of rentable area",
+    "project_def": null,
+    "share_denominator": "bears to the total rentable square footage of the Building, being 48,000 square feet ",
+    "payment_direction": "to Easton Technology Center c/o Thomas Park Management, PO Box 6309, Hicksville, NY 11802, through the tenant online portal or by check payable to Landlord,",
+    "pm_block": ["COPY TO:Thomas Park Management", "PO Box 6309", "Hicksville, NY 11802", "ATTN: Civita Peters"]
+  },
+  "MD-SBY": {
+    "state_code": "MD",
+    "entity": "2203 NORTHWOOD, LLC",
+    "label": "MD-Salisbury-2203-2207Northwood",
+    "premises": "[2203 / 2205 / 2207] Northwood Drive, Salisbury, Maryland 21801 (Suite [SUITE NUMBER])",
+    "building_def": "the building known as [BUILDING ADDRESS — 2203, 2205 or 2207 Northwood Drive], Salisbury, Maryland 21801, containing [BUILDING RSF] square feet of rentable area",
+    "project_def": "the buildings known as 2203, 2205 and 2207 Northwood Drive, Salisbury, Maryland 21801, collectively containing 53,700 square feet of rentable area, together with the land on which they are situated and all parking areas, drives, walkways and other common areas serving them",
+    "share_denominator": "bears to the total rentable square footage of the Project, being 53,700 square feet ",
+    "payment_direction": "to 2203 Northwood, LLC through the tenant online portal, payable to Landlord,",
+    "pm_block": ["COPY TO:Sperry Van Ness — Miller Commercial", "[MANAGER STREET ADDRESS]", "Salisbury, MD 21801", "ATTN: Brady Smith"]
+  },
+  "MO-RAY": {
+    "state_code": "MO",
+    "entity": "9620 STATE 350, LLC",
+    "label": "MO-Raytown-9620StateRoute350",
+    "premises": "9620 E. State Route 350, Raytown, Missouri (Unit [UNIT NUMBER])",
+    "building_def": "the building known as 9620 E. State Route 350, Raytown, Missouri, containing 34,560 square feet of rentable area",
+    "project_def": null,
+    "share_denominator": "bears to the total rentable square footage of the Building, being 34,560 square feet ",
+    "payment_direction": null,
+    "pm_block": ["COPY TO:[PROPERTY MANAGER]", "[MANAGER STREET ADDRESS]", "[MANAGER CITY, STATE ZIP]", "ATTN: [MANAGER CONTACT]"]
+  }
+}
