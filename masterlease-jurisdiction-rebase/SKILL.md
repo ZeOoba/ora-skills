@@ -1,6 +1,6 @@
 ---
 name: masterlease-jurisdiction-rebase
-description: "Rebase Oxford Realty Advisors jurisdiction-conformed Master Lease property templates onto a new master revision in one command, and generate state-conformed (MD/MO) property templates from the OH-anchored master. Use whenever the user mentions: new master lease version, rebase the lease templates, regenerate the MD/MO templates, jurisdiction overlay, conform the lease to a state, state-conformed lease template, update property lease forms, lease template for Easton / Salisbury / Northwood / Raytown, or uploads a new ORA_MasterLease_ShallowBayIndustrial_v*.docx. Also use when adding a NEW property or state overlay to the lease-template system. Edits the master DOCX in place (native formatting preserved) with asserted-count substitutions — the anti-contamination discipline from the 2026-08-03 propagation audit. Companion to lease-form-qc (which QCs drafted leases); this skill produces the templates leases are drafted FROM. v1.1.1 (2026-08-03)"
+description: "Rebase Oxford Realty Advisors jurisdiction-conformed Master Lease property templates onto a new master revision in one command, and generate state-conformed (MD/MO) property templates from the OH-anchored master. Use whenever the user mentions: new master lease version, rebase the lease templates, regenerate the MD/MO templates, jurisdiction overlay, conform the lease to a state, state-conformed lease template, update property lease forms, lease template for Easton / Salisbury / Northwood / Raytown, or uploads a new ORA_MasterLease_ShallowBayIndustrial_v*.docx. Also use when adding a NEW property or state overlay to the lease-template system. Edits the master DOCX in place (native formatting preserved) with asserted-count substitutions — the anti-contamination discipline from the 2026-08-03 propagation audit. Companion to lease-form-qc (which QCs drafted leases); this skill produces the templates leases are drafted FROM. v1.1.2 (2026-08-03)"
 ---
 
 # Master Lease Jurisdiction Rebase — Oxford Realty Advisors
@@ -25,10 +25,12 @@ producing a quietly wrong template.
 **Never build from a cached or knowledge-store copy of the master.** Version drift
 happened twice on 2026-08-03 (a v2.1 cache was used while v2.4 was canonical).
 
-- Canonical location: **UNRESOLVED — SharePoint search finds no copy of the master
-  (verified 2026-08-03).** Ask Gabriel for the current master, or have him upload it.
-  When he pins a SharePoint path, record it here (edit this section) and in
-  memory/rules.md on the Code surface.
+- Canonical location: **`Business/Leases All properties/` (egoldberg's OneDrive/SharePoint),
+  pinned 2026-08-03 by Gabriel.** Both `ORA_MasterLease_ShallowBayIndustrial_v2.4_TEMPLATE.docx`
+  and the `v2.4.1` typo-fix companion were parked there the same day. Always pull the
+  highest version number present in that folder before a rebase run — do not use a
+  cached or knowledge-store copy (see the v2.1-cache-while-v2.4-was-canonical incident
+  above).
 - Freshness check before any run: compare the version string in the supplied master's
   filename (`v2.4` etc.) against the newest version mentioned anywhere in the session
   and in this skill's changelog. If the supplied master is not the highest version
@@ -97,6 +99,10 @@ leaves the office.
 
 ## Changelog
 
+- v1.1.2 (2026-08-03, Code-surface close-out): canonical master location resolved —
+  Gabriel pinned `Business/Leases All properties/` (egoldberg's OneDrive/SharePoint);
+  both v2.4 and the v2.4.1 typo-fix companion parked there same day. Closes the
+  UNRESOLVED gap this section carried since v1.0.
 - v1.1.1 (2026-08-03, Code-surface close-out): dropped the `Demised Premisess` fix-up
   rule from `build_rules` — v2.4.1 (the typo-fix companion master, uploaded same
   session) already corrects the spelling upstream, so the rule's own "drop this rule
