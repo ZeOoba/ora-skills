@@ -10,7 +10,7 @@ Usage:
   python3 rebase.py --master <master.docx> --property MD-EAS [--out DIR]
   python3 rebase.py --master <master.docx> --all [--out DIR]
 
-Anchors keyed to master v2.4 (2026-08-03). On assertion failure after a master rev:
+Anchors keyed to master v2.4.1 (2026-08-03). On assertion failure after a master rev:
 diff the masters, update the anchor here or in config/, log it in SKILL.md changelog.
 """
 import argparse, copy, json, pathlib, re, sys
@@ -88,18 +88,29 @@ def insert_savings_clause(doc):
         sys.exit("Savings-clause insertion: no non-underlined body run found in cloned paragraph.")
 
 
+def article(state_name):
+    """'an' before vowel-sound state names (Indiana, Ohio, Iowa...); 'a Utah' — the
+    only U-state is pronounced with a consonant sound."""
+    return "an" if state_name[:1].upper() in "AEIO" else "a"
+
+
 def build_rules(P, L):
     st = L["state"]
+    es = P.get("entity_state")
+    if not es:
+        sys.exit(f"{P['entity']}: missing 'entity_state' in config/properties.json. The LLC's "
+                 "formation state must be SOURCED (Articles of Organization, ratified LLC roster, "
+                 "or an executed lease's recital) — never assumed from the property's location. "
+                 "Fail-closed by design (2026-08-03 eval finding).")
     rules = [
         ("[LANDLORD ENTITY]", P["entity"], 3),
-        ("a [STATE] limited liability company", f"a {st} limited liability company", 2),
+        ("a [STATE] limited liability company", f"{article(es)} {es} limited liability company", 2),
         ("the building situated at [PREMISES ADDRESS] (such rentable area",
          f"the building situated at {P['premises']} (such rentable area", 1),
         ("the building known as [BUILDING ADDRESS], containing [BUILDING RSF] square feet of rentable area",
          P["building_def"], 1),
         (f"national banks in the State of {ANCHOR_STATE} are authorized to close",
          f"national banks in the State of {st} are authorized to close", 1),
-        ("Demised Premisess", "Demised Premises", 1),  # master typo; drop this rule once fixed upstream
         ("bears to the total rentable square footage of the Building, being [BUILDING RSF] square feet ",
          P["share_denominator"], 1),
         ("(Franklin County Auditor Parcel No. [PARCEL NO])", L["parcel_reference"], 1),
@@ -169,8 +180,8 @@ def main():
         sys.exit(f"Unknown property key(s) {unknown}. Known: " + ", ".join(props) +
                  ". Add new properties to config/properties.json (facts from source of record only).")
 
-    m = re.search(r"_v(\d+\.\d+(?:\.\d+)?)_", pathlib.Path(a.master).name)
-    ver = m.group(1) if m else "vUNKNOWN"
+    m = re.search(r"_v(\d+\.\d+(?:\.\d+)?(?:-[A-Za-z0-9]+)?)_", pathlib.Path(a.master).name)
+    ver = m.group(1) if m else "UNKNOWN"
     outdir = pathlib.Path(a.out); outdir.mkdir(parents=True, exist_ok=True)
 
     for k in keys:

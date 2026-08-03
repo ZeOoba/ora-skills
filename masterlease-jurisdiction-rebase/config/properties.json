@@ -1,8 +1,9 @@
 {
-  "_comment": "Property configs. Provenance: entities from executed leases (2026-08-03); SF from Portfolio Basis workbook; PM blocks from executed-lease practice. Unknown facts stay bracketed tokens — never invent.",
+  "_comment": "Property configs. Provenance: entities AND entity_state from executed leases (2026-08-03) — entity_state is the LLC's formation state per the lease recital, NOT assumed from property location (2026-08-03 eval finding); SF from Portfolio Basis workbook; PM blocks from executed-lease practice. Unknown facts stay bracketed tokens — never invent.",
   "MD-EAS": {
     "state_code": "MD",
     "entity": "29000 INFORMATION LANE, LLC",
+    "entity_state": "Maryland",
     "label": "MD-Easton-29000InformationLane",
     "premises": "29000 Information Lane, Technology Commons, Easton, Maryland (Suite [SUITE NUMBER])",
     "building_def": "the building known as 29000 Information Lane, Easton, Maryland, containing 48,000 square feet of rentable area",
@@ -14,6 +15,7 @@
   "MD-SBY": {
     "state_code": "MD",
     "entity": "2203 NORTHWOOD, LLC",
+    "entity_state": "Maryland",
     "label": "MD-Salisbury-2203-2207Northwood",
     "premises": "[2203 / 2205 / 2207] Northwood Drive, Salisbury, Maryland 21801 (Suite [SUITE NUMBER])",
     "building_def": "the building known as [BUILDING ADDRESS — 2203, 2205 or 2207 Northwood Drive], Salisbury, Maryland 21801, containing [BUILDING RSF] square feet of rentable area",
@@ -25,6 +27,7 @@
   "MO-RAY": {
     "state_code": "MO",
     "entity": "9620 STATE 350, LLC",
+    "entity_state": "Missouri",
     "label": "MO-Raytown-9620StateRoute350",
     "premises": "9620 E. State Route 350, Raytown, Missouri (Unit [UNIT NUMBER])",
     "building_def": "the building known as 9620 E. State Route 350, Raytown, Missouri, containing 34,560 square feet of rentable area",
