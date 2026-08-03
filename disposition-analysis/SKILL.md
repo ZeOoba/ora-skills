@@ -1,9 +1,10 @@
 ---
+
 name: disposition-analysis
-description: Oxford Realty Advisors hold / refinance / 1031 / sell decision engine. Use when the user mentions: should we sell, hold or sell, disposition, dispose of, exit an asset, recycle or prune the portfolio, 1031, like-kind exchange, replace an asset, refinance vs sell, harvest gains, cash out, when to sell, or keeping vs selling a property. Defaults to HOLD + cash-out refinance for liquidity (ORA generational-hold doctrine); when capital is recycled the default exit is a 1031 exchange (ORA almost always 1031s); a taxable sale is the rare exception that must clear a high bar. Charges the forfeited estate step-up and deferred depreciation recapture (Sec 1245 ordinary + unrecaptured Sec 1250 + LTCG + NIIT + state) against any taxable sale; models the 1031 deferral (carryover basis, 45/180-day, QI, boot) and the estate step-up overlay. Produces a hold/refi/1031/sell recommendation with tax-charged net proceeds. Conforms to the ORA Tax-Inclusive Underwriting Standard. v1.0
+description: Oxford Realty Advisors hold / refinance / 1031 / sell decision engine. Use when the user mentions: should we sell, hold or sell, disposition, dispose of, exit an asset, recycle or prune the portfolio, 1031, like-kind exchange, replace an asset, refinance vs sell, harvest gains, cash out, when to sell, or keeping vs selling a property. Defaults to HOLD + cash-out refinance for liquidity (ORA generational-hold doctrine); when capital is recycled the default exit is a 1031 exchange; a taxable sale is the rare exception that must clear a high bar. Charges the forfeited estate step-up and deferred depreciation recapture (Sec 1245 ordinary + unrecaptured Sec 1250 + LTCG + NIIT + state) against any taxable sale; models the 1031 deferral (carryover basis, 45/180-day, QI, boot) and the estate step-up overlay. Produces a hold/refi/1031/sell recommendation with tax-charged net proceeds; logs every ruling to memory/disposition-ledger.md. Conforms to the ORA Tax-Inclusive Underwriting Standard. v1.1
 ---
 
-# Disposition Analysis — Oxford Realty Advisors (v1.0)
+# Disposition Analysis — Oxford Realty Advisors (v1.1)
 
 You are evaluating whether ORA should HOLD, REFINANCE, 1031-EXCHANGE, or make a TAXABLE SALE of an asset. ORA is a generational-hold family office; the burden of proof is on selling, and recycling is almost always done via 1031. Every analysis carries the tax overlay — a sale's "true" cost is the headline price minus the tax a hold would have avoided.
 
@@ -43,6 +44,9 @@ Side by side, after-tax to ORA:
 ### Step 6 — Recommendation
 State HOLD / REFI / 1031 / SELL with the tax-charged numbers and the one-line reason. Default to the most tax-deferring path that meets the trigger; only recommend a taxable sale when it clears the hold-and-1031 benchmark after the full tax charge. Flag any boot, §461(l)/timing interaction, and the estate consequence.
 
+### Step 7 — Log the ruling (2026-07-29)
+Append one row to `memory/disposition-ledger.md` — the post-acquisition lifecycle ledger (Date | Property | Event | Terms/Amount | Rationale | Source). Event = the ruling (HOLD / REFI / 1031 / SELL); for a HOLD, Terms/Amount is "No transaction" plus the live refi lever if quantified. This is a DIFFERENT file from `memory/deal-decision-ledger.md`, which is scoped to PRE-acquisition pipeline decisions (PASS/SKIP/DROP/PARK/CLOSE) only — never write a disposition ruling there. If this is the property's first-ever row in disposition-ledger.md, also add the ACQUIRED baseline row (purchase price, date, source) before the new ruling row, so the ledger is self-contained per property.
+
 ## Conventions
 - Pull defaults from the ORA Taxpayer Profile (REPS qualified, 1031 default, rates) and the Tax-Inclusive Underwriting Standard.
 - Rates: §1245 ordinary 37% + 3.8% NIIT · unrecaptured §1250 25% + NIIT · LTCG 20% + NIIT · + OH state. Confirm current law / state with CPA.
@@ -50,4 +54,5 @@ State HOLD / REFI / 1031 / SELL with the tax-charged numbers and the one-line re
 - Output: concise decision memo (paths table + recommendation); for a live decision, build the four-path after-tax comparison in the IRR model.
 
 ## Cross-skill
-acquisition-underwriting (replacement-asset underwrite for 1031 targets) · deal-comparison (replacement vs hold) · the IRR model's Tax Analysis tab (recapture block) · portfolio-reporting (concentration/rebalance triggers).
+acquisition-underwriting (replacement-asset underwrite for 1031 targets) · deal-comparison (replacement vs hold) · the IRR model's Tax Analysis tab (recapture block) · portfolio-reporting (concentration/rebalance triggers) · disposition-ledger.md (Step 7 log, new 2026-07-29).
+
