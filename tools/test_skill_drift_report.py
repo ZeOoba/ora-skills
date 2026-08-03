@@ -476,6 +476,18 @@ class ReviewFindingsRemediation(FixtureTestCase):
         for stock in ('docx', 'xlsx', 'pdf'):
             self.assertNotIn(stock, rep['skills'])
 
+    def test_platform_stock_skills_are_excluded_by_name(self):
+        """STOCK_SKILLS is the boundary between 'ORA owns this and it is missing
+        from the repo' and 'the platform ships this'. Pinned because capturing a
+        stock skill would give it a bogus authoritative source that then reads as
+        drift on every platform update."""
+        for stock in ('docx', 'schedule', 'setup-cowork', 'morning'):
+            self.assertIn(stock, sdr.STOCK_SKILLS)
+        # ORA-authored skills must never be excluded as stock.
+        for ora in ('lease-form-qc', 'masterlease-jurisdiction-rebase',
+                    'acquisition-underwriting', 'parcel-data-recovery'):
+            self.assertNotIn(ora, sdr.STOCK_SKILLS)
+
     def test_unknown_skill_argument_is_reported_not_silently_empty(self):
         """`... report.py dmeo` used to render a clean, empty, reassuring report."""
         _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
