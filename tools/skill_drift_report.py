@@ -192,6 +192,48 @@ def split_skill_md(text: str) -> tuple[str, str]:
     return '', text
 
 
+_TOP_KEY_RE = re.compile(r'^([A-Za-z0-9_-]+):[ \t]*(.*)$')
+
+
+def _normalize_frontmatter(fm: str) -> str:
+    """A COMPARE-ONLY view of frontmatter with YAML scalar quoting stripped from
+    top-level keys. Never used to write a file - only to decide whether two
+    frontmatters mean the same thing.
+
+    WHY: the platform re-serializes frontmatter on install and its quoting style
+    VARIES over time. acquisition-underwriting's `name` was pulled from the cache
+    QUOTED on 2026-07-27 (the REPO-FIRST recovery in commit 20a936e byte-copied it
+    that way), and the same cache served it UNQUOTED on 2026-08-03 - producing a
+    permanent MANUAL-MERGE on a delta with identical YAML meaning. Three other
+    skills (lease-form-qc, market-monitor, solar-lease-underwriting) sit quoted on
+    BOTH sides today and would flip the same way whenever the platform's style
+    changes again. Treating serialization as content is the same false-positive
+    family as the CRLF flags this tool exists to kill.
+
+    Deliberately narrow: no YAML parser, no re-indentation. Only a top-level
+    `key: value` line has its value unquoted. A block-scalar indicator (`>`, `|`)
+    carries no quotes so it passes through untouched, and its indented
+    continuation lines are not top-level keys so they are never rewritten.
+    Both sides get the identical treatment, so this can only ever collapse a
+    difference that is purely quoting - never mask a changed value.
+    """
+    out = []
+    for ln in fm.split('\n'):
+        m = _TOP_KEY_RE.match(ln)
+        if m and m.group(2).strip():
+            out.append(f'{m.group(1)}: {_unquote(m.group(2).strip())}')
+        else:
+            out.append(ln)
+    return '\n'.join(out)
+
+
+def _split_parts(text: str) -> dict:
+    """The ONE place a SKILL.md becomes comparable parts. Used for both working-tree
+    files and historical git blobs so ancestry hashes live in the same space."""
+    fm, body = split_skill_md(text)
+    return {'frontmatter': _normalize_frontmatter(fm), 'body': body}
+
+
 def _unquote(s: str) -> str:
     if len(s) >= 2 and s[0] == s[-1] and s[0] in '"\'':
         return s[1:-1]
@@ -384,8 +426,8 @@ def _part_history_hashes(repo_root: Path, relpath: str):
         data = _git_blob_bytes(repo_root, rev, relpath)
         if data is None:
             continue
-        fm, body = split_skill_md(normalized_text(data))
-        by_rev[rev] = {'frontmatter': _text_hash(fm), 'body': _text_hash(body)}
+        parts = _split_parts(normalized_text(data))
+        by_rev[rev] = {p: _text_hash(parts[p]) for p in PARTS}
 
     def _collect(revs):
         out = {p: set() for p in PARTS}
@@ -444,8 +486,15 @@ def skill_md_report(repo_root: Path, cache_root: Path, skill: str, read_at=None)
                          f'{REMEDY[UNREADABLE]} ({type(exc).__name__}: {exc})')
 
     repo_text, cache_text = normalized_text(repo_raw), normalized_text(cache_raw)
-    repo_split = dict(zip(PARTS, split_skill_md(repo_text)))
-    cache_split = dict(zip(PARTS, split_skill_md(cache_text)))
+    repo_split = _split_parts(repo_text)
+    cache_split = _split_parts(cache_text)
+    # Descriptions are read from the RAW frontmatter, never the normalized view.
+    # _normalize_frontmatter is COMPARE-ONLY: unquoting a scalar discards the
+    # leading/trailing whitespace that YAML quotes exist to protect, which would
+    # silently shave characters off a REPORTED description length (caught by the
+    # replayed parcel-data-recovery fixture: 203 -> 202).
+    repo_fm_raw, _ = split_skill_md(repo_text)
+    cache_fm_raw, _ = split_skill_md(cache_text)
 
     # Walk git history ONLY if something actually differs. Direction is irrelevant
     # to an agreeing part, and the walk spawns a subprocess per revision - on a
@@ -481,8 +530,8 @@ def skill_md_report(repo_root: Path, cache_root: Path, skill: str, read_at=None)
             findings.append({'kind': PART_DRIFT, 'part': part,
                              'relation': rel, 'direction': direction})
 
-    repo_desc = description_of(repo_split['frontmatter']) or ''
-    cache_desc = description_of(cache_split['frontmatter']) or ''
+    repo_desc = description_of(repo_fm_raw) or ''
+    cache_desc = description_of(cache_fm_raw) or ''
     if repo_desc != cache_desc and len(cache_desc) < len(repo_desc):
         # The routing surface shrank platform-side. This is what a byte-exact pull
         # would have destroyed on parcel-data-recovery (850 -> 203 chars).
@@ -507,8 +556,8 @@ def skill_md_report(repo_root: Path, cache_root: Path, skill: str, read_at=None)
         # consumer can mistake it for the verdict's evidence.
         'point_in_time': {
             'read_at': read_at,
-            'repo_version_token': version_token_of(repo_split['frontmatter']),
-            'cache_version_token': version_token_of(cache_split['frontmatter']),
+            'repo_version_token': version_token_of(repo_fm_raw),
+            'cache_version_token': version_token_of(cache_fm_raw),
             'repo_bytes': len(repo_raw),
             'cache_bytes': len(cache_raw),
             'repo_desc_chars': len(repo_desc),
