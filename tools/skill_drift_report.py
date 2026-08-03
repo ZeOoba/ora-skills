@@ -96,8 +96,10 @@ REMEDY = {
     ),
     CACHE_NEWER: (
         'REPO-FIRST VIOLATION - pull cache into repo. Every differing part is a clean '
-        'cache-side superset, so the byte-exact copy in the CACHE->REPO RECOVERY '
-        'PROCEDURE is safe here; still content-verify and open a PR, never commit to main'
+        'cache-side superset: no non-blank line is lost and existing line ORDER is '
+        'preserved, so the byte-exact copy in the CACHE->REPO RECOVERY PROCEDURE is '
+        'safe for content. NOT verified: blank-line/whitespace structure - diff the '
+        'file before committing. Still content-verify and open a PR, never commit to main'
     ),
     MANUAL_MERGE: (
         'MANUAL MERGE required - neither side is a superset, so NO byte-exact copy in '
@@ -150,9 +152,50 @@ def split_skill_md(text: str) -> tuple[str, str]:
     return '', text
 
 
+def _unquote(s: str) -> str:
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in '"\'':
+        return s[1:-1]
+    return s
+
+
 def description_of(frontmatter: str) -> str | None:
-    m = _DESC_RE.search(frontmatter)
-    return m.group(1).strip() if m else None
+    """The skill's routing surface, as a plain string.
+
+    Handles the three shapes that actually occur on disk (2026-08-03 sweep of all
+    55 skills), because a parser that understands only one of them silently
+    disables the DESCRIPTION-REGRESSION detector on the rest:
+
+      description: plain text
+      description: "quoted text"     -> quotes stripped, so the count is the
+                                        DESCRIPTION's length, not the YAML
+                                        literal's (parcel-data-recovery reads 850,
+                                        matching the incident record, not 852)
+      description: >                 -> folded block scalar, joined with spaces;
+        continuation lines...           `|` joins with newlines.
+
+    census-acs-extract, ratify-hurdle-rate and oxford-cc-strategic-audit all use
+    the block form, and the original `^description:\\s*(.*)$` regex returned
+    literally '>' for each — so len(cache_desc) < len(repo_desc) could never fire
+    and the regression detector was dead on those three. Only a TOP-LEVEL
+    `description:` matches; a nested one under `metadata:` is indented and skipped.
+    """
+    lines = frontmatter.split('\n')
+    for i, ln in enumerate(lines):
+        if not ln.startswith('description:'):
+            continue
+        head = ln[len('description:'):].strip()
+        if re.fullmatch(r'[>|][+-]?\d*', head):  # block scalar + optional indicators
+            collected = []
+            for cont in lines[i + 1:]:
+                if not cont.strip():
+                    collected.append('')
+                    continue
+                if not cont[:1].isspace():
+                    break  # dedented to a sibling key: the block is over
+                collected.append(cont.strip())
+            return ('\n' if head.startswith('|') else ' ').join(collected).strip()
+        return _unquote(head)
+    return None
 
 
 def version_token_of(text: str) -> str | None:
@@ -163,10 +206,25 @@ def version_token_of(text: str) -> str | None:
 
 
 def _line_subset(inner: str, outer: str) -> bool:
-    """Every non-blank line of `inner` appears in `outer` at least as often."""
-    ic = Counter(ln for ln in inner.splitlines() if ln.strip())
-    oc = Counter(ln for ln in outer.splitlines() if ln.strip())
-    return all(oc[ln] >= n for ln, n in ic.items())
+    """True if `inner`'s non-blank lines appear in `outer` IN THE SAME ORDER.
+
+    ORDER MATTERS (fixed 2026-08-03, found by the real-data reorder tests). The
+    first cut used a Counter, which is order-blind: a cache that reordered the
+    document AND appended a section read as a clean cache-side superset, so
+    combine_verdict returned CACHE-NEWER and prescribed the byte-exact pull —
+    which would then have silently imposed the platform's section ordering on the
+    authoritative repo copy. A subsequence test makes "superset" mean what the
+    remedy assumes: everything the other side had is still there, still in order,
+    with new material only inserted between existing lines.
+
+    Blank lines are still ignored, so trivial whitespace churn does not manufacture
+    a MANUAL-MERGE. That is a deliberate, disclosed limit: a byte-exact pull can
+    therefore still alter blank-line structure, which is why the CACHE-NEWER remedy
+    says ordering and content are verified but whitespace structure is not.
+    """
+    outer_iter = iter([ln for ln in outer.splitlines() if ln.strip()])
+    return all(line in outer_iter
+               for line in (ln for ln in inner.splitlines() if ln.strip()))
 
 
 def _contains(outer: str, inner: str) -> bool:
