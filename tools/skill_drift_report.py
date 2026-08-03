@@ -49,7 +49,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from package_skills import REPO, SKIP  # noqa: E402
+from package_skills import MAX_DESC, REPO, SKIP  # noqa: E402
 from pending_reimport import (  # noqa: E402
     CACHE_ROOT, _git_blob_bytes, _git_text, all_skill_dirs, classify_shared_copy,
 )
@@ -60,12 +60,16 @@ REPO_NEWER = 'REPO-NEWER'
 CACHE_NEWER = 'CACHE-NEWER'
 MANUAL_MERGE = 'MANUAL-MERGE'
 NOT_INSTALLED = 'NOT-INSTALLED'
+BROKEN_INSTALL = 'BROKEN-INSTALL'
+CACHE_ONLY = 'CACHE-ONLY'
+UNREADABLE = 'UNREADABLE'
 
 # --- text relations (containment, not direction) --------------------------
 IDENTICAL = 'IDENTICAL'
 REPO_SUPERSET = 'REPO-SUPERSET'
 CACHE_SUPERSET = 'CACHE-SUPERSET'
 DISJOINT = 'DISJOINT'
+WHITESPACE_ONLY = 'WHITESPACE-ONLY'
 
 # --- directions (git-ancestry derived; classify_shared_copy's vocabulary) --
 IN_SYNC_DIR = 'IN-SYNC'
@@ -84,8 +88,13 @@ CHANGED_DURING_RUN = 'CHANGED-DURING-RUN'
 
 PARTS = ('frontmatter', 'body')
 
-# Platform import limit; a merged description must still fit (pre-commit Check 2).
-MAX_DESC = 1024
+# Anthropic stock skills ship with the platform and legitimately have no repo
+# source, so they are NOT cache-only findings. Same roster the drift-check
+# SKILL.md step 3 carries; kept in sync with it by hand (it is doctrine, not code).
+STOCK_SKILLS = frozenset({
+    'docx', 'xlsx', 'pptx', 'pdf', 'mcp-builder', 'skill-creator',
+    'schedule', 'setup-cowork', 'consolidate-memory',
+})
 
 REMEDY = {
     IN_SYNC: 'none',
@@ -96,8 +105,10 @@ REMEDY = {
     ),
     CACHE_NEWER: (
         'REPO-FIRST VIOLATION - pull cache into repo. Every differing part is a clean '
-        'cache-side superset, so the byte-exact copy in the CACHE->REPO RECOVERY '
-        'PROCEDURE is safe here; still content-verify and open a PR, never commit to main'
+        'cache-side superset: no non-blank line is lost and existing line ORDER is '
+        'preserved, so the byte-exact copy in the CACHE->REPO RECOVERY PROCEDURE is '
+        'safe for content. NOT verified: blank-line/whitespace structure - diff the '
+        'file before committing. Still content-verify and open a PR, never commit to main'
     ),
     MANUAL_MERGE: (
         'MANUAL MERGE required - neither side is a superset, so NO byte-exact copy in '
@@ -105,6 +116,20 @@ REMEDY = {
         f'session (merged description must stay <= {MAX_DESC} chars), then PR'
     ),
     NOT_INSTALLED: 'none - no cache directory; never installed (this is not drift)',
+    BROKEN_INSTALL: (
+        'BROKEN INSTALL - the cache directory exists but holds no SKILL.md, so the '
+        'skill is half-installed, not un-installed. Reinstall via package-and-stage-skill '
+        'and install the staged .skill with the Cowork Save-skill button'
+    ),
+    CACHE_ONLY: (
+        'CACHE-ONLY - installed platform-side with NO authoritative repo source. '
+        'Capture it into the repo (REPO-FIRST RULE) or retire it; until then its text '
+        'enters session context with nothing to review it against'
+    ),
+    UNREADABLE: (
+        'UNREADABLE - a store file could not be read this run (lock, permissions). '
+        'No verdict was computed; re-run. This is a reporting gap, never a clean result'
+    ),
 }
 
 _DESC_RE = re.compile(r'^description:\s*(.*)$', re.M)
@@ -122,7 +147,17 @@ def normalized_text(data: bytes) -> str:
     confirmed disposition-analysis 2026-06-15: 6366 B on disk incl. padding vs 6211 B
     clean text). Stripping them here means a padded-but-identical file reads IN-SYNC.
     """
-    return data.rstrip(b'\x00').decode('utf-8', errors='replace').replace('\r\n', '\n')
+    text = data.rstrip(b'\x00').decode('utf-8', errors='replace').replace('\r\n', '\n')
+    # A UTF-8 BOM defeats the '---' fence test in split_skill_md, which would dump
+    # the whole file into `body` and manufacture a spurious DESCRIPTION-REGRESSION.
+    return text.lstrip('﻿')
+
+
+def _read_bytes(path: Path) -> bytes:
+    """Single funnel for every store read, so one locked file is contained to a
+    single UNREADABLE finding instead of raising out of the whole run (on Windows
+    the Claude app can hold a cache file open). Also the test seam for that path."""
+    return path.read_bytes()
 
 
 def norm_hash(data: bytes) -> str:
@@ -150,9 +185,50 @@ def split_skill_md(text: str) -> tuple[str, str]:
     return '', text
 
 
+def _unquote(s: str) -> str:
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in '"\'':
+        return s[1:-1]
+    return s
+
+
 def description_of(frontmatter: str) -> str | None:
-    m = _DESC_RE.search(frontmatter)
-    return m.group(1).strip() if m else None
+    """The skill's routing surface, as a plain string.
+
+    Handles the three shapes that actually occur on disk (2026-08-03 sweep of all
+    55 skills), because a parser that understands only one of them silently
+    disables the DESCRIPTION-REGRESSION detector on the rest:
+
+      description: plain text
+      description: "quoted text"     -> quotes stripped, so the count is the
+                                        DESCRIPTION's length, not the YAML
+                                        literal's (parcel-data-recovery reads 850,
+                                        matching the incident record, not 852)
+      description: >                 -> folded block scalar, joined with spaces;
+        continuation lines...           `|` joins with newlines.
+
+    census-acs-extract, ratify-hurdle-rate and oxford-cc-strategic-audit all use
+    the block form, and the original `^description:\\s*(.*)$` regex returned
+    literally '>' for each — so len(cache_desc) < len(repo_desc) could never fire
+    and the regression detector was dead on those three. Only a TOP-LEVEL
+    `description:` matches; a nested one under `metadata:` is indented and skipped.
+    """
+    lines = frontmatter.split('\n')
+    for i, ln in enumerate(lines):
+        if not ln.startswith('description:'):
+            continue
+        head = ln[len('description:'):].strip()
+        if re.fullmatch(r'[>|][+-]?\d*', head):  # block scalar + optional indicators
+            collected = []
+            for cont in lines[i + 1:]:
+                if not cont.strip():
+                    collected.append('')
+                    continue
+                if not cont[:1].isspace():
+                    break  # dedented to a sibling key: the block is over
+                collected.append(cont.strip())
+            return ('\n' if head.startswith('|') else ' ').join(collected).strip()
+        return _unquote(head)
+    return None
 
 
 def version_token_of(text: str) -> str | None:
@@ -163,14 +239,36 @@ def version_token_of(text: str) -> str | None:
 
 
 def _line_subset(inner: str, outer: str) -> bool:
-    """Every non-blank line of `inner` appears in `outer` at least as often."""
-    ic = Counter(ln for ln in inner.splitlines() if ln.strip())
-    oc = Counter(ln for ln in outer.splitlines() if ln.strip())
-    return all(oc[ln] >= n for ln, n in ic.items())
+    """True if `inner`'s non-blank lines appear in `outer` IN THE SAME ORDER.
+
+    ORDER MATTERS (fixed 2026-08-03, found by the real-data reorder tests). The
+    first cut used a Counter, which is order-blind: a cache that reordered the
+    document AND appended a section read as a clean cache-side superset, so
+    combine_verdict returned CACHE-NEWER and prescribed the byte-exact pull —
+    which would then have silently imposed the platform's section ordering on the
+    authoritative repo copy. A subsequence test makes "superset" mean what the
+    remedy assumes: everything the other side had is still there, still in order,
+    with new material only inserted between existing lines.
+
+    Blank lines are still ignored, so trivial whitespace churn does not manufacture
+    a MANUAL-MERGE. That is a deliberate, disclosed limit: a byte-exact pull can
+    therefore still alter blank-line structure, which is why the CACHE-NEWER remedy
+    says ordering and content are verified but whitespace structure is not.
+    """
+    outer_iter = iter([ln for ln in outer.splitlines() if ln.strip()])
+    return all(line in outer_iter
+               for line in (ln for ln in inner.splitlines() if ln.strip()))
 
 
 def _contains(outer: str, inner: str) -> bool:
     return inner in outer or _line_subset(inner, outer)
+
+
+def _ws_key(text: str) -> str:
+    """Content with blank lines dropped and trailing whitespace stripped. Two texts
+    with the same key differ only in whitespace LAYOUT - every non-blank line, and
+    its order, is identical."""
+    return '\n'.join(ln.rstrip() for ln in text.splitlines() if ln.strip())
 
 
 def part_relation(repo_text: str, cache_text: str) -> str:
@@ -182,6 +280,12 @@ def part_relation(repo_text: str, cache_text: str) -> str:
     """
     if repo_text == cache_text:
         return IDENTICAL
+    if _ws_key(repo_text) == _ws_key(cache_text):
+        # A trailing-newline or blank-line-only delta is not stale skill text. Left
+        # to the containment tests it lands in DISJOINT -> MANUAL-MERGE, i.e. a
+        # supervised-merge ticket for a zero-content difference: the same nuisance
+        # class as the CRLF flags this tool exists to kill.
+        return WHITESPACE_ONLY
     repo_has_cache = _contains(repo_text, cache_text)
     cache_has_repo = _contains(cache_text, repo_text)
     if repo_has_cache and not cache_has_repo:
@@ -205,7 +309,8 @@ def combine_verdict(parts: dict) -> str:
     """
     rels = {p: info['relation'] for p, info in parts.items()}
     dirs = {p: info['direction'] for p, info in parts.items()}
-    differing = [p for p, rel in rels.items() if rel != IDENTICAL]
+    agreed = (IDENTICAL, WHITESPACE_ONLY)
+    differing = [p for p, rel in rels.items() if rel not in agreed]
     if not differing:
         return IN_SYNC
 
@@ -217,7 +322,7 @@ def combine_verdict(parts: dict) -> str:
     if ds == {REPO_AHEAD}:
         return REPO_NEWER
     if ds == {CACHE_AHEAD}:
-        if all(rels[p] in (IDENTICAL, CACHE_SUPERSET) for p in parts):
+        if all(rels[p] in (IDENTICAL, WHITESPACE_ONLY, CACHE_SUPERSET) for p in parts):
             return CACHE_NEWER
         return MANUAL_MERGE
     return MANUAL_MERGE
@@ -262,19 +367,29 @@ def _part_history_hashes(repo_root: Path, relpath: str):
     if (_git_text(repo_root, 'rev-parse', '--is-shallow-repository') or '').strip() == 'true':
         return None, None
 
-    def _hashes(rev_text):
+    head_revs = head.split()
+    all_revs = (_git_text(repo_root, 'rev-list', '--all', '--', relpath) or '').split()
+
+    # Hash each UNIQUE revision once. HEAD's list is a subset of --all's, so the
+    # first cut ran `git show` twice per shared revision and threw one result away.
+    by_rev = {}
+    for rev in set(head_revs) | set(all_revs):
+        data = _git_blob_bytes(repo_root, rev, relpath)
+        if data is None:
+            continue
+        fm, body = split_skill_md(normalized_text(data))
+        by_rev[rev] = {'frontmatter': _text_hash(fm), 'body': _text_hash(body)}
+
+    def _collect(revs):
         out = {p: set() for p in PARTS}
-        for rev in rev_text.split():
-            data = _git_blob_bytes(repo_root, rev, relpath)
-            if data is None:
-                continue
-            fm, body = split_skill_md(normalized_text(data))
-            for part, text in (('frontmatter', fm), ('body', body)):
-                out[part].add(hashlib.sha256(text.encode('utf-8')).hexdigest())
+        for rev in revs:
+            h = by_rev.get(rev)
+            if h:
+                for part in PARTS:
+                    out[part].add(h[part])
         return out
 
-    all_text = _git_text(repo_root, 'rev-list', '--all', '--', relpath) or ''
-    return _hashes(head), _hashes(all_text)
+    return _collect(head_revs), _collect(all_revs)
 
 
 def _text_hash(text: str) -> str:
@@ -289,32 +404,56 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
-def skill_md_report(repo_root: Path, cache_root: Path, skill: str, read_at: str) -> dict:
+def _terminal(skill, verdict, read_at, remedy=None):
+    return {'skill': skill, 'verdict': verdict, 'remedy': remedy or REMEDY[verdict],
+            'parts': {}, 'findings': [], 'stability': STABLE,
+            'point_in_time': {'read_at': read_at}}
+
+
+def skill_md_report(repo_root: Path, cache_root: Path, skill: str, read_at=None) -> dict:
+    """One skill's verdict. `read_at` is stamped when THIS skill's files are read,
+    not when the run began - a full run takes tens of seconds against a live cache,
+    so a single run-start stamp would misdate every figure after the first."""
+    read_at = read_at or _now()
     repo_file = repo_root / skill / 'SKILL.md'
     cache_file = cache_root / skill / 'SKILL.md'
 
+    if not (repo_root / skill / 'SKILL.md').is_file():
+        # Installed with no authoritative source, or the repo dir was deleted while
+        # the skill stayed installed. Either way its text still enters session
+        # context with nothing to review it against.
+        return _terminal(skill, CACHE_ONLY, read_at)
     if not (cache_root / skill).is_dir():
-        return {'skill': skill, 'verdict': NOT_INSTALLED, 'remedy': REMEDY[NOT_INSTALLED],
-                'parts': {}, 'findings': [], 'stability': STABLE,
-                'point_in_time': {'read_at': read_at}}
+        return _terminal(skill, NOT_INSTALLED, read_at)
     if not cache_file.is_file():
-        return {'skill': skill, 'verdict': NOT_INSTALLED,
-                'remedy': 'cache dir exists but holds no SKILL.md - reinstall via '
-                          'package-and-stage-skill (see also step 2d)',
-                'parts': {}, 'findings': [], 'stability': STABLE,
-                'point_in_time': {'read_at': read_at}}
+        # HALF-installed, not un-installed - a distinct, actionable state that the
+        # NOT-INSTALLED label used to hide from the rendered report entirely.
+        return _terminal(skill, BROKEN_INSTALL, read_at)
 
-    repo_raw, cache_raw = repo_file.read_bytes(), cache_file.read_bytes()
+    try:
+        repo_raw, cache_raw = _read_bytes(repo_file), _read_bytes(cache_file)
+    except OSError as exc:
+        return _terminal(skill, UNREADABLE, read_at,
+                         f'{REMEDY[UNREADABLE]} ({type(exc).__name__}: {exc})')
+
     repo_text, cache_text = normalized_text(repo_raw), normalized_text(cache_raw)
     repo_split = dict(zip(PARTS, split_skill_md(repo_text)))
     cache_split = dict(zip(PARTS, split_skill_md(cache_text)))
 
-    ancestors, all_hist = _part_history_hashes(repo_root, f'{skill}/SKILL.md')
+    # Walk git history ONLY if something actually differs. Direction is irrelevant
+    # to an agreeing part, and the walk spawns a subprocess per revision - on a
+    # clean run that was the entire cost of the report.
+    agreed = (IDENTICAL, WHITESPACE_ONLY)
+    relations = {p: part_relation(repo_split[p], cache_split[p]) for p in PARTS}
+    if all(rel in agreed for rel in relations.values()):
+        ancestors = all_hist = None
+    else:
+        ancestors, all_hist = _part_history_hashes(repo_root, f'{skill}/SKILL.md')
 
     parts, findings = {}, []
     for part in PARTS:
-        rel = part_relation(repo_split[part], cache_split[part])
-        if rel == IDENTICAL:
+        rel = relations[part]
+        if rel in agreed:
             direction = IN_SYNC_DIR
         else:
             # Belt-and-braces companion to the guards in _part_history_hashes: an
@@ -331,7 +470,7 @@ def skill_md_report(repo_root: Path, cache_root: Path, skill: str, read_at: str)
         parts[part] = {'relation': rel, 'direction': direction,
                        'repo_sha256': _text_hash(repo_split[part]),
                        'cache_sha256': _text_hash(cache_split[part])}
-        if rel != IDENTICAL:
+        if rel not in agreed:
             findings.append({'kind': PART_DRIFT, 'part': part,
                              'relation': rel, 'direction': direction})
 
@@ -368,8 +507,14 @@ def skill_md_report(repo_root: Path, cache_root: Path, skill: str, read_at: str)
             'repo_desc_chars': len(repo_desc),
             'cache_desc_chars': len(cache_desc),
         },
-        '_cache_hash_at_read': norm_hash(cache_raw),
     }
+
+
+def _cache_skill_dirs(cache_root: Path) -> set:
+    try:
+        return {d.name for d in cache_root.iterdir() if d.is_dir()}
+    except OSError:
+        return set()
 
 
 def report(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
@@ -377,20 +522,40 @@ def report(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
     """Full drift report. Never fabricates: an unreachable cache root yields no
     findings rather than flagging every skill as drifted.
 
+    Enumeration is the UNION of both stores, not just the repo working tree. A
+    repo-only enumeration silently dropped every cache-only skill - installed
+    platform-side with no authoritative source, which is the direction that most
+    warrants review - plus any skill deleted from the repo while still installed.
+
     _after_read is a test seam for the stability re-check (simulates the cache
     moving mid-run, which it demonstrably does).
     """
-    read_at = _now()
-    out = {'read_at': read_at, 'repo_root': str(repo_root), 'cache_root': str(cache_root),
-           'cache_root_unreadable': not cache_root.is_dir(), 'skills': {}}
+    out = {'read_at': _now(), 'repo_root': str(repo_root), 'cache_root': str(cache_root),
+           'cache_root_unreadable': not cache_root.is_dir(),
+           'unknown_skills': [], 'skills': {}}
     if out['cache_root_unreadable']:
         return out
 
-    names = skills if skills is not None else all_skill_dirs(repo_root)
+    repo_skills = {s for s in all_skill_dirs(repo_root) if s not in SKIP}
+    cache_skills = _cache_skill_dirs(cache_root)
+    if skills is not None:
+        # An unknown name used to yield an empty, reassuring report - the worst
+        # possible answer to "is this one skill in sync?".
+        out['unknown_skills'] = sorted(s for s in skills
+                                       if s not in repo_skills | cache_skills)
+        names = [s for s in skills if s not in out['unknown_skills']]
+    else:
+        names = sorted(repo_skills | (cache_skills - STOCK_SKILLS))
+
+    baseline = {}
     for skill in names:
-        if skill in SKIP or not (repo_root / skill / 'SKILL.md').is_file():
-            continue
-        out['skills'][skill] = skill_md_report(repo_root, cache_root, skill, read_at)
+        out['skills'][skill] = skill_md_report(repo_root, cache_root, skill)
+        cache_file = cache_root / skill / 'SKILL.md'
+        if cache_file.is_file():
+            try:
+                baseline[skill] = norm_hash(_read_bytes(cache_file))
+            except OSError:
+                pass
 
     if _after_read is not None:
         _after_read()
@@ -398,18 +563,20 @@ def report(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
     # Re-hash every cache SKILL.md we read. The cache is live - it advanced under a
     # single session between two verification passes on 2026-08-03 - so a verdict
     # computed from a file that moved mid-run must say so rather than be reported flat.
-    for skill, rec in out['skills'].items():
-        before = rec.pop('_cache_hash_at_read', None)
+    for skill, before in baseline.items():
         cache_file = cache_root / skill / 'SKILL.md'
-        if before is None:
-            continue
-        after = norm_hash(cache_file.read_bytes()) if cache_file.is_file() else None
-        rec['stability'] = STABLE if after == before else CHANGED_DURING_RUN
+        try:
+            after = norm_hash(_read_bytes(cache_file)) if cache_file.is_file() else None
+        except OSError:
+            after = None
+        if after != before:
+            out['skills'][skill]['stability'] = CHANGED_DURING_RUN
     out['verified_at'] = _now()
     return out
 
 
-ACTIONABLE = (REPO_NEWER, CACHE_NEWER, MANUAL_MERGE)
+ACTIONABLE = (REPO_NEWER, CACHE_NEWER, MANUAL_MERGE,
+              BROKEN_INSTALL, CACHE_ONLY, UNREADABLE)
 
 
 def render_text(rep: dict) -> str:
@@ -422,6 +589,9 @@ def render_text(rep: dict) -> str:
 
     counts = Counter(r['verdict'] for r in rep['skills'].values())
     lines.append('  ' + ', '.join(f'{v} {k}' for k, v in sorted(counts.items())))
+    if rep.get('unknown_skills'):
+        lines.append(f"  UNKNOWN SKILL(S) - not in either store, nothing was checked: "
+                     f"{', '.join(rep['unknown_skills'])}")
     for skill, r in sorted(rep['skills'].items()):
         if r['verdict'] not in ACTIONABLE and r['stability'] == STABLE:
             continue
@@ -455,6 +625,11 @@ def main() -> None:
     args = ap.parse_args()
     rep = report(skills=args.skills or None)
     print(json.dumps(rep, indent=2) if args.json else render_text(rep))
+    # Exit non-zero when nothing could be checked, so a typo'd skill name or an
+    # unreachable cache can never be mistaken for a clean result by a caller that
+    # only reads the exit code.
+    if rep['cache_root_unreadable'] or rep['unknown_skills']:
+        sys.exit(2)
 
 
 if __name__ == '__main__':
