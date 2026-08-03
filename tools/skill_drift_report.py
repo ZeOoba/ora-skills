@@ -94,6 +94,13 @@ PARTS = ('frontmatter', 'body')
 STOCK_SKILLS = frozenset({
     'docx', 'xlsx', 'pptx', 'pdf', 'mcp-builder', 'skill-creator',
     'schedule', 'setup-cowork', 'consolidate-memory',
+    # 'morning' added 2026-08-03 when the new CACHE-ONLY verdict first surfaced it.
+    # It is platform stock, not ORA paper: zero Oxford/ORA mentions (vs 13 in
+    # lease-form-qc), first-person personal-productivity voice, and it ships its own
+    # Fraunces font assets. Capturing it into this repo would manufacture a bogus
+    # "authoritative source" for a skill ORA does not own, which would then read as
+    # drift on every platform update forever.
+    'morning',
 })
 
 REMEDY = {
