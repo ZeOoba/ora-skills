@@ -7,7 +7,9 @@ description: >
   durable audit memo. Use when Gabriel says: ratify hurdle rate, confirm hurdle rate,
   lock in IRR hurdle, ratify the 8%, make the hurdle rate official, sign off on hurdle
   rate, or capital allocation hurdle ratification. Requires migration 015_hurdle_rate.sql
-  to be applied (adds hurdle_rate_* columns to capital_config). v1.2
+  to be applied (adds hurdle_rate_* columns to capital_config). v1.3 (2026-08-03:
+  audit-memo template stamped Gabriel as "Principal" against CLAUDE.md's ratified
+  "VP Acquisitions" — corrected; caught by doctrine-integrity-probe Check 13)
 ---
 
 # ratify-hurdle-rate
@@ -154,7 +156,7 @@ oxford-command-center repo. Do NOT commit — leave integration to Gabriel.
 ```markdown
 # ORA Hurdle Rate Ratification — [YYYY-MM-DD]
 
-**Ratified by:** Gabriel Goldberg, Principal, Oxford Realty Advisors
+**Ratified by:** Gabriel Goldberg, VP Acquisitions, Oxford Realty Advisors
 **Date:** [YYYY-MM-DD]
 **Hurdle rate:** [X]% unlevered IRR (decimal: [0.XX])
 **Ratification status:** proposed → ratified
