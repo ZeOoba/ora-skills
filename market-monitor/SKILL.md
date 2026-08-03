@@ -1,5 +1,5 @@
 ---
-name: "market-monitor"
+name: market-monitor
 description: "Industrial real estate market monitoring and analysis for Oxford Realty Advisors target markets. Use when researching market conditions, comparing markets, tracking demand drivers, or preparing market intelligence reports. Triggers: market update, market conditions, vacancy rate, industrial market, rent growth, supply pipeline, absorption, market comparison, submarket analysis, cap rate trends. v1.2 (2026-07-25: added a Sourcing Discipline pointer to acquisition-underwriting's vendor/operator-report rule — vendor \"state of the market\" content-marketing reports are directional-only, never a live data source here; no market data or workflow changed). v1.1 (2026-07-08: Cincinnati OH profile added, Madison WI corrected to Primary Markets, Grand Rapids/Richmond/Des Moines entry-cluster profiles added, Toledo/Nashville reclassified as Watch/Adjacent — parity restored with target-markets.json)"
 ---
 
