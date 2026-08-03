@@ -365,6 +365,74 @@ class PointInTimeFiguresAreStamped(FixtureTestCase):
         self.assertEqual(rep['skills']['demo']['stability'], sdr.STABLE)
 
 
+class AbsentGitHistoryNeverPrescribesAPull(FixtureTestCase):
+    """A CACHE-AHEAD direction is INFERRED FROM ABSENCE: the cache content matches
+    no commit anywhere. That inference is only valid if we could actually LOOK.
+    When history is missing rather than searched-and-empty, `absence` degrades from
+    'this was never committed' to 'I could not check' -- and the remedy for
+    CACHE-AHEAD overwrites the authoritative store.
+
+    Found in code review 2026-08-03: `git rev-list HEAD -- <path>` exits 0 with
+    EMPTY stdout for a path with no history, so the empty ancestor set was being
+    treated as proof rather than as ignorance.
+    """
+
+    def _seed(self, repo_body, cache_body, commit=True):
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('desc', repo_body))
+        if commit:
+            self._commit()
+        _write(self.cache / 'demo' / 'SKILL.md', _skill_md('desc', cache_body))
+
+    def test_untracked_repo_file_never_reports_cache_newer(self):
+        """Nothing is committed at this path, so rev-list yields nothing -- which
+        is ignorance, not evidence the cache content is unreviewed-new."""
+        self._init_git()
+        # Commit something else so HEAD exists but demo/SKILL.md has no history.
+        _write(self.repo / 'unrelated.txt', 'x')
+        self._commit()
+        self._seed('BODY\n', 'BODY\nADDED\n', commit=False)
+        r = self._report_for()
+        self.assertEqual(r['parts']['body']['direction'], sdr.UNKNOWN)
+        self.assertEqual(r['verdict'], sdr.MANUAL_MERGE)
+        self.assertNotEqual(r['verdict'], sdr.CACHE_NEWER)
+
+    def test_part_history_hashes_is_none_when_the_path_has_no_history(self):
+        self._init_git()
+        _write(self.repo / 'unrelated.txt', 'x')
+        self._commit()
+        self.assertEqual(sdr._part_history_hashes(self.repo, 'demo/SKILL.md'),
+                         (None, None))
+
+    def test_shallow_clone_does_not_turn_a_repo_deletion_into_cache_newer(self):
+        """The dangerous one. Repo deliberately DELETED a section in c2; the cache
+        still holds the pre-deletion text, which is a textual superset. With full
+        history that is REPO-AHEAD (reimport). In a shallow clone the deletion
+        commit is invisible, so absence would read as CACHE-AHEAD and the pull
+        would RE-INTRODUCE the deleted content into the authoritative store."""
+        self._init_git()
+        self._seed('KEEP\nDELETE ME\n', 'KEEP\nDELETE ME\n')          # c1
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('desc', 'KEEP\n'))
+        self._commit('remove section')                                 # c2
+
+        # Full history: the cache content IS an ancestor -> safe reimport.
+        self.assertEqual(self._report_for()['verdict'], sdr.REPO_NEWER)
+
+        shallow = self.tmp / 'shallow'
+        subprocess.run(['git', 'clone', '-q', '--depth', '1',
+                        self.repo.as_uri(), str(shallow)], capture_output=True)
+        if not (shallow / '.git').exists():
+            self.skipTest('shallow clone unavailable in this environment')
+        r = sdr.report(shallow, self.cache, skills=['demo'])['skills']['demo']
+        self.assertEqual(r['parts']['body']['direction'], sdr.UNKNOWN)
+        self.assertEqual(r['verdict'], sdr.MANUAL_MERGE)
+
+    def test_full_history_still_reports_a_genuine_cache_superset(self):
+        """Guard against over-correcting into never emitting CACHE-NEWER."""
+        self._init_git()
+        self._seed('BODY\n', 'BODY\nADDED\n')
+        self.assertEqual(self._report_for()['verdict'], sdr.CACHE_NEWER)
+
+
 class UnreadableStoreNeverFabricates(FixtureTestCase):
     def test_missing_cache_root_yields_no_drift_findings(self):
         _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))

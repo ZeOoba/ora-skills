@@ -235,11 +235,31 @@ def _part_history_hashes(repo_root: Path, relpath: str):
     frontmatter that matches an old commit while the body does not is classified
     per part instead of collapsing to one whole-file answer.
 
-    (None, None) when git is unavailable or the file is untracked -> UNKNOWN, which
-    combine_verdict refuses to turn into a pull.
+    Returns (None, None) -> direction UNKNOWN -> combine_verdict refuses to turn it
+    into a pull, whenever we CANNOT LOOK rather than looked-and-found-nothing:
+
+      * git unavailable / not a repo             (rev-list errors)
+      * the path has NO history                  (rev-list exits 0, EMPTY stdout)
+      * the repository is SHALLOW                (history deliberately truncated)
+
+    The middle two are the code-review finding of 2026-08-03. CACHE-AHEAD is
+    inferred from ABSENCE - "this content matches no commit anywhere" - and its
+    remedy overwrites the authoritative store. That inference is only sound if the
+    search was capable of finding a match. An untracked path and a shallow clone
+    both return an empty-or-truncated ancestry, which the first cut accepted as
+    proof; an untracked SKILL.md therefore reported CACHE-NEWER, and in a shallow
+    clone a section the repo had deliberately DELETED read as cache-side-new, so
+    the prescribed byte-exact pull would have re-introduced it.
+
+    KNOWN RESIDUAL: if the cache content was committed only on a branch that is
+    later deleted or gc'd, ancestry genuinely no longer contains it and the verdict
+    decays DIVERGENT -> CACHE-AHEAD. That is not detectable from here - git has
+    forgotten. The MANUAL-MERGE superset gate remains the backstop.
     """
     head = _git_text(repo_root, 'rev-list', 'HEAD', '--', relpath)
-    if head is None:
+    if head is None or not head.strip():
+        return None, None
+    if (_git_text(repo_root, 'rev-parse', '--is-shallow-repository') or '').strip() == 'true':
         return None, None
 
     def _hashes(rev_text):
@@ -297,11 +317,16 @@ def skill_md_report(repo_root: Path, cache_root: Path, skill: str, read_at: str)
         if rel == IDENTICAL:
             direction = IN_SYNC_DIR
         else:
+            # Belt-and-braces companion to the guards in _part_history_hashes: an
+            # EMPTY per-part ancestor set means every blob read failed, which is
+            # again "could not look", not "searched and found nothing". Passing it
+            # through as a real (empty) set would let classify_shared_copy skip its
+            # UNKNOWN branch and return CACHE-AHEAD on no evidence at all.
             direction = classify_shared_copy(
                 _text_hash(cache_split[part]),
                 _text_hash(repo_split[part]),
-                ancestors[part] if ancestors else None,
-                all_hist[part] if all_hist else None,
+                ancestors[part] if ancestors and ancestors[part] else None,
+                all_hist[part] if all_hist and all_hist[part] else None,
             )
         parts[part] = {'relation': rel, 'direction': direction,
                        'repo_sha256': _text_hash(repo_split[part]),

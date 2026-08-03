@@ -337,9 +337,22 @@ def _git_blob_bytes(repo_root: Path, rev: str, relpath: str):
 def _file_history_hashes(repo_root: Path, relpath: str):
     """(ancestor_hashes, all_history_hashes) EOL-normalized content hashes of
     relpath across HEAD's ancestry and across all branches. (None, None) when git
-    is unavailable or the file is untracked, so classify_shared_copy -> UNKNOWN."""
+    is unavailable, the path has NO history, or the repo is SHALLOW -- so
+    classify_shared_copy -> UNKNOWN.
+
+    The empty-history and shallow guards were added 2026-08-03 alongside the
+    identical fix in skill_drift_report._part_history_hashes. `git rev-list HEAD --
+    <path>` exits 0 with EMPTY stdout for an untracked path, and the first cut
+    returned an empty SET, which classify_shared_copy accepts as a real search
+    result and resolves to CACHE-AHEAD. That conflates "searched and found nothing"
+    with "could not search". Lower blast radius here than in the drift report (no
+    shared-dep remedy is a byte-exact copy), but it is the same defect and would
+    otherwise mislabel an untracked shared dep as runtime-only content to commit
+    back."""
     head = _git_text(repo_root, 'rev-list', 'HEAD', '--', relpath)
-    if head is None:
+    if head is None or not head.strip():
+        return None, None
+    if (_git_text(repo_root, 'rev-parse', '--is-shallow-repository') or '').strip() == 'true':
         return None, None
 
     def _hashes(rev_text):
