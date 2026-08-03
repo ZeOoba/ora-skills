@@ -11,12 +11,20 @@ qc-gate.md presents its gate as a numbered table, not a checkbox list).
 """
 import io
 import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
-from package_skills import (
+# package_skills.py is a sibling, imported flat rather than package-relative.
+# `python tools/test_package_skills.py` gets tools/ on sys.path for free (script
+# dir), but `python -m unittest tools.test_package_skills` from the repo root does
+# not, and fails with a bare ModuleNotFoundError that reads like a missing
+# dependency rather than a cwd problem. Make both entry points work.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from package_skills import (  # noqa: E402  (deliberate: needs the path bootstrap above)
     REPO,
     _staged_content,
     check_named_counts,
