@@ -369,13 +369,35 @@ class SharedDepGitIntegration(FixtureTestCase):
         self.assertIsNone(pr._git_blob_bytes(self.repo, 'deadbeef', self.DEP))
 
     def test_file_history_hashes_none_none_when_file_never_committed(self):
+        """REVERSED 2026-08-03 (code review). This test previously asserted
+        `set()`, with a comment reasoning that a successful-but-empty rev-list
+        "must not be conflated with git-unavailable". True at the git layer, wrong
+        at the consumer: classify_shared_copy treats a non-None ancestor set as a
+        completed search, so an empty set resolves to CACHE-AHEAD -- "this content
+        was never committed anywhere" -- on no evidence whatsoever. Both cases mean
+        the same thing to a DIRECTION verdict: nothing was searched. The old
+        assertion certified the defect, which is why it survived review.
+
+        Blast radius here is modest (no shared-dep remedy is a byte-exact copy),
+        but the identical bug in skill_drift_report._part_history_hashes made an
+        untracked SKILL.md report CACHE-NEWER and prescribe a destructive pull.
+        """
         _git(self.repo, 'commit', '--allow-empty', '-q', '-m', 'empty init')
-        # repo has commits, but self.DEP was never added -- 'git rev-list HEAD -- DEP'
-        # succeeds with empty output, which must not be conflated with git-unavailable.
         ancestor, all_hist = pr._file_history_hashes(self.repo, self.DEP)
 
-        self.assertEqual(ancestor, set())
-        self.assertEqual(all_hist, set())
+        self.assertIsNone(ancestor)
+        self.assertIsNone(all_hist)
+
+    def test_untracked_shared_dep_is_unknown_not_cache_ahead(self):
+        """End-to-end consequence of the above: with no history to search, the
+        direction must be UNKNOWN ("verify by hand"), not CACHE-AHEAD ("commit the
+        runtime content back to the repo")."""
+        _git(self.repo, 'commit', '--allow-empty', '-q', '-m', 'empty init')
+        ancestor, all_hist = pr._file_history_hashes(self.repo, self.DEP)
+
+        self.assertEqual(
+            pr.classify_shared_copy('cachehash', 'repohash', ancestor, all_hist),
+            'UNKNOWN')
 
 
 class LedgerLineRouting(unittest.TestCase):
