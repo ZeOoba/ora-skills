@@ -1,5 +1,5 @@
 ---
-name: "lease-form-qc"
+name: lease-form-qc
 description: "Pre-execution QC gate for leases drafted on Oxford Realty Advisors own landlord form (Fairground Village Center / 1100 Rarig Ave / Sepich portfolio paper). Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, is this lease ready to send, review our lease draft, new tenant lease, lease from the template, or uploads a DOCX that is an ORA-form lease. Also run before ANY outbound lease goes to a tenant or broker. Scans 42 systemic defects in the ORA base form (dead cross-references, undefined Project/Building/Business Day, missing OpEx billing machinery, obsolete statutory cites, audited-financials trap, missing no-recording/force-majeure/counterparts, Ohio mitigation-duty exposure) and reports PASS/FAIL with severity. Carries ORA's six ratified standing lease positions (2026-08-03) so they apply by default. Distinct from legal-intelligence, which reviews counterparty paper: this audits ORA's OWN paper. v2.1.1"
 ---
 
