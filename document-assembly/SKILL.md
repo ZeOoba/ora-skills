@@ -178,6 +178,7 @@ Always use the correct legal entity:
 - Landlord entity: use the value in the "Property Entity / LLC" field of the Notion Tenant Database record
 - Buyer entity for acquisitions: confirm with Gabriel — typically a newly formed LLC per acquisition
 - Signing authority: "Gabriel Goldberg, Member / Principal" unless the entity's operating agreement specifies otherwise; if uncertain, ask Gabriel
+  - **DO NOT "correct" this to "VP Acquisitions" (Gabriel ruling, 2026-08-03).** This line is ENTITY-EXECUTION CAPACITY, not a firm title. "Member"/"Principal" state the authority under which Gabriel binds an LLC — a term of the operating agreement — whereas "VP Acquisitions" is his Oxford Realty Advisors operating title (ratified canon for correspondence, memos, LOIs; see CLAUDE.md Identity). The two are different registers and the ruling that settled the firm title deliberately does NOT reach this one. `doctrine-integrity-probe` Check 13 greps for `principal` and cannot distinguish them, so it will flag this line as identity drift on every run — that is a KNOWN FALSE POSITIVE, not a defect to fix. Same exemption covers the 21 `Landlord - *` Outlook signatures (`%APPDATA%\Microsoft\Signatures\`), which sign "[LLC], by Oxford Realty Advisors LLC, its Manager / Gabriel Goldberg, Principal" — Gabriel's capacity within the Manager entity, not his job title. If an operating agreement ever names a different capacity, THAT is the authority to follow here, not CLAUDE.md.
 
 ---
 
