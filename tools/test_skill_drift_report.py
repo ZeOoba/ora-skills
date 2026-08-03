@@ -433,6 +433,149 @@ class AbsentGitHistoryNeverPrescribesAPull(FixtureTestCase):
         self.assertEqual(self._report_for()['verdict'], sdr.CACHE_NEWER)
 
 
+class ReviewFindingsRemediation(FixtureTestCase):
+    """Code-review findings 3, 4, 6-10 (2026-08-03). Each test names the finding
+    it pins so a future edit can't quietly undo one."""
+
+    # --- finding 3: a half-installed skill was invisible -------------------
+    def test_cache_dir_without_a_skill_md_is_broken_install_not_not_installed(self):
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        (self.cache / 'demo').mkdir(parents=True)
+        r = self._report_for()
+        self.assertEqual(r['verdict'], sdr.BROKEN_INSTALL)
+
+    def test_broken_install_is_actionable_and_rendered(self):
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        (self.cache / 'demo').mkdir(parents=True)
+        rep = sdr.report(self.repo, self.cache, skills=['demo'])
+        self.assertIn(sdr.BROKEN_INSTALL, sdr.ACTIONABLE)
+        self.assertIn('demo', sdr.render_text(rep))
+
+    def test_never_installed_stays_non_actionable(self):
+        """Guard: BROKEN-INSTALL must not swallow the ordinary never-installed case."""
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        self.assertEqual(self._report_for()['verdict'], sdr.NOT_INSTALLED)
+
+    # --- finding 4: blind to anything absent from the repo working tree ----
+    def test_cache_only_skill_is_reported_not_silently_dropped(self):
+        """Installed platform-side with no authoritative repo source — the single
+        most important direction to surface, and it was invisible."""
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        _write(self.cache / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        _write(self.cache / 'ghost' / 'SKILL.md', _skill_md('g', 'G\n'))
+        rep = sdr.report(self.repo, self.cache)
+        self.assertIn('ghost', rep['skills'])
+        self.assertEqual(rep['skills']['ghost']['verdict'], sdr.CACHE_ONLY)
+        self.assertIn(sdr.CACHE_ONLY, sdr.ACTIONABLE)
+
+    def test_anthropic_stock_skills_are_not_reported_as_cache_only(self):
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        for stock in ('docx', 'xlsx', 'pdf'):
+            _write(self.cache / stock / 'SKILL.md', _skill_md('s', 'S\n'))
+        rep = sdr.report(self.repo, self.cache)
+        for stock in ('docx', 'xlsx', 'pdf'):
+            self.assertNotIn(stock, rep['skills'])
+
+    def test_unknown_skill_argument_is_reported_not_silently_empty(self):
+        """`... report.py dmeo` used to render a clean, empty, reassuring report."""
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        _write(self.cache / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        rep = sdr.report(self.repo, self.cache, skills=['dmeo'])
+        self.assertEqual(rep['unknown_skills'], ['dmeo'])
+        self.assertIn('dmeo', sdr.render_text(rep))
+
+    # --- finding 6: whitespace-only churn manufactured a MANUAL-MERGE ------
+    def test_trailing_newline_only_difference_is_in_sync(self):
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'BODY\n'))
+        _write(self.cache / 'demo' / 'SKILL.md', _skill_md('d', 'BODY'))
+        r = self._report_for()
+        self.assertEqual(r['verdict'], sdr.IN_SYNC)
+
+    def test_blank_line_only_difference_is_in_sync(self):
+        _write(self.repo / 'demo' / 'SKILL.md', '---\nname: d\ndescription: x\n---\n\nA\n\nB\n')
+        _write(self.cache / 'demo' / 'SKILL.md', '---\nname: d\ndescription: x\n---\n\nA\nB\n')
+        r = self._report_for()
+        self.assertEqual(r['verdict'], sdr.IN_SYNC)
+        self.assertEqual(r['parts']['body']['relation'], sdr.WHITESPACE_ONLY)
+
+    def test_whitespace_normalization_never_masks_a_real_content_change(self):
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'A\nB\n'))
+        _write(self.cache / 'demo' / 'SKILL.md', _skill_md('d', 'A\nB\nREAL NEW LINE\n'))
+        self.assertNotEqual(self._report_for()['verdict'], sdr.IN_SYNC)
+
+    # --- finding 7: git history walked even when nothing differs ----------
+    def test_git_history_is_not_walked_when_both_parts_are_identical(self):
+        self._init_git()
+        text = _skill_md('d', 'BODY\n')
+        _write(self.repo / 'demo' / 'SKILL.md', text)
+        self._commit()
+        _write(self.cache / 'demo' / 'SKILL.md', text)
+        calls = []
+        real = sdr._part_history_hashes
+        sdr._part_history_hashes = lambda *a, **k: (calls.append(a), real(*a, **k))[1]
+        try:
+            self.assertEqual(self._report_for()['verdict'], sdr.IN_SYNC)
+        finally:
+            sdr._part_history_hashes = real
+        self.assertEqual(calls, [], 'history walked despite identical parts')
+
+    # --- finding 8: internal key leaked from the public helper -------------
+    def test_skill_md_report_does_not_leak_internal_keys(self):
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        _write(self.cache / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        rec = sdr.skill_md_report(self.repo, self.cache, 'demo', '2026-01-01T00:00:00Z')
+        self.assertFalse([k for k in rec if k.startswith('_')], f'leaked: {list(rec)}')
+
+    # --- finding 9: a BOM defeated frontmatter detection -------------------
+    def test_utf8_bom_does_not_defeat_frontmatter_detection(self):
+        body = 'BODY\n'
+        (self.repo / 'demo').mkdir(parents=True)
+        (self.cache / 'demo').mkdir(parents=True)
+        (self.repo / 'demo' / 'SKILL.md').write_bytes(
+            b'\xef\xbb\xbf' + _skill_md('d', body).encode('utf-8'))
+        (self.cache / 'demo' / 'SKILL.md').write_bytes(_skill_md('d', body).encode('utf-8'))
+        r = self._report_for()
+        self.assertEqual(r['verdict'], sdr.IN_SYNC)
+        self.assertEqual(r['findings'], [])
+
+    # --- finding 10: MAX_DESC duplicated from the packager ----------------
+    def test_max_desc_is_the_packagers_constant(self):
+        import package_skills
+        self.assertIs(sdr.MAX_DESC, package_skills.MAX_DESC)
+
+    # --- speculative: an unreadable file killed the entire run ------------
+    def test_an_unreadable_file_does_not_abort_the_whole_report(self):
+        for name in ('demo', 'locked'):
+            _write(self.repo / name / 'SKILL.md', _skill_md('d', 'B\n'))
+            _write(self.cache / name / 'SKILL.md', _skill_md('d', 'B\n'))
+        real = sdr._read_bytes
+
+        def boom(path):
+            if 'locked' in str(path):
+                raise PermissionError('file is locked by another process')
+            return real(path)
+
+        sdr._read_bytes = boom
+        try:
+            rep = sdr.report(self.repo, self.cache)
+        finally:
+            sdr._read_bytes = real
+        self.assertEqual(rep['skills']['demo']['verdict'], sdr.IN_SYNC)
+        self.assertEqual(rep['skills']['locked']['verdict'], sdr.UNREADABLE)
+        self.assertIn('locked', sdr.render_text(rep))
+
+    # --- speculative: read_at was the run-start stamp, not the file's -----
+    def test_each_skill_carries_its_own_read_stamp(self):
+        for name in ('a_demo', 'b_demo'):
+            _write(self.repo / name / 'SKILL.md', _skill_md('d', 'B\n'))
+            _write(self.cache / name / 'SKILL.md', _skill_md('d', 'B\n'))
+        rep = sdr.report(self.repo, self.cache)
+        for name in ('a_demo', 'b_demo'):
+            stamp = rep['skills'][name]['point_in_time']['read_at']
+            self.assertRegex(stamp, r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$')
+            self.assertGreaterEqual(stamp, rep['read_at'])
+
+
 class UnreadableStoreNeverFabricates(FixtureTestCase):
     def test_missing_cache_root_yields_no_drift_findings(self):
         _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
