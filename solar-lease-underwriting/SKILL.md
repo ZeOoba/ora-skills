@@ -1,5 +1,5 @@
 ---
-name: "solar-lease-underwriting"
+name: solar-lease-underwriting
 description: "Oxford Realty Advisors rooftop solar / community-solar lease underwriting skill. Use when evaluating, negotiating, or reviewing a rooftop solar, community solar, or PPA-style lease proposal (King Energy or any developer) before signature, or auditing an already-executed one. Trigger on: solar lease, rooftop lease, community solar, King Energy, roof rent, solar PPA, Site Access Fee, ITC, SREC, solar rent benchmark, should we lease our roof, solar developer proposal, solar lease economics, King Energy pitch. Companion to legal-intelligence (clause-level contract review) and acquisition-underwriting (whole-property acquisition) — this skill owns the counterparty-economics and rent-benchmarking layer specific to third-party rooftop energy leases. v1.0 (2026-07-26, built from the King Energy Red Branch Rd / Northwood Dr lease review)."
 ---
 
