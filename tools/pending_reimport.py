@@ -38,6 +38,7 @@ Usage:
   python tools/pending_reimport.py clear <skill> [...]    # after confirmed reimport
 """
 import hashlib
+import os
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -174,7 +175,39 @@ def _normalized_hash(path: Path) -> str:
     while the platform import stores LF, so a raw-byte hash reads perpetually
     "drifted" on line endings alone. A raw-only mismatch is in-sync, not drift.
     """
-    return _normalized_hash_bytes(path.read_bytes())
+    return _normalized_hash_bytes(_read_bytes_long(path))
+
+
+def _win_long(path) -> str:
+    """Windows long-path-safe string form of `path`, opting out of the legacy
+    260-char MAX_PATH.
+
+    CACHE_ROOT is a fixed, deeply-nested AppData path, and a skill's own bundled
+    layout stacks a relative path on top of it -- the combination can legitimately
+    exceed 260 chars while the file is genuinely present (confirmed 2026-08-03:
+    masterlease-jurisdiction-rebase's bundled fixture
+    scripts/fixtures/ORA_MasterLease_ShallowBayIndustrial_v2.4.1_TEMPLATE.docx
+    resolves to a 265-char cache path). Plain pathlib silently reports such a path
+    MISSING instead of raising, which is exactly the false "drifted" verdict
+    skill_drifted() produced. The `\\\\?\\` prefix requires a fully resolved,
+    backslash-separated absolute path -- which Path.resolve() already guarantees
+    -- and is safe to apply unconditionally, short paths included.
+    """
+    s = str(Path(path).resolve())
+    return s if s.startswith('\\\\?\\') else '\\\\?\\' + s
+
+
+def _isfile_long(path) -> bool:
+    return os.path.isfile(_win_long(path))
+
+
+def _isdir_long(path) -> bool:
+    return os.path.isdir(_win_long(path))
+
+
+def _read_bytes_long(path) -> bytes:
+    with open(_win_long(path), 'rb') as f:
+        return f.read()
 
 
 def skill_drifted(repo_root: Path, cache_root: Path, skill: str) -> bool:
@@ -190,13 +223,17 @@ def skill_drifted(repo_root: Path, cache_root: Path, skill: str) -> bool:
     cowork-settings and 2 in-progress skills have no cache dir today and are
     not reimport candidates -- flagging them would flood the ledger with
     "never installed" noise indistinguishable from real "went stale" drift.
+
+    Existence and read checks against the cache are long-path-safe (see
+    _win_long()) -- a deep bundled path past MAX_PATH must never read as
+    "missing" when it's actually present.
     """
     cache_dir = cache_root / skill
-    if not cache_dir.is_dir():
+    if not _isdir_long(cache_dir):
         return False
     for rel, src_path in skill_source_files(skill, repo_root).items():
         cache_file = cache_dir / rel
-        if not cache_file.is_file():
+        if not _isfile_long(cache_file):
             return True
         if _normalized_hash(src_path) != _normalized_hash(cache_file):
             return True
@@ -378,9 +415,9 @@ def shared_dep_report(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT):
         ancestor_hashes, all_history_hashes = _file_history_hashes(repo_root, dep)
         rows: dict[str, str] = {}
         for skill in sorted(SHARED_CONSUMERS[dep]):
-            if not (cache_root / skill).is_dir():
+            if not _isdir_long(cache_root / skill):
                 rows[skill] = 'NOT-INSTALLED'
-            elif not (cache_root / skill / dep).is_file():
+            elif not _isfile_long(cache_root / skill / dep):
                 rows[skill] = 'MISSING-IN-CACHE'
             else:
                 rows[skill] = classify_shared_copy(
