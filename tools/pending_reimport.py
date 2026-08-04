@@ -192,6 +192,22 @@ def _win_long(path) -> str:
     skill_drifted() produced. The `\\\\?\\` prefix requires a fully resolved,
     backslash-separated absolute path -- which Path.resolve() already guarantees
     -- and is safe to apply unconditionally, short paths included.
+
+    KNOWN LIMITATION -- UNC paths (noted 2026-08-03 by a second session verifying
+    this fix; latent, NOT live). A UNC path needs the `\\\\?\\UNC\\server\\share`
+    form, with the leading double backslash replaced by `UNC\\`. This function
+    instead prepends the prefix verbatim, so `\\\\srv\\share\\f` becomes
+    `\\\\?\\\\\\srv\\share\\f`, which Windows will not resolve -- the file then reads
+    as MISSING, reintroducing exactly the false "drifted" verdict this helper
+    exists to prevent, and in a form that is harder to spot because the path
+    looks plausible.
+
+    Harmless today: CACHE_ROOT is a drive-letter path under AppData and the repo
+    side is local, so no caller reaches this branch. It matters only if the skill
+    cache or the repo is ever moved to a network share. If that happens, special-
+    case the UNC prefix here rather than at the call sites -- every long-path
+    helper below routes through this one function, so it is the single point of
+    repair.
     """
     s = str(Path(path).resolve())
     return s if s.startswith('\\\\?\\') else '\\\\?\\' + s
