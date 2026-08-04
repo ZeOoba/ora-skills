@@ -12,6 +12,7 @@ tests build synthetic repo/cache fixture trees (never the real ora-skills repo
 or the real AppData runtime cache) so they're deterministic regardless of live
 drift state.
 """
+import os
 import shutil
 import subprocess
 import sys
@@ -28,6 +29,16 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding='utf-8', newline='')
 
 
+def _write_long(path: Path, text: str) -> None:
+    """Like _write(), but long-path-safe for fixture paths that deliberately
+    exceed Windows' 260-char MAX_PATH -- plain pathlib mkdir/write_text fail
+    silently or raise on this machine (no LongPathsEnabled policy), same as the
+    plain is_file()/read_bytes() reads the fix targets."""
+    os.makedirs(pr._win_long(path.parent), exist_ok=True)
+    with open(pr._win_long(path), 'w', encoding='utf-8', newline='') as f:
+        f.write(text)
+
+
 class FixtureTestCase(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix='pending_reimport_test_'))
@@ -37,7 +48,10 @@ class FixtureTestCase(unittest.TestCase):
         self.cache.mkdir()
 
     def tearDown(self):
-        shutil.rmtree(self.tmp, ignore_errors=True)
+        # Long-path-safe: a fixture built past MAX_PATH (see WindowsMaxPath below)
+        # is invisible to a plain rmtree the same way it's invisible to a plain
+        # is_file() -- ignore_errors=True would otherwise leak it on disk forever.
+        shutil.rmtree(pr._win_long(self.tmp), ignore_errors=True)
 
 
 class SweepDrift(FixtureTestCase):
@@ -120,6 +134,91 @@ class SweepDrift(FixtureTestCase):
         drifted = pr.sweep_drift(repo_root=self.repo, cache_root=self.cache / 'does-not-exist')
 
         self.assertEqual(drifted, [])
+
+
+class WindowsMaxPath(FixtureTestCase):
+    """2026-08-03 regression: skill_drifted() used plain pathlib is_file()/
+    read_bytes() against CACHE_ROOT, which silently reports a file MISSING once
+    the resolved path exceeds Windows' legacy 260-char MAX_PATH -- even though
+    the file is genuinely present and byte-identical. Caught live:
+    masterlease-jurisdiction-rebase's bundled fixture
+    (scripts/fixtures/ORA_MasterLease_ShallowBayIndustrial_v2.4.1_TEMPLATE.docx)
+    resolves to a 265-char cache path and was flagged as sweep-drifted with an
+    empty ledger entry, even though `main.log` showed a clean install and a
+    byte-for-byte hash match once read with a `\\\\?\\`-prefixed path. These
+    build a synthetic path past that threshold under a real temp dir (never the
+    live AppData cache) so the test is deterministic regardless of machine or
+    session state.
+
+    Only the CACHE side is pushed past MAX_PATH -- mirroring production, where
+    CACHE_ROOT is a fixed ~150-char deeply-nested AppData path and REPO is not.
+    Deepening the repo side too would just prove pathlib's rglob() also breaks
+    on a deep repo tree, a different (and not live) problem; skill_source_files()
+    enumerates the REPO, which stays short in this codebase."""
+
+    def setUp(self):
+        super().setUp()
+        # Simulate CACHE_ROOT's real depth (the live AppData path is ~150 chars
+        # before a skill name is even appended) without hardcoding the live path.
+        self.cache = self.cache.joinpath(
+            *(f'deep_cache_root_segment_{i}' for i in range(4))
+        )
+        self.cache.mkdir(parents=True)
+
+    def _long_rel(self, skill: str, leaf: str = 'fixture.docx') -> str:
+        segments = []
+        rel = leaf
+        while len(str(self.cache / skill / rel)) <= 260:
+            segments.append('nested_directory_segment')
+            rel = '/'.join(segments + [leaf])
+        assert len(str(self.repo / skill / rel)) <= 260, (
+            'fixture rel path pushed the (short) repo side past MAX_PATH too -- '
+            'this test is meant to isolate the cache-only long-path case'
+        )
+        return rel
+
+    def test_identical_content_past_max_path_is_not_drifted(self):
+        skill = 'long-path-skill'
+        rel = self._long_rel(skill)
+        content = 'identical content\n'
+        _write(self.repo / skill / 'SKILL.md', 'name: long-path-skill\n')
+        _write(self.cache / skill / 'SKILL.md', 'name: long-path-skill\n')
+        _write(self.repo / skill / rel, content)
+        _write_long(self.cache / skill / rel, content)
+        self.assertGreater(len(str(self.cache / skill / rel)), 260)
+        # Sanity: plain pathlib really does false-negative here on this machine --
+        # otherwise this test would pass for the wrong reason (no LongPathsEnabled
+        # policy, matching the live incident).
+        self.assertFalse((self.cache / skill / rel).is_file())
+
+        drifted = pr.sweep_drift(repo_root=self.repo, cache_root=self.cache)
+
+        self.assertNotIn(skill, drifted)
+
+    def test_genuinely_missing_file_past_max_path_is_still_drifted(self):
+        skill = 'long-path-missing-skill'
+        rel = self._long_rel(skill)
+        _write(self.repo / skill / 'SKILL.md', 'name: long-path-missing-skill\n')
+        _write(self.cache / skill / 'SKILL.md', 'name: long-path-missing-skill\n')
+        _write(self.repo / skill / rel, 'only in repo\n')
+        # cache never gets this file at all -- must still read as drifted, not
+        # be masked by the long-path fix.
+
+        drifted = pr.sweep_drift(repo_root=self.repo, cache_root=self.cache)
+
+        self.assertIn(skill, drifted)
+
+    def test_differing_content_past_max_path_is_drifted(self):
+        skill = 'long-path-diff-skill'
+        rel = self._long_rel(skill)
+        _write(self.repo / skill / 'SKILL.md', 'name: long-path-diff-skill\n')
+        _write(self.cache / skill / 'SKILL.md', 'name: long-path-diff-skill\n')
+        _write(self.repo / skill / rel, 'repo version\n')
+        _write_long(self.cache / skill / rel, 'cache version\n')
+
+        drifted = pr.sweep_drift(repo_root=self.repo, cache_root=self.cache)
+
+        self.assertIn(skill, drifted)
 
 
 class Candidates(FixtureTestCase):
