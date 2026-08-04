@@ -1,6 +1,6 @@
 ---
 name: lease-form-qc
-description: "Pre-execution QC gate for leases drafted on Oxford Realty Advisors own landlord form (Fairground Village Center / 1100 Rarig Ave / Sepich portfolio paper). Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, is this lease ready to send, review our lease draft, new tenant lease, lease from the template, or uploads a DOCX that is an ORA-form lease. Also run before ANY outbound lease goes to a tenant or broker. Scans 42 systemic defects in the ORA base form (dead cross-references, undefined Project/Building/Business Day, missing OpEx billing machinery, obsolete statutory cites, audited-financials trap, missing no-recording/force-majeure/counterparts, Ohio mitigation-duty exposure) and reports PASS/FAIL with severity. Carries ORA's six ratified standing lease positions (2026-08-03) so they apply by default. Distinct from legal-intelligence, which reviews counterparty paper: this audits ORA's OWN paper. v2.1.1"
+description: "Pre-execution QC gate for leases drafted on Oxford Realty Advisors own landlord form (Fairground Village Center / 1100 Rarig Ave / Sepich portfolio paper). Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, is this lease ready to send, review our lease draft, new tenant lease, lease from the template, or uploads a DOCX that is an ORA-form lease. Also run before ANY outbound lease goes to a tenant or broker. Scans 51 systemic defects in the ORA base form (dead cross-references, undefined terms, OpEx billing machinery, obsolete statutory cites, Ohio mitigation exposure, F10-F13) with PASS/FAIL severity. Carries ORA's six ratified standing lease positions (2026-08-03). Distinct from legal-intelligence (counterparty paper): this audits ORA's OWN paper. v2.4 (2026-08-04: scanner 46->51 — F14-F18 v2.6 standards + T1 unfilled-token gate; review-packet rule; template pointer v2.6 / Exhibit B v1.2)"
 ---
 
 # Lease Form QC — Oxford Realty Advisors own paper
@@ -23,6 +23,38 @@ do not re-ask unless the deal presents a specific reason to depart.
 | 4 | **Late fee 10% + 18% default interest**, retained. | Known penalty-characterization risk, consciously accepted. Do not silently reduce to 5%. The 18% now carries a lesser-of-maximum-lawful-rate savings clause (added 2026-08-03) — that clause preserves the rate, it does not soften it. |
 | 5 | **Flat Hazardous Materials ban — no retail-product carve-out.** | Keep the environmental section absolute. Maximum landlord leverage is the deliberate choice. When the tenant's use plausibly involves packaged chemicals, note the day-one-breach/waiver risk in the report, but do not insert a carve-out. |
 | 6 | **No extension option** by default. | Preserves mark-to-market flexibility. If an option is ever added, total possible term may exceed three years, triggering the R.C. 5301.01 acknowledgment (notarization) requirement. |
+
+## External AI review intake (formalized v2.2)
+
+When Gabriel supplies one or more external LLM reviews of ORA paper, run this protocol
+(proven on the v2.2 reviews 2026-08-03 and the v2.4.1 ChatGPT/Grok/Gemini reviews
+2026-08-04):
+
+0. **Review-packet rule (added v2.3):** external AI reviews of ORA paper must be run on
+   the master **and Exhibit B (Rules & Regulations) together** — never the bare master.
+   Reviewers who see only the master report the operational package (roof, floor loading,
+   exterior storage, plumbing, docks, utility capacity) as "missing"; this false finding
+   recurred in both the 2026-08-04 v2.4.1 and v2.5 cycles. If a supplied review shows no
+   awareness of Exhibit B, note it in the report and rule those points ALREADY DONE.
+1. **Verify every factual claim against the document XML before ruling** — extracted
+   text hides Word's numbering layer, footers and exhibit attachments; expect
+   hallucinated defects (fake typos, "no numbering", "missing" provisions that exist).
+2. **Screen every suggestion against the six ratified positions** — tenant-side edits
+   (late-fee/default-rate reductions, entry notice, tiered holdover, audit rights,
+   expense caps, SNDA-by-default, tenant self-help/offset, guaranty restructure) are
+   rejected wholesale on landlord paper.
+3. **Check whether the reviewer saw Exhibit B** — operational-package recommendations
+   are usually already implemented there; rule them ALREADY DONE, not accepted.
+4. **Rule each point** with the taxonomy AGREE / PARTIAL / REJECT / ALREADY DONE /
+   FACTUALLY FALSE / DECISION GATE / COUNSEL PASS / DEFER-v3.0, one-to-two-sentence
+   reasoning each, and verify quantitative claims (occurrence counts) directly.
+5. **Route accepted edits** as asserted-count substitutions on the controlled master
+   (never hand-edits to property templates), then rerun this QC and the
+   masterlease-jurisdiction-rebase engine.
+
+Reference adjudications (Claude Lease Project Outputs): 2026-08-04_MasterLease-v2.4.1_External-Review-Adjudication_Memo_v01.docx
+(18 edits + 4 gate adoptions -> master v2.5) and 2026-08-04_MasterLease-v2.5_External-Review-Adjudication_Memo_v01.docx
+(11 edits + Exhibit B v1.2 -> master v2.6; zero gates re-opened).
 
 ## Adjudicating external AI reviews of ORA paper (added v2.1)
 
@@ -78,9 +110,13 @@ Reads `word/document.xml` directly, reports revision encoding, prints one line p
 FAIL with severity (BLOCK / HIGH / MED / LOW), exits non-zero on any failure. Also
 accepts plain text for bulk-scanning historical leases pulled from SharePoint.
 
-Benchmarks: untouched ORA-form lease ≈ **39 of 42 failures**. A lease drafted from
-the v2.3 template = **0**. Anything above 0 on a template-derived lease means a token
-fill introduced a defect. **Scan clean or accepted documents only** — a tracked-change
+Benchmarks (scanner v2.4, 51 checks): untouched ORA-form lease ≈ **39–48 failures**; a
+v2.4.1-derived lease fails exactly F10–F13 (+F14–F18); a v2.5-derived lease fails exactly
+**F14–F18**; a v2.6-derived lease = **0 of 51** (verified 2026-08-04 on the master and all
+four rebased property templates). The scanner also enforces a **T1 token gate**: any
+unfilled `[TOKEN]` in a file whose name lacks `_TEMPLATE` is a BLOCK failure (drafted
+leases must be fully filled; pass `--allow-tokens` to scan a working draft). Anything
+above 0 on a template-derived lease means a token fill introduced a defect. **Scan clean or accepted documents only** — a tracked-change
 redline contains both old and new text and will spuriously fail (~15 checks); run
 `accept_changes.py` first.
 
@@ -150,6 +186,22 @@ CERCLA: 42 U.S.C. § 9061 → **§ 9601**. HMTA: 49 U.S.C. § 1802 → **§ 5101
   acknowledgment. Position 6 keeps terms short; still check every option.
 - Jury waiver and subrogation waiver enforceable; no Ohio commercial deposit statute.
 
+### Class 5a — v2.5 STANDARD PROVISIONS (added v2.2)
+
+- **F10** — venue clause (courts of the county where the Project is located; tokenless, rebase-safe).
+- **F11** — indemnity carve-out for losses waived under the INSURANCE waiver of subrogation.
+- **F12** — "Governmental Agency" and "Building Standard" defined.
+- **F13** — Operating Costs exclude amounts separately billed to / paid directly by tenants.
+
+### Class 5b — v2.6 STANDARD PROVISIONS (added v2.4)
+
+- **F14** — "All Risk (Special Form) Property insurance" — modernized policy-form terminology.
+- **F15** — Landlord exculpation enumerates managers, members, officers, employees, agents.
+- **F16** — assignment/sublease excess-rent (profit) capture, net of documented brokerage.
+- **F17** — continuous prepaid annual HVAC preventative-maintenance contract, copy delivered annually.
+- **F18** — footer carries the ORA Master Lease form-version tag (vintage forensics).
+- **T1** — unfilled-token gate on non-template files (BLOCK; `--allow-tokens` to override).
+
 ### Class 6 — MISSING PROVISIONS
 
 No-recording · Landlord default standard · Force majeure · OFAC · Counterparts/
@@ -186,12 +238,14 @@ if done, re-verify every numeric cross-reference (see F7).
 
 ## Decision gates — never fix unilaterally
 
-Only genuine departures from the six ratified positions get comments now. Externally
-suggested items that remain open for a future counsel pass (not unilateral edits):
-SNDA/non-disturbance framework (lender-driven; pure subordination is the landlord
-default) · Rules & Regulations exhibit (Exhibit B) carrying the operational package ·
-Basic Lease Information summary page · affiliate-assignment carve-out · CC&R
-compliance clause · relocation right.
+Only genuine departures from the six ratified positions get comments now. Gate rulings
+2026-08-04 (Gabriel): ADOPTED into master v2.5 — Basic Lease Information page (body
+controls on conflict), relocation right (Rights Reserved clause (h)), assignment
+recapture, CC&R compliance. REJECTED as defaults (deal-by-deal concessions only) —
+SNDA/non-disturbance (pure subordination remains the landlord default),
+affiliate-assignment carve-out. Remaining counsel-pass items: attorney-in-fact
+estoppel, R.C. Ch. 1923 self-help/notice-to-quit waiver, acceleration formula,
+gross-up methodology.
 
 ## Output
 
@@ -207,10 +261,11 @@ compliance clause · relocation right.
 
 ## Preventing recurrence
 
-Draft new leases from **`ORA_MasterLease_ShallowBayIndustrial_v2.3_TEMPLATE.docx`**
-(0 of 42; all six positions encoded; deal terms tokenized; parcel-number pattern
+Draft new leases from **`ORA_MasterLease_ShallowBayIndustrial_v2.6_TEMPLATE.docx`** (accept the
+tracked v2.5→v2.6 changes when drafting) with
+**`ORA_MasterLease_ExhibitB_RulesAndRegulations_v1.2_TEMPLATE.docx`** attached as Exhibit B
+(0 of 46; all six positions encoded; BLI page, venue, subrogation carve-out, OpEx separate-billing exclusion included; deal terms tokenized; parcel-number pattern
 included). Never copy the last executed lease. After filling tokens, run this QC
 anyway — token fills introduce their own errors. **After inserting or removing any
 section, re-verify every numeric cross-reference** — that is exactly how the v2.2
 Section 24 defect was born.
-

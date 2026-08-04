@@ -2,7 +2,7 @@
 """Tests for rebase.py (masterlease-jurisdiction-rebase v1.1).
 
 Three cases required by the 2026-08-03 Master Lease conformance session close-out:
-1. Parity against a known master — the real OH v2.4.1 controlled master rebases
+1. Parity against a known master — the real OH v2.6 controlled master rebases
    cleanly (no anchor drift, no post-check failure) into a state-conformed template.
 2. article() unit cases, including the "an Ohio" / "a Utah" fix that motivated v1.1.
 3. Fail-closed on a missing entity_state field and on a RESEARCH-REQUIRED state.
@@ -17,7 +17,7 @@ import unittest
 
 HERE = pathlib.Path(__file__).resolve().parent
 CONFIG = HERE.parent / "config"
-FIXTURE_MASTER = HERE / "fixtures" / "ORA_MasterLease_ShallowBayIndustrial_v2.4.1_TEMPLATE.docx"
+FIXTURE_MASTER = HERE / "fixtures" / "ORA_MasterLease_ShallowBayIndustrial_v2.6_TEMPLATE.docx"
 
 sys.path.insert(0, str(HERE))
 import rebase  # noqa: E402
@@ -101,7 +101,7 @@ class FailClosedTests(unittest.TestCase):
 
 
 class ParityAgainstKnownMasterTests(unittest.TestCase):
-    """The real OH v2.4.1 controlled master rebases cleanly for every ratified property."""
+    """The real OH v2.5 controlled master rebases cleanly for every ratified property."""
 
     @classmethod
     def setUpClass(cls):
@@ -112,10 +112,16 @@ class ParityAgainstKnownMasterTests(unittest.TestCase):
 
     def _rebase_one(self, key, out_dir):
         P = self.properties[key]
-        L = self.states[P["state_code"]]
-        doc = Document(str(FIXTURE_MASTER))
-        rebase.apply(doc, rebase.build_rules(P, L))
-        rebase.insert_savings_clause(doc)
+        # Single-tenant variants are anchored to the master's own state and take
+        # no overlay (mirrors main()); everything else requires a ratified overlay.
+        L = self.states.get(P["state_code"], {}) if P.get("variant") == "single-tenant" \
+            else self.states[P["state_code"]]
+        # Routes through rebase.rebase_one() -- the same pipeline main() uses -- so a
+        # step added there (e.g. the NNN override) can't drift out of sync with its
+        # own test again the way it did the first time this override was added
+        # (2026-08-04: this test called apply()+insert_savings_clause() directly and
+        # missed the new convert_to_nnn() step main() had).
+        doc = rebase.rebase_one(FIXTURE_MASTER, P, L)
         out = out_dir / f"{key}.docx"
         doc.save(str(out))
         rebase.post_check(out, P, L)
@@ -132,6 +138,12 @@ class ParityAgainstKnownMasterTests(unittest.TestCase):
                 with self.subTest(property=key):
                     out, P, L = self._rebase_one(key, out_dir)
                     full = "\n".join(p.text for p in Document(str(out)).paragraphs)
+                    if P.get("variant") == "single-tenant":
+                        # Generic OH-anchored variant: keeps Ohio and its tokens;
+                        # post_check() inside _rebase_one carries the assertions.
+                        self.assertIn("the entire building situated at [PREMISES ADDRESS]", full)
+                        self.assertIn(rebase.SAVINGS_TITLE, full)
+                        continue
                     self.assertNotIn("Ohio", full)
                     self.assertIn(P["entity"], full)
                     self.assertIn(L["state"], full)
