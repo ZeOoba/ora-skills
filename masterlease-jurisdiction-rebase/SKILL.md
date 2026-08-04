@@ -1,6 +1,6 @@
 ---
-name: "masterlease-jurisdiction-rebase"
-description: "Rebase Oxford Realty Advisors jurisdiction-conformed Master Lease property templates onto a new master revision in one command, and generate state-conformed (MD/MO) property templates from the OH-anchored master. Use whenever the user mentions: new master lease version, rebase the lease templates, regenerate the MD/MO templates, jurisdiction overlay, conform the lease to a state, state-conformed lease template, update property lease forms, lease template for Easton / Salisbury / Northwood / Raytown / Columbia, or uploads a new ORA_MasterLease_ShallowBayIndustrial_v*.docx. Also use when adding a NEW property or state overlay, or converting a property to NNN. Edits the master DOCX in place (native formatting preserved) with asserted-count substitutions — the anti-contamination discipline from the 2026-08-03 propagation audit. Companion to lease-form-qc (which QCs drafted leases); this skill produces the templates leases are drafted FROM. v1.4 (2026-08-04: workspace hygiene; anchors keyed to v2.5)"
+name: masterlease-jurisdiction-rebase
+description: "Rebase Oxford Realty Advisors jurisdiction-conformed Master Lease property templates onto a new master revision in one command, and generate state-conformed (MD/MO) property templates from the OH-anchored master. Use whenever the user mentions: new master lease version, rebase the lease templates, regenerate the MD/MO templates, jurisdiction overlay, conform the lease to a state, state-conformed lease template, update property lease forms, lease template for Easton / Salisbury / Northwood / Raytown / Columbia, or uploads a new ORA_MasterLease_ShallowBayIndustrial_v*.docx. Also use when adding a NEW property or state overlay, or converting a property to NNN. Edits the master DOCX in place with asserted-count substitutions (2026-08-03 anti-contamination discipline). Companion to lease-form-qc (which QCs drafted leases); this skill produces the templates leases are drafted FROM. v1.6 (2026-08-04: single-tenant variant via config (OH-ST-NNN); fixture v2.6; --out required; ora_docx_redline.py)"
 ---
 
 # Master Lease Jurisdiction Rebase — Oxford Realty Advisors
@@ -34,8 +34,8 @@ happened twice on 2026-08-03 (a v2.1 cache was used while v2.4 was canonical).
   If the connected SharePoint search tool doesn't index that path on a given surface
   (observed 2026-08-04 — the connector resolved the folder to 9050 Red Branch Road's own
   lease archive, not the portfolio master), fall back to this skill's bundled
-  `scripts/fixtures/ORA_MasterLease_ShallowBayIndustrial_v2.5_TEMPLATE.docx`, which the
-  test suite validates against canonical v2.5 — but say so explicitly in the output and
+  `scripts/fixtures/ORA_MasterLease_ShallowBayIndustrial_v2.6_TEMPLATE.docx`, which the
+  test suite validates against canonical v2.6 — but say so explicitly in the output and
   flag that production use should be confirmed against the live copy first.
 - Freshness check before any run: compare the version string in the supplied master's
   filename (`v2.5` etc.) against the newest version mentioned anywhere in the session
@@ -179,7 +179,49 @@ ZIPs, suites, parcel/tax-account numbers, per-building Northwood RSF, and the Ra
 block are deliberately tokenized: fill at drafting time from the county record or PM
 agreement, and run `lease-form-qc` on every drafted lease before it leaves the office.
 
+## Single-tenant variant (added v1.6)
+
+`"variant": "single-tenant"` in a `config/properties.json` entry (currently only
+**OH-ST-NNN**, paired with `"lease_structure": "NNN"`) regenerates the
+OH-SingleTenant-NNN template family from the master: entire-building demise
+(incl. paved/yard areas), 100% Proportionate Share, gross-up and "Tenant's
+Allocation" removed, exclusive parking, tenant site-services maintenance
+addendum — then the NNN conversion and savings clause. Variant entries stay
+generic-tokenized (no entity/premises/PM fills; tokens fill at drafting time),
+skip the state-overlay gate (the family is anchored to the master's own state),
+and get their own post-check branch (token/residue/marker assertions). Delta set
+recovered 2026-08-04 by paragraph diff of the v2.4.1 variant against its v2.4.1
+base; engine output verified text-identical to the hand-built v2.6 canonical.
+Relocation clause (h) is retained as an inert option by ratified judgment call.
+
+## Shared tracked-change editor (added v1.5)
+
+`scripts/ora_docx_redline.py` — the reusable asserted-count tracked-change editor
+(`replace` / `insert_after` / `insert_paragraphs_after` ops from a JSON spec, real
+`<w:ins>`/`<w:del>` with author+date). Use it for every master revision instead of
+rebuilding the machinery ad hoc (it was reimplemented three times across the v2.3,
+v2.5 and v2.6 builds before extraction). Anchors must sit inside one `<w:t>` (run
+`merge_runs.py` first); always validate output with the docx skill's `validate.py
+--original --author`. ANCHOR DRIFT failures follow the same never-loosen rule as
+`rebase.py`.
+
 ## Changelog
+
+- v1.6 (2026-08-04): Single-tenant variant support. `single_tenant_rules()` /
+  `convert_to_single_tenant()` + `variant` config field + OH-ST-NNN entry;
+  `rebase_one`, `post_check`, `main()` and the parity test all branch on the
+  variant; `--all` now emits five templates. First run's ST_ALLOC_DEF constant
+  fired ANCHOR DRIFT against the real master (reconstructed from memory instead
+  of extracted) — corrected from the document text; the never-loosen discipline
+  working as designed. 6/6 tests green; engine variant output text-identical to
+  the 2026-08-04 hand-built canonical.
+
+- v1.5 (2026-08-04): Phase-3 close of the v2.5→v2.6 revision cycle. (1) Parity fixture
+  swapped v2.5 → v2.6 (accepted-changes copy of the redline master); v2.6 rebase of all
+  four properties ran with ZERO anchor drift — no rekey needed, v1.3 anchor set carries
+  forward unchanged. (2) `--out` is now `required=True` in packaged source — closes the
+  v1.4 PENDING one-liner. (3) `scripts/ora_docx_redline.py` added (see section above).
+  All 6 tests green against the v2.6 fixture.
 
 - v1.4 (2026-08-04): Workspace & output hygiene section added after the 2026-08-04
   superseded-file sweep of `Business/Leases All properties/` (491 files; ~450 were
@@ -187,7 +229,8 @@ agreement, and run `lease-form-qc` on every drafted lease before it leaves the o
   template copies at the folder root). Rules: working artifacts in session scratch only;
   no short-name copies; `--out` always explicit; end-of-run debris sweep to `/archive/`.
   **PENDING source patch (ora-skills repo, Code surface):** `scripts/rebase.py`
-  `--out` default `"."` → `required=True` — one line, `main()` argparse block. Runtime
+  `--out` default `"."` → `required=True` — one line, `main()` argparse block. *(Applied
+  in the v1.5 packaged source; repo-side port still pending.)* Runtime
   SKILL.md updated ahead of source per the v1.1.2 reconciliation precedent; reconcile on
   the next package-and-stage run and clear the PENDING_REIMPORT note. No anchors,
   configs, or engine behavior changed in v1.4.

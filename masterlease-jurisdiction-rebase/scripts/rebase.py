@@ -189,6 +189,77 @@ def convert_to_nnn(doc):
         target._p.replace(target_pPr, new_pPr)
 
 
+
+
+# --- Single-tenant variant override -----------------------------------------
+# Encodes the OH-SingleTenant-NNN template family's deltas vs. the multi-tenant
+# master, recovered 2026-08-04 by paragraph diff of the v2.4.1 variant against
+# the v2.4.1 base and verified on the v2.6 rebuild (25/25 structural checks,
+# lease_qc 0/51). A config entry opts in via "variant": "single-tenant" (always
+# paired with "lease_structure": "NNN" for this family). The variant stays
+# generic-tokenized: entity/premises/PM fills are SKIPPED and are filled at
+# drafting time. Judgment calls ratified 2026-08-04: the master's broader
+# capital-amortization clause supersedes the old roof/structure-specific
+# sentence; the gross-up sentence and the "Tenant's Allocation" definition are
+# removed (meaningless at a 100% share with exclusive parking); relocation
+# clause (h) is retained as an inert option.
+
+ST_ALLOC_DEF = (
+    "  For purposes hereof, \u201cTenant\u2019s Allocation\u201d shall be equal to a portion of the total "
+    "number of available parking spaces in the Project based upon the ratio of (i) the rentable "
+    "square footage of the Demised Premises compared to (ii) the rentable square footage for the "
+    "entire Project. "
+)
+
+
+def single_tenant_rules():
+    return [
+        ("approximately [PREMISES RSF] square feet of rentable area in the building situated at "
+         "[PREMISES ADDRESS] (such rentable area being hereinafter referred to as the \"Demised Premises\")",
+         "the entire building situated at [PREMISES ADDRESS], containing approximately [BUILDING RSF] "
+         "square feet of rentable area, together with all adjacent paved, parking and yard areas "
+         "serving it (such building and areas being hereinafter referred to as the \"Demised Premises\")", 1),
+        ("Demised Premises: [PREMISES ADDRESS] \u2014 approximately [PREMISES RSF] rentable square feet",
+         "Demised Premises: [PREMISES ADDRESS] \u2014 the entire building, approximately [BUILDING RSF] "
+         "rentable square feet", 1),
+        (" If the Building is not fully occupied, for purposes of calculating Tenant's Proportionate "
+         "Share, Landlord may \"gross up\" Operating Costs to what they would have been if the Building "
+         "or Project had been fully occupied. ",
+         " ", 1),
+        ("\"Tenant's Proportionate Share\" shall mean the proportion that the rentable square footage of "
+         "the Demised Premises bears to the total rentable square footage of the Building, being "
+         "[BUILDING RSF] square feet (Franklin County Auditor Parcel No. [PARCEL NO]). Tenant's "
+         "Proportionate Share is estimated to be [PROPORTIONATE SHARE]%.",
+         "\"Tenant's Proportionate Share\" shall mean one hundred percent (100%), Tenant leasing the "
+         "entire Building, containing [BUILDING RSF] square feet (Franklin County Auditor Parcel No. "
+         "[PARCEL NO]).", 1),
+        ("Tenant\u2019s Proportionate Share: [PROPORTIONATE SHARE]%",
+         "Tenant\u2019s Proportionate Share: 100% (entire Building)", 1),
+        ("Tenant shall be entitled to a non-exclusive right to use the unreserved parking spaces in "
+         "the Project adjacent to the Building in order to satisfy the general operational requirements "
+         "of the Demised Premises in an amount not to exceed the Tenant\u2019s Allocation (hereinafter "
+         "defined).  Notwithstanding the foregoing, Landlord reserves the right to designate specific "
+         "spaces for Tenant\u2019s use or use by any other occupant of the Project and to prohibit "
+         "Tenant\u2019s use of other designated spaces.",
+         "Tenant shall have the exclusive right to use the parking areas in the Project for Tenant's "
+         "employees, agents, customers and invitees, subject to the terms of this Lease.", 1),
+        (ST_ALLOC_DEF, "", 1),
+        ("prevented by Tenant\u2019s performance of its maintenance obligations.",
+         "prevented by Tenant\u2019s performance of its maintenance obligations.  In addition, Tenant, at "
+         "Tenant's sole cost and expense, shall provide all janitorial service, snow and ice removal, "
+         "lawn mowing, landscaping, exterior sweeping and pest control for the Demised Premises and "
+         "the Project, shall keep all parking and yard areas clean and free of debris and free from "
+         "accumulation of snow and ice, and shall maintain the Demised Premises in a first-class and "
+         "fully operative condition.", 1),
+    ]
+
+
+def convert_to_single_tenant(doc):
+    """Rewrite the multi-tenant master into the single-tenant variant (entire-building
+    demise, 100% share, exclusive parking, tenant site services). Fails loudly on
+    anchor drift, same discipline as apply()."""
+    apply(doc, single_tenant_rules())
+
 def build_rules(P, L):
     st = L["state"]
     es = P.get("entity_state")
@@ -249,6 +320,31 @@ def build_rules(P, L):
 def post_check(path, P, L):
     full = "\n".join(p.text for p in Document(str(path)).paragraphs)
     errs = []
+    if P.get("variant") == "single-tenant":
+        for tok in ("[PREMISES RSF]", "[PROPORTIONATE SHARE]", "[BASE YEAR]"):
+            if tok in full:
+                errs.append(f"single-tenant variant but {tok} token still present")
+        for residue in ("gross up", "Allocation", "non-exclusive"):
+            if residue in full:
+                errs.append(f"single-tenant variant but multi-tenant residue: {residue}")
+        for marker in ("the entire building situated at [PREMISES ADDRESS]",
+                       "one hundred percent (100%), Tenant leasing the entire Building",
+                       "janitorial service, snow and ice removal"):
+            if marker not in full:
+                errs.append(f"single-tenant marker missing: {marker[:50]}")
+        for tok in ("[LANDLORD ENTITY]", "[PREMISES ADDRESS]"):
+            if tok not in full:
+                errs.append(f"generic variant should retain token {tok}")
+        if SAVINGS_TITLE not in full:
+            errs.append("savings clause missing")
+        if P.get("lease_structure") == "NNN":
+            if "OPERATING COSTS, TAXES AND INSURANCE" not in full:
+                errs.append("NNN heading missing")
+            if "\u201cInsurance\u201d " not in full and '"Insurance" ' not in full:
+                errs.append("Insurance defined term missing")
+        if errs:
+            sys.exit(f"POST-CHECK FAILED for {path.name}: {errs}")
+        return
     if ANCHOR_STATE in full:
         errs.append(f"{ANCHOR_STATE} residue present")
     for tok in ("[STATE]", "[LANDLORD ENTITY]", "[PREMISES ADDRESS]"):
@@ -274,6 +370,14 @@ def rebase_one(master_path, P, L):
     and the test suite, so a step added here (like the NNN override) can't drift
     out of sync between the CLI path and its own tests again."""
     doc = Document(str(master_path))
+    if P.get("variant") == "single-tenant":
+        # Generic-tokenized variant: no entity/premises/PM fills, no state overlay
+        # (the family is anchored to the master's own state). Footer token stays.
+        convert_to_single_tenant(doc)
+        if P.get("lease_structure") == "NNN":
+            convert_to_nnn(doc)
+        insert_savings_clause(doc)
+        return doc
     apply(doc, build_rules(P, L))
     if P.get("lease_structure") == "NNN":
         convert_to_nnn(doc)
@@ -310,7 +414,9 @@ def main():
     for k in keys:
         P = props[k]
         L = states.get(P["state_code"])
-        if not L or L.get("RESEARCH_REQUIRED"):
+        if P.get("variant") == "single-tenant":
+            L = L or {}
+        elif not L or L.get("RESEARCH_REQUIRED"):
             sys.exit(f"{k}: state overlay {P['state_code']} is RESEARCH-REQUIRED — complete "
                      "config/state_overlays.json with fresh statutory research first (fail-closed by design).")
         doc = rebase_one(a.master, P, L)
