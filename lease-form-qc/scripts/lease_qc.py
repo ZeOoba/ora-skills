@@ -17,11 +17,15 @@ def text_of(path):
             has_del = '<w:del ' in xml
             has_strike = 'w:strike' in xml
             has_cmt = any(n.endswith('word/comments.xml') for n in z.namelist())
+            ftr = ''.join(z.read(n).decode('utf-8', 'replace')
+                          for n in z.namelist() if re.search(r'word/footer\d*\.xml$', n))
         t = re.sub(r'<w:p[ >]', '\n<w:p ', xml)
         t = re.sub(r'<[^>]+>', '', t)
         for a, b in [('&amp;', '&'), ('&lt;', '<'), ('&gt;', '>'),
                      ('&quot;', '"'), ('&apos;', "'")]:
             t = t.replace(a, b)
+        ftr_t = re.sub(r'<[^>]+>', '', ftr)
+        t += '\n[[FOOTER]] ' + ftr_t
     else:
         t = open(path, encoding='utf-8', errors='replace').read()
         has_ins = has_del = has_strike = has_cmt = False
@@ -108,21 +112,53 @@ CHECKS = [
             and not re.search(r'maximum rate permitted by', t, re.I)),
  ("F9","LOW","Non-breaking-space artifacts in operative text",
   lambda t: '\xa0' in t),
+ ("F10","MED","No venue clause (courts of the county where the Project is located) — v2.5 standard",
+  lambda t: 'Venue for any action' not in t),
+ ("F11","HIGH","Indemnity lacks waiver-of-subrogation carve-out (insurer can bypass the mutual waiver) — v2.5 standard",
+  lambda t: 'waived pursuant to the waiver of subrogation' not in t),
+ ("F12","MED","'Governmental Agency' or 'Building Standard' used but undefined — v2.5 standard",
+  lambda t: (('Governmental Agency' in t and not _defined(t, 'Governmental Agency'))
+             or (re.search(r'[Bb]uilding [Ss]tandard', t) and not _defined(t, 'Building Standard')))),
+ ("F13","MED","Operating Costs lack separate-billing exclusion (flat-fee water double-recovery risk) — v2.5 standard",
+  lambda t: 'increase over base year' in t and 'shall not include amounts separately billed' not in t),
  ("F6","LOW","Late fee runs on Business Days, cure on calendar days, and 'Business Day' is undefined",
   lambda t: bool(re.search(r'five \(5\) Business Days following the date when due', t, re.I))
             and not _defined(t, 'Business Days?')),
+ ("F14","MED","Insurance not modernized: 'All Risk' without '(Special Form)' — v2.6 standard",
+  lambda t: 'All Risk' in t and '(Special Form)' not in t),
+ ("F15","MED","Landlord exculpation lacks manager/member/officer/agent enumeration — v2.6 standard",
+  lambda t: 'No other person or entity shall be liable' in t
+            and 'manager, member, officer, employee or agent of Landlord' not in t),
+ ("F16","MED","Assignment/sublease lacks excess-rent (profit) capture — v2.6 standard",
+  lambda t: bool(re.search(r'assign or otherwise transfer this Lease', t, re.I))
+            and 'of such excess' not in t),
+ ("F17","MED","HVAC servicing without continuous annual preventative-maintenance contract — v2.6 standard",
+  lambda t: bool(re.search(r'serviced on a semiannual basis', t, re.I))
+            and 'preventative-maintenance contract' not in t),
+ ("F18","LOW","Footer lacks the ORA Master Lease form-version tag — v2.6 standard",
+  lambda t: '[[FOOTER]]' in t and 'ORA Master Lease v' not in t.split('[[FOOTER]]')[1]),
 ]
 
 SEV_ORDER = {"BLOCK": 0, "HIGH": 1, "MED": 2, "LOW": 3}
 
-def scan(path):
+TOKEN_RE = re.compile(r"\[[A-Z][A-Z0-9 /,.'&-]{2,}\]")
+
+def scan(path, allow_tokens=False):
+    import os
     t, (ins, dele, strike, cmt) = text_of(path)
     enc = ("OOXML tracked changes" if (ins or dele)
            else "compare-tool formatting (strikethrough)" if strike else "clean")
     print(f"\n{'='*78}\n{path}")
     print(f"  revision encoding: {enc}{'  + counsel comments present' if cmt else ''}")
     fails = [c for c in CHECKS if c[3](t)]
-    for cid, sev, label, _ in sorted(CHECKS, key=lambda c: SEV_ORDER[c[1]]):
+    if not allow_tokens and '_TEMPLATE' not in os.path.basename(path).upper():
+        toks = sorted(set(TOKEN_RE.findall(t)))
+        if toks:
+            fails.append(("T1", "BLOCK",
+                          f"Unfilled template tokens remain ({len(toks)}): "
+                          + ', '.join(toks[:6]) + ('…' if len(toks) > 6 else ''),
+                          lambda t: True))
+    for cid, sev, label, _ in sorted(CHECKS + [f for f in fails if f[0] == "T1"], key=lambda c: SEV_ORDER[c[1]]):
         st = "FAIL" if (cid, sev, label) in [(f[0], f[1], f[2]) for f in fails] else "pass"
         if st == "FAIL":
             print(f"  [{sev:<5}] {cid:<5} FAIL  {label}")
@@ -132,6 +168,9 @@ def scan(path):
     return len(fails)
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
+    args = sys.argv[1:]
+    allow = "--allow-tokens" in args
+    args = [a for a in args if a != "--allow-tokens"]
+    if not args:
         sys.exit(__doc__)
-    sys.exit(1 if sum(scan(p) for p in sys.argv[1:]) else 0)
+    sys.exit(1 if sum(scan(p, allow_tokens=allow) for p in args) else 0)
