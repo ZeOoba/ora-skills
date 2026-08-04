@@ -15,6 +15,7 @@ diff the masters, update the anchor here or in config/, log it in SKILL.md chang
 """
 import argparse, copy, json, pathlib, re, sys
 from docx import Document
+from docx.oxml.ns import qn
 
 HERE = pathlib.Path(__file__).resolve().parent
 CONFIG = HERE.parent / "config"
@@ -94,6 +95,100 @@ def article(state_name):
     return "an" if state_name[:1].upper() in "AEIO" else "a"
 
 
+# --- NNN structure override -------------------------------------------------
+# The master's default expense structure is modified gross with a calendar base
+# year (ratified standing position #1, 2026-08-03). A property opts out of that
+# default only via an explicit "lease_structure": "NNN" field in its
+# config/properties.json entry, sourced from Gabriel's direction and the
+# property's own established leasing practice — never applied by inference from
+# an executed lease alone. 9050 Red Branch Road (MD-COL) is the first such
+# override (2026-08-04): Gabriel confirmed the building runs NNN leases
+# building-wide, consistent with the LINERX/Eddie Woo Park executed lease and
+# ~15 years of suite leases on Muirkirk Properties' own NNN form. This does not
+# alter any of the other five ratified positions (co-tenancy, 1.0x deposit, 10%
+# late fee / 18% default rate + savings clause, flat Hazardous Materials ban, no
+# extension option) — only the expense-recovery mechanism.
+
+NNN_INSURANCE_DEF = (
+    "shall mean all premiums and other costs paid or incurred by Landlord for the property, "
+    "liability, rent-loss, and other insurance policies Landlord elects to carry on or in connection "
+    "with the Project, the Building, or the Premises, as further described in the section of this "
+    "Lease entitled “INSURANCE.”"
+)
+
+
+def nnn_text_rules():
+    return [
+        ("Base Year: [BASE YEAR]", "Base Year: Not applicable — full NNN", 1),  # v2.5 BLI line
+        ("\tOPERATING COSTS AND TAXES.",
+         "\tOPERATING COSTS, TAXES AND INSURANCE.", 1),
+        ("Tenant shall pay to Landlord, Tenant's Proportionate Share (hereinafter defined) of the "
+         "increase over base year of all Operating Costs (hereinafter defined) and/or Taxes "
+         "(hereinafter defined). Base year shall be defined as the calendar year in which the "
+         "Commencement Date occurs, being the [BASE YEAR] calendar year.  ",
+         "Tenant shall pay to Landlord, as additional rent, Tenant's Proportionate Share (hereinafter "
+         "defined) of all Operating Costs (hereinafter defined), Taxes (hereinafter defined), and "
+         "Insurance (hereinafter defined), without regard to any base year -- i.e., on a full, triple "
+         "net (NNN) basis from the Commencement Date, consistent with Landlord's established leasing "
+         "practice at the Building.  ",
+         1),
+        ("Landlord may from time to time deliver to Tenant a written estimate of Tenant’s "
+         "Proportionate Share of the increase in Operating Costs and Taxes for the then-current "
+         "calendar year",
+         "Landlord may from time to time deliver to Tenant a written estimate of Tenant’s "
+         "Proportionate Share of Operating Costs, Taxes, and Insurance for the then-current calendar "
+         "year",
+         1),
+        ("Landlord shall deliver to Tenant a statement setting forth the actual Operating Costs and "
+         "Taxes for that year, Tenant’s Proportionate Share of the increase over the base year, "
+         "and the estimated amounts paid by Tenant.",
+         "Landlord shall deliver to Tenant a statement setting forth the actual Operating Costs, "
+         "Taxes, and Insurance for that year, Tenant’s Proportionate Share thereof, and the "
+         "estimated amounts paid by Tenant.",
+         1),
+    ]
+
+
+def convert_to_nnn(doc):
+    """Rewrite the modified-gross OPERATING COSTS AND TAXES article into a full NNN
+    (Operating Costs + Taxes + Insurance, no base year) structure. Fails loudly on
+    anchor drift, same discipline as apply()."""
+    apply(doc, nnn_text_rules())
+
+    paras = doc.paragraphs
+    tax_idx = next((i for i, p in enumerate(paras) if p.text.startswith("“Taxes” ")
+                     or p.text.startswith("\"Taxes\" ")), None)
+    opcost_idx = next((i for i, p in enumerate(paras) if p.text.startswith("“Operating Costs” ")
+                        or p.text.startswith("\"Operating Costs\" ")), None)
+    if tax_idx is None or opcost_idx is None:
+        sys.exit("ANCHOR DRIFT: could not locate the Operating Costs / Taxes definition paragraphs "
+                  "to insert the Insurance definition — diff the master and update convert_to_nnn().")
+    ins_idx = tax_idx + 2
+    if ins_idx >= len(paras) or paras[ins_idx].text.strip() != "":
+        sys.exit(f"ANCHOR DRIFT: expected a blank spacer paragraph at index {ins_idx} (two after the "
+                  "Taxes definition) to hold the new Insurance definition; found non-blank or "
+                  "out-of-range content. Diff the master and update convert_to_nnn().")
+
+    target = paras[ins_idx]
+    for r in list(target.runs):
+        r._element.getparent().remove(r._element)
+    r0 = target.add_run("“Insurance” ")
+    r0.bold = True
+    r1 = target.add_run(NNN_INSURANCE_DEF)
+    r1.bold = False
+
+    model_pPr = paras[opcost_idx]._p.find(qn("w:pPr"))
+    target_pPr = target._p.find(qn("w:pPr"))
+    if model_pPr is not None and target_pPr is not None:
+        new_pPr = copy.deepcopy(model_pPr)
+        target_rPr = target_pPr.find(qn("w:rPr"))
+        if target_rPr is not None:
+            new_rPr = new_pPr.find(qn("w:rPr"))
+            if new_rPr is not None:
+                new_pPr.replace(new_rPr, copy.deepcopy(target_rPr))
+        target._p.replace(target_pPr, new_pPr)
+
+
 def build_rules(P, L):
     st = L["state"]
     es = P.get("entity_state")
@@ -103,8 +198,8 @@ def build_rules(P, L):
                  "or an executed lease's recital) — never assumed from the property's location. "
                  "Fail-closed by design (2026-08-03 eval finding).")
     rules = [
-        ("[LANDLORD ENTITY]", P["entity"], 3),
-        ("a [STATE] limited liability company", f"{article(es)} {es} limited liability company", 2),
+        ("[LANDLORD ENTITY]", P["entity"], 4),  # v2.5: +1 (BLI page)
+        ("a [STATE] limited liability company", f"{article(es)} {es} limited liability company", 3),  # v2.5: +1 (BLI page)
         ("the building situated at [PREMISES ADDRESS] (such rentable area",
          f"the building situated at {P['premises']} (such rentable area", 1),
         ("the building known as [BUILDING ADDRESS], containing [BUILDING RSF] square feet of rentable area",
@@ -129,10 +224,16 @@ def build_rules(P, L):
          f"and in the regulations adopted and publications promulgated pursuant to said laws, any analogous laws of the State of {st} "
          f"(including {L['env_overlay']}), or any future laws or regulations", 1),
         ("COPY TO:[PROPERTY MANAGER]", P["pm_block"][0], 1),
-        ("1480 Dublin Rd", P["pm_block"][1], 1),
-        ("Columbus, OH 43215", P["pm_block"][2], 1),
+        ("[MANAGER STREET ADDRESS]", P["pm_block"][1], 1),  # v2.5: master pre-tokenized
+        ("[MANAGER CITY, STATE ZIP]", P["pm_block"][2], 1),  # v2.5: master pre-tokenized
         ("ATTN: [MANAGER CONTACT]", P["pm_block"][3], 1),
     ]
+    # v2.5 Basic Lease Information page fills
+    rules.append((" [PREMISES ADDRESS] — approximately", f" {P['premises']} — approximately", 1))
+    m_bd = re.match(r"the building known as (.+), containing (.+) square feet of rentable area", P["building_def"])
+    if m_bd:
+        rules.append(("[BUILDING ADDRESS] — [BUILDING RSF] rentable square feet (Parcel No. [PARCEL NO])",
+                      f"{m_bd.group(1)} — {m_bd.group(2)} rentable square feet {L['parcel_reference'].strip()}", 1))
     if P.get("project_def"):
         rules.append(("the Building together with the land on which it is situated and all parking areas, drives, walkways and other common areas serving it",
                       P["project_def"], 1))
@@ -157,8 +258,30 @@ def post_check(path, P, L):
         errs.append("savings clause missing")
     if L["state"] not in full:
         errs.append("state name absent")
+    if P.get("lease_structure") == "NNN":
+        if "[BASE YEAR]" in full:
+            errs.append("NNN property but [BASE YEAR] token still present")
+        if "OPERATING COSTS, TAXES AND INSURANCE" not in full:
+            errs.append("NNN property but OPERATING COSTS, TAXES AND INSURANCE heading missing")
+        if "“Insurance” " not in full and '"Insurance" ' not in full:
+            errs.append("NNN property but Insurance defined term missing")
     if errs:
         sys.exit(f"POST-CHECK FAILED for {path.name}: {errs}")
+
+
+def rebase_one(master_path, P, L):
+    """Single source of truth for the per-property pipeline — used by both main()
+    and the test suite, so a step added here (like the NNN override) can't drift
+    out of sync between the CLI path and its own tests again."""
+    doc = Document(str(master_path))
+    apply(doc, build_rules(P, L))
+    if P.get("lease_structure") == "NNN":
+        convert_to_nnn(doc)
+    insert_savings_clause(doc)
+    for sec in doc.sections:  # v2.5: fill footer lease identifier
+        for fp in sec.footer.paragraphs:
+            replace_in_paragraph(fp, "[PREMISES ADDRESS]", P["premises"])
+    return doc
 
 
 def main():
@@ -166,7 +289,7 @@ def main():
     ap.add_argument("--master", required=True)
     ap.add_argument("--property", dest="prop")
     ap.add_argument("--all", action="store_true")
-    ap.add_argument("--out", default=".")
+    ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
     props = json.loads((CONFIG / "properties.json").read_text(encoding="utf-8"))
@@ -190,9 +313,7 @@ def main():
         if not L or L.get("RESEARCH_REQUIRED"):
             sys.exit(f"{k}: state overlay {P['state_code']} is RESEARCH-REQUIRED — complete "
                      "config/state_overlays.json with fresh statutory research first (fail-closed by design).")
-        doc = Document(a.master)
-        apply(doc, build_rules(P, L))
-        insert_savings_clause(doc)
+        doc = rebase_one(a.master, P, L)
         out = outdir / f"ORA_MasterLease_ShallowBay_{P['label']}_v{ver}_TEMPLATE.docx"
         doc.save(str(out))
         post_check(out, P, L)
