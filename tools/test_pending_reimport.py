@@ -136,6 +136,94 @@ class SweepDrift(FixtureTestCase):
         self.assertEqual(drifted, [])
 
 
+class FrontmatterQuotingAndTrailingBlankLineIsNotDrift(FixtureTestCase):
+    """2026-08-03: skill_drift_report.py's _normalize_frontmatter (PR #35,
+    commit 3d15526, "YAML scalar quoting is serialization, not drift") strips
+    top-level YAML scalar quoting before comparing frontmatter, because the
+    Cowork platform re-serializes SKILL.md frontmatter on install and its
+    quoting style varies over time. pending_reimport.py's OWN separate
+    comparator (_normalized_hash/_normalized_hash_bytes, feeding
+    skill_drifted() -> sweep_drift() -> candidates()) was not updated alongside
+    it: a confirmed-correct Save-skill install of masterlease-jurisdiction-rebase
+    -- content-verified identical to the repo except for that same quoting-class
+    difference plus a trailing blank line -- still reported as a live-sweep
+    candidate. These fixtures mirror test_skill_drift_report.py's quoting tests
+    so the two comparators can never silently disagree again."""
+
+    def test_name_quoting_difference_alone_is_not_drift(self):
+        _write(self.repo / 'demo' / 'SKILL.md',
+               '---\nname: "demo"\ndescription: d\n---\n\nBODY\n')
+        _write(self.cache / 'demo' / 'SKILL.md',
+               '---\nname: demo\ndescription: d\n---\n\nBODY\n')
+
+        self.assertFalse(pr.skill_drifted(self.repo, self.cache, 'demo'))
+        self.assertNotIn('demo', pr.sweep_drift(repo_root=self.repo, cache_root=self.cache))
+
+    def test_single_and_double_quoting_agree(self):
+        _write(self.repo / 'demo' / 'SKILL.md', "---\nname: 'demo'\ndescription: d\n---\n\nB\n")
+        _write(self.cache / 'demo' / 'SKILL.md', '---\nname: demo\ndescription: d\n---\n\nB\n')
+
+        self.assertFalse(pr.skill_drifted(self.repo, self.cache, 'demo'))
+
+    def test_trailing_blank_line_alone_is_not_drift(self):
+        _write(self.repo / 'demo' / 'SKILL.md', '---\nname: demo\ndescription: d\n---\n\nBODY\n')
+        _write(self.cache / 'demo' / 'SKILL.md', '---\nname: demo\ndescription: d\n---\n\nBODY\n\n')
+
+        self.assertFalse(pr.skill_drifted(self.repo, self.cache, 'demo'))
+
+    def test_quoting_plus_trailing_blank_line_together_is_not_drift(self):
+        """The live masterlease-jurisdiction-rebase case: both deltas at once."""
+        _write(self.repo / 'demo' / 'SKILL.md',
+               '---\nname: "demo"\ndescription: d\n---\n\nBODY\n')
+        _write(self.cache / 'demo' / 'SKILL.md',
+               '---\nname: demo\ndescription: d\n---\n\nBODY\n\n')
+
+        self.assertFalse(pr.skill_drifted(self.repo, self.cache, 'demo'))
+        self.assertNotIn('demo', pr.sweep_drift(repo_root=self.repo, cache_root=self.cache))
+
+    def test_quoting_normalization_never_masks_a_real_content_change(self):
+        """Same constraint PR #35 enforced: the normalization must never hide an
+        actual value change, only a difference in how it was serialized."""
+        _write(self.repo / 'demo' / 'SKILL.md',
+               '---\nname: "demo"\ndescription: OLD\n---\n\nB\n')
+        _write(self.cache / 'demo' / 'SKILL.md',
+               '---\nname: demo\ndescription: NEW\n---\n\nB\n')
+
+        self.assertTrue(pr.skill_drifted(self.repo, self.cache, 'demo'))
+        self.assertIn('demo', pr.sweep_drift(repo_root=self.repo, cache_root=self.cache))
+
+    def test_real_body_content_change_is_still_drift_even_with_quoting_noise(self):
+        _write(self.repo / 'demo' / 'SKILL.md',
+               '---\nname: "demo"\ndescription: d\n---\n\nBODY v1\n')
+        _write(self.cache / 'demo' / 'SKILL.md',
+               '---\nname: demo\ndescription: d\n---\n\nBODY v2\n\n')
+
+        self.assertTrue(pr.skill_drifted(self.repo, self.cache, 'demo'))
+
+    def test_non_frontmatter_file_trailing_blank_line_is_unaffected(self):
+        """Scope guard: the trailing-blank-line collapse must stay confined to
+        SKILL.md-shaped (frontmatter-fenced) content. A bundled non-SKILL.md file
+        (e.g. a script) with a genuine trailing-blank-line difference must still
+        hash differently -- this normalization was never asked for there, and
+        widening it silently would risk masking real changes in bundled files
+        that never had anything to do with the platform's frontmatter
+        re-serialization behavior."""
+        repo_hash = pr._normalized_hash_bytes(b'print(1)\n')
+        cache_hash = pr._normalized_hash_bytes(b'print(1)\n\n')
+
+        self.assertNotEqual(repo_hash, cache_hash)
+
+    def test_frontmatter_quoting_fixture_pair_hashes_equal(self):
+        """Direct unit coverage of the hashing primitive with a fixture pair that
+        differs ONLY in quoting style, mirroring
+        test_skill_drift_report.py's ReviewFindingsRemediation quoting tests."""
+        repo_bytes = '---\nname: "demo"\ndescription: d\n---\n\nBODY\n'.encode('utf-8')
+        cache_bytes = '---\nname: demo\ndescription: d\n---\n\nBODY\n'.encode('utf-8')
+
+        self.assertEqual(pr._normalized_hash_bytes(repo_bytes),
+                          pr._normalized_hash_bytes(cache_bytes))
+
+
 class WindowsMaxPath(FixtureTestCase):
     """2026-08-03 regression: skill_drifted() used plain pathlib is_file()/
     read_bytes() against CACHE_ROOT, which silently reports a file MISSING once
