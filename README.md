@@ -33,7 +33,7 @@ flowchart TD
         Root["Repo root"]
         S1["acquisition-underwriting/"]
         S2["loi-generation/"]
-        S3["...50 more skill folders"]
+        S3["...55 more skill folders\n(57 total)"]
         Shared["target-markets.json\n(shared buy-box market data)"]
         Tools["tools/\npackage_skills.py, build_plugin.py,\npending_reimport.py, hooks/"]
         Plugins["plugins/\nora-operations-extensions/\n(plugin-build.json bundles)"]
@@ -68,9 +68,24 @@ flowchart TD
     Exec -- "4. optionally reads/runs" --> R2
 ```
 
+**Reading the diagram:** everything lives flat under the repo root — each of the 57
+skill folders (`acquisition-underwriting/`, `loi-generation/`, etc.) sits directly under
+`Repo root`, alongside `target-markets.json` (shared buy-box data), `tools/`, `plugins/`,
+`_staging/`, and `_archive/`. Inside a skill folder, only `SKILL.md` is required; the rest
+(`references/`, `templates/`, `PACKAGING-NOTE.md`, and so on) exists only where that skill
+actually needs it, which is why `acquisition-underwriting/` and `loi-generation/` are shown
+with different contents. The bottom half of the diagram traces the two things that
+actually happen to this repo: **packaging** (`tools/package_skills.py` or
+`tools/build_plugin.py` zips a skill or plugin bundle for Cowork's "Save skill" import,
+and a separate one-way sync mirrors shipped files into the AppData runtime cache — this
+repo always wins on divergence) and **triggering** (a live Claude Code / Cowork session
+scans every `SKILL.md`'s frontmatter, matches `name`/`description` against what the user
+just asked for, and — once a skill triggers — loads its Markdown body as instructions for
+that turn, optionally pulling from `references/` as it goes).
+
 ## Directory / skill inventory
 
-**53 git-tracked skill directories** (each contains its own `SKILL.md`), plus four
+**57 git-tracked skill directories** (each contains its own `SKILL.md`), plus four
 non-skill support directories: `tools/` (packaging/build/hook scripts), `plugins/`
 (version-controlled Cowork plugin bundles), `_staging/` (dated pending-reimport batches),
 and `_archive/` (retired skills, kept for reference).
@@ -84,6 +99,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `parcel-data-recovery` — county-level SF/value/year-built/delinquency recovery for off-market screens
 - `ora-flood-zoning-dd` — FEMA flood + zoning/permitted-use due-diligence determinations
 - `census-acs-extract` — Census ACS educational-attainment/migration data for market underwriting
+- `ora-millage-lookup` — resolves a parcel's property-tax rate/taxable base from verified government endpoints; companion to acquisition-underwriting STAGE 2.5
 - `market-monitor` — industrial market conditions, vacancy, rent growth, supply pipeline tracking
 - `rent-comp` — rent and sale comparable research for target markets
 - `submarket-spatial-analysis` — drive-time, demographics, and locational scoring
@@ -101,7 +117,10 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `rent-roll-reconciliation` — reconciles the Notion Tenant DB against an authoritative rent-roll export
 - `lease-abstraction-pipeline` — single or batch lease abstraction / rent-roll extraction
 - `lease-renewal-pipeline` — flags upcoming expirations and drafts renewal templates
+- `lease-form-qc` — pre-execution QC gate for leases on ORA's own landlord form (42-defect scan, PASS/FAIL)
+- `masterlease-jurisdiction-rebase` — rebases jurisdiction-conformed Master Lease property templates onto a new master revision; companion to lease-form-qc
 - `legal-intelligence` — lease/contract clause library and legal document analysis
+- `solar-lease-underwriting` — rooftop/community-solar lease underwriting: counterparty economics and rent-benchmarking for third-party rooftop energy leases
 - `tax-appeal` — property tax assessment analysis and appeal decision engine
 - `disposition-analysis` — hold / refinance / 1031 / sell decision engine
 - `capex-budgeting` — multi-year capital plan and reserve studies
