@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -619,6 +620,40 @@ class LedgerLineRouting(unittest.TestCase):
             'daily-brief', 'now', 'h', 's', 't', pr.plugin_of('daily-brief'))
         self.assertIn('plugin: ora-operations-extensions', bundled)
         self.assertNotIn('plugin:', standalone)
+
+
+class WinLongNonWindowsNoOp(unittest.TestCase):
+    """2026-08-03: _win_long() unconditionally prepended the `\\\\?\\` prefix,
+    which is meaningless outside Windows. Resolving a path from a POSIX context
+    (e.g. this script run via Cowork's bash sandbox against the mounted repo)
+    then produced a string neither OS could open, surfacing as a silent
+    `pending_reimport: skipped (...)` rather than the loud failure the ledger
+    exists to produce.
+
+    Can't exercise a real cross-platform run on this Windows box, and patching
+    os.name alone isn't enough: it's a process-global flag pathlib itself
+    dispatches on, so calling the real WindowsPath.resolve() while os.name says
+    'posix' crashes with UnsupportedOperation rather than exercising the guard.
+    Path is stubbed out here so the test isolates the `if os.name != 'nt'`
+    branch in _win_long() from real path resolution."""
+
+    def _win_long_with(self, os_name, resolved):
+        fake_resolved = unittest.mock.MagicMock()
+        fake_resolved.__str__.return_value = resolved
+        fake_path = unittest.mock.MagicMock()
+        fake_path.resolve.return_value = fake_resolved
+        with unittest.mock.patch.object(pr, 'Path', return_value=fake_path), \
+                unittest.mock.patch.object(pr.os, 'name', os_name):
+            return pr._win_long('irrelevant-input')
+
+    def test_prefix_skipped_when_not_windows(self):
+        result = self._win_long_with('posix', '/sessions/example/ora-skills/target-markets.json')
+        self.assertEqual(result, '/sessions/example/ora-skills/target-markets.json')
+        self.assertFalse(result.startswith('\\\\?\\'))
+
+    def test_prefix_applied_when_windows(self):
+        result = self._win_long_with('nt', r'C:\Users\Owner\ora-skills\target-markets.json')
+        self.assertTrue(result.startswith('\\\\?\\'))
 
 
 if __name__ == '__main__':
