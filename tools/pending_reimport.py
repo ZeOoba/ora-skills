@@ -51,6 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from package_skills import (  # noqa: E402
     REPO, SKIP, SHARED_ROOT_DEPS, is_bundled, plugin_of, skill_source_files,
 )
+from skill_md_normalize import normalize_skill_md_text  # noqa: E402
 
 LEDGER = REPO / '_staging' / 'PENDING_REIMPORT.md'
 
@@ -157,14 +158,27 @@ def write_entries(entries: dict[str, str], ledger_path: Path = LEDGER) -> None:
 
 
 def _normalized_hash_bytes(data: bytes) -> str:
-    """SHA256 of content, CRLF->LF normalized when it decodes as text. Bytes form
-    (see _normalized_hash) so a git blob's content can be hashed the same way a
-    working-tree/cache file is, for the shared-dep direction check."""
+    """SHA256 of content, CRLF->LF normalized when it decodes as text, PLUS --
+    for content shaped like a SKILL.md (opens with a '---' frontmatter fence) --
+    YAML scalar-quoting and a trailing EOF blank line normalized away via
+    skill_md_normalize.normalize_skill_md_text(), the same rules
+    skill_drift_report.py's verdict already applies (PR #35, 2026-08-03:
+    "YAML scalar quoting is serialization, not drift"). Ported here because this
+    comparator feeds skill_drifted()/sweep_drift()/candidates() and was not
+    updated alongside PR #35 -- a confirmed-correct Save-skill install that
+    differed from the repo only in that quoting class (plus a trailing blank
+    line) still read as a live-sweep candidate. Content with no frontmatter fence
+    passes through this step unchanged, so non-SKILL.md bundled files (scripts,
+    fixtures, shared repo-root JSON deps) hash exactly as before.
+
+    Bytes form (see _normalized_hash) so a git blob's content can be hashed the
+    same way a working-tree/cache file is, for the shared-dep direction check.
+    """
     try:
-        data = data.decode('utf-8').replace('\r\n', '\n').encode('utf-8')
+        text = data.decode('utf-8').replace('\r\n', '\n')
     except UnicodeDecodeError:
-        pass  # binary file: compare raw bytes, EOL normalization doesn't apply
-    return hashlib.sha256(data).hexdigest()
+        return hashlib.sha256(data).hexdigest()  # binary: raw bytes, no text rules apply
+    return hashlib.sha256(normalize_skill_md_text(text).encode('utf-8')).hexdigest()
 
 
 def _normalized_hash(path: Path) -> str:
