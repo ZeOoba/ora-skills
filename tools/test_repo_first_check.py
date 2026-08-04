@@ -30,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import repo_first_check as rfc  # noqa: E402
 from pending_reimport import read_entries  # noqa: E402
+from unittest import mock  # noqa: E402
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -147,6 +148,42 @@ class ClassifySkill(FixtureTestCase):
         self.assertEqual(verdict, 'IN-SYNC')
         self.assertNotIn('scripts/new.py', [rel for rel, _ in per_file])
 
+    def test_cache_only_file_with_no_repo_counterpart_is_a_finding(self):
+        # _packaged_rel_paths() only ever walks the REPO side -- a file created
+        # platform-side (create-skill / a direct cache write) that never existed in
+        # the repo at all was previously invisible to classify_skill() entirely
+        # (2026-08-04 review finding: this is exactly the masterlease-jurisdiction-
+        # rebase v1.6 shape, a brand-new scripts/ file appearing cache-side).
+        _commit(self.repo, 'demo-skill/SKILL.md', 'name: demo-skill\n', 'init')
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'name: demo-skill\n')
+        _write(self.cache / 'demo-skill' / 'scripts' / 'brand_new.py', 'never in the repo\n')
+
+        verdict, per_file = rfc.classify_skill('demo-skill', self.repo, self.cache)
+
+        self.assertIn(verdict, rfc.BAD_VERDICTS)
+        self.assertIn(('scripts/brand_new.py', 'REPO-MISSING'), per_file)
+
+    def test_shared_root_dep_in_cache_is_not_a_false_positive(self):
+        # Found via live smoke test against the real repo: a SHARED_ROOT_DEPS file
+        # (e.g. target-markets.json) is injected into a consuming skill's cache copy
+        # from the REPO ROOT at packaging time -- it has no same-named file under
+        # repo_root/<skill>/, so the cache-only scan misclassified it as
+        # REPO-MISSING for all 5 real consuming skills before this exclusion was
+        # added. pending_reimport.shared_dep_report() already direction-checks these
+        # correctly against their true repo-root source.
+        _commit(self.repo, 'demo-skill/SKILL.md', 'name: demo-skill\n', 'init')
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'name: demo-skill\n')
+        _write(self.cache / 'demo-skill' / 'shared.json', '{"version": 1}\n')
+        # no repo_root/demo-skill/shared.json, and no repo_root/shared.json either --
+        # this test only needs to prove the DECLARED name is excluded, not that the
+        # shared file's own content is separately checked (that's shared_dep_report's job)
+
+        with mock.patch.object(rfc, 'SHARED_ROOT_DEPS', {'demo-skill': ['shared.json']}):
+            verdict, per_file = rfc.classify_skill('demo-skill', self.repo, self.cache)
+
+        self.assertEqual(verdict, 'IN-SYNC')
+        self.assertNotIn('shared.json', [rel for rel, _ in per_file])
+
 
 class RecordLedger(FixtureTestCase):
     """The durable STORE_AHEAD_OF_REPO ledger — the reverse-direction companion to
@@ -171,6 +208,20 @@ class RecordLedger(FixtureTestCase):
         rfc.record_ledger([], ledger_path=self.ledger)
 
         self.assertFalse(self.ledger.is_file())
+
+    def test_writes_its_own_header_not_pending_reimports(self):
+        # write_entries()'s header param was newly generalized (previously hardcoded
+        # to PENDING_REIMPORT.md's own text) specifically so this ledger gets ITS
+        # OWN header. Reverting that generalization (or dropping the LEDGER_HEADER
+        # argument at the call site) would silently write the wrong file's header
+        # into this one -- confirmed by no other test, per code review.
+        findings = [('demo-skill', 'CACHE-AHEAD', [('scripts/run.py', 'CACHE-AHEAD')])]
+
+        rfc.record_ledger(findings, ledger_path=self.ledger)
+
+        raw = self.ledger.read_text(encoding='utf-8')
+        self.assertIn('STORE AHEAD OF REPO', raw)
+        self.assertNotIn('PENDING REIMPORT', raw)
 
     def test_ledger_self_clears_once_a_skill_reconciles(self):
         findings = [('demo-skill', 'CACHE-AHEAD', [('scripts/run.py', 'CACHE-AHEAD')])]
@@ -209,8 +260,8 @@ class RecordLedger(FixtureTestCase):
 
 
 class FullSweepIntegration(FixtureTestCase):
-    """End-to-end: main()'s full-sweep path (no --check-staged) must see a skill that
-    has NO staged repo change at all — the exact scenario --check-staged structurally
+    """End-to-end: the full-sweep path (no --check-staged) must see a skill that has
+    NO staged repo change at all — the exact scenario --check-staged structurally
     cannot catch, since _staged_skills() only ever returns skills touched by the
     commit about to happen."""
 
@@ -227,6 +278,93 @@ class FullSweepIntegration(FixtureTestCase):
 
         skills = {f[0] for f in findings}
         self.assertIn('demo-skill', skills)
+
+
+class RunIntegration(FixtureTestCase):
+    """End-to-end coverage of run() (main()'s thin CLI wrapper just forwards to this)
+    — every store it touches is parameterized, so these exercise the WHOLE control
+    flow (reachability guard, per-file remedy text, ledger write) against a
+    disposable fixture tree, never the live repo/cache/ledger."""
+
+    def setUp(self):
+        super().setUp()
+        self.ledger = self.tmp / 'STORE_AHEAD_OF_REPO.md'
+        self.rescue_dir = self.tmp / 'rescue'
+
+    def _run(self, check_staged=False):
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            code = rfc.run(check_staged, repo_root=self.repo, cache_root=self.cache,
+                            ledger_path=self.ledger, rescue_dir=self.rescue_dir)
+        return code, buf.getvalue()
+
+    def test_unreachable_cache_root_never_touches_an_existing_ledger(self):
+        # The critical bug found in code review: record_ledger([]) reads an empty
+        # findings list as "everything reconciled" and deletes the ledger. A full
+        # sweep against an UNREACHABLE cache root (e.g. a Cowork bash sandbox, per
+        # _win_long's own docstring) produces exactly that empty list for every
+        # skill via classify_skill's NOT-INSTALLED short-circuit -- so without a
+        # guard, losing the cache mid-run would silently erase real findings instead
+        # of leaving them untouched.
+        _commit(self.repo, 'demo-skill/SKILL.md', 'name: demo-skill\n', 'init')
+        stale_findings = [('demo-skill', 'CACHE-AHEAD', [('scripts/run.py', 'CACHE-AHEAD')])]
+        rfc.record_ledger(stale_findings, ledger_path=self.ledger)
+        self.assertTrue(self.ledger.is_file())
+        before = self.ledger.read_text(encoding='utf-8')
+
+        unreachable_cache = self.tmp / 'does-not-exist'
+        code = rfc.run(False, repo_root=self.repo, cache_root=unreachable_cache,
+                        ledger_path=self.ledger, rescue_dir=self.rescue_dir)
+
+        self.assertEqual(code, 0)
+        self.assertTrue(self.ledger.is_file())
+        self.assertEqual(self.ledger.read_text(encoding='utf-8'), before)
+
+    def test_per_file_remedy_text_matches_each_files_own_verdict(self):
+        # main()'s print loop used to look up why[]/fix[] by the skill-level
+        # aggregate verdict for EVERY bad file, so a DIVERGENT file was told to
+        # "commit it to the repo first" (CACHE-AHEAD's remedy) whenever the same
+        # skill also had a CACHE-AHEAD file. Reproduce that exact shape end-to-end.
+        _commit(self.repo, 'demo-skill/SKILL.md', 'name: demo-skill\n', 'init')
+        _commit(self.repo, 'demo-skill/scripts/a.py', 'a-v1\n', 'a v1')
+        _git(self.repo, 'checkout', '-q', '-b', 'other')
+        _commit(self.repo, 'demo-skill/scripts/b.py', 'b-off-branch\n', 'b off-branch')
+        _git(self.repo, 'checkout', '-q', 'main')
+        _write(self.repo / 'demo-skill' / 'scripts' / 'b.py', 'b-main\n')
+        _git(self.repo, 'add', 'demo-skill/scripts/b.py')
+        _git(self.repo, 'commit', '-q', '-m', 'b on main')
+
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'name: demo-skill\n')
+        _write(self.cache / 'demo-skill' / 'scripts' / 'a.py', 'a-cache-only-never-committed\n')
+        _write(self.cache / 'demo-skill' / 'scripts' / 'b.py', 'b-off-branch\n')
+
+        code, stderr = self._run(check_staged=False)
+
+        self.assertEqual(code, 0)
+        a_line = next(ln for ln in stderr.splitlines() if 'scripts/a.py' in ln)
+        b_line = next(ln for ln in stderr.splitlines() if 'scripts/b.py' in ln)
+        self.assertIn('never committed on ANY branch', a_line)
+        self.assertIn("matches a commit OFF this branch's ancestry", b_line)
+        self.assertIn('commit it to the repo first', stderr)
+        self.assertIn('reconcile the branches, do not auto-reimport', stderr)
+
+    def test_findings_are_ledgered_and_rescued(self):
+        _commit(self.repo, 'demo-skill/SKILL.md', 'name: demo-skill\n', 'init')
+        _commit(self.repo, 'demo-skill/scripts/run.py', 'v1\n', 'add script')
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'name: demo-skill\n')
+        _write(self.cache / 'demo-skill' / 'scripts' / 'run.py', 'v2-never-committed\n')
+
+        code, stderr = self._run(check_staged=False)
+
+        self.assertEqual(code, 0)
+        entries = read_entries(self.ledger)
+        self.assertIn('demo-skill', entries)
+        rescued = self.rescue_dir / 'demo-skill' / 'scripts' / 'run.py'
+        self.assertTrue(rescued.is_file())
+        self.assertEqual(rescued.read_text(encoding='utf-8'), 'v2-never-committed\n')
+        self.assertIn('Rescued the cache copy', stderr)
 
 
 if __name__ == '__main__':
