@@ -70,7 +70,7 @@ flowchart TD
 
 ## Directory / skill inventory
 
-**53 git-tracked skill directories** (each contains its own `SKILL.md`), plus four
+**57 git-tracked skill directories** (each contains its own `SKILL.md`), plus four
 non-skill support directories: `tools/` (packaging/build/hook scripts), `plugins/`
 (version-controlled Cowork plugin bundles), `_staging/` (dated pending-reimport batches),
 and `_archive/` (retired skills, kept for reference).
@@ -84,6 +84,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `parcel-data-recovery` — county-level SF/value/year-built/delinquency recovery for off-market screens
 - `ora-flood-zoning-dd` — FEMA flood + zoning/permitted-use due-diligence determinations
 - `census-acs-extract` — Census ACS educational-attainment/migration data for market underwriting
+- `ora-millage-lookup` — resolves a parcel's property-tax rate/taxable base from verified government endpoints; companion to acquisition-underwriting STAGE 2.5
 - `market-monitor` — industrial market conditions, vacancy, rent growth, supply pipeline tracking
 - `rent-comp` — rent and sale comparable research for target markets
 - `submarket-spatial-analysis` — drive-time, demographics, and locational scoring
@@ -101,7 +102,10 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `rent-roll-reconciliation` — reconciles the Notion Tenant DB against an authoritative rent-roll export
 - `lease-abstraction-pipeline` — single or batch lease abstraction / rent-roll extraction
 - `lease-renewal-pipeline` — flags upcoming expirations and drafts renewal templates
+- `lease-form-qc` — pre-execution QC gate for leases on ORA's own landlord form (42-defect scan, PASS/FAIL)
+- `masterlease-jurisdiction-rebase` — rebases jurisdiction-conformed Master Lease property templates onto a new master revision; companion to lease-form-qc
 - `legal-intelligence` — lease/contract clause library and legal document analysis
+- `solar-lease-underwriting` — rooftop/community-solar lease underwriting: counterparty economics and rent-benchmarking for third-party rooftop energy leases
 - `tax-appeal` — property tax assessment analysis and appeal decision engine
 - `disposition-analysis` — hold / refinance / 1031 / sell decision engine
 - `capex-budgeting` — multi-year capital plan and reserve studies
