@@ -146,7 +146,11 @@ def read_entries(ledger_path: Path = LEDGER) -> dict[str, str]:
     return entries
 
 
-def write_entries(entries: dict[str, str], ledger_path: Path = LEDGER) -> None:
+def write_entries(entries: dict[str, str], ledger_path: Path = LEDGER, header: str = HEADER) -> None:
+    """`header` is parameterized (default = this module's own PENDING_REIMPORT
+    header) so tools/repo_first_check.py can reuse this same read/write/empty-file-
+    deletes convention for its own STORE_AHEAD_OF_REPO ledger -- the reverse-
+    direction companion -- without writing the wrong header into it."""
     ledger_path.parent.mkdir(parents=True, exist_ok=True)
     if not entries:
         # nothing pending -> remove the ledger so its mere presence always means "work to do"
@@ -154,7 +158,7 @@ def write_entries(entries: dict[str, str], ledger_path: Path = LEDGER) -> None:
             ledger_path.unlink()
         return
     body = '\n'.join(entries[k] for k in sorted(entries)) + '\n'
-    ledger_path.write_text(HEADER + body, encoding='utf-8')
+    ledger_path.write_text(header + body, encoding='utf-8')
 
 
 def _normalized_hash_bytes(data: bytes) -> str:
