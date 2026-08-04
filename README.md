@@ -37,7 +37,7 @@ flowchart TD
         Shared["target-markets.json\n(shared buy-box market data)"]
         Tools["tools/\npackage_skills.py, build_plugin.py,\npending_reimport.py, hooks/"]
         Plugins["plugins/\nora-operations-extensions/\n(plugin-build.json bundles)"]
-        Staging["_staging/\ndated import batches +\nPENDING_REIMPORT.md ledger"]
+        Staging["_staging/\ndated import batches +\nPENDING_REIMPORT.md (repo-ahead)\n+ STORE_AHEAD_OF_REPO.md (cache-ahead)"]
         Archive["_archive/\nretired/superseded skills\n(e.g. deal-screen, cap-rate-snapshot)"]
     end
 
@@ -87,8 +87,9 @@ that turn, optionally pulling from `references/` as it goes).
 
 **57 git-tracked skill directories** (each contains its own `SKILL.md`), plus four
 non-skill support directories: `tools/` (packaging/build/hook scripts), `plugins/`
-(version-controlled Cowork plugin bundles), `_staging/` (dated pending-reimport batches),
-and `_archive/` (retired skills, kept for reference).
+(version-controlled Cowork plugin bundles), `_staging/` (dated pending-reimport batches,
+plus the gitignored `PENDING_REIMPORT.md`/`STORE_AHEAD_OF_REPO.md` drift ledgers), and
+`_archive/` (retired skills, kept for reference).
 
 Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 `description`, condensed):
@@ -216,6 +217,22 @@ and `rent-comp`. Not duplicated into any skill folder — see "Conventions" belo
   `--stat` shows files you didn't touch. Cowork sandbox sessions specifically cannot
   reliably perform git *write* operations through the folder bridge (read-only ops like
   `status`/`diff`/`log` work) — do git writes from a Code-surface session.
+- **Cowork-side skill edits (create-skill, direct cache edits, `save_skill`) reach ONLY
+  the AppData runtime cache, never this repo — they leave zero git trace, so the
+  single-writer check above is blind to them.** Before starting any non-trivial work
+  here, also run `python tools/repo_first_check.py` (full sweep, read-only, no
+  `--check-staged`) — it hashes every bundled file (`SKILL.md` and everything under
+  `scripts/`, `references/`, `fixtures/`, `config/`, not just `SKILL.md`) against the
+  live runtime cache and derives direction from git ancestry, the same classifier
+  `pending_reimport.classify_shared_copy` already uses for shared deps. Any
+  `CACHE-AHEAD`/`DIVERGENT` finding means a session edited the cache directly and never
+  committed it — reconcile that FIRST, or a later commit's `pre-commit` Check 4 mirror
+  sync will silently clobber it. Findings persist to `_staging/STORE_AHEAD_OF_REPO.md`
+  (gitignored, self-clearing once reconciled) so they survive past one run's console
+  output — the reverse-direction companion to `_staging/PENDING_REIMPORT.md`. Built
+  2026-08-04 after `masterlease-jurisdiction-rebase` drifted cache-ahead of the repo
+  three times in one session, twice caught only by manual diffing because nothing ran
+  this check automatically and nothing durable recorded what it found.
 - **Retirement, not deletion:** superseded skills move to `_archive/` rather than being
   deleted (e.g. `deal-screen`, `cap-rate-snapshot`, `market-comp-analyzer`, and the
   earlier `underwrite` were subsumed by `acquisition-underwriting`'s SCREEN/SNAPSHOT/COMPS
