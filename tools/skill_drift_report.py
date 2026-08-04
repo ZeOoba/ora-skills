@@ -54,6 +54,9 @@ from pending_reimport import (  # noqa: E402
     CACHE_ROOT, _git_blob_bytes, _git_text, _isdir_long, _isfile_long,
     _read_bytes_long, all_skill_dirs, classify_shared_copy,
 )
+from skill_md_normalize import (  # noqa: E402
+    _normalize_frontmatter, _unquote, split_skill_md,
+)
 
 # --- verdicts -------------------------------------------------------------
 IN_SYNC = 'IN-SYNC'
@@ -181,68 +184,11 @@ def norm_hash(data: bytes) -> str:
     return hashlib.sha256(normalized_text(data).encode('utf-8')).hexdigest()
 
 
-def split_skill_md(text: str) -> tuple[str, str]:
-    """('frontmatter inner text', 'body') for a normalized SKILL.md.
-
-    Only a leading '---' fence opens frontmatter, and only the FIRST subsequent
-    '---' line closes it - a horizontal rule later in the body cannot truncate it.
-    No frontmatter -> ('', whole text), so a malformed file still gets a body diff
-    rather than being skipped.
-    """
-    if not text.startswith('---\n'):
-        return '', text
-    rest = text[4:]
-    for m in re.finditer(r'^---\s*$', rest, re.M):
-        return rest[:m.start()], rest[m.end():].lstrip('\n')
-    return '', text
-
-
-_TOP_KEY_RE = re.compile(r'^([A-Za-z0-9_-]+):[ \t]*(.*)$')
-
-
-def _normalize_frontmatter(fm: str) -> str:
-    """A COMPARE-ONLY view of frontmatter with YAML scalar quoting stripped from
-    top-level keys. Never used to write a file - only to decide whether two
-    frontmatters mean the same thing.
-
-    WHY: the platform re-serializes frontmatter on install and its quoting style
-    VARIES over time. acquisition-underwriting's `name` was pulled from the cache
-    QUOTED on 2026-07-27 (the REPO-FIRST recovery in commit 20a936e byte-copied it
-    that way), and the same cache served it UNQUOTED on 2026-08-03 - producing a
-    permanent MANUAL-MERGE on a delta with identical YAML meaning. Three other
-    skills (lease-form-qc, market-monitor, solar-lease-underwriting) sit quoted on
-    BOTH sides today and would flip the same way whenever the platform's style
-    changes again. Treating serialization as content is the same false-positive
-    family as the CRLF flags this tool exists to kill.
-
-    Deliberately narrow: no YAML parser, no re-indentation. Only a top-level
-    `key: value` line has its value unquoted. A block-scalar indicator (`>`, `|`)
-    carries no quotes so it passes through untouched, and its indented
-    continuation lines are not top-level keys so they are never rewritten.
-    Both sides get the identical treatment, so this can only ever collapse a
-    difference that is purely quoting - never mask a changed value.
-    """
-    out = []
-    for ln in fm.split('\n'):
-        m = _TOP_KEY_RE.match(ln)
-        if m and m.group(2).strip():
-            out.append(f'{m.group(1)}: {_unquote(m.group(2).strip())}')
-        else:
-            out.append(ln)
-    return '\n'.join(out)
-
-
 def _split_parts(text: str) -> dict:
     """The ONE place a SKILL.md becomes comparable parts. Used for both working-tree
     files and historical git blobs so ancestry hashes live in the same space."""
     fm, body = split_skill_md(text)
     return {'frontmatter': _normalize_frontmatter(fm), 'body': body}
-
-
-def _unquote(s: str) -> str:
-    if len(s) >= 2 and s[0] == s[-1] and s[0] in '"\'':
-        return s[1:-1]
-    return s
 
 
 def description_of(frontmatter: str) -> str | None:
