@@ -28,9 +28,9 @@ happened twice on 2026-08-03 (a v2.1 cache was used while v2.4 was canonical).
 - Canonical location: **`Business/Leases All properties/` (egoldberg's OneDrive/SharePoint),
   pinned 2026-08-03 by Gabriel.** Both `ORA_MasterLease_ShallowBayIndustrial_v2.4_TEMPLATE.docx`
   and the `v2.4.1` typo-fix companion were parked there the same day. Always pull the
-  highest version number present in that folder before a rebase run — do not use a
-  cached or knowledge-store copy (see the v2.1-cache-while-v2.4-was-canonical incident
-  above).
+  highest version number present in that folder before a rebase run — never rely on a
+  cached copy from this project's Knowledge files, a prior session, or any other
+  knowledge-store source (see the v2.1-cache-while-v2.4-was-canonical incident above).
 - Freshness check before any run: compare the version string in the supplied master's
   filename (`v2.4` etc.) against the newest version mentioned anywhere in the session
   and in this skill's changelog. If the supplied master is not the highest version
@@ -99,10 +99,13 @@ leaves the office.
 
 ## Changelog
 
-- v1.1.2 (2026-08-03, Code-surface close-out): canonical master location resolved —
-  Gabriel pinned `Business/Leases All properties/` (egoldberg's OneDrive/SharePoint);
-  both v2.4 and the v2.4.1 typo-fix companion parked there same day. Closes the
-  UNRESOLVED gap this section carried since v1.0.
+- v1.1.2 (2026-08-03): canonical master location resolved — Gabriel pinned
+  `Business/Leases All properties/` (egoldberg's OneDrive/SharePoint); both v2.4 and
+  the v2.4.1 typo-fix companion parked there same day. Closes the UNRESOLVED gap this
+  section carried since v1.0. Resolved independently on both surfaces — Code-surface
+  close-out, and a Cowork-surface hand-edit applied directly to the packaged `.skill`
+  ahead of the Code-surface source — with divergent prose; reconciled here so the two
+  surfaces stop drifting.
 - v1.1.1 (2026-08-03, Code-surface close-out): dropped the `Demised Premisess` fix-up
   rule from `build_rules` — v2.4.1 (the typo-fix companion master, uploaded same
   session) already corrects the spelling upstream, so the rule's own "drop this rule
