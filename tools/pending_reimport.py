@@ -222,8 +222,39 @@ def _win_long(path) -> str:
     case the UNC prefix here rather than at the call sites -- every long-path
     helper below routes through this one function, so it is the single point of
     repair.
+
+    NON-WINDOWS NO-OP (found 2026-08-03, Cowork verification session on
+    masterlease-jurisdiction-rebase): `\\\\?\\` is a Windows-only extended-length
+    convention. This function previously applied it unconditionally, so a repo
+    path resolved from a POSIX context (e.g. this script run via Cowork's
+    `mcp__workspace__bash` sandbox against the mounted repo, rather than native
+    Windows) became `\\\\?\\/sessions/.../target-markets.json` -- a string neither
+    OS can resolve. `_read_bytes_long()` then raised a bare FileNotFoundError on
+    a file that genuinely exists, which `candidates()`/`sweep_drift()` catches
+    and prints as `pending_reimport: skipped (...)` -- silently dropping that
+    shared-dep check rather than the loud failure this ledger exists to produce.
+    Guarded below: MAX_PATH is a Windows-only limitation, so the prefix is now
+    only applied when actually running on Windows (`os.name == 'nt'`).
+
+    SEPARATE, LARGER GAP (same session, not fixed here -- flagging since it
+    changes how much to trust a `candidates` run from Cowork bash): CACHE_ROOT
+    is a hardcoded native-Windows AppData path. Inside the Cowork bash sandbox
+    it doesn't exist under any mount, so `Path(CACHE_ROOT / skill).resolve()`
+    silently produces a bogus (but exception-free) path, `_isdir_long()` returns
+    False, and `skill_drifted()` short-circuits to `False` for EVERY skill --
+    "no candidates" from a Cowork-bash-sandbox run currently means "the cache
+    directory couldn't be found," not "verified in sync." This function's fix
+    stops the loud target-markets.json crash; it does NOT make cache-side sweep
+    results trustworthy from that environment. Until CACHE_ROOT resolution is
+    made environment-aware (or the doctrine is updated to say `candidates`/
+    `sweep_drift` must run from a real Windows shell, not Cowork bash), treat a
+    Cowork-bash `candidates`/`sweep_drift` result as repo-side-only and verify
+    cache state independently (e.g. Read tool directly against the cache path,
+    which does have host access) before trusting a "no candidates" verdict.
     """
     s = str(Path(path).resolve())
+    if os.name != 'nt':
+        return s
     return s if s.startswith('\\\\?\\') else '\\\\?\\' + s
 
 
