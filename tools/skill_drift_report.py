@@ -51,7 +51,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from package_skills import MAX_DESC, REPO, SKIP  # noqa: E402
 from pending_reimport import (  # noqa: E402
-    CACHE_ROOT, _git_blob_bytes, _git_text, all_skill_dirs, classify_shared_copy,
+    CACHE_ROOT, _git_blob_bytes, _git_text, _isdir_long, _isfile_long,
+    _read_bytes_long, all_skill_dirs, classify_shared_copy,
 )
 
 # --- verdicts -------------------------------------------------------------
@@ -163,8 +164,12 @@ def normalized_text(data: bytes) -> str:
 def _read_bytes(path: Path) -> bytes:
     """Single funnel for every store read, so one locked file is contained to a
     single UNREADABLE finding instead of raising out of the whole run (on Windows
-    the Claude app can hold a cache file open). Also the test seam for that path."""
-    return path.read_bytes()
+    the Claude app can hold a cache file open). Also the test seam for that path.
+
+    Long-path-safe (pending_reimport._read_bytes_long) -- a deep cache path past
+    MAX_PATH must raise the same as a genuinely locked/missing file, not silently
+    misbehave, since callers here already handle OSError."""
+    return _read_bytes_long(path)
 
 
 def norm_hash(data: bytes) -> str:
@@ -472,9 +477,9 @@ def skill_md_report(repo_root: Path, cache_root: Path, skill: str, read_at=None)
         # the skill stayed installed. Either way its text still enters session
         # context with nothing to review it against.
         return _terminal(skill, CACHE_ONLY, read_at)
-    if not (cache_root / skill).is_dir():
+    if not _isdir_long(cache_root / skill):
         return _terminal(skill, NOT_INSTALLED, read_at)
-    if not cache_file.is_file():
+    if not _isfile_long(cache_file):
         # HALF-installed, not un-installed - a distinct, actionable state that the
         # NOT-INSTALLED label used to hide from the rendered report entirely.
         return _terminal(skill, BROKEN_INSTALL, read_at)
@@ -607,7 +612,7 @@ def report(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
     for skill in names:
         out['skills'][skill] = skill_md_report(repo_root, cache_root, skill)
         cache_file = cache_root / skill / 'SKILL.md'
-        if cache_file.is_file():
+        if _isfile_long(cache_file):
             try:
                 baseline[skill] = norm_hash(_read_bytes(cache_file))
             except OSError:
@@ -622,7 +627,7 @@ def report(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
     for skill, before in baseline.items():
         cache_file = cache_root / skill / 'SKILL.md'
         try:
-            after = norm_hash(_read_bytes(cache_file)) if cache_file.is_file() else None
+            after = norm_hash(_read_bytes(cache_file)) if _isfile_long(cache_file) else None
         except OSError:
             after = None
         if after != before:

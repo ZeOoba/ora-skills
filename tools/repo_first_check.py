@@ -50,7 +50,11 @@ from pending_reimport import (  # noqa: E402
     CACHE_ROOT,
     REPO,
     _file_history_hashes,
+    _isdir_long,
+    _isfile_long,
     _normalized_hash_bytes,
+    _read_bytes_long,
+    _win_long,
     all_skill_dirs,
     classify_shared_copy,
 )
@@ -64,9 +68,13 @@ def _hash_file(path: Path):
     NUL padding is a platform-upload artifact, not content (ora-skill-store-drift-check
     step 2b) -- a padded-but-identical cache file must read IN-SYNC, not CACHE-AHEAD,
     or this check would false-positive on every padded skill.
+
+    Long-path-safe (pending_reimport._read_bytes_long) -- a deep cache path past
+    MAX_PATH must raise OSError like a genuinely missing/locked file, not silently
+    misread, since this already degrades to None on OSError.
     """
     try:
-        return _normalized_hash_bytes(path.read_bytes().rstrip(b'\x00'))
+        return _normalized_hash_bytes(_read_bytes_long(path).rstrip(b'\x00'))
     except OSError:
         return None
 
@@ -106,7 +114,7 @@ def _packaged_rel_paths(skill: str) -> list[str]:
 def classify_skill(skill: str):
     """-> (verdict, [(relpath, verdict), ...]). Worst verdict wins."""
     cache_dir = Path(CACHE_ROOT) / skill
-    if not cache_dir.is_dir():
+    if not _isdir_long(cache_dir):
         return 'NOT-INSTALLED', []
 
     order = {'IN-SYNC': 0, 'REPO-AHEAD': 1, 'UNKNOWN': 2, 'DIVERGENT': 3, 'CACHE-AHEAD': 4}
@@ -114,7 +122,7 @@ def classify_skill(skill: str):
 
     for rel in _packaged_rel_paths(skill):
         repo_p, cache_p = REPO / skill / rel, cache_dir / rel
-        if not cache_p.exists():
+        if not _isfile_long(cache_p):
             continue                      # MISSING-IN-CACHE is the reimport path's finding
         repo_h, cache_h = _hash_file(repo_p), _hash_file(cache_p)
         if repo_h is None or cache_h is None:
@@ -138,7 +146,7 @@ def rescue(skill: str, rels: list[str]) -> Path | None:
             src = Path(CACHE_ROOT) / skill / rel
             tgt = dest / rel
             tgt.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, tgt)
+            shutil.copy2(_win_long(src), tgt)  # long-path-safe source read
         return dest
     except OSError as exc:                # never let a rescue failure block anything
         print(f'repo_first_check: rescue copy failed for {skill}: {exc}', file=sys.stderr)
