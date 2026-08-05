@@ -15,16 +15,60 @@ import package_skills as ps  # noqa: E402
 
 PLUGIN = 'ora-operations-extensions'
 
+# 2026-08-05: the ora-operations-extensions bundle was RETIRED (Gabriel's call
+# during the automation audit) and its manifest archived to
+# _archive/plugins/ora-operations-extensions/. All seven member skills already
+# lived at the repo root and simply revert to standalone Save-skill installs, so
+# plugin_of() now returns None for every skill in the repo.
+#
+# The tests below therefore exercise build_plugin.py against a SYNTHETIC fixture
+# plugin rather than a live one. That is deliberate: the regression coverage here
+# encodes real past incidents (the 8-vs-7 membership defect, the 2026-07-24
+# outdir collision, the validate-before-bump reorder) and must survive the
+# retirement of any particular bundle. build_plugin.py itself is unchanged and
+# still works the moment a new plugin manifest lands under plugins/.
+
+
+def make_fixture_plugin(td, skills=('fake-skill',), description='Seven test skills',
+                        version='0.1.0', with_skillmd=True):
+    """Build a synthetic plugin tree under `td`; returns (root, plugins_dir)."""
+    root = Path(td)
+    plugins_dir = root / 'plugins'
+    pdir = plugins_dir / PLUGIN
+    pdir.mkdir(parents=True)
+    for s in skills:
+        sdir = root / s
+        sdir.mkdir(exist_ok=True)
+        if with_skillmd:
+            (sdir / 'SKILL.md').write_text(f'---\nname: {s}\n---\nbody of {s}')
+    (pdir / 'README.md').write_text('# fixture plugin\n')
+    manifest = {
+        'name': PLUGIN, 'version': version,
+        'description': description, 'skills': list(skills),
+    }
+    (pdir / 'plugin-build.json').write_text(json.dumps(manifest))
+    return root, plugins_dir
+
 
 class PluginMembership(unittest.TestCase):
     def test_members_map_to_owning_plugin(self):
-        self.assertEqual(ps.plugin_of('deal-retirement'), PLUGIN)
-        self.assertEqual(ps.plugin_of('submarket-spatial-analysis'), PLUGIN)
+        # Membership is derived from manifests, not hardcoded. Verify the mapping
+        # logic directly so it stays covered with no live bundle in the repo.
+        manifests = {PLUGIN: {'skills': ['deal-retirement', 'submarket-spatial-analysis']}}
+        members = ps._build_plugin_members(manifests)
+        self.assertEqual(members['deal-retirement'], PLUGIN)
+        self.assertEqual(members['submarket-spatial-analysis'], PLUGIN)
 
     def test_standalone_skill_is_not_a_member(self):
         self.assertIsNone(ps.plugin_of('acquisition-underwriting'))
         # debt-management is a standalone skill, NOT bundled (the 8-vs-7 defect)
         self.assertIsNone(ps.plugin_of('debt-management'))
+
+    def test_retired_bundle_members_are_now_standalone(self):
+        # Post-retirement invariant: nothing in the repo routes to a plugin.
+        for s in ('deal-retirement', 'submarket-spatial-analysis',
+                  'investor-relations', 'vendor-management'):
+            self.assertIsNone(ps.plugin_of(s))
 
     def test_no_plugins_dir_yields_empty(self):
         self.assertEqual(ps._build_plugin_members({}), {})
@@ -45,16 +89,33 @@ class VersionBump(unittest.TestCase):
 
 class ShippedManifest(unittest.TestCase):
     def test_strips_build_only_skills_key(self):
-        bm = bp.load_manifest(PLUGIN)
-        shipped = bp.shipped_manifest(bm)
+        with tempfile.TemporaryDirectory() as td:
+            _root, plugins_dir = make_fixture_plugin(td)
+            with mock.patch.object(bp, 'PLUGINS_DIR', plugins_dir):
+                bm = bp.load_manifest(PLUGIN)
+            shipped = bp.shipped_manifest(bm)
         self.assertNotIn('skills', shipped)
         self.assertIn('version', shipped)
         self.assertEqual(shipped['name'], PLUGIN)
 
 
 class Entries(unittest.TestCase):
+    """Packaging-shape coverage, run against a synthetic manifest so it survives
+    the retirement of any individual bundle."""
+
+    MEMBERS = ('alpha-skill', 'beta-skill', 'gamma-skill')
+
     def setUp(self):
-        self.entries = bp.plugin_entries(PLUGIN)
+        self._td = tempfile.TemporaryDirectory()
+        self.root, self.plugins_dir = make_fixture_plugin(
+            self._td.name, skills=self.MEMBERS,
+            description='Three institutional skills for testing')
+        with mock.patch.object(bp, 'PLUGINS_DIR', self.plugins_dir):
+            self.bm = bp.load_manifest(PLUGIN)
+            self.entries = bp.plugin_entries(PLUGIN, repo_root=self.root, bm=self.bm)
+
+    def tearDown(self):
+        self._td.cleanup()
 
     def test_all_forward_slash(self):
         self.assertFalse([a for a in self.entries if '\\' in a])
@@ -64,27 +125,34 @@ class Entries(unittest.TestCase):
         self.assertIn('README.md', self.entries)
 
     def test_every_member_skill_present_with_skillmd(self):
-        skills = bp.load_manifest(PLUGIN)['skills']
-        self.assertEqual(len(skills), 7)
+        skills = self.bm['skills']
+        self.assertEqual(len(skills), len(self.MEMBERS))
         for s in skills:
             self.assertIn(f'skills/{s}/SKILL.md', self.entries)
 
-    def test_shipped_manifest_has_no_debt_and_no_skills_key(self):
+    def test_shipped_manifest_drops_skills_key_and_keeps_description(self):
+        # Guards the 8-vs-7 defect class: the build-only `skills` key must never
+        # ship, and the shipped description must be the manifest's own text (it
+        # once drifted to name a skill that was not actually a member).
         pj = json.loads(self.entries['.claude-plugin/plugin.json'])
         self.assertNotIn('skills', pj)
-        self.assertNotIn('debt', pj['description'].lower())
-        self.assertTrue(pj['description'].startswith('Seven'))
+        self.assertEqual(pj['description'], self.bm['description'])
+        for s in self.MEMBERS:
+            self.assertNotIn(s, pj.get('description', ''))
 
     def test_member_skillmd_bytes_equal_repo(self):
-        for s in bp.load_manifest(PLUGIN)['skills']:
-            repo_bytes = (ps.REPO / s / 'SKILL.md').read_bytes()
+        for s in self.bm['skills']:
+            repo_bytes = (self.root / s / 'SKILL.md').read_bytes()
             self.assertEqual(self.entries[f'skills/{s}/SKILL.md'], repo_bytes)
 
 
 class BuildRoundTrip(unittest.TestCase):
     def test_build_writes_valid_zip(self):
         with tempfile.TemporaryDirectory() as td:
-            dest = bp.build_plugin(PLUGIN, Path(td))
+            root, plugins_dir = make_fixture_plugin(
+                td, skills=('alpha-skill', 'beta-skill'))
+            with mock.patch.object(bp, 'PLUGINS_DIR', plugins_dir):
+                dest = bp.build_plugin(PLUGIN, root / 'out', repo_root=root)
             self.assertTrue(dest.is_file())
             with zipfile.ZipFile(dest) as z:
                 names = z.namelist()
@@ -92,6 +160,26 @@ class BuildRoundTrip(unittest.TestCase):
                 self.assertFalse([n for n in names if '\\' in n])
                 pj = json.loads(z.read('.claude-plugin/plugin.json'))
                 self.assertEqual(pj['name'], PLUGIN)
+
+
+class RetiredBundleArchived(unittest.TestCase):
+    """2026-08-05 retirement: the live manifest is gone, the archived copy remains
+    as an audit trail, and every former member still exists at the repo root."""
+
+    MEMBERS = ('annual-cycle', 'capex-budgeting', 'cash-position-monitor',
+               'deal-retirement', 'investor-relations',
+               'submarket-spatial-analysis', 'vendor-management')
+
+    def test_live_manifest_is_gone(self):
+        self.assertFalse((ps.REPO / 'plugins' / PLUGIN / 'plugin-build.json').exists())
+
+    def test_archived_manifest_retained(self):
+        self.assertTrue(
+            (ps.REPO / '_archive' / 'plugins' / PLUGIN / 'plugin-build.json').is_file())
+
+    def test_all_former_members_survive_at_repo_root(self):
+        for s in self.MEMBERS:
+            self.assertTrue((ps.REPO / s / 'SKILL.md').is_file(), f'{s} lost its SKILL.md')
 
 
 class OutdirCollision(unittest.TestCase):

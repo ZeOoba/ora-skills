@@ -610,16 +610,26 @@ class LedgerLineRouting(unittest.TestCase):
         self.assertIn('build_plugin.py', line)
         self.assertIn('NOT a standalone Save-skill', line)
 
-    def test_live_membership_routes_real_bundled_skill(self):
-        # End-to-end with the real membership map: a bundled skill gets the tag,
-        # a standalone one does not.
+    def test_membership_routing_tags_bundled_and_not_standalone(self):
+        # A bundled skill gets the plugin tag, a standalone one does not.
+        # 2026-08-05: ora-operations-extensions was retired and archived, so there
+        # is no live bundle to read membership from — the owner is passed
+        # explicitly here to keep the routing behavior itself covered.
         bundled = pr.format_ledger_line(
             'submarket-spatial-analysis', 'now', 'h', 's', 't',
-            pr.plugin_of('submarket-spatial-analysis'))
+            owner='ora-operations-extensions')
         standalone = pr.format_ledger_line(
             'daily-brief', 'now', 'h', 's', 't', pr.plugin_of('daily-brief'))
         self.assertIn('plugin: ora-operations-extensions', bundled)
         self.assertNotIn('plugin:', standalone)
+
+    def test_live_membership_is_empty_after_bundle_retirement(self):
+        # Post-retirement invariant: every skill routes as a standalone
+        # Save-skill install, so no ledger line carries a plugin tag.
+        for s in ('submarket-spatial-analysis', 'deal-retirement', 'daily-brief'):
+            self.assertIsNone(pr.plugin_of(s))
+            line = pr.format_ledger_line(s, 'now', 'h', 's', 't', pr.plugin_of(s))
+            self.assertNotIn('plugin:', line)
 
 
 class WinLongNonWindowsNoOp(unittest.TestCase):
