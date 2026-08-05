@@ -439,7 +439,7 @@ When Gabriel uploads a closing statement (HUD-1 or ALTA Settlement Statement):
 
 ### Post-Closing Integration
 
-Trigger the re-operations skill for:
+Post-closing operational setup (`re-operations` retired 2026-08-05, redundant with named ops siblings — route by task: `rent-roll-reconciliation` for PM-platform/tenant-DB setup (items 2, 9 below), `ora-pm-ledger` to track the remaining manual steps as ops tasks; items 4, 6, 10 are Eric/manual, not skill-automated):
 
  1. Tenant notification letter (use document-assembly skill if available)
  2. PM platform setup (add property and all units to appropriate platform: Rent Manager for Columbus/KC/Indy, Yardi for MD)
