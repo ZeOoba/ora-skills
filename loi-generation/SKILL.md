@@ -480,7 +480,7 @@ Full overlay text in `references/state-overlays.md`. Summary of §6 distinguishi
 
 - **Owner-occupied property where ORA is selling, not buying** — wrong direction; use `deal-execution` skill for sale side
 - **Refinance proposal** — use `debt-management` skill
-- **Off-market lease proposal** (ORA leasing to a third party) — use `re-operations` skill
+- **Off-market lease proposal** (ORA leasing to a third party) — `re-operations` retired 2026-08-05 (redundant with named ops siblings, no direct-execution evidence); for the lease document itself, use `lease-form-qc`
 - **PSA stage** — handoff to `deal-execution` skill once LOI is executed; this skill stops at LOI delivery (sole exception: Phase 6b register update to EXECUTED status when the countersigned LOI returns)
 
 ---
