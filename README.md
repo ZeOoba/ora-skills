@@ -111,7 +111,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `deal-retirement` — retires deal artifacts/tasks on close or kill; appends the decision ledger
 
 **Portfolio & asset operations**
-- `re-operations` — day-to-day operations across the multi-platform (Yardi/AppFolio/Rent Manager) portfolio
+- ~~`re-operations`~~ — retired 2026-08-05 (no direct-execution evidence; ops scope covered by `rent-roll-reconciliation`, `lease-renewal-pipeline`, `tenant-intelligence`, `ora-pm-ledger`, `ora-tenant-hubspot-reconciliation`)
 - `maintenance-analytics` — predictive maintenance and CapEx forecasting
 - `tenant-intelligence` — tenant risk scoring, renewal probability, portfolio health metrics
 - `rent-roll-qc` — final QC/polish pass on rent rolls before external delivery
