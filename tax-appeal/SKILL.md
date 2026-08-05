@@ -203,5 +203,5 @@ Output as XLSX per ORA's three standing naming schemas (ratified 2026-06-10; ORA
 - **rent-comp:** Pull sale comps for comparable sales approach and cap rate data for income approach
 - **acquisition-underwriting:** Tax analysis is a standard component of deal underwriting — feed assessed value and tax rate into pro forma
 - **maintenance-analytics:** Deferred maintenance register supports arguments for physical depreciation in cost approach
-- **re-operations:** Track appeal deadlines in operations calendar, flag upcoming deadlines in monthly checklist
+- **ora-pm-ledger:** Track appeal deadlines in the daily ops ledger, flag upcoming deadlines in the monthly checklist (`re-operations` retired 2026-08-05, redundant with named ops siblings)
 - **document-assembly:** Generate appeal letters using the ORA letterhead template
