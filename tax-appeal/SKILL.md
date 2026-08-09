@@ -49,7 +49,7 @@ Income Approach Value = Stabilized NOI / Market Cap Rate
 - Include management fee (even if self-managed, impute 3-5% for valuation)
 
 **Cap Rate Selection:**
-- Use the rent-comp skill to pull recent sale comps and extract cap rates
+- Use the market-monitor skill (`rent-comp` retired 2026-08-05, comp-sourcing discipline absorbed by market-monitor v1.2) to pull recent sale comps and extract cap rates
 - Or search: "[city] [property type] cap rate [year]"
 - Apply appropriate cap rate for property class and condition
 - Use cap rate RANGE to establish value range (not single point)
@@ -66,7 +66,7 @@ Income Approach Value = Stabilized NOI / Market Cap Rate
 | Income Value (high) | $X |
 
 ### B. Comparable Sales Approach
-- Use the rent-comp skill (sale comp workflow) to pull 3-6 recent comparable sales
+- Use the market-monitor skill (`rent-comp` retired 2026-08-05) to pull 3-6 recent comparable sales
 - Calculate median and mean price/SF from comps
 - Apply to subject property: `Comparable Value = Median Price/SF × Subject SF`
 - Adjust for: age, condition, location, occupancy, lease quality
@@ -76,7 +76,7 @@ Income Approach Value = Stabilized NOI / Market Cap Rate
 Cost Approach Value = Land Value + (Replacement Cost - Depreciation)
 ```
 - **Land value:** County assessor land-only value OR comparable land sales
-- **Replacement cost:** Use maintenance-analytics skill lifecycle costs or search construction costs
+- **Replacement cost:** `maintenance-analytics` retired 2026-08-05, no successor named — search construction costs directly
 - **Depreciation:** `Age / Useful Life × Replacement Cost` (straight-line, 40-year life for industrial)
 
 ---
@@ -200,8 +200,8 @@ Output as XLSX per ORA's three standing naming schemas (ratified 2026-06-10; ORA
 
 ## 7. CROSS-SKILL INTEGRATION
 
-- **rent-comp:** Pull sale comps for comparable sales approach and cap rate data for income approach
+- **market-monitor:** Pull sale comps for comparable sales approach and cap rate data for income approach (`rent-comp` retired 2026-08-05, absorbed here)
 - **acquisition-underwriting:** Tax analysis is a standard component of deal underwriting — feed assessed value and tax rate into pro forma
-- **maintenance-analytics:** Deferred maintenance register supports arguments for physical depreciation in cost approach
+- **(no successor):** `maintenance-analytics` retired 2026-08-05 with no successor named — deferred-maintenance depreciation arguments in the cost approach need a manual source until one exists
 - **ora-pm-ledger:** Track appeal deadlines in the daily ops ledger, flag upcoming deadlines in the monthly checklist (`re-operations` retired 2026-08-05, redundant with named ops siblings)
 - **document-assembly:** Generate appeal letters using the ORA letterhead template
