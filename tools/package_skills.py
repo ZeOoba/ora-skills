@@ -352,7 +352,6 @@ SHARED_ROOT_DEPS = {
     'daily-brief': ['target-markets.json'],
     'deal-comparison': ['target-markets.json'],
     'market-monitor': ['target-markets.json'],
-    'rent-comp': ['target-markets.json'],
     'acquisition-underwriting': ['target-markets.json'],
 }
 
