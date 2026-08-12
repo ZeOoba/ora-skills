@@ -441,6 +441,17 @@ rent-comp (comp data; also feeds STAGE 2.9's comp-based retail/auto cap-rate val
 - Stages: Sourced → Screened → LOI → Under Contract → DD → Closing → Closed (mirror in Acquisition Pipeline Tracker collection://bcfe4a03-7e61-4ac1-a0bb-c44174fa138b). Brokers → Broker Relationships DB (48e43778).
 - Check both DBs for duplicates BEFORE logging; update in place / supersede stale entries rather than duplicating.
 
+### Pipeline stamping (standing rule — added 2026-08-12)
+
+**This skill previously stamped neither field, despite being named as a stamper elsewhere.** `ora-deal-command-board` STEP 2 has described `Last Activity` since 2026-07-17 as "an explicit date stamped by deal owners and deal-touching skills (loi-generation, deal-execution, acquisition-underwriting, etc.)" — but `loi-generation` Phase 6 and `deal-execution`'s NOTION PIPELINE STAMPING section were the only two that actually did it. That gap is closed here; it was never a decision, only an omission.
+
+Any time this skill acts on a deal that has an Acquisition Pipeline Tracker row (`bcfe4a03`) — a SCREEN verdict, a COMPS refresh, an UNDERWRITE, or a FULL IC memo — update that row:
+
+- **`Last Activity` = today (date-only).** A screen or an underwrite IS deal progress. Without this stamp the work is invisible to the weekly board, which reads `Last Activity` and not Notion's system last-edited timestamp, so a deal under active underwriting false-flags STALLED — the exact 754 Old State Route 74 failure documented in `deal-execution`. Underwriting that happens off-Notion (in the model, in a memo) is precisely the case this field exists to cover.
+- **`Next Action Date` — only when the verdict carries a date.** Write it into the column, never only into `Next Action` prose. Realistic cases: a T2 WATCH verdict with a re-check date, a STAGE 2.6 pre-LOI DD item with a deadline, an LOI decision date. **If the verdict carries no date, leave the column NULL** — do not invent one, and specifically do not manufacture a date from the tickler habit ("re-check in 30 days") unless that re-check was actually decided. A fabricated date on a live deal record is a Hard-Invariant-7 fabrication, and it is worse than a null here because two downstream tasks now treat this column as a commitment: `ora-deal-aging-sla` STEP 3d flags a past-due date as a missed self-imposed commitment, and `ora-health-guard` block 4d runs its 7-day deadline sweep off it.
+
+Both fields are date-only. Where `Next Action Date` and the `Next Action` prose disagree, `ora-deal-command-board` STEP 2b reports `DATE DIVERGENCE` rather than reconciling — so an inconsistent stamp surfaces as a contradiction for a human to resolve, not as a silent wrong answer.
+
 ## CAPITAL STRUCTURE CONTEXT
 
 100% family capital; ~15% portfolio LTV; all-cash close capability is the competitive weapon (speed + certainty); generational hold with refi liquidity — no exit requirement. **Two governors, two levels:** per-property refi ceiling = LESSER of 65% LTV and 1.25x DSCR (UNDERWRITING CONVENTIONS); portfolio-aggregate ceiling = 40% LTV (Hard Invariant 4), checked per-deal at STAGE 2.3. At ~15% actual, ORA carries roughly 25 points of headroom to the portfolio governor even with individual refis running to 65% LTV — the aggregate ceiling, not the per-property one, is what to watch as acquisition pace increases toward the $700–800M target.

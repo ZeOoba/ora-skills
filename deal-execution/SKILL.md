@@ -460,6 +460,12 @@ Any time this skill acts on a deal that has an Acquisition Pipeline Tracker row 
 
 This is load-bearing for the weekly `ora-deal-command-board`, which reads `Last Activity` (not Notion's system last-edited timestamp) to decide staleness. PSA negotiation that happens off-Notion must still bump `Last Activity`, or the deal false-flags STALLED while under active work. **Origin: 754 Old State Route 74, 2026-07-17 — the row sat at a frozen 6/11 timestamp through weeks of live PSA negotiation and false-flagged STALLED on the Monday board.** Do NOT rely on the board to stamp this itself — the board is read-only by charter (a board that stamped activity would reset its own stall clock merely by surfacing a deal).
 
+**`Next Action Date` — stamp it whenever the next action carries a date (added 2026-08-12).** The tracker gained a `Next Action Date` date property on 2026-08-11. Rule: **if the `Next Action` text you write names or implies a date, write that date into `Next Action Date` as well — never only into the prose.** If the next action genuinely has no date, leave the column NULL; do not invent one, and do not substitute the target close date or a guess like "about a month out." This is the same argument `loi-generation` Phase 6 already makes for `LOI Expiration Date`: a date sitting only in prose rots the moment anyone edits the field, and nothing can safely alert against it.
+
+This skill is the highest-value stamper of the three, because PSA execution is where dated obligations cluster — EMD delivery deadlines, Feasibility Period expiry, contingency-period ends. Those are exactly the dates that must not live only in a paragraph. Where a workflow produces several dated obligations at once, `Next Action Date` carries the **nearest one ORA must act on**, not the furthest; the full set belongs in the Deal-Terms Register and the diary, which is what those exist for.
+
+Two consumers read this field and both are hardened against a bad value: `ora-deal-command-board` STEP 2b resolves it with a prose fallback and reports column-vs-prose disagreement as `DATE DIVERGENCE` rather than reconciling it, and `ora-deal-aging-sla` STEP 3d flags a past-due date whose `Last Activity` predates it as a missed self-imposed commitment. A wrong date here therefore surfaces as a contradiction rather than being silently trusted — but it still costs a human the reconciliation, so stamp what the document says, not what you infer it means.
+
 ---
 
 ## OUTPUT FORMATS
