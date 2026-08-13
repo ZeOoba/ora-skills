@@ -3,14 +3,33 @@
 Some ORA skills reach the Cowork runtime as members of a **plugin bundle**, not as
 standalone Save-skill installs. This directory version-controls those bundles.
 
-## Why this exists (2026-07-16)
+**Currently empty by design (2026-08-05), not by default.** The one bundle that
+ever lived here, `ora-operations-extensions` (`deal-retirement` +
+`submarket-spatial-analysis`), was retired by Gabriel in commit `2f4f831` — a
+manifest-only overlay with a lifetime invocation count of 1, against 128 for the
+anthropic-skills catalog and 1240 for superpowers. Retiring the manifest removed
+no skill: both members already lived (and still live) as standalone top-level
+repo dirs, so `plugin_of()` now correctly returns `None` for every skill and they
+install via standalone Save-skill. The archived manifest is at
+`_archive/plugins/ora-operations-extensions/` for reference only — do not restore
+it without a fresh Gabriel decision. **`package-and-stage-skill` Step 0 reads
+`plugin_of(skill)` returning `None` as "not bundled" — today that answer is
+correct for every skill, but it is currently a vacuous truth from an empty
+`plugins/` dir, not a per-skill confirmed-standalone check.** If a new plugin
+bundle is ever added here, Step 0 will start discriminating again automatically
+(no code change needed); until then, treat "not bundled" as "no bundles exist
+right now," not as evidence a specific skill was ever evaluated against one.
 
-`deal-retirement` and `submarket-spatial-analysis` are bundled in the
+## History (2026-07-16 — the bundle that used to live here)
+
+`deal-retirement` and `submarket-spatial-analysis` were bundled in the
 `ora-operations-extensions` plugin. When their SKILL.md was committed, the
 post-commit ledger routed them through the standalone Save-skill remedy — the
 WRONG target: a Save-skill `.skill` installs a shadow standalone copy and leaves
 the plugin's loaded copies stale. The bundle also had no source in the repo; the
 only bundle structure was the installed copy, so it wasn't version-controlled.
+This is why the pattern below exists — it is no longer demonstrated by a live
+example in this directory (see the retirement note above).
 
 ## The pattern
 
