@@ -1,6 +1,6 @@
 ---
 name: capex-budgeting
-description: Multi-year capital expenditure planning and reserve studies for Oxford Realty Advisors. Use when the user mentions: capex budget, capital plan, reserve study, multi-year capital, capex schedule, capex forecast, building system replacement, capital reserve, replacement reserve, capex line item, sinking fund, deferred maintenance financial plan, or any task that requires building a capital plan beyond reactive maintenance. Bridges maintenance-analytics (reactive) into financial planning. v1.0
+description: Multi-year capital expenditure planning and reserve studies for Oxford Realty Advisors. Use when the user mentions: capex budget, capital plan, reserve study, multi-year capital, capex schedule, capex forecast, building system replacement, capital reserve, replacement reserve, capex line item, sinking fund, deferred maintenance financial plan, or any task that requires building a capital plan beyond reactive maintenance. Bridges reactive maintenance into financial planning. v1.1 (2026-08-12: tombstoned the three dangling `maintenance-analytics` references left by that skill's 2026-08-05 retirement — predictive failure horizons are now an explicit manual source; no formula or reserve-study method changed)
 license: ORA Internal
 ---
 
@@ -18,7 +18,7 @@ Annual budget kickoff, refi reserve negotiation, property acquisition (initial 1
 
 ## Inputs
 
-- maintenance-analytics skill output (predictive failure horizons by system)
+- **(no successor):** `maintenance-analytics` retired 2026-08-05 (zero-use) — predictive failure horizons by system need a manual source (vendor service records, warranty schedules, building-system age from the Notion property database)
 - Notion property database (build year, last major capex, building systems)
 - Vendor scoreboard (current cost benchmarks)
 - QuickBooks capex history (actual vs. budget variance)
@@ -28,7 +28,7 @@ Annual budget kickoff, refi reserve negotiation, property acquisition (initial 1
 ## Standard Workflows
 
 ### Annual Capex Budget (next FY)
-1. Pull predictive maintenance forecast for next 12 months from maintenance-analytics.
+1. Assemble the next-12-month predictive maintenance forecast manually — `maintenance-analytics` retired 2026-08-05 with no successor named; source from vendor service records, warranty schedules, and building-system age.
 2. Layer in deferred maintenance items prioritized by criticality.
 3. Layer in tenant-driven capex (TI commitments from new leases).
 4. Apply inflation to vendor estimates.
@@ -67,7 +67,7 @@ Annual budget kickoff, refi reserve negotiation, property acquisition (initial 1
 
 ## Dependencies
 
-- maintenance-analytics skill (failure horizons)
+- **(no successor):** `maintenance-analytics` retired 2026-08-05 — failure horizons need a manual source until one exists
 - vendor-management skill (vendor cost benchmarks)
 - xlsx skill (capex schedule models)
 - docx skill (reserve study deliverables)
