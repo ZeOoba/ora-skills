@@ -206,6 +206,91 @@ class ValidateSkillFrontmatter(unittest.TestCase):
         self.assertTrue(any('references/missing.md' in e and 'could not read' in e for e in errors))
 
 
+class FrontmatterYamlValidityGate(unittest.TestCase):
+    """2026-08-13 follow-up: package_skills.py validated description *length* via regex
+    while blind to whether the frontmatter YAML block actually parses. parcel-data-recovery
+    v1.7 shipped a description with an unescaped inner '"' that closed the scalar early --
+    the packager printed 'description 966/1024 chars OK' and the platform silently rejected
+    the import at packaging time with no main.log line at all.
+
+    A repo-wide sweep (2026-08-13) found the install-blocking defect is narrow: a
+    double-quoted description whose first unescaped closing '"' lands BEFORE the end of the
+    value, leaving trailing content that corrupts the block mapping (YAML ParserError:
+    'expected <block end>, but found <scalar>'). Two other strict-YAML failure modes exist
+    in 19 currently-installed skills and must NOT be flagged, since the platform tolerates
+    both: an unquoted description containing ': ' (15 skills, e.g. capex-budgeting), and a
+    double-quoted description that never closes at all -- missing closing quote entirely (4
+    skills, e.g. document-assembly; YAML ScannerError: 'unexpected end of stream'). Gating on
+    strict YAML validity alone would flag all 19 and churn working skills to no effect.
+    """
+
+    def test_real_prefix_parcel_data_recovery_is_rejected(self):
+        # Recovered via `git show d03fe62:parcel-data-recovery/SKILL.md` -- the exact
+        # content that shipped in commit d03fe62 and that the platform rejected.
+        description = (
+            'County-level building SF, market value, year-built, and tax-delinquency '
+            'recovery for Oxford Realty Advisors off-market parcel screens. Encodes '
+            'verified endpoints (2026-06-11). v1.7 (2026-08-12: tombstoned the dangling '
+            '"rent-comp P2" placeholder reference). v1.6 (2026-07-27)'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / 'fixture-skill'
+            skill_dir.mkdir()
+            (skill_dir / 'SKILL.md').write_text(
+                f'---\nname: fixture-skill\ndescription: "{description}"\n---\n\n# x\n',
+                encoding='utf-8',
+            )
+            errors = validate_skill_frontmatter(skill_dir)
+            self.assertTrue(
+                any('unescaped' in e and 'fixture-skill' in e for e in errors),
+                f'expected an unescaped-inner-quote rejection, got: {errors}',
+            )
+
+    def test_fixed_parcel_data_recovery_passes(self):
+        # The single-quote fix actually committed (dcdc98e) -- must pass clean.
+        description = (
+            'County-level building SF recovery. v1.7 (2026-08-12: tombstoned the dangling '
+            "'rent-comp P2' placeholder reference). v1.6 (2026-07-27)"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = _make_skill(Path(tmp), 'fixture-skill', description)
+            errors = validate_skill_frontmatter(skill_dir)
+            self.assertEqual(errors, [])
+
+    def test_unquoted_description_with_colon_space_is_not_flagged(self):
+        """Class B (benign): matches the 15 live skills like capex-budgeting whose
+        unquoted description contains ': ' -- strict yaml.safe_load rejects this
+        ('mapping values are not allowed here') but the platform installs it fine."""
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / 'fixture-skill'
+            skill_dir.mkdir()
+            (skill_dir / 'SKILL.md').write_text(
+                '---\nname: fixture-skill\n'
+                'description: Use when the user mentions: capex budget, capital plan\n'
+                '---\n\n# x\n',
+                encoding='utf-8',
+            )
+            errors = validate_skill_frontmatter(skill_dir)
+            self.assertEqual(errors, [])
+
+    def test_unterminated_double_quoted_description_is_not_flagged(self):
+        """Class B (benign): matches the 4 live skills like document-assembly whose
+        double-quoted description is missing its closing quote entirely -- strict
+        yaml.safe_load rejects this ('unexpected end of stream') but the platform
+        installs it fine, and there is no trailing garbage corrupting the mapping."""
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / 'fixture-skill'
+            skill_dir.mkdir()
+            (skill_dir / 'SKILL.md').write_text(
+                '---\nname: fixture-skill\n'
+                'description: "Automated document generation. v1.3 — changelog in body.\n'
+                '---\n\n# x\n',
+                encoding='utf-8',
+            )
+            errors = validate_skill_frontmatter(skill_dir)
+            self.assertEqual(errors, [])
+
+
 class StagedSkillMapping(unittest.TestCase):
     """staged_skill_dirs() takes an explicit `files` list in tests so it never shells
     out to the real `git diff --cached` — a commit touching only non-skill files must

@@ -80,6 +80,40 @@ def is_skill_dir(top: str) -> bool:
     return top not in SKIP and (REPO / top / 'SKILL.md').is_file()
 
 
+def _description_has_unescaped_inner_quote(raw: str) -> bool:
+    """True iff `raw` (the unparsed text captured after 'description:') is a double-quoted
+    YAML scalar whose first unescaped closing '"' lands BEFORE the end of the value, leaving
+    trailing content that corrupts the surrounding block mapping.
+
+    This is the ONE install-blocking frontmatter defect class found in a 2026-08-13
+    repo-wide sweep (parcel-data-recovery v1.7, commit d03fe62) -- the platform's importer
+    rejects it at packaging time with a bare 'malformed yaml' and no main.log line at all,
+    while package_skills.py's regex-based description extraction sailed past it printing
+    'description N/1024 chars OK'.
+
+    Deliberately narrower than "does the whole frontmatter block parse as strict YAML":
+    two OTHER strict-YAML failure modes are common and benign, tolerated by the platform --
+    an unquoted description containing ': ' (mapping-values-not-allowed), and a double-quoted
+    description that never closes at all (unexpected-end-of-stream, missing closing quote
+    entirely). A 2026-08-13 sweep found 19 live skills in those two benign classes; gating on
+    strict validity alone would flag and needlessly churn all of them. This function returns
+    False for both -- only an early, non-trailing-empty close is treated as a real defect.
+    """
+    s = raw.strip()
+    if not s.startswith('"'):
+        return False
+    i = 1
+    while i < len(s):
+        c = s[i]
+        if c == '\\':
+            i += 2
+            continue
+        if c == '"':
+            return s[i + 1:].strip() != ''
+        i += 1
+    return False  # never closes -- unterminated scalar, not this defect class
+
+
 def validate_skill_frontmatter(skill_dir: Path, *, read_text=None, md_files=None) -> list[str]:
     """Validate one skill dir's SKILL.md frontmatter plus every *.md's named-count headers.
 
@@ -122,6 +156,14 @@ def validate_skill_frontmatter(skill_dir: Path, *, read_text=None, md_files=None
     if not dm:
         errors.append(f"{skill}: frontmatter has no 'description'")
     else:
+        if _description_has_unescaped_inner_quote(dm.group(1)):
+            errors.append(
+                f"{skill}: description is a double-quoted YAML scalar with an unescaped "
+                f'inner \'"\' that closes the scalar early, corrupting the frontmatter block '
+                f"mapping. The platform's importer rejects this at packaging time with a bare "
+                f"'malformed yaml' and NO main.log line (parcel-data-recovery v1.7, "
+                f'2026-08-13). Escape inner quotes as \\" or switch them to single quotes.'
+            )
         desc = dm.group(1).strip().strip("'\"")
         if len(desc) > MAX_DESC:
             errors.append(
