@@ -1,6 +1,6 @@
 ---
 name: lease-abstraction-pipeline
-description: 'Lease abstraction (single document or batch) and rent roll data extraction for Oxford Realty Advisors. Use whenever the user mentions: abstract this lease, abstract/parse leases, extract lease data or terms, lease abstract, summarize/read/review this lease, process lease folder, batch lease, lease pipeline, run lease abstraction, update rent roll from leases, or scheduled lease scan — for one or more commercial leases uploaded directly or in a folder, SharePoint, or Google Drive. Also trigger when an uploaded PDF/DOCX appears to be a commercial lease, or on "run the lease pipeline" / "process the leases" / "update my rent roll". Produces: 32-field abstract per lease (markdown single-doc; master XLSX batch with derived metrics, quality flags, portfolio analytics), Notion Tenant Database upsert, email summary to ggoldberg@oxfordra.net ONLY (routing canon 2026-06-10). Autonomous unattended operation — do not pause mid-run. v2.3 (2026-07-12)'
+description: 'Lease abstraction (single document or batch) and rent roll data extraction for Oxford Realty Advisors. Use whenever the user mentions: abstract this lease, abstract/parse leases, extract lease data or terms, lease abstract, summarize/read/review this lease, process lease folder, batch lease, lease pipeline, run lease abstraction, update rent roll from leases, or scheduled lease scan — for one or more commercial leases uploaded directly or in a folder, SharePoint, or Google Drive. Also trigger when an uploaded PDF/DOCX appears to be a commercial lease, or on "run the lease pipeline" / "process the leases" / "update my rent roll". Produces: 32-field abstract per lease (markdown single-doc; master XLSX batch with derived metrics, quality flags, portfolio analytics), Notion Tenant Database upsert, email summary to ggoldberg@oxfordra.net ONLY (routing canon 2026-06-10). Autonomous unattended operation — do not pause mid-run. v2.4 (2026-08-12: rent-comp ref -> acquisition-underwriting). v2.3 (2026-07-12)'
 ---
 
 # Lease Abstraction Pipeline — Oxford Realty Advisors
@@ -91,7 +91,7 @@ TabContents**1 — Master Rent Roll**One row/lease. All 30 fields + 7 derived me
 
 Target database: ORA Notion Tenant Database. Logic: update record if tenant already exists (match on Tenant Name + Property + Suite); create new record if no match. Do not overwrite records where Notion shows a more recent modified date than the lease document, unless Gabriel explicitly instructs.
 
-Notion FieldSource FieldTenant NameField 2 — Tenant entity namePropertyField 4 — Property addressSuiteField 5 — Suite/unitLease StartField 8 — Commencement dateLease EndField 9 — Expiration dateCurrent Rent (monthly)Field 14 — Base rent Year 1, monthlyRent PSFDerived — Rent PSF Year 1Lease TypeField 18Renewal OptionsField 11GuarantyField 23 — Yes/NoDays Until ExpirationDerived — Months until expiration × 30Flag CountTotal flags (all severities)Flag StatusHighest severity: Critical / Warning / CleanCAM Recovery TypeField 31 (v2.3)Tenant Pro-Rata ShareField 32 (v2.3)
+Notion FieldSource FieldTenant NameField 2 — Tenant entity namePropertyField 4 — Property addressSuiteField 5 — Suite/unitLease StartField 8 — Commencement dateLease EndField 9 — Expiration dateCurrent Rent (monthly)Field 14 — Base rent Year 1, monthlyRent PSFDerived — Rent PSF Year 1Lease TypeField 18Renewal OptionsField 11GuarantyField 23 — Yes/NoDays Until ExpirationDerived — Months until expiration × 30Flag CountTotal flags (all severities)Flag StatusHighest severity: Critical / Warning / CleanCAM Recovery TypeField 31 (v2.3)Tenant Pro-Rata ShareField 32 (v2.4)
 
 ---
 
@@ -149,7 +149,7 @@ Notion: [N] updated / [N] created
 
 - **legal-intelligence:** Reference clause library when flagging non-standard provisions. Compare against Oxford preferred positions.
 - **tenant-intelligence:** Feed extracted data into tenant risk scoring for existing portfolio tenants.
-- **rent-comp:** Compare extracted rent PSF against current market comps for below/above-market flags.
+- **acquisition-underwriting** (successor to the retired `rent-comp`, 2026-08-05): compare extracted rent PSF against current market comps for below/above-market flags, using that skill's COMPS mode / comp-grid discipline (absorbed from `rent-comp` on 2026-08-12 — see the 2026-08-12 event_log entry).
 - **document-assembly:** Use extracted data to auto-populate estoppels, renewal offers, lease addenda.
 - **lease-renewal-pipeline:** Auto-trigger for any lease flagged as expiring within 12 months.
 
@@ -165,6 +165,8 @@ See `references/extraction-edge-cases.md` for guidance on:
 - Ground leases and master lease structures
 
 ## Changelog
+
+- v2.4 (2026-08-12): Repointed the cross-skill `rent-comp` reference (retired 2026-08-05) at `acquisition-underwriting`, which absorbed the comp-grid discipline on 2026-08-12 per Gabriel's scoped-restore ruling. Below/above-market rent PSF flags now have a live method again. No extraction field, derived metric, or quality flag changed.
 
 - v2.3 (2026-07-12): added Fields 31 (CAM Recovery Type) + 32 (Tenant Pro-Rata Share) — the FY2025 CAM reconciliation data-readiness review (ora-cam-reconciliation-annual, 2026-07-12) found these two fields blocking a defensible reconciliation (0/139 and 45/138 leases populated respectively) with no existing extraction path to backfill them. Notion Tenant Database's "CAM Recovery Type" select field already existed with 7 live options (unused); added a matching "Tenant Pro-Rata Share" number/percent property to the same data source. STEP 7 Notion mapping updated; frontmatter field-count bumped 30->32.
 - v2.2 (2026-07-08): HIGH fix (Skill Text Audit finding 5) — Step 6 file-naming citation repointed from the superseded single "ORA File-Naming Standard 2026-05-14.md" to the ratified three-schema doctrine (ORA Cowork Global Settings v2.0, 2026-06-10/11); master workbook classified as a session/analysis output. Also (MEDIUM fix, finding 10): companion `SCHEDULED_TASK.md` version stamp (was 1.0 / 2026-04-04) synced to this file's version.

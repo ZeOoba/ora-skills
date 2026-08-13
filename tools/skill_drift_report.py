@@ -206,10 +206,12 @@ def description_of(frontmatter: str) -> str | None:
       description: >                 -> folded block scalar, joined with spaces;
         continuation lines...           `|` joins with newlines.
 
-    census-acs-extract, ratify-hurdle-rate and oxford-cc-strategic-audit all use
-    the block form, and the original `^description:\\s*(.*)$` regex returned
-    literally '>' for each — so len(cache_desc) < len(repo_desc) could never fire
-    and the regression detector was dead on those three. Only a TOP-LEVEL
+    ratify-hurdle-rate uses the block form (as did census-acs-extract and
+    oxford-cc-strategic-audit, both retired 2026-08-05), and the original
+    `^description:\\s*(.*)$` regex returned literally '>' for each — so
+    len(cache_desc) < len(repo_desc) could never fire and the regression detector
+    was dead on those. ratify-hurdle-rate is now the live block-form fixture that
+    tools/test_skill_drift_report_realdata.py pins to. Only a TOP-LEVEL
     `description:` matches; a nested one under `metadata:` is indented and skipped.
     """
     lines = frontmatter.split('\n')

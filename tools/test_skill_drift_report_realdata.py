@@ -42,9 +42,16 @@ REPO = Path(__file__).resolve().parent.parent
 # Skills chosen for their DESCRIPTION SHAPE, not their content:
 #   parcel-data-recovery  -> double-quoted single-line scalar, and the actual
 #                            subject of the 2026-08-03 near-miss
-#   census-acs-extract    -> folded block scalar (`description: >`)
+#   ratify-hurdle-rate    -> folded block scalar (`description: >`)
+#
+# BLOCK_SCALAR_SKILL was 'census-acs-extract' until 2026-08-12. That skill was
+# retired 2026-08-05 (moved to _archive/), and because _real_parts() returns None
+# for an absent SKILL.md, the three tests below did not FAIL -- they silently
+# SKIPPED, leaving the folded-block-scalar parse path untested for a week. If you
+# retire whatever skill this points at, repoint it at another LIVE skill using
+# `description: >`; do not let it fall back to skipping.
 QUOTED_SCALAR_SKILL = 'parcel-data-recovery'
-BLOCK_SCALAR_SKILL = 'census-acs-extract'
+BLOCK_SCALAR_SKILL = 'ratify-hurdle-rate'
 
 # The trigger phrases the incident record names as lost when the cache
 # description collapsed to 203 chars. These ARE the routing surface.
@@ -123,7 +130,13 @@ class DescriptionParsingOnRealShapes(unittest.TestCase):
         self.assertIsNotNone(desc)
         self.assertNotEqual(desc, '>')
         self.assertGreater(len(desc), 200, 'block scalar was not folded')
-        self.assertIn('Census', desc)
+        # Anchor on a phrase that SPANS a source line break ("...in the\n
+        # capital_config table..."). Presence of it proves the fold actually
+        # JOINED continuation lines with a single space -- a length check alone
+        # would still pass if each line were concatenated without separators, or
+        # kept its newline. (Replaces an `assertIn('Census', ...)` anchor that was
+        # tied to the retired census-acs-extract.)
+        self.assertIn('in the capital_config table', desc)
 
     def test_every_real_skill_yields_a_usable_description(self):
         """Conformance sweep over the live checkout — a new skill added with an
