@@ -99,10 +99,10 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `owner-outreach` — weekly off-market owner cold-outreach letter pipeline (draft only)
 - `parcel-data-recovery` — county-level SF/value/year-built/delinquency recovery for off-market screens
 - `ora-flood-zoning-dd` — FEMA flood + zoning/permitted-use due-diligence determinations
-- `census-acs-extract` — Census ACS educational-attainment/migration data for market underwriting
+- ~~`census-acs-extract`~~ — retired 2026-08-05 (zero use across git history, event_log, and Notion; no doctrine dependency). Archived script still runnable at `_archive/census-acs-extract_retired-2026-08-05/census_acs_extract.py`
 - `ora-millage-lookup` — resolves a parcel's property-tax rate/taxable base from verified government endpoints; companion to acquisition-underwriting STAGE 2.5
 - `market-monitor` — industrial market conditions, vacancy, rent growth, supply pipeline tracking
-- `rent-comp` — rent and sale comparable research for target markets
+- ~~`rent-comp`~~ — retired 2026-08-05; its comp-grid discipline was absorbed into `acquisition-underwriting` on 2026-08-12 (the retirement record wrongly credited `market-monitor` — see the 2026-08-12 event_log entry)
 - `submarket-spatial-analysis` — drive-time, demographics, and locational scoring
 - `deal-comparison` — side-by-side deal and portfolio-fit comparison
 - `loi-generation` — the sole letter-of-intent drafting path
@@ -112,7 +112,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 
 **Portfolio & asset operations**
 - ~~`re-operations`~~ — retired 2026-08-05 (no direct-execution evidence; ops scope covered by `rent-roll-reconciliation`, `lease-renewal-pipeline`, `tenant-intelligence`, `ora-pm-ledger`, `ora-tenant-hubspot-reconciliation`)
-- `maintenance-analytics` — predictive maintenance and CapEx forecasting
+- ~~`maintenance-analytics`~~ — retired 2026-08-05 (zero use for CapEx/maintenance forecasting output); no successor — `capex-budgeting` now sources failure horizons manually
 - `tenant-intelligence` — tenant risk scoring, renewal probability, portfolio health metrics
 - `rent-roll-qc` — final QC/polish pass on rent rolls before external delivery
 - `rent-roll-reconciliation` — reconciles the Notion Tenant DB against an authoritative rent-roll export
@@ -143,7 +143,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `tenant-email` — tenant-facing email drafting (renewals, notices, maintenance, rent)
 - `document-assembly` — template-driven document generation from Notion data (11 templates; not LOIs)
 - `daily-brief` — daily CRE news/market/portfolio intelligence brief
-- `conversation-archival` — archives decisions/analyses to the Notion Knowledge Base
+- ~~`conversation-archival`~~ — retired 2026-08-05 (its entire Notion footprint was evidence-checked, not merely absent)
 
 **Systems, automation & infrastructure**
 - `automation-health-monitor` — scheduled health check across the dual-fleet scheduled-task registry
@@ -153,16 +153,16 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `exception-detection` — anomaly/exception scan across financial, tenant, and pipeline data
 - `graph-app-registration` — Azure AD app registration / Microsoft Graph API access runbook
 - `deploy-site` / `website-perfection` — build/deploy and optimize oxfordra.net
-- `code-debugging-optimizations` — systematic debugging/repair for the site or any codebase
-- `oxford-cc-strategic-audit` — strategic audit of the Oxford Command Center app
+- ~~`code-debugging-optimizations`~~ — retired 2026-08-05 (zero use; redundant with `website-perfection`)
+- ~~`oxford-cc-strategic-audit`~~ — retired 2026-08-05 (hygiene commits exist, but no evidence a full audit run/report was produced or consumed)
 - `package-and-stage-skill` — packaging/staging helper for this repo itself
 - `file-reconciliation` — hash-diff dedupe/reconciliation between file trees
-- `build-with-gate-reviews` — gated build workflow for non-trivial multi-file subsystems
+- ~~`build-with-gate-reviews`~~ — retired 2026-08-05 (zero use across three independent verification passes)
 - `cowork-settings` — version/diff/publish the Cowork Global Settings document
 
 **Shared data:** `target-markets.json` (repo root) — canonical buy-box market list,
-consumed by `acquisition-underwriting`, `daily-brief`, `deal-comparison`, `market-monitor`,
-and `rent-comp`. Not duplicated into any skill folder — see "Conventions" below.
+consumed by `acquisition-underwriting`, `daily-brief`, `deal-comparison`, and
+`market-monitor`. Not duplicated into any skill folder — see "Conventions" below.
 
 ## Conventions
 
