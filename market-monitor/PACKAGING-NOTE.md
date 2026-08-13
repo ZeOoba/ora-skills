@@ -2,8 +2,9 @@
 
 `target-markets.json` is NOT tracked in this directory, by design. `tools/package_skills.py`
 injects it at package time from the single REPO-ROOT copy (`../target-markets.json`) via
-SHARED_ROOT_DEPS (2026-07-09). Five consumer skills share it: acquisition-underwriting,
-daily-brief, deal-comparison, market-monitor, rent-comp.
+SHARED_ROOT_DEPS (2026-07-09). Four consumer skills share it: acquisition-underwriting,
+daily-brief, deal-comparison, market-monitor. (rent-comp was a fifth until it was retired
+2026-08-05; its SHARED_ROOT_DEPS entry was removed 2026-08-12 in 171dc8a.)
 
 Rules:
 1. Do NOT copy target-markets.json into this directory -- it creates a duplicate zip entry
