@@ -225,11 +225,44 @@ delta given an IDENTICAL input, which is exactly what a real doctrine edit produ
 
 ## Limitations / follow-ups (not built this pass)
 
-Found by a mandatory adversarial REFUTE pass (2026-08-14, Fable-pinned) run against this build
-before it was called done — listed here rather than silently fixed where fixing would have
-meant fabricating data this harness doesn't actually have:
+Found by two mandatory adversarial REFUTE passes (2026-08-14, both Fable-pinned) — the first
+against the original 6-deal build, the second against the E Fulton enrichment + scheduled-task
+registration — listed here rather than silently fixed where fixing would have meant fabricating
+data this harness doesn't actually have:
 
-- **Replay nondeterminism is real and now measured, not assumed.** A 3-run repeatability check
+**Second REFUTE pass (E Fulton enrichment + scheduled task) — 2 HIGH-severity findings, both
+fixed same-day, not deferred:**
+1. **The scheduled task's target checkout didn't have the enrichment yet.** The task's prompt
+   points at `C:\Users\Owner\ora-skills` (the primary checkout), but the enrichment commit
+   (`c7527d9`) had only been pushed to `origin/main` — the primary checkout was still on the
+   pre-enrichment golden set (and its own unpushed local commits from an unrelated concurrent
+   session). Had this shipped as-is, the first scheduled run would have replayed the STALE golden
+   set, and an Economics-side regression — the exact blind spot this enrichment exists to close —
+   would have passed silently. Fixed via a plain `git merge origin/main` on the primary checkout
+   (clean, no conflicts, left the other session's unpushed commits and dirty `README.md` fully
+   intact — merge is additive, not destructive, so this was safe under the single-writer
+   discipline without waiting on that session to finish).
+2. **An all-error harness run would have silently marked itself "checked" forever.** The original
+   scheduled-task design advanced `last_checked_sha` unconditionally and only posted to Notion on
+   a scored FLAG — so if every replay subagent errored (model unavailable, parse failure), the run
+   would produce zero FLAGs, post nothing, advance its state anyway, and the doctrine edit would
+   never actually get evaluated by anyone. Fixed: state now advances only on a fully clean run
+   (every deal parsed, regardless of PASS/FLAG); Step 3 now also posts to Notion on ANY parse
+   failure, not just a FLAG, specifically so a malfunctioning run is never indistinguishable from
+   a healthy no-op. Also switched the poll from a commit-SHA check to a `git hash-object` content
+   hash, since a commit-SHA check would never see an uncommitted doctrine edit — and this
+   environment routinely carries uncommitted WIP for weeks (see `project_primary_checkout_main_move_blocked_2026-08-12.md`).
+
+**Lower-severity findings from the same pass, fixed inline in the golden file:** the enrichment's
+"physical specs are time-invariant" framing was overstated (narrowed to a freeze-to-source-date
+window, not "any point in time" — condition-dependent sub-scores and the OM's "active" rail-spur
+claim were carved out as NOT covered by the invariance argument); E Fulton's repeatability stdev
+used population variance (0.85) where the other two HIGH-confidence deals used sample variance —
+corrected to 1.04 for consistency; `SCHEMA.md` updated to document the irreducible-null vs.
+recoverable-gap distinction that got E Fulton to MEDIUM; a P(exec) mean-of-3-discrete-bands value
+flagged as informational-only, not a real band placement.
+
+**First REFUTE pass (original 6-deal build) — replay nondeterminism is real and now measured, not assumed.** A 3-run repeatability check
   on the 2 HIGH-confidence deals (identical frozen inputs, identical doctrine, 3 independent
   subagent replays each) found a 4.5-point Combined-score range on Port Sheldon and a 1.0-point
   range on Liberty — see each deal's `repeatability` block in `golden_set/*.json`. The original
