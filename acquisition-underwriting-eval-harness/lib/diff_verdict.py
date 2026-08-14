@@ -26,6 +26,11 @@ def _require_number(value, label):
     raise ValueError(f"{label} must be a number, got {value!r}")
 
 
+def _is_number_or_none(value):
+    """True for None or a real (non-bool) number -- guards optional aggregate fields."""
+    return value is None or (isinstance(value, Real) and not isinstance(value, bool))
+
+
 def _normalize_tier(tier):
     """Normalize a tier label for informational comparison.
 
@@ -145,6 +150,33 @@ def diff_verdict(golden: dict, observed: dict) -> dict:
             "per-category deltas not computed"
         )
 
+    # Carry the aggregation provenance (n, samples, stdev, range) through to the
+    # result so record_run() persists it. Without this the snapshot cannot show
+    # how many replays actually went into `combined_observed` -- a mean built
+    # from 2-of-3 parsed replays would be indistinguishable from a clean run in
+    # the permanent record, and Step 3's range-exceeds-tolerance advisory would
+    # be unrecordable. Absent for a single-replay (unaggregated) observed dict.
+    aggregate = observed.get("aggregate")
+    if isinstance(aggregate, dict):
+        n = aggregate.get("n")
+        observed_range = aggregate.get("combined_range")
+        if isinstance(n, int) and n < 3:
+            notes.append(
+                f"degraded measurement: mean built from only {n} replay(s) -- "
+                "the harness gates on a 3-replay mean (SKILL.md Step 1)"
+            )
+        if (
+            _is_number_or_none(observed_range)
+            and observed_range is not None
+            and observed_range > tolerance_pts
+        ):
+            notes.append(
+                f"replay spread ({observed_range} pts) exceeds this deal's own "
+                f"tolerance ({tolerance_pts} pts) -- the replays disagreed with "
+                "each other by more than the gate's width, so this verdict is "
+                "weakly supported whichever way it landed"
+            )
+
     return {
         "deal_id": golden.get("deal_id"),
         "status": status,
@@ -159,5 +191,6 @@ def diff_verdict(golden: dict, observed: dict) -> dict:
         "golden_tier": golden_tier,
         "observed_tier": observed_tier,
         "category_deltas": category_deltas,
+        "aggregate": aggregate if isinstance(aggregate, dict) else None,
         "notes": notes,
     }
