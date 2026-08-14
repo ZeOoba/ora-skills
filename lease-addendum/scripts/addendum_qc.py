@@ -262,7 +262,8 @@ CHECKS = [
 
 def scan(path, m3b=False, m4=False, allow_tokens=False, state=None, overlay=None):
     t = text_of(path)
-    ctx = {"m3b": m3b, "m4": m4, "allow_tokens": allow_tokens, "state": state, "overlay": overlay or {}}
+    is_template = "TEMPLATE" in path.upper()
+    ctx = {"m3b": m3b, "m4": m4, "allow_tokens": allow_tokens or is_template, "state": state, "overlay": overlay or {}}
     results = []
     for cid, sev, label, test in CHECKS:
         if test(t, ctx):
