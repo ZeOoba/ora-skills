@@ -31,3 +31,10 @@ _staging/
 
 # Git worktree admin dirs (EnterWorktree / git worktree add convention, 2026-07-12)
 .claude/worktrees/
+
+# Eval-harness daily run output (Rev 10 R10-2, 2026-08-14): writes a run JSON +
+# a summary.csv row on every daily fire, which made this single-writer checkout
+# show uncommitted work every day (false-positive against the shared-checkout
+# protocol) and would have committed ~365 JSONs/yr. Machine-local run state,
+# not source of truth.
+acquisition-underwriting-eval-harness/runs/
