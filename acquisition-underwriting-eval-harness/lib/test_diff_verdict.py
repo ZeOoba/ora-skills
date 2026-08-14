@@ -290,7 +290,11 @@ class TestRealGoldenFiles(unittest.TestCase):
             "REDACTED-021": False,    # LOW
             "REDACTED-031": False,         # LOW
             "REDACTED-024": True,      # HIGH
-            "REDACTED-020": False,   # LOW
+            # Enriched 2026-08-14 (real sourced physical specs, 3-run repeatability
+            # check) -- promoted LOW -> MEDIUM. Tenancy & Lease stays null by design
+            # (occupancy was a genuine unknown at the 6/9 screen date, not a research
+            # gap), so it never reaches HIGH, but MEDIUM is scored=True same as HIGH.
+            "REDACTED-020": True,    # MEDIUM
             "REDACTED-019": True,  # HIGH
         }
         for f in files:
