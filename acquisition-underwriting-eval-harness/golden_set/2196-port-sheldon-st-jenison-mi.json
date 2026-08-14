@@ -6,10 +6,12 @@
   "source": "Notion Deal Sourcing Log (collection://9a6ae219-85a3-4621-899c-c757fd062f8b), queried 2026-08-14",
   "confidence": "HIGH",
   "known_gaps": [
-    "RE-BASELINED 2026-08-14 (see harness README 'RCT v03 date-boundary finding'): original 2026-06-20 screen predates the 2026-07-14 RCT v03 recalibration. archived_pre_v03_reference (Combined 36) is historical only. The `golden` block is the MEAN of 3 independent 2026-08-14 replays under current doctrine (see `repeatability` below) -- not a single N=1 run.",
-    "REPEATABILITY FINDING (2026-08-14, added post-REFUTE-pass): 3 independent frozen replays of this exact deal, identical inputs, identical doctrine, produced Combined 32.0 / 27.5 / 28.5 -- a 4.5-point range, exceeding the harness's original 3.0-pt tolerance on its own. Tolerance widened to 5.0 pts harness-wide as a result (see diff_policy and SKILL.md). This deal is the noisier of the two HIGH-confidence rows -- Liberty Office Park's 3-run range was only 1.0 pt.",
-    "SKILL.md-CITATION LEAKAGE (identified via the repeatability check): this exact address is named in SKILL.md's own text as the worked validation example for the price-watch re-engage trigger ('Validation: 2196 Port Sheldon'). The first replay (Combined 32.0) awarded 5 Seller & Motivation points, apparently drawing on that citation's owner-user-vacating characterization -- a fact NOT present in this file's frozen `inputs`. Two independent re-replays (Combined 27.5, 28.5) explicitly declined to award those points, one of them explicitly noting the citation was inadmissible since it wasn't in the frozen fact set. This is a narrow but real leakage risk specific to golden deals SKILL.md happens to cite by name -- a frozen-replay subagent reading the full skill file sees its own answer key for that one input. Not fixable without either stripping the citation from SKILL.md (out of scope -- read-only) or excluding self-citing deals from the golden set; documented instead as a standing caveat.",
-    "The 2026-08-14 baseline replays are otherwise the cleanest of the six -- all 7 scorecard categories resolved (zero nulls) across all 3 runs.",
+    "RE-BASELINED 2026-08-14 (see harness README 'RCT v03 date-boundary finding'): original 2026-06-20 screen predates the 2026-07-14 RCT v03 recalibration. archived_pre_v03_reference (Combined 36) is historical only. The `golden` block is the MEAN of 6 independent 2026-08-14 replays under current doctrine (see `repeatability` below) -- not a single N=1 run.",
+    "REBASELINED AGAIN 2026-08-14 (n=3 -> n=6, Gabriel-directed): the scheduled-poll run added 3 further replays (25.0 / 28.5 / 27.0) under the SAME doctrine SHA and SAME frozen inputs. Golden Combined moved 29.33 -> 28.08. This was a precision improvement, NOT a detected doctrine change -- 83547a76 was unchanged throughout, so all 6 draws are same-condition samples of one underlying value.",
+    "REPEATABILITY FINDING (2026-08-14, revised at n=6): 6 independent frozen replays of this exact deal, identical inputs, identical doctrine, produced Combined 32.0 / 27.5 / 28.5 / 25.0 / 28.5 / 27.0 -- a 7.0-point range (stdev 2.31), which EXCEEDS the harness's 5.0-pt tolerance on its own. The earlier n=3 range (4.5 pts) understated dispersion; three samples were not enough to size this. The response was NOT to widen the tolerance further but to gate on the mean of 3 replays per run (SKILL.md Steps 1-3), which shrinks the standard error to ~1.33. This deal remains the noisiest row in the set by a wide margin -- Liberty's 6-run range is 2.0 pts and E Fulton's is 2.0 pts.",
+    "SKILL.md-CITATION LEAKAGE (identified via the repeatability check; RE-MEASURED at n=6): this exact address is named in SKILL.md's own text as the worked validation example for the price-watch re-engage trigger ('Validation: 2196 Port Sheldon'). The first replay (Combined 32.0) awarded 5 Seller & Motivation points, apparently drawing on that citation's owner-user-vacating characterization -- a fact NOT present in this file's frozen `inputs`. All FIVE subsequent independent replays declined to award those points (several explicitly noting the citation was inadmissible because it was absent from the frozen fact set, and one returning the category as null rather than 0). So the leakage rate is 1 of 6, not the 1-of-3 the original finding implied -- a real but low-frequency risk, and notably the single leaked run is also the high outlier (32.0) driving much of this deal's dispersion. Still not fixable without either stripping the citation from SKILL.md (out of scope -- read-only) or excluding self-citing deals from the golden set; documented instead as a standing caveat.",
+    "WHY THE CONTAMINATED RUN STAYS IN THE GOLDEN (asked and answered during the REFUTE pass): run 1 (32.0) is the SKILL.md-citation-leaked sample, and dropping it would give mean 27.30, stdev 1.44, range 3.5 -- a tighter-looking baseline. It is deliberately KEPT because the leak is a property of the measurement process, not a one-off error: every future replay reads the same SKILL.md and will leak at roughly the same ~1/6 rate, so the expected future replay is ~27.30 + (1/6)(5) = ~28.13, which the mean-of-6 golden (28.08) matches almost exactly and the contamination-excluded mean (27.30) would not. The golden must predict what future replays will actually produce, not what a hypothetically clean process would. TWO CONSEQUENCES: (i) `golden.seller_motivation` = 0.83 derives entirely from that one run, so clean replays will show a systematic ~-0.83 delta on that category (informational only, never gates); (ii) if the 2196 Port Sheldon citation is ever removed from acquisition-underwriting/SKILL.md, this golden goes stale by roughly +0.8 pts and dispersion drops to ~1.4 stdev -- rebaseline at that point rather than reading the shift as doctrine drift.",
+    "The 2026-08-14 replays are otherwise the cleanest of the six deals -- all 7 scorecard categories resolved in 5 of 6 runs (run 6 returned seller_motivation as null rather than 0, a reporting difference worth 0 points either way, not a genuine input-packet gap).",
     "Building SF has a minor OM-vs-assessor variance (19,777 OM vs 19,471 assessor, ~1.6%) -- below the skill's 2% no-flag threshold, normal noise, not a data-quality issue.",
     "NOI is pro-forma/modeled ($137,027 at $7.50/SF NNN, property 100% vacant) -- expected and consistent with the Lease-Up Assumption Block, not an archive gap."
   ],
@@ -40,35 +42,41 @@
     "runs": [
       {"combined": 32.0, "quality": 32.0, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 12.0, "market_location": 6.0, "seller_motivation": 5.0, "tenancy_lease": 0.0, "value_add": 9.0}, "note": "run 1 (original baseline) -- see SKILL.md-citation-leakage finding re: the 5-pt Seller score"},
       {"combined": 27.5, "quality": 27.5, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 13.5, "market_location": 6.0, "seller_motivation": 0.0, "tenancy_lease": 0.0, "value_add": 8.0}, "note": "run 2"},
-      {"combined": 28.5, "quality": 28.5, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 13.5, "market_location": 6.0, "seller_motivation": 0.0, "tenancy_lease": 0.0, "value_add": 9.0}, "note": "run 3"}
+      {"combined": 28.5, "quality": 28.5, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 13.5, "market_location": 6.0, "seller_motivation": 0.0, "tenancy_lease": 0.0, "value_add": 9.0}, "note": "run 3"},
+      {"combined": 25.0, "quality": 25.0, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 11.0, "market_location": 6.0, "seller_motivation": 0.0, "tenancy_lease": 0.0, "value_add": 8.0}, "note": "run 4 (2026-08-14 scheduled-poll, replay A) -- the low sample; declined the SKILL.md-citation Seller points"},
+      {"combined": 28.5, "quality": 28.5, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 14.5, "market_location": 6.0, "seller_motivation": 0.0, "tenancy_lease": 0.0, "value_add": 8.0}, "note": "run 5 (2026-08-14 scheduled-poll, replay B)"},
+      {"combined": 27.0, "quality": 27.0, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 12.0, "market_location": 6.0, "seller_motivation": null, "tenancy_lease": 0.0, "value_add": 9.0}, "note": "run 6 (2026-08-14 scheduled-poll, replay C) -- returned seller_motivation as null (unsupportable) rather than 0; contributes 0 points either way"}
     ],
-    "combined_mean": 29.33,
-    "combined_stdev": 2.36,
-    "combined_range": 4.5
+    "combined_mean": 28.08,
+    "combined_stdev": 2.31,
+    "combined_sem": 0.94,
+    "combined_range": 7.0,
+    "n": 6,
+    "sampling_note": "Runs 1-3 were the 2026-08-14 build's original repeatability check; runs 4-6 were added by the 2026-08-14 scheduled-poll run (Gabriel-directed, doctrine SHA unchanged at 83547a76 -- so all 6 samples are same-inputs, same-doctrine draws and are legitimately poolable). The n=3 range was 4.5 pts; at n=6 it is 7.0 pts, i.e. the original 3 samples UNDERSTATED this deal's dispersion and the 5.0-pt tolerance derived from them was too tight. See diff_policy.tolerance_rationale."
   },
   "golden": {
     "baselined_date": "2026-08-14",
     "baselined_against_skill_sha": "83547a76651c53c8f3311c2f30db53cbf16fd219",
-    "baselined_method": "mean of 3 independent replays (see repeatability block)",
-    "quality": 29.33,
+    "baselined_method": "mean of 6 independent replays (see repeatability block); REBASELINED 2026-08-14 from the earlier mean-of-3 value 29.33",
+    "quality": 28.08,
     "economics": 0.0,
-    "combined": 29.33,
+    "combined": 28.08,
     "category_breakdown": {
       "basis": 0.0,
       "yield": 0.0,
-      "product_physical": 13.0,
+      "product_physical": 12.75,
       "market_location": 6.0,
-      "seller_motivation": 1.67,
+      "seller_motivation": 0.83,
       "tenancy_lease": 0.0,
-      "value_add": 8.67
+      "value_add": 8.5
     },
-    "category_breakdown_sum_check": "0+0+13.0+6.0+1.67+0+8.67 = 29.34 (~29.33 mean, rounding), matches Combined.",
+    "category_breakdown_sum_check": "0+0+12.75+6.0+0.83+0+8.5 = 28.08 exactly, matches Combined. Category means treat a null as 0 points (run 6's seller_motivation), consistent with how that run's own Combined total excluded them -- see lib/aggregate_replays.py.",
     "expected_score": null,
     "expected_score_note": "P(exec) varied by run scenario (25%/20%/20%) alongside the score -- not meaningfully averageable without re-deriving from the mean Combined; left null rather than averaged.",
     "p_exec_pct": null,
     "verdict_tier": "PASS-band (FLOOR-FLAGGED; price-watch re-engage per SKILL.md's own validation example for this deal)",
-    "floor_result": "FLOOR-FLAGGED across all 3 runs -- Basis breached (~54-56% discount to RCT v03 GR LOW $253.11 vs 65% floor at 1987 vintage) + Yield breached (~6.0-6.1% YoC vs 8.0% floor); DSCR clears (~1.45x, LTV-bound refi) in every run; DENOMINATOR-SENSITIVE in every run",
-    "replay_notes": "Bear-mode UNKNOWN (market-monitor unavailable) -> scored OFF, T2 ceiling, non-binding in all 3 runs. See known_gaps for the SKILL.md-citation-leakage finding driving most of the run-to-run variance (Seller & Motivation 5.0/0.0/0.0)."
+    "floor_result": "FLOOR-FLAGGED across all 6 runs -- Basis breached (~54-56% discount to RCT v03 GR LOW $253.11 vs 65% floor at 1987 vintage) + Yield breached (~6.0-6.9% YoC vs 8.0% floor); DSCR clears (~1.42-1.45x, LTV-bound refi) wherever computed; DENOMINATOR-SENSITIVE in every run",
+    "replay_notes": "Bear-mode UNKNOWN (market-monitor unavailable) -> scored OFF, T2 ceiling, non-binding in all 6 runs. Two independent sources of run-to-run variance: (1) the SKILL.md-citation leakage on Seller & Motivation (5.0 in run 1, 0/null in runs 2-6) and (2) genuine judgment spread on Product & Physical (11.0-14.5 across runs, driven by how much partial credit each run gave for unknown clear height / site function). See known_gaps."
   },
   "archived_pre_v03_reference": {
     "note": "Historical only -- screened 2026-06-20, before the 2026-07-14 RCT v03 recalibration. The pre-v03 Basis score cleared comfortably at the old (lower) floor/denominator; under RCT v03 the same price/SF now breaches. This is the expected, ratified effect of the recalibration, not a regression. NOT the diff target.",
@@ -82,8 +90,8 @@
   "diff_policy": {
     "primary_signal": "combined_score",
     "tolerance_combined_pts": 5.0,
-    "tolerance_rationale": "Widened from an initial arbitrary 3.0 after the repeatability check showed this deal's own 3-run range (4.5 pts) exceeded that tolerance -- a 3.0-pt gate would have false-FLAGged two identical-doctrine reruns of each other. 5.0 pts covers the observed range with a small margin (~mean +/- 2 stdev at stdev=2.36) without being so wide it can't catch a real doctrine-driven swing. See known_gaps for why this deal specifically is noisier than most (SKILL.md-citation leakage).",
+    "tolerance_rationale": "Held at 5.0 pts, but the thing being compared CHANGED on 2026-08-14: the harness now diffs the MEAN of 3 replays against this golden, not a single replay (SKILL.md Steps 1-3, lib/aggregate_replays.py). That is what makes 5.0 defensible here. Single-draw history: the tolerance went 3.0 -> 5.0 after an n=3 range of 4.5 pts; at n=6 the range is 7.0 pts (samples 25.0-32.0, stdev 2.31). Against THIS golden (28.08) the worst observed single draw sits 3.92 pts off (the 32.0 run), inside 5.0 by 1.08 pts -- but that is one observed set of 6, and a single draw carries the full 2.31 stdev, so a plausible worse draw breaches and false-FLAGs on pure noise. Gating on a 3-replay mean collapses that: the delta's dispersion is sqrt(2.31^2/3 + 2.31^2/6) = 1.63 (combining the 3-replay mean's error with this golden's own SEM of 0.94), so a +/-2 sigma band is ~3.3 pts -- inside 5.0 with real margin (false-FLAG probability ~0.2%, z = 3.06) while still catching a doctrine-driven swing. Raising the tolerance instead (to ~7.0) was considered and rejected -- it would have masked the noise rather than averaging it out, and blunted the gate's ability to detect genuine drift. See known_gaps for why this deal specifically is the noisiest in the set (SKILL.md-citation leakage).",
     "tier_check": "informational_only",
-    "reason": "HIGH confidence: fully resolved (zero null categories) across all 3 replays, internally consistent (category sums match Combined in every run). The single noisiest deal in the golden set by raw score variance, but the noise has an identified, documented cause rather than being unexplained -- and remains the strongest row for watching future doctrine-edit deltas precisely because 3 independent samples exist to judge against."
+    "reason": "HIGH confidence: fully resolved across all 6 replays (one null in run 6, worth 0 points either way), internally consistent (category sums match Combined in every run). The single noisiest deal in the golden set by raw score variance, but the noise has an identified, documented cause rather than being unexplained -- and remains a strong row for watching future doctrine-edit deltas precisely because 6 independent samples now exist to judge against."
   }
 }
