@@ -405,8 +405,8 @@ def is_bundled(rel_posix: str) -> bool:
     'references/qc-gate.md', 'versions/20260716_...md'). Excluded from every bundle:
       - PACKAGING-NOTE.md (any level): repo-reader documentation only (2026-07-16 false-
         missing-file incident) — bundling it flips consumers to repo-newer on drift checks.
-      - a top-level versions/ directory: dated version archives (only cowork-settings uses
-        one today) — historical snapshots, never shippable skill content. The drift-check
+      - a top-level versions/ directory: dated version archives (several skills use
+        this pattern today) — historical snapshots, never shippable skill content. The drift-check
         has always SKIPped cowork-settings\versions; excluding it here keeps packager, the
         post-commit hook (tools/pending_reimport.py imports this), and the drift-check in
         agreement so a versions/-only commit never falsely flags a reimport (2026-07-16).
