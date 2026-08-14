@@ -1,6 +1,6 @@
 ---
 name: lease-renewal-pipeline
-description: Flag upcoming lease expirations across the portfolio and draft renewal templates. v1.0
+description: Flag upcoming lease expirations across the portfolio and route renewal-letter drafting through document-assembly. v1.1
 user-invocable: true
 allowed-tools: Read Glob Grep Write WebSearch WebFetch mcp__c5f4869f-7d3a-4472-a66a-8e61315feb51__notion-search mcp__c5f4869f-7d3a-4472-a66a-8e61315feb51__notion-fetch mcp__a3e380ce-2ea9-4b42-92d9-37c588a4b760__search_crm_objects mcp__c0ea3c01-b8f1-4371-aa06-08a1449f59fc__outlook_email_search
 ---
@@ -37,11 +37,9 @@ Show all leases expiring in the next 6 months.
 
 4. **For CRITICAL and ACTION NEEDED tenants:**
    - Check Outlook/HubSpot for recent communication with the tenant
-   - Draft a renewal letter template with:
-     - Proposed new term (3-5 years)
-     - Proposed rent bump (3% annual or market adjustment)
-     - Key lease terms to update
-   - Save drafts to the appropriate property folder
+   - Determine the terms to propose: new term (3-5 years), rent bump (3% annual or market adjustment), key lease terms to update
+   - **Renewal letters are standalone formal documents, not email bodies — per CLAUDE.md's Comms drafting tie-break, route drafting to the `document-assembly` skill's templates, never draft letter prose directly in this skill or hand off to `tenant-email`.** Pass `document-assembly` the tenant name, property, the proposed terms above, and the urgency tier.
+   - Save the resulting draft to the appropriate property folder
 
 5. **Summary output:**
    - Total leases expiring in window
@@ -51,3 +49,7 @@ Show all leases expiring in the next 6 months.
 
 ### Output Format
 Markdown table for the pipeline, followed by draft renewal letters for any critical expirations.
+
+## Changelog
+
+- **v1.1 (2026-08-14):** Fixed a live skill-routing collision (ORA Automation Audit Revision 8, `ora-setup-audit`) — Step 4 previously drafted renewal-letter prose directly with no format specified and no reference to CLAUDE.md's ratified comms-drafting tie-break, a silent third path around `document-assembly`/`tenant-email`. Now determines terms only and hands drafting to `document-assembly`, consistent with the tie-break's "tenant-directed formal letters (renewal offers, notices) route to document-assembly" rule. No change to lease-data sourcing or urgency logic.
