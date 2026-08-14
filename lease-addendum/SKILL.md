@@ -195,8 +195,14 @@ remaining blanks.
 
 ## DOCX build mechanics
 
-Edit the source addendum in place with `python-docx`, preserving the existing style set. No
-sibling skill in this repo already implements table-integrity XML tricks, PDF-pagination
+`templates/Lease_Addendum_TEMPLATE.docx` is the starting point — clean metadata, standing
+counterparts clause, real page break before signatures, enumerated-prior-addenda recital
+scaffolding. `scripts/build_addendum_docx.py` generates it (`--template`) and generates
+populated drafts from deal data (`--config <json>`) using the same mechanics below; regenerate
+the template from this script rather than hand-editing the `.docx` if the scaffolding needs to
+change. For an addendum already in progress (not starting fresh), edit the source addendum in
+place with `python-docx`, preserving the existing style set. No sibling skill in this repo
+already implements table-integrity XML tricks, PDF-pagination
 verification, or signature-page formatting — `lease-form-qc` is read-only and
 `masterlease-jurisdiction-rebase` never touches tables, margins, or fonts. Two patterns are
 reused from `masterlease-jurisdiction-rebase` (attribution in `scripts/addendum_qc.py` header):
