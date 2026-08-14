@@ -10,13 +10,19 @@ Two uses:
        python build_addendum_docx.py --config <config.json> <output.docx>
 
 Mechanics encoded here (see SKILL.md "DOCX build mechanics"):
-  - Times New Roman 12pt body. EB Garamond/DM Sans/Navy/Gold (ORA Institutional
-    Style Guide) is reserved for the QC report deliverable, not the addendum
-    itself -- the one file in the real ORA corpus that set an explicit font used
-    Times New Roman, and it is the standard convention for a legal instrument two
-    outside counterparties will sign.
-  - 1.0" margins throughout, including the Exhibit section (its own
-    WD_SECTION.NEW_PAGE).
+  - Times New Roman 12pt BODY. The letterhead block (firm name, landlord entity,
+    title, property address) uses the ORA Institutional Style Guide (EB Garamond /
+    DM Sans, Navy #1B2A4A) -- sourced from the DelVal Equipment Corp. addendum
+    (29000 Information Lane, 2026-08), the one file in the corpus that carries a
+    branded letterhead. Gabriel's instruction (2026-08-14): 95% of real addenda
+    match the terser Hogan/Hoodz-of-Delmarva pattern for CONTENT (one-line
+    recital, table-per-clause, plain-text signature-page marker) -- that stays
+    the default. Only the letterhead typography and DelVal's margins carry over;
+    the fuller lettered-Recitals/numbered-Amendments narrative structure and
+    DelVal's un-tabled clause layout do NOT -- those were explicitly scoped out.
+  - 0.75"/0.75" top/bottom, 1.0"/1.0" left/right margins (DelVal's), including
+    the Exhibit section (its own WD_SECTION.NEW_PAGE, still 1.0" all sides per
+    the existing Exhibit convention).
   - Hanging-indent labeled paragraphs: bold label + tab, 1.5" hanging indent.
   - w:cantSplit on every table row, w:keepNext on every row but the last (and on
     the paragraph before the table) -- table integrity, never a manual page break.
@@ -37,7 +43,9 @@ from docx import Document
 from docx.enum.section import WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt
+from docx.shared import Inches, Pt, RGBColor
+
+ORA_NAVY = RGBColor(0x1B, 0x2A, 0x4A)
 
 
 def T(val, token):
@@ -45,11 +53,11 @@ def T(val, token):
     return val if val not in (None, "") else f"[{token}]"
 
 
-def set_margins(section, inches=1.0):
-    section.top_margin = Inches(inches)
-    section.bottom_margin = Inches(inches)
-    section.left_margin = Inches(inches)
-    section.right_margin = Inches(inches)
+def set_margins(section, inches=1.0, top=None, bottom=None, left=None, right=None):
+    section.top_margin = Inches(top if top is not None else inches)
+    section.bottom_margin = Inches(bottom if bottom is not None else inches)
+    section.left_margin = Inches(left if left is not None else inches)
+    section.right_margin = Inches(right if right is not None else inches)
 
 
 def set_default_font(doc, name="Times New Roman", size=12):
@@ -62,6 +70,46 @@ def set_default_font(doc, name="Times New Roman", size=12):
         rfonts = rpr.makeelement(qn("w:rFonts"), {})
         rpr.append(rfonts)
     rfonts.set(qn("w:eastAsia"), name)
+
+
+def _styled_run(paragraph, text, font="EB Garamond", size=11, bold=False, italic=False, color=None):
+    r = paragraph.add_run(text)
+    r.font.name = font
+    r.font.size = Pt(size)
+    r.bold = bold
+    r.italic = italic
+    if color is not None:
+        r.font.color.rgb = color
+    return r
+
+
+def add_letterhead(doc, cfg):
+    """Centered letterhead block -- typography sourced verbatim from the DelVal
+    Equipment Corp. addendum (29000 Information Lane, 2026-08), the one file in
+    the corpus that carries one. Firm name / title in DM Sans bold Navy; landlord
+    entity / property address in EB Garamond italic. Scope is letterhead + margins
+    only (Gabriel, 2026-08-14) -- this does not change the body font below it."""
+    ordinal_upper = T(cfg.get("ordinal"), "ORDINAL").upper()
+
+    p1 = doc.add_paragraph()
+    p1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p1.paragraph_format.space_after = Pt(3)
+    _styled_run(p1, "OXFORD REALTY ADVISORS", font="DM Sans", size=15, bold=True, color=ORA_NAVY)
+
+    p2 = doc.add_paragraph()
+    p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p2.paragraph_format.space_after = Pt(15)
+    _styled_run(p2, T(cfg.get("landlord_entity"), "LANDLORD ENTITY"), font="EB Garamond", size=11, italic=True, color=ORA_NAVY)
+
+    p3 = doc.add_paragraph()
+    p3.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p3.paragraph_format.space_after = Pt(14)
+    _styled_run(p3, f"{ordinal_upper} ADDENDUM TO LEASE", font="DM Sans", size=14, bold=True, color=ORA_NAVY)
+
+    p4 = doc.add_paragraph()
+    p4.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p4.paragraph_format.space_after = Pt(14)
+    _styled_run(p4, T(cfg.get("premises_address"), "PREMISES ADDRESS, CITY, STATE ZIP"), font="EB Garamond", size=11, italic=True)
 
 
 def set_row_cantsplit(row):
@@ -281,7 +329,7 @@ def add_exhibit_a_guaranty(doc, cfg):
 def build_addendum(cfg, output_path):
     doc = Document()
     set_default_font(doc)
-    set_margins(doc.sections[0], 1.0)
+    set_margins(doc.sections[0], top=0.75, bottom=0.75, left=1.0, right=1.0)
 
     ordinal_upper = T(cfg.get("ordinal"), "ORDINAL").upper()
     doc.core_properties.title = f"{ordinal_upper} ADDENDUM TO LEASE"
@@ -294,10 +342,7 @@ def build_addendum(cfg, output_path):
         br.bold = True
         banner.paragraph_format.space_after = Pt(12)
 
-    title = doc.add_paragraph()
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    tr = title.add_run(f"{ordinal_upper} ADDENDUM TO LEASE")
-    tr.bold = True
+    add_letterhead(doc, cfg)
 
     # Recital -- enumerated prior addenda, not a blanket catch-all (Doctrine rule 1)
     prior = cfg.get("prior_addenda", [])
