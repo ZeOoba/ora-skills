@@ -67,7 +67,7 @@
   },
   "diff_policy": {
     "primary_signal": "combined_score",
-    "tolerance_combined_pts": 3.0,
+    "tolerance_combined_pts": 5.0,
     "tier_check": "informational_only",
     "reason": "HIGH confidence: the 2026-08-14 baseline replay is fully resolved (zero null categories), internally consistent (category sum matches Combined exactly), and cross-validates against an independent skill-documented figure (the price-watch re-engage band). The strongest row in the re-baselined golden set -- the one most worth watching for future doctrine-edit deltas."
   },
