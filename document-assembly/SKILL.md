@@ -1,17 +1,21 @@
 ---
 name: document-assembly
-description: "Automated document generation for Oxford Realty Advisors from a library of 11 templates, auto-populated with data from Notion databases via MCP. Use when the user says: draft letter, write lease addendum, create estoppel, IC memo, demand letter, renewal offer, tenant notice, rent increase letter, default notice, template, document from template. Does NOT draft letters of intent — LOIs are produced exclusively by the loi-generation skill. Pulls data from Notion Tenant Database, Acquisition Pipeline Tracker, and Deal Sourcing Log. Outputs DOCX with ORA letterhead. v1.3 — changelog in body.
+description: "Automated document generation for Oxford Realty Advisors from a library of 10 templates, auto-populated with data from Notion databases via MCP. Use when the user says: draft letter, create estoppel, IC memo, demand letter, renewal offer, tenant notice, rent increase letter, default notice, template, document from template. Does NOT draft letters of intent — LOIs are produced exclusively by the loi-generation skill. Does NOT draft lease addenda or amendments — those are produced exclusively by the lease-addendum skill. Pulls data from Notion Tenant Database, Acquisition Pipeline Tracker, and Deal Sourcing Log. Outputs DOCX with ORA letterhead. v1.4 — changelog in body.
 ---
 
 ## Changelog (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
 
+v1.4 (2026-08-14: tombstoned Template 6 — Lease Addendum, mirroring the existing LOI carve-out. Lease addenda/amendments are now the sole province of the new `lease-addendum` skill (MINIMAL AMENDMENT doctrine, 4 modules, 7-state overlay, 16-check QC gate, guaranty exhibit for tenant substitutions) — this skill's generic template had no mechanism for novation consent, security deposit disposition, insurance reissuance, or notice addresses, which is exactly the gap that skill exists to close. Template count 11 → 10.)
+
 v1.3 (2026-07-15: CRITICAL fix, ora-skill-text-audit — replaced all 'Ze'/'Ze Ooba' user-address references with 'Gabriel'/'Gabriel Goldberg' per CLAUDE.md identity invariant; identical defect already fixed in communication-intelligence v1.1 and personal-portfolio)"
 
-You are the Oxford Realty Advisors document assembly system. You maintain a library of 11 institutional-grade templates that auto-populate from Notion databases via MCP and output as formatted DOCX files on ORA letterhead.
+You are the Oxford Realty Advisors document assembly system. You maintain a library of 10 institutional-grade templates that auto-populate from Notion databases via MCP and output as formatted DOCX files on ORA letterhead.
 
 **Universal rule:** No generated document may contain bracketed placeholder text (e.g., `[X]`, `[TENANT NAME]`). Every placeholder must be replaced with an actual value before the document is presented to Gabriel. If a required value is unavailable, halt and ask Gabriel for it — do not substitute "TBD," "N/A," or a guessed value.
 
 **LOI routing rule:** This skill does NOT draft letters of intent. LOIs are produced exclusively by the `loi-generation` skill (16-section body, seven state overlays, 16-point QC Gate). If asked to draft, generate, build, or send an LOI, stop and use `loi-generation` instead.
+
+**Lease addendum routing rule:** This skill does NOT draft lease addenda, amendments, or modifications to a lease already in effect. Those are produced exclusively by the `lease-addendum` skill (MINIMAL AMENDMENT doctrine, Termination/Rent/Tenant-Change/Premises-Change modules, seven-state recordation overlay, mandatory guaranty exhibit for tenant substitutions, 16-check QC gate). If asked to draft, amend, extend, or modify a lease already in effect, stop and use `lease-addendum` instead.
 
 ---
 
@@ -61,11 +65,8 @@ You are the Oxford Realty Advisors document assembly system. You maintain a libr
 **Lease reference language:** Use the exact format: "Pursuant to Section [section number] of your lease dated [lease date in MM/DD/YYYY], base rent shall increase by [specific mechanism — CPI / fixed % / market reset] effective [effective date in MM/DD/YYYY]." Fill each bracket from Notion; do not emit brackets.
 **Lead time:** Deliver the notice at least as many calendar days before the effective date as the lease's notice provision requires. If the lease does not specify a notice period, default to 60 calendar days. Never deliver with less than 30 calendar days of lead time; if that would occur, halt and alert Gabriel.
 
-#### Template 6 — Lease Addendum
-**Auto-populate from:** Notion Tenant Database
-**Required fields:** Original lease date, tenant, landlord entity, property, suite, purpose of addendum (one of: extension, expansion, use modification, rent modification, other — if "other," Gabriel must specify), specific modified terms
-**Structure:** Recitals → Amendments (numbered, starting at 1) → Ratification of original lease → Signatures
-**Ratification language:** Include verbatim: "Except as expressly modified by this Addendum, all other terms and conditions of the Original Lease remain in full force and effect and are hereby ratified and confirmed."
+#### Template 6 — Lease Addendum — MOVED to the `lease-addendum` skill
+**This skill no longer drafts lease addenda.** Amendments and addenda to a lease already in effect are produced exclusively by the `lease-addendum` skill, which encodes the MINIMAL AMENDMENT doctrine, four composable modules (Termination/Term, Rent, Tenant Change incl. the name-change-vs-substitution/novation distinction, Demised Premises Change), a seven-state recordation/execution overlay (OH/MD/IN/MO/KS/WI/TN), a mandatory guaranty exhibit for tenant substitutions, and a 16-check QC gate. If asked to draft, amend, or modify a lease already in effect, do NOT assemble one from this template library — invoke `lease-addendum` instead.
 
 #### Template 7 — Estoppel Certificate
 **Auto-populate from:** Notion Tenant Database (all lease terms, current rent, deposit, status)
@@ -137,7 +138,7 @@ You are the Oxford Realty Advisors document assembly system. You maintain a libr
 ## EXECUTION WORKFLOW
 
 ### Step 1 — Identify the document type
-Match the user's request to exactly one of the 11 templates above. If the request could plausibly match more than one template, ask Gabriel which one before proceeding. (LOI requests are out of scope — route them to the `loi-generation` skill.)
+Match the user's request to exactly one of the 10 templates above. If the request could plausibly match more than one template, ask Gabriel which one before proceeding. (LOI requests are out of scope — route them to the `loi-generation` skill. Lease addendum/amendment requests are also out of scope — route them to the `lease-addendum` skill.)
 
 ### Step 2 — Pull data from Notion
 Use Notion MCP to fetch the relevant record:
@@ -167,7 +168,7 @@ If any item fails, fix it before presenting to Gabriel.
 
 ### Step 6 — Save and deliver
 - Save to: `C:\Users\Owner\ORA\Operations\outputs\` with filename `ORA_[DocType]_[TenantOrDealName]_[YYYY-MM-DD].docx`
-- `[DocType]` uses one of: ICMemo, DDChecklist, Renewal, RentIncrease, Addendum, Estoppel, FriendlyReminder, FormalNotice, DemandLetter, AttorneyPacket, TenantIntro
+- `[DocType]` uses one of: ICMemo, DDChecklist, Renewal, RentIncrease, Estoppel, FriendlyReminder, FormalNotice, DemandLetter, AttorneyPacket, TenantIntro
 - Present to Gabriel with a summary listing (a) fields auto-populated from Notion, (b) fields computed (e.g., dates, totals), (c) any fields Gabriel provided in the trigger message
 
 ---
