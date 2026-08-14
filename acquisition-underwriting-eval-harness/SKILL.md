@@ -61,42 +61,60 @@ not summing to the archived Combined. Cause not determinable from the archive. I
 today's pass/fail (see finding 1 — that block is never diffed), but kept because it's a real,
 otherwise-undocumented gap in the Deal Sourcing Log's own internal consistency.
 
-**3. Frozen-input-packet incompleteness.** Even against the re-baselined golden values, 4 of 6
+**3. Frozen-input-packet incompleteness.** Even against the re-baselined golden values, most
 baseline replays left 2-3 of the 7 scorecard categories `null` (Product & Physical, Seller &
 Motivation, Tenancy & Lease most often) because the input packet — reconstructed from Notion's
 *structured* fields — doesn't capture the physical/site/comp detail the *original* live-tooled
-screens evidently had. Only 2196 REDACTED-119 and REDACTED-069 resolved cleanly (zero
-nulls); those are `confidence: HIGH` and the ones most worth watching for a future doctrine-edit
-delta. The other 4 are `confidence: LOW`, run and report, but are `scored: false` /
-`informational_only: true` — excluded from the strict pass/fail tally until their input packets
-can be enriched. **Because of both findings above, the harness's primary and only pass/fail-gating
-signal is the Combined-score delta — never the tier label** (see `golden_set/SCHEMA.md` and each
-deal's `diff_policy`).
+screens evidently had. 2196 REDACTED-119 and REDACTED-069 resolved cleanly (zero nulls) from
+the start; REDACTED-059 was enriched 2026-08-14 (Gabriel's request — see "REDACTED-156
+enrichment" below) to 1 null (Tenancy & Lease only). All three are `confidence: HIGH`/`MEDIUM` and
+`scored: true`. The remaining 3 deals are `confidence: LOW`, run and report, but are
+`scored: false` / `informational_only: true` — excluded from the strict pass/fail tally until their
+input packets can be enriched the same way. **Because of both findings above, the harness's primary
+and only pass/fail-gating signal is the Combined-score delta — never the tier label** (see
+`golden_set/SCHEMA.md` and each deal's `diff_policy`).
+
+**4. REDACTED-156 enrichment (2026-08-14, Gabriel's request) — closed the Economics-blind-spot.**
+Before this, both scored deals (REDACTED-119, Liberty) breach both the Basis and Yield floors,
+pinning Economics at 0.0 — a future edit to the Basis scale, Yield slope, or RCT top-of-scale would
+move neither one unless it flipped a floor from breach to clear, the exact class of edit that
+motivated this build. Enriching REDACTED-156's input packet with real, sourced physical specs (REDACTED-107 Co. OM, Crexi listing, Franklin County Auditor CAMA, pre-6/9 Morning Brief pages — full
+citations in the golden file's `known_gaps`) resolved 6 of 7 scorecard categories and produced a
+Basis of 25.0/25 (full points, CapEx-supported) — REDACTED-156 is now `confidence: MEDIUM`, `scored:
+true`, and the harness's only scored deal with nonzero Economics. Tenancy & Lease stays null by
+design, not by gap: occupancy was a confirmed unknown at the 6/9 screen date ("rent roll
+unreconciled"), and backfilling it with later data would violate the frozen-snapshot discipline —
+this is why the deal is MEDIUM rather than HIGH. The enrichment also surfaced a genuine finding the
+original screen could not have caught: per-building SF (previously totally unknown) shows the North
+Main Building breaches the 50,000 SF/building gate under every plausible reading — all 3 repeatability
+runs independently flagged this as GATE-FLAGGED.
 
 ## Golden set
 
 `golden_set/*.json` — 6 frozen deals, schema documented in `golden_set/SCHEMA.md`. `golden` =
 the 2026-08-14 re-baseline (finding 1 above); confidence reflects how many of that replay's 7
-scorecard categories are null (finding 3):
+scorecard categories are null (finding 3), except where a null is structurally irreducible rather
+than a research gap (finding 4 — REDACTED-156's Tenancy & Lease):
 
 | Deal | Confidence | Scored (gates PASS/FLAG)? | Golden Combined | 3-run range |
 |---|---|---|---|---|
 | REDACTED-023 | HIGH (0 nulls) | Yes | 29.33 (mean of 3) | 4.5 pts |
 | REDACTED-069, West Chester OH | HIGH (0 nulls) | Yes | 28.67 (mean of 3) | 1.0 pt |
-| REDACTED-059, Columbus OH | LOW (2 nulls) | No — informational only | 47.0 (1 run) | n/a |
+| REDACTED-059, Columbus OH | MEDIUM (1 null, irreducible — see finding 4) | Yes | 57.17 (mean of 3) | 2.0 pts |
 | REDACTED-102 Ave, Cincinnati OH | LOW (2 nulls, no ask/NOI) | No — informational only | 22.4 (1 run) | n/a |
 | REDACTED-113 Rd, Gahanna OH | LOW (3 nulls) | No — informational only | 9.0 (1 run) | n/a |
 | 470 REDACTED-148 Blvd, Columbus OH | LOW (3 nulls, Quality fully null) | No — informational only | 0.0 (1 run) | n/a |
 
-`golden.combined` for the 2 HIGH deals is the mean of 3 independent replays (see "Limitations" —
-the repeatability check that produced these ranges is why the tolerance is 5.0 pts, not 3.0). The
-4 LOW deals are single-run values, run and reported for completeness but excluded from strict
-pass/fail regardless of any future repeatability finding.
+`golden.combined` for the 3 scored deals is the mean of 3 independent replays each (see
+"Limitations" — the repeatability check that produced these ranges is why the tolerance is 5.0
+pts, not 3.0). The 3 LOW deals are single-run values, run and reported for completeness but
+excluded from strict pass/fail regardless of any future repeatability finding.
 
-First snapshot: `runs/2026-08-14T205042Z_baseline-rebaselined.json` (2 scored deals, both PASS by
-construction — golden values are drawn from this same repeatability-corrected set; the next real
-run, after any doctrine edit, is the first one to diff against it and produce a non-trivial
-result).
+Latest snapshot: `runs/2026-08-14T212717Z_REDACTED-043-baseline.json` (3 scored
+deals, all PASS by construction — golden values are drawn from this same repeatability-corrected
+set, same convention as the original baseline). See `runs/summary.csv` for the full dated list.
+The next real run, after any doctrine edit, is the first to diff the new 3-scored-deal set and
+produce a non-trivial result.
 
 ## Procedure
 
@@ -229,28 +247,55 @@ meant fabricating data this harness doesn't actually have:
   replay reading the full skill file sees its own answer key for that one input. No golden deal in
   this set other than REDACTED-119 is currently affected (checked: none of the others are cited by
   address in SKILL.md).
-- **The strict-scoring gate cannot currently see an Economics-side doctrine edit.** Both HIGH
-  deals (REDACTED-119, Liberty) breach both the Basis and Yield floors, pinning Economics at 0.0
-  in every run. A future edit to the Basis linear scale, the Yield slope, or the RCT top-of-scale
-  would move neither scored deal unless it happened to flip a floor from breach to clear — the
-  exact class of edit (a replacement-cost/floor recalibration) that motivated this whole build in
-  the first place. Only the LOW-confidence (unscored) rows currently exercise nonzero Economics
-  (REDACTED-156: Basis 25.0; Hamilton: Basis 7.4, assumption-contingent). Enriching one nonzero-Economics
-  deal's input packet to HIGH confidence — or sourcing a 7th golden deal that clears at least one
-  floor — would close this gap; not done in this pass because it would require facts not
-  currently available (see "frozen-input-packet incompleteness" above), and inventing them would
-  violate the no-fabrication constraint this whole harness exists to uphold.
-- **No unattended re-run path.** Re-running today requires a Claude Code session to drive the
-  Agent-tool orchestration in Steps 1–2. A headless `claude -p` CLI script would remove that
-  dependency but was descoped for this pilot (flagged, not built).
-- **No scheduled-task registration.** Per ratified scope — needs its own Gabriel-gated
-  registration via `register-scheduled-task` if this pattern proves out.
-- **Not extended to other skills.** Piloted on `acquisition-underwriting` only.
-- **4 of 6 golden deals are LOW-confidence / informational-only** (input-packet incompleteness —
-  2-3 of 7 scorecard categories null in the replay) — a 3rd-4th HIGH-confidence golden deal would
-  strengthen the strict-scoring set beyond its current 2 rows; none of the remaining candidates in
-  the Deal Sourcing Log currently have complete enough facts (confirmed via a dedicated research
-  pass, 2026-08-14).
+- **RESOLVED 2026-08-14 — the strict-scoring gate could not previously see an Economics-side
+  doctrine edit.** Both HIGH deals (REDACTED-119, Liberty) breach both the Basis and Yield floors,
+  pinning Economics at 0.0 in every run; a future edit to the Basis linear scale, the Yield slope,
+  or the RCT top-of-scale would have moved neither scored deal unless it happened to flip a floor
+  from breach to clear — the exact class of edit (a replacement-cost/floor recalibration) that
+  motivated this whole build. Closed by enriching REDACTED-156's input packet with real, sourced
+  physical facts (see "REDACTED-156 enrichment" above) rather than sourcing a new 7th golden deal —
+  REDACTED-156 is now `scored: true` with Basis 25.0/25 (full points), the harness's only scored deal
+  with nonzero Economics. **Residual gap:** this closes the blind spot for edits that move the
+  Basis scale/RCT floor near REDACTED-156's 90%+ discount (still comfortably clear of the ≥76%
+  top-of-scale threshold, so a moderate recalibration might not move it either) — a broader edit
+  stress-test would benefit from a 4th scored deal nearer its own floor boundary; not pursued this
+  pass since none of the remaining LOW-confidence candidates have recoverable enough facts
+  (confirmed 2026-08-14).
+- **No unattended re-run path — investigated 2026-08-14, headless CLI confirmed non-viable in
+  this environment.** Re-running today requires a Claude Code session to drive the Agent-tool
+  orchestration in Steps 1–2. Tried a headless `claude -p` subprocess wrapper (the natural
+  candidate) and it fails immediately: a nested CLI invocation from within a running session's
+  Bash tool has no persisted auth (`claude auth status` reports `loggedIn: false`, no
+  `ANTHROPIC_API_KEY`, and the parent session's OAuth token does not carry over — confirmed by
+  direct test, not assumption). This isn't a scripting bug to fix; it's how this environment's
+  credential model works. **The actual unattended path ORA already has is `register-scheduled-task`**
+  — the CC/MCP and LAMS/Cowork fleets run scheduled SKILL.md procedures inside the authenticated
+  Desktop app, not as bare subprocess calls, so this harness's SKILL.md (Steps 1–2's Agent-tool
+  orchestration) is already shaped correctly to become a scheduled task once a cadence/trigger is
+  ratified — see the next bullet. No separate headless-script build is needed or was pursued
+  further.
+- **RESOLVED 2026-08-14 — scheduled-task registration.** Gabriel ratified: event-driven trigger
+  (approximated via daily polling of `acquisition-underwriting/SKILL.md`'s git SHA — the fleet has
+  no true git-hook trigger, so a cheap daily SHA check that only runs the full 6-deal replay on an
+  actual change is the closest fit) and Notion Operations Hub posting, but ONLY when a scored deal
+  FLAGs (silent no-op on PASS, to avoid noise). Registered as `ora-acquisition-underwriting-eval-harness`
+  on the CC/MCP fleet, `14 12 * * *` (~12:23 PM ET daily with jitter), verified via
+  `list_scheduled_tasks`. The task is a thin wrapper — it reads and follows this SKILL.md's Steps
+  0–5 rather than duplicating them, per the registration skill's own single-source-of-truth
+  guidance. State (`last_checked_sha`) lives in the task's own folder
+  (`~/.claude/scheduled-tasks/ora-acquisition-underwriting-eval-harness/state.json`), not in the
+  `ora-skills` repo, specifically to avoid a daily write to the shared single-writer checkout.
+- **Not extended to other skills.** Gabriel's explicit call, 2026-08-14: stay pilot-only for now —
+  prove out `acquisition-underwriting`'s harness across a few real doctrine-edit cycles (the
+  scheduled task above will surface these) before replicating the pattern elsewhere.
+- **3 of 6 golden deals are LOW-confidence / informational-only** (input-packet incompleteness —
+  2-3 of 7 scorecard categories null in the replay) — a 4th scored golden deal (beyond the 3 now
+  scored: REDACTED-119, Liberty, REDACTED-156) would further strengthen the strict-scoring set; none of
+  the remaining 3 candidates (Hamilton, REDACTED-113 Rd, 470 REDACTED-148) currently have complete
+  enough facts to enrich the same way REDACTED-156 was (confirmed via the same research pass that
+  enriched REDACTED-156, 2026-08-14 — Hamilton and 470 REDACTED-148 both lack any NOI/price basis at all,
+  not just physical specs; REDACTED-113 Rd's underlying arithmetic inconsistency, per finding 2
+  above, is a deeper archive problem physical enrichment wouldn't fix).
 - **The re-baselined golden values are themselves unverified LLM judgment**, not ground truth —
   the numeric floor/YoC/discount components were independently recomputed and verified correct
   during the REFUTE pass, but the judgment-scored categories (Product & Physical, Market &
