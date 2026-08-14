@@ -16,36 +16,44 @@ an unfilled token here is a QC check 14 BLOCK like anywhere else in the document
 THIS GUARANTY OF LEASE ("**Guaranty**") is made as of [EFFECTIVE DATE] by [GUARANTOR NAME],
 an individual residing at [GUARANTOR ADDRESS] ("**Guarantor**"), in favor of [LANDLORD ENTITY],
 a [STATE] [ENTITY TYPE] ("**Landlord**"), with respect to that certain lease dated [PRIME LEASE
-DATE], as amended, between Landlord and [TENANT ENTITY] ("**Tenant**"), for premises located at
-[PREMISES ADDRESS] (as amended, the "**Lease**").
+DATE], as amended, between Landlord and [TENANT ENTITY], a [STATE] [ENTITY TYPE] ("**Tenant**"),
+for premises located at [PREMISES ADDRESS] (the "**Premises**") (the Prime Lease, as amended,
+including by the Addendum dated [ADDENDUM DATE] to which this Guaranty is attached, the
+"**Lease**").
 
-**A. Consideration and Reliance.** Guarantor acknowledges that Landlord would not consent to
-[the Addendum / the assignment, assumption, or substitution effected by the Addendum dated
-[ADDENDUM DATE]] without this Guaranty, that Guarantor derives a direct or indirect financial
-benefit from Tenant's occupancy of the Premises, and that Landlord is relying on this Guaranty
-as a material inducement to enter into the Addendum.
+**A. Consideration and Reliance.** Guarantor holds a direct or indirect ownership interest in
+Tenant, will derive substantial economic benefit from the Lease, has received a copy of the
+Lease, and acknowledges the sufficiency of that consideration. Landlord has agreed to enter into
+the Addendum in reliance on this Guaranty as a material inducement, and would not have done so
+without it.
 
-**B. Guaranty.** Guarantor unconditionally guarantees to Landlord the full and prompt payment
-and performance of all of Tenant's obligations under the Lease, including the payment of Rent
-and all other sums due, and the performance of all covenants, as and when due, whether at
-stated maturity, by acceleration, or otherwise (payment **and** performance — not a guaranty of
-collection).
+**B. Guaranty.** Guarantor unconditionally guarantees to Landlord the full and prompt payment of
+all rent and other sums payable by Tenant, and the full and faithful performance of all of
+Tenant's obligations, under the Lease for the entire term and any extension, renewal, or
+holdover, together with all damages, costs, and reasonable attorneys' fees arising from Tenant's
+failure to pay or perform. THIS IS A GUARANTY OF PAYMENT AND PERFORMANCE AND NOT OF COLLECTION.
 
-**C. Direct, Primary and Continuing.** This is a guaranty of payment and performance, not of
-collection. Guarantor's obligations are direct and primary and are not conditioned on Landlord
-first proceeding against Tenant, any other guarantor, or any collateral, or exhausting any
-remedy against any of them. Landlord may proceed against Guarantor without first pursuing
-Tenant or any other person. This Guaranty is continuing and covers the Lease as it may be
-further amended, extended, or renewed.
+**C. Direct, Primary and Continuing.** Guarantor's liability is primary, direct, and independent
+of Tenant's, and continues until all obligations under the Lease are fully paid and performed.
+It is not conditioned upon any notice or demand, upon Landlord first proceeding against Tenant
+or any other guarantor, or upon Landlord pursuing or exhausting any security deposit or other
+collateral, each of which Guarantor waives. Landlord may enforce this Guaranty against Guarantor
+alone.
 
-**D. Amendments; Waiver of Defenses.** Guarantor consents in advance to any amendment,
-modification, extension, or renewal of the Lease, and to any assignment or sublease consented
-to by Landlord, without notice to Guarantor and without release of or reduction in Guarantor's
-obligations. Guarantor waives: presentment, demand, protest, and notice of any kind (including
+**D. Amendments; Waiver of Defenses.** Landlord may, without notice to or the consent of
+Guarantor and without releasing, reducing, or otherwise affecting Guarantor's liability: (i)
+amend, modify, extend, renew, or replace the Lease, including any rent increase or term
+extension; (ii) consent to any assignment, subletting, or further substitution of Tenant; (iii)
+grant any indulgence or forbearance, waive any default, or release, impair, or apply any
+security deposit or any other guarantor's obligations; this Guaranty applies to the Lease as so
+amended. Guarantor waives: presentment, demand, protest, and notice of any kind, including
 notice of default, notice of acceptance of this Guaranty, and notice of any amendment to the
-Lease); all suretyship and similar defenses, including impairment of collateral, release of any
-co-guarantor, and any defense arising from Landlord's election of remedies; and any right to
+Lease; every defense available to a surety or guarantor, including any defense based on
+amendment of the Lease, impairment of collateral or of subrogation rights, release of any other
+obligor, or unenforceability of the Lease against Tenant for any reason; and any right to
 require Landlord to proceed against Tenant or any security before proceeding against Guarantor.
+Guarantor subordinates every claim against Tenant to prior payment in full of the guaranteed
+obligations.
 
 **E. Bankruptcy; Reinstatement.** If Tenant becomes a debtor in any bankruptcy or insolvency
 proceeding, Guarantor's obligations extend to all amounts that would have been payable by
@@ -55,21 +63,29 @@ Guarantor's obligations are reinstated to the extent any payment to Landlord by 
 Tenant or Guarantor is avoided, set aside, or required to be repaid as a preference,
 fraudulent transfer, or otherwise under the Bankruptcy Code or applicable insolvency law.
 
-**F. General.** This Guaranty is governed by the laws of the State of [PROPERTY STATE], without
-regard to conflict-of-laws principles. Venue for any action lies exclusively in the state or
-federal courts sitting in [COUNTY], [PROPERTY STATE], and Guarantor consents to personal
-jurisdiction there. GUARANTOR AND LANDLORD EACH WAIVE ANY RIGHT TO TRIAL BY JURY in any action
-arising out of this Guaranty or the Lease. Guarantor shall reimburse Landlord's reasonable
-attorneys' fees and costs incurred to enforce this Guaranty. This Guaranty binds Guarantor's
-heirs, executors, administrators, and successors, and inures to the benefit of Landlord's
-successors and assigns. If more than one Guarantor executes this Guaranty, their obligations
-are joint and several. **[IF UNDER SEAL — see state overlay: recite "GIVEN UNDER SEAL" here and
-place a seal/scroll ["L.S."] beside the signature below; a seal recited in the body but absent
-at the signature does not hold.]**
+**F. General.** This Guaranty is governed by the laws of the State of [PROPERTY STATE]. Venue
+for any action lies exclusively in the state or federal courts in and for [COUNTY],
+[PROPERTY STATE], and Guarantor consents to personal jurisdiction there. LANDLORD AND GUARANTOR
+EACH WAIVE TRIAL BY JURY. The prevailing party is entitled to its court costs and reasonable
+attorneys' fees, including on appeal. This Guaranty binds Guarantor's heirs, personal
+representatives, successors, and assigns and inures to Landlord's successors and assigns,
+including any purchaser or mortgagee; Guarantor may not assign its obligations. If executed by
+more than one person, liability is joint and several. This Guaranty may be modified only by a
+writing signed by Landlord and Guarantor.
 
-IN WITNESS WHEREOF, Guarantor has executed this Guaranty as of the date first written above.
+▶ CONDITIONAL — UNDER SEAL ◀ (include this sentence and the "(SEAL)" signature designation only
+where the state overlay's limitations-period entry makes a sealed instrument materially
+advantageous — e.g., Maryland's 12-year specialty period vs. 3-year simple-contract period; for
+an entity Guarantor the seal must be recited here in the body, not only at the signature, or it
+does not hold per that state's case law — see `state-overlay.json`'s `limitations_period` entry
+for the state in question): "This Guaranty is executed under seal and is intended as a sealed
+instrument." ▶ END CONDITIONAL ◀
+
+Executed and delivered ▶ CONDITIONAL — UNDER SEAL ◀ under seal ▶ END CONDITIONAL ◀ on this
+_____ day of ______________, [YEAR].
 
 GUARANTOR:
 
-_________________________________ (SEAL, if applicable)
+_________________________________ ▶ CONDITIONAL — UNDER SEAL ◀ (SEAL) ▶ END CONDITIONAL ◀
 [GUARANTOR NAME]
+Address: [GUARANTOR ADDRESS]
