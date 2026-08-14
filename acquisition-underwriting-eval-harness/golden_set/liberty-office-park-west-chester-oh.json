@@ -42,7 +42,19 @@
     ],
     "combined_mean": 28.67,
     "combined_stdev": 0.58,
-    "combined_range": 1.0
+    "combined_range": 1.0,
+    "additional_samples_2026-08-14_scheduled_poll": {
+      "note": "3 further replays collected by the 2026-08-14 scheduled-poll run under the SAME doctrine hash and SAME frozen inputs. Recorded for dispersion evidence but deliberately NOT folded into `golden.combined`: the n=6 mean is 28.33 vs the shipped golden 28.67, a 0.34-pt shift well inside noise, and rebaselining a stable deal for that gains nothing while churning the baseline. Contrast 2196 Port Sheldon, which WAS rebaselined because its n=6 dispersion materially changed the picture.",
+      "runs": [
+        {"combined": 27.0, "quality": 27.0, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 14.0, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 3.0, "value_add": 1.0}, "note": "run 4 (scheduled-poll replay A)"},
+        {"combined": 28.0, "quality": 28.0, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 14.0, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 3.0, "value_add": 2.0}, "note": "run 5 (scheduled-poll replay B)"},
+        {"combined": 29.0, "quality": 29.0, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 15.0, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 3.0, "value_add": 2.0}, "note": "run 6 (scheduled-poll replay C)"}
+      ],
+      "combined_mean_all_6": 28.33,
+      "combined_stdev_all_6": 0.82,
+      "combined_range_all_6": 2.0,
+      "n_all": 6
+    }
   },
   "golden": {
     "baselined_date": "2026-08-14",

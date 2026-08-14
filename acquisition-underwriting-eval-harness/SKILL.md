@@ -98,25 +98,41 @@ the 2026-08-14 re-baseline (finding 1 above); confidence reflects how many of th
 scorecard categories are null (finding 3), except where a null is structurally irreducible rather
 than a research gap (finding 4 — E Fulton's Tenancy & Lease):
 
-| Deal | Confidence | Scored (gates PASS/FLAG)? | Golden Combined | 3-run range |
+| Deal | Confidence | Scored (gates PASS/FLAG)? | Golden Combined | Observed range |
 |---|---|---|---|---|
-| 2196 Port Sheldon St, Jenison MI | HIGH (0 nulls) | Yes | 29.33 (mean of 3) | 4.5 pts |
-| Liberty Office Park, West Chester OH | HIGH (0 nulls) | Yes | 28.67 (mean of 3) | 1.0 pt |
-| E Fulton St Portfolio, Columbus OH | MEDIUM (1 null, irreducible — see finding 4) | Yes | 57.17 (mean of 3) | 2.0 pts |
+| 2196 Port Sheldon St, Jenison MI | HIGH (0 nulls) | Yes | 28.08 (mean of 6) | **7.0 pts (n=6)** |
+| Liberty Office Park, West Chester OH | HIGH (0 nulls) | Yes | 28.67 (mean of first 3) | 2.0 pts (n=6) |
+| E Fulton St Portfolio, Columbus OH | MEDIUM (1 null, irreducible — see finding 4) | Yes | 57.17 (mean of first 3) | 2.0 pts (n=4) |
 | 11850 Hamilton Ave, Cincinnati OH | LOW (2 nulls, no ask/NOI) | No — informational only | 22.4 (1 run) | n/a |
 | 1333 Research Rd, Gahanna OH | LOW (3 nulls) | No — informational only | 9.0 (1 run) | n/a |
 | 470 McCormick Blvd, Columbus OH | LOW (3 nulls, Quality fully null) | No — informational only | 0.0 (1 run) | n/a |
 
-`golden.combined` for the 3 scored deals is the mean of 3 independent replays each (see
-"Limitations" — the repeatability check that produced these ranges is why the tolerance is 5.0
-pts, not 3.0). The 3 LOW deals are single-run values, run and reported for completeness but
+`golden.combined` for the scored deals is the mean of N independent replays. Port Sheldon's is
+the mean of all 6. Liberty's and E Fulton's remain the mean of their **first 3** — their extra
+2026-08-14 samples are recorded under `repeatability.additional_samples_2026-08-14_scheduled_poll`
+in each file but deliberately did NOT move their goldens, because the resulting shifts (28.67 →
+28.33 and 57.17 → 56.88) are both under 0.4 pts, i.e. pure noise, and churning a stable baseline
+for that buys nothing. Port Sheldon was rebaselined because its n=6 dispersion materially changed
+the picture. The 3 LOW deals are single-run values, run and reported for completeness but
 excluded from strict pass/fail regardless of any future repeatability finding.
 
-Latest snapshot: `runs/2026-08-14T212717Z_post-e-fulton-enrichment-baseline.json` (3 scored
-deals, all PASS by construction — golden values are drawn from this same repeatability-corrected
-set, same convention as the original baseline). See `runs/summary.csv` for the full dated list.
-The next real run, after any doctrine edit, is the first to diff the new 3-scored-deal set and
-produce a non-trivial result.
+**Every run gates on the MEAN of 3 replays per deal, never a single draw** (Steps 1–3 below).
+This is the direct consequence of the n=6 finding: Port Sheldon's single-draw range is 7.0 pts
+against a 5.0-pt tolerance, so one replay could false-FLAG on noise alone. See "Limitations".
+
+Latest snapshot: `runs/2026-08-14T215119Z_scheduled-poll.json` — the **first genuine
+replay-to-golden diff this harness has ever run** (3 scored, 3 PASS, 0 FLAG, doctrine SHA
+unchanged). Every prior snapshot fed each golden block back in as its own observed value and so
+passed by construction; see "Limitations". `runs/summary.csv` has the full dated list.
+
+**Read that snapshot with two caveats — it predates the changes it motivated.** (1) Its
+`combined_observed` values are SINGLE replays, not 3-replay means; the mean-of-3 gate was
+adopted *because* of what this run measured, so it is the last single-draw run, not an example
+of current procedure. Under the new gate the same replay data gives Port Sheldon −1.25 rather
+than the −4.33 recorded there. (2) Its per-category deltas resolve rather than showing `None`
+only because the runner hand-normalized the display-name keys in a scratch driver; the
+normalization now lives in `aggregate_replays.py`, so later snapshots get it automatically.
+Its Port Sheldon and Liberty rows also diff against the pre-rebaseline goldens (29.33 / 28.67).
 
 ## Procedure
 
@@ -127,9 +143,18 @@ snapshot can be attributed to an exact doctrine revision:
 git -C <ora-skills repo root> log -1 --format=%H -- acquisition-underwriting/SKILL.md
 ```
 
-**Step 1 — for each `golden_set/*.json` file**, spawn one subagent (Agent tool,
+**Step 1 — for each `golden_set/*.json` file**, spawn **3 independent subagents** (Agent tool,
 `model: "fable"` — this replays scored/financial logic and must never run below the Fable
-floor) with a prompt built from this template:
+floor), each with the SAME prompt built from the template below. Three, not one: a single replay
+is not a stable measurement (n=6 finding — Port Sheldon's single-draw range is 7.0 pts against a
+5.0-pt tolerance), and the gate compares the mean of the 3 in Step 3.
+
+Send all 3 in one message so they run concurrently, and do NOT vary the prompt between them —
+identical prompts are what make them samples of one distribution rather than three different
+questions. For a 6-deal set that is 18 agents per run.
+
+Prompt template (used verbatim for every replay of every deal, substituting only the frozen
+facts):
 
 ```
 You are running a FROZEN REPLAY of the acquisition-underwriting skill's SCREEN mode, for a
@@ -169,21 +194,43 @@ response, matching this shape:
 ```
 
 **Step 2 — parse.** Extract the single fenced `json` block from each subagent's final response.
-If a response contains zero or more than one fenced json block, that deal's replay FAILED —
-report it as an error, do not guess which block was intended.
+If a response contains zero or more than one fenced json block, that replay FAILED — report it
+as an error, do not guess which block was intended. A failed replay is **never** silently
+dropped from its deal's sample set: report it, and if fewer than 3 replays parsed for a deal,
+say so explicitly in Step 5 (`aggregate.n` records what actually went into the mean).
 
-**Step 3 — diff.** For each parsed observed result, call
-`lib.diff_verdict.diff_verdict(golden_json, observed_json)`.
+**Step 2.5 — aggregate.** For each deal, pass its list of parsed replays to
+`lib.aggregate_replays.aggregate_replays(replays)`. This returns ONE observed dict whose
+`combined` is the **mean** across replays, plus an `aggregate` block carrying `n`,
+`combined_samples`, `combined_stdev`, `combined_sem`, `combined_range`, and
+`category_null_counts`. It also normalizes the replay prompt's display-name category keys
+("Product & Physical") to the golden files' snake_case ("product_physical") — without that,
+`diff_verdict`'s per-category deltas silently return `None` on every real replay.
+
+**Step 3 — diff.** For each deal's aggregated observed result, call
+`lib.diff_verdict.diff_verdict(golden_json, observed_json)`. The gate compares the 3-replay mean
+against `golden.combined` — never a single draw.
+
+If a deal's own `aggregate.combined_range` exceeds its `diff_policy.tolerance_combined_pts`,
+report that alongside the verdict: the replays disagreed with each other by more than the gate's
+own width, so that deal's PASS/FLAG is weakly supported this run regardless of which way it
+landed. Port Sheldon does this routinely (range 7.0 vs tolerance 5.0) — it is the known-noisy
+row, not a new finding.
 
 **Step 4 — snapshot.** Collect all `diff_verdict()` results into a list and call
 `lib.record_run.record_run(results, run_dir="runs/", skill_sha=<Step 0 hash>, run_label=<your
 choice, e.g. "baseline" or "post-<doctrine-change>">)`.
 
 **Step 5 — report.** Print a summary table (deal_id, status, scored, combined_golden,
-combined_observed, combined_delta) and call out any `status == "FLAG"` among `scored: true`
-rows prominently — that is the harness's actual regression signal. `informational_only` rows
-are shown for completeness but are not evidence of a regression by themselves (see Data-quality
-finding above).
+combined_observed, combined_delta, plus `n` and `combined_range` from the aggregate block) and
+call out any `status == "FLAG"` among `scored: true` rows prominently — that is the harness's
+actual regression signal. `informational_only` rows are shown for completeness but are not
+evidence of a regression by themselves (see Data-quality finding above). Also report any deal
+where fewer than 3 replays parsed, or where `combined_range` exceeded tolerance.
+
+**Before treating any FLAG as doctrine drift, check Step 0's SHA against the previous run's.**
+If the doctrine SHA is UNCHANGED, a FLAG cannot be a regression by construction — it is noise, a
+golden-set edit, or an input-packet change. Check `git log` on the golden file before escalating.
 
 ## Self-test (regression-detection proof)
 
@@ -204,7 +251,7 @@ To reproduce the full self-test from scratch (e.g. after changing `diff_verdict.
 3. Diff the mutated replay's result against the REAL (unmutated) golden file's `golden` block
    — not against the mutated fixture's own `golden` block, which is a straight copy and would
    trivially self-match.
-4. Confirm `combined_delta` from `diff_verdict()` exceeds the 3.0-pt tolerance and `status ==
+4. Confirm `combined_delta` from `diff_verdict()` exceeds the 5.0-pt tolerance and `status ==
    "FLAG"`. This proves the load → replay → diff → flag pipeline works end to end.
 
 **Caught in this build:** running this self-test surfaced a real bug — a 2026-08-14 golden-set
@@ -268,16 +315,50 @@ flagged as informational-only, not a real band placement.
   range on Liberty — see each deal's `repeatability` block in `golden_set/*.json`. The original
   3.0-pt tolerance would have produced false FLAGs from LLM run-to-run noise alone. Tolerance
   widened to 5.0 pts harness-wide as a direct, cited response (not an arbitrary round number —
-  see `diff_policy.tolerance_rationale` in each file). **Only 3 samples per deal exist; this is
-  a first estimate, not a converged one.** More repeat runs (ideally 5–10 per HIGH-confidence
-  deal) would tighten the tolerance and increase confidence that a future FLAG is real doctrine
-  drift rather than residual noise. `golden.combined` for both HIGH deals is now the mean of the
-  3 samples, not a single run.
-- **SKILL.md-citation leakage on named-example deals.** Port Sheldon is cited by address in
-  SKILL.md's own text as the worked validation example for the price-watch trigger. One of the 3
-  repeatability runs appears to have drawn on that citation (awarding Seller & Motivation points
-  for an owner-user-vacating characterization not present in the frozen `inputs`); two independent
-  re-runs correctly declined to. This is a narrow, real, and only partially mitigable risk for any
+  see `diff_policy.tolerance_rationale` in each file). **That n=3 estimate has since been
+  superseded — see the n=6 finding below.**
+
+**Third pass (2026-08-14 scheduled-poll run) — the n=3 dispersion estimate was too low, and two
+latent defects surfaced on the first real diff:**
+1. **n=3 understated the noise; the fix is averaging, not a wider tolerance.** The scheduled-poll
+   run added 3 more replays per HIGH deal. At n=6, Port Sheldon's range is **7.0 pts** (samples
+   25.0/27.0/27.5/28.5/28.5/32.0, stdev 2.31) — it EXCEEDS the 5.0-pt tolerance, so two honest
+   same-doctrine replays could false-FLAG each other. Liberty (2.0 pts, n=6) and E Fulton (2.0
+   pts, n=4) are tight; the noise is concentrated in one deal. Response (Gabriel-ratified): (a)
+   Port Sheldon's golden rebaselined to the n=6 mean **28.08** (was 29.33), and (b) **every run
+   now gates on the mean of 3 replays** via `lib/aggregate_replays.py`, which cuts that mean's
+   standard error to ~1.33. The gate diffs it against a golden that is itself an estimate (mean
+   of 6, SEM ~0.94), so the honest dispersion of the delta is √(2.31²/3 + 2.31²/6) ≈ **1.63** —
+   a ±2σ band of ~±3.3 pts inside the 5.0-pt tolerance, i.e. a false-FLAG probability of ~0.2%
+   (z = 3.06). Quoting the 3-replay SEM alone (±2.7) understates that by ~10× in probability
+   terms; both clear the tolerance, but ±3.3 is the number to reason with. Widening the
+   tolerance to ~7.0 was explicitly rejected — it masks noise instead of averaging it, and
+   blunts detection of real drift.
+2. **Every snapshot before `2026-08-14T215119Z_scheduled-poll.json` passed by construction.**
+   `run_baseline_2026-08-14.py` fed each golden block back in as its own `observed` value, so
+   the diff was golden-vs-itself and could only ever return delta 0.0. The "2 PASS" / "3 PASS"
+   on those baselines was therefore not evidence the harness works. The scheduled-poll run is
+   the first true replay-to-golden diff.
+3. **Per-category deltas were silently dead** (masked by defect 2). The replay prompt asks for
+   display-name keys ("Product & Physical"); golden files store snake_case
+   ("product_physical"); `diff_verdict` matches keys exactly — so on a real replay every
+   per-category delta returned `None`. Golden-vs-golden trivially matched, which is why it went
+   unnoticed. Fixed by normalization in `aggregate_replays.py`, with a test asserting every
+   golden-set category key is a reachable normalization target.
+4. **Concurrency hazard, observed live.** A concurrent session rebaselined E Fulton's golden
+   mid-run (LOW/47.0 → MEDIUM/57.17), so replays launched against the old input packet diffed
+   against a new golden and produced a −12.17 "FLAG" that was pure artifact. Re-check
+   `git log`/mtimes on `golden_set/` immediately before Step 4 and discard any deal whose golden
+   moved mid-run — do not record or alert on it. `ora-skills` is a single-writer checkout;
+   prefer an isolated worktree for any harness edit.
+- **SKILL.md-citation leakage on named-example deals** (re-measured at n=6). Port Sheldon is
+  cited by address in SKILL.md's own text as the worked validation example for the price-watch
+  trigger. One replay drew on that citation (awarding Seller & Motivation points for an
+  owner-user-vacating characterization not present in the frozen `inputs`); **all five other
+  replays declined to**, several explicitly noting the citation was inadmissible as it wasn't in
+  the frozen fact set. So the leakage rate is 1-in-6, not the 1-in-3 the n=3 sample implied —
+  and that single leaked run is also the high outlier (32.0) inflating this deal's dispersion.
+  This is a narrow, real, and only partially mitigable risk for any
   future golden deal that also happens to be named in SKILL.md's own worked examples — a frozen
   replay reading the full skill file sees its own answer key for that one input. No golden deal in
   this set other than Port Sheldon is currently affected (checked: none of the others are cited by
