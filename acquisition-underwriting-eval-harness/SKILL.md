@@ -120,19 +120,27 @@ excluded from strict pass/fail regardless of any future repeatability finding.
 This is the direct consequence of the n=6 finding: Port Sheldon's single-draw range is 7.0 pts
 against a 5.0-pt tolerance, so one replay could false-FLAG on noise alone. See "Limitations".
 
-Latest snapshot: `runs/2026-08-14T215119Z_scheduled-poll.json` — the **first genuine
-replay-to-golden diff this harness has ever run** (3 scored, 3 PASS, 0 FLAG, doctrine SHA
-unchanged). Every prior snapshot fed each golden block back in as its own observed value and so
-passed by construction; see "Limitations". `runs/summary.csv` has the full dated list.
+**`runs/` is git-ignored** (2026-08-14) — snapshots are machine-local run state, not source of
+truth, and a daily fire writing into a tracked directory inside a single-writer checkout
+manufactured a daily false "uncommitted work that isn't yours" signal. Snapshots still get
+written and are still the durable local record; they are just not versioned. **The tracked
+evidence trail is each golden file's `repeatability` block**, which carries the individual
+per-replay samples the goldens were computed from.
 
-**Read that snapshot with two caveats — it predates the changes it motivated.** (1) Its
-`combined_observed` values are SINGLE replays, not 3-replay means; the mean-of-3 gate was
-adopted *because* of what this run measured, so it is the last single-draw run, not an example
-of current procedure. Under the new gate the same replay data gives Port Sheldon −1.25 rather
-than the −4.33 recorded there. (2) Its per-category deltas resolve rather than showing `None`
-only because the runner hand-normalized the display-name keys in a scratch driver; the
-normalization now lives in `aggregate_replays.py`, so later snapshots get it automatically.
-Its Port Sheldon and Liberty rows also diff against the pre-rebaseline goldens (29.33 / 28.67).
+The **first genuine replay-to-golden diff this harness ever ran** was the 2026-08-14
+scheduled-poll (3 scored, 3 PASS, 0 FLAG, doctrine unchanged; snapshot
+`2026-08-14T215119Z_scheduled-poll.json`, local-only). Every earlier snapshot fed each golden
+block back in as its own observed value and so passed by construction — see "Limitations".
+
+**If you still have that snapshot locally, read it with two caveats — it predates the changes it
+motivated.** (1) Its `combined_observed` values are SINGLE replays, not 3-replay means; the
+mean-of-3 gate was adopted *because* of what that run measured, so it is the last single-draw
+run, not an example of current procedure. Under the new gate the same replay data gives Port
+Sheldon −1.25 rather than the −4.33 recorded there. (2) Its per-category deltas resolve rather
+than showing `None` only because the runner hand-normalized the display-name keys in a scratch
+driver; that normalization now lives in `aggregate_replays.py`, so later snapshots get it
+automatically. Its Port Sheldon and Liberty rows also diff against the pre-rebaseline goldens
+(29.33 / 28.67).
 
 ## Procedure
 
