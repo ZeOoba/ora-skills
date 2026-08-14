@@ -1,6 +1,6 @@
 ---
 name: acquisition-underwriting-eval-harness
-description: "Golden-set regression harness for the acquisition-underwriting skill — replays a frozen set of 6 past SCREEN-mode deals against CURRENT SKILL.md doctrine, diffs the resulting Combined score against a re-baselined golden snapshot, flags deltas beyond tolerance, and writes a dated re-runnable snapshot. Use after any material doctrine edit to acquisition-underwriting (a scorecard-weight amendment, a new QC-gate rule, a ruling/amendment) to check whether the change actually moved scores and by how much — not a live deal-evaluation tool, never invoke this for an actual acquisition screen. PILOT — one skill only, no scheduled-task registration yet."
+description: "Golden-set regression harness for the acquisition-underwriting skill — replays a frozen set of 6 past SCREEN-mode deals against CURRENT SKILL.md doctrine, diffs the resulting Combined score against a re-baselined golden snapshot, flags deltas beyond tolerance, and writes a dated re-runnable snapshot. Use after any material doctrine edit to acquisition-underwriting (a scorecard-weight amendment, a new QC-gate rule, a ruling/amendment) to check whether the change actually moved scores and by how much — not a live deal-evaluation tool, never invoke this for an actual acquisition screen. PILOT — piloted on one skill only; registered 2026-08-14 as a daily-polling scheduled task."
 ---
 
 # Acquisition-Underwriting Eval Harness (pilot, v1.0 — 2026-08-14)
@@ -11,8 +11,10 @@ scoring actually change, and by how much?** It does not evaluate real deals and 
 invoked for one — its inputs are deliberately frozen historical facts, not live research.
 
 Built 2026-08-14 per Gabriel's ratified scope (`memory/reference_skill_eval_harness_gap_2026-08-14.md`):
-pilot on `acquisition-underwriting` only, harness-only (no scheduled-task registration, no
-extension to other skills this pass).
+pilot on `acquisition-underwriting` only, no extension to other skills this pass. The original
+scope was harness-only; Gabriel ratified scheduled-task registration later the same day, and the
+task went live 2026-08-14 (CC/MCP fleet, `ora-acquisition-underwriting-eval-harness`, daily
+poll) — see Limitations.
 
 ## When to invoke
 
@@ -29,8 +31,10 @@ extension to other skills this pass).
   fetching live data (Notion, market-monitor, web, comp pulls) — see the replay prompt below.
 - Not a judgment on whether a doctrine edit was "right." It only reports whether the score
   changed and by how much; whether that change is an improvement is Gabriel's call.
-- Not wired into any scheduled task. Re-running it today requires a Claude Code session to
-  drive the Agent-tool orchestration below — see LIMITATIONS.
+- Not a headless/standalone script. It IS wired into a scheduled task (CC/MCP fleet,
+  `ora-acquisition-underwriting-eval-harness`, daily poll — live 2026-08-14), but that task still
+  drives the Agent-tool orchestration below from inside an authenticated Claude Code session; a
+  bare `claude -p` subprocess cannot run it. See LIMITATIONS.
 
 ## Data-quality findings (read before trusting any delta)
 
