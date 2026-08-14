@@ -290,7 +290,11 @@ class TestRealGoldenFiles(unittest.TestCase):
             "11850-hamilton-ave-cincinnati-oh": False,    # LOW
             "1333-research-rd-gahanna-oh": False,         # LOW
             "2196-port-sheldon-st-jenison-mi": True,      # HIGH
-            "e-fulton-st-portfolio-columbus-oh": False,   # LOW
+            # Enriched 2026-08-14 (real sourced physical specs, 3-run repeatability
+            # check) -- promoted LOW -> MEDIUM. Tenancy & Lease stays null by design
+            # (occupancy was a genuine unknown at the 6/9 screen date, not a research
+            # gap), so it never reaches HIGH, but MEDIUM is scored=True same as HIGH.
+            "e-fulton-st-portfolio-columbus-oh": True,    # MEDIUM
             "liberty-office-park-west-chester-oh": True,  # HIGH
         }
         for f in files:
