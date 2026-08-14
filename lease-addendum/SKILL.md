@@ -40,10 +40,12 @@ else. This is the design center; every module below operates inside it.
    unchanged provision — restatement creates ambiguity about whether it was amended. (Confirmed
    as ORA's actual practice across the existing addendum corpus — no restatement anywhere in it.)
 3. **Ratification clause is mandatory.** ORA's own canonical sentence, used verbatim in every
-   addendum reviewed: *"All other terms of the Prime Lease will remain in effect."* Extend it
-   only where a conflict-control clause is genuinely needed (e.g., a novation touching multiple
-   prior addenda): add "; this Addendum controls on conflict; no other term is modified expressly
-   or by implication."
+   addendum reviewed: *"All other terms of the Prime Lease will remain in effect."* Where a
+   conflict-control clause is genuinely needed (M3b, or any amendment touching multiple prior
+   addenda), add it as its own sentence, not a semicolon-appended rider — this is ORA's own
+   verified practice, not an invented convention: *"All other terms of the Prime Lease will
+   remain in full force and effect. In the event of any conflict between this Addendum and the
+   Prime Lease, this Addendum controls."*
 4. **Never renumber the Prime Lease.** Cross-reference by section title, not number — the house
    style already does this by using generic labels (Termination, Rent, Tenant, Brokers) rather
    than section numbers; preserve that.
