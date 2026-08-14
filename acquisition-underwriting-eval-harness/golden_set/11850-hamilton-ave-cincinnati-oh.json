@@ -1,0 +1,80 @@
+{
+  "deal_id": "11850-hamilton-ave-cincinnati-oh",
+  "deal_name": "11850 Hamilton Ave, Cincinnati OH 45231 (Dollar General, quasi-IOS)",
+  "mode": "SCREEN",
+  "date_seen": "2026-06-09",
+  "source": "Notion Deal Sourcing Log (collection://9a6ae219-85a3-4621-899c-c757fd062f8b), scored row (pre-v03 Combined 53), queried 2026-08-14; cross-referenced Acquisition Pipeline Tracker row 'Dollar General Quasi-IOS'",
+  "confidence": "LOW",
+  "known_gaps": [
+    "RE-BASELINED 2026-08-14 (see harness README 'RCT v03 date-boundary finding'): original 2026-06-09 screen predates the 2026-07-14 RCT v03 recalibration. archived_pre_v03_reference is historical only, not the diff target. The `golden` block is a fresh 2026-08-14 replay under current doctrine.",
+    "The 2026-08-14 baseline replay has 2 of 7 categories null (Product & Physical, Tenancy & Lease) and both Expected Score and P(exec)% are null -- every P(exec) band is gap-to-ask or deal-status keyed and this deal has no ask price and no LOI/PSA status in the frozen facts, so no band was derivable (the replay correctly declined to invent one rather than guess).",
+    "NOI is not disclosed -- only derivable via a later pipeline record's implied cap rate, which the replay used ONLY as an explicitly flagged assumption to solve the unpriced/no-NOI walk price (per the skill's own documented convention). Basis (7.4) and the floor result are therefore assumption-contingent; Yield (0.0) is assumption-independent since it binds by construction at the solved walk price."
+  ],
+  "inputs": {
+    "address": "11850 Hamilton Ave, Cincinnati, OH 45231",
+    "market": "Cincinnati OH",
+    "asking_price": null,
+    "price_used_for_scoring": null,
+    "building_sf": 11579,
+    "building_sf_pipeline_variant": 11574,
+    "year_built": 1998,
+    "occupancy_pct": null,
+    "asset_type": "Dollar General net-lease, quasi-IOS",
+    "noi_annual": null,
+    "noi_basis": "Not disclosed. Implied only: linked pipeline Purchase Price $1,100,000 x Going-In Cap Rate 6.95% = ~$76,450 -- used only as a flagged assumption to solve the no-NOI walk price, not an archived SCREEN-time input.",
+    "physical": {
+      "construction_type": null,
+      "clear_height": null,
+      "docks_drive_ins": null
+    },
+    "environmental_notes": null,
+    "other_facts": "Single-tenant Dollar General, DD-Critical items (FEMA, zoning, roof, reassessed tax) all unknown at screen time -- no OM/financials ever produced."
+  },
+  "golden": {
+    "baselined_date": "2026-08-14",
+    "baselined_against_skill_sha": "83547a76651c53c8f3311c2f30db53cbf16fd219",
+    "quality": 15.0,
+    "quality_note": "Partial lower bound -- Product & Physical and Tenancy & Lease null on the frozen input packet.",
+    "economics": 7.4,
+    "combined": 22.4,
+    "category_breakdown": {
+      "basis": 7.4,
+      "yield": 0.0,
+      "product_physical": null,
+      "market_location": 8.0,
+      "seller_motivation": 4.0,
+      "tenancy_lease": null,
+      "value_add": 3.0
+    },
+    "expected_score": null,
+    "p_exec_pct": null,
+    "verdict_tier": "PASS-band · GATE-FLAGGED (retail-only)",
+    "floor_result": "Basis floor CLEARS (67.2% vs 63.5% ramp floor at 1998 vintage) but only at an assumption-contingent solved walk price ~$937K; DENOMINATOR-SENSITIVE (3.7 pts from floor); Yield floor binds by construction (walk solved to 8.0% YoC)",
+    "replay_notes": "Unpriced/no-NOI Stage 1 convention applied -- walk price solved to 8% YoC floor using the implied $76,450 NOI as a flagged assumption. Retail-only Gate 6 triggers GATE-FLAGGED (Dollar General). Bear-mode UNKNOWN -> OFF, T2 ceiling (moot below 60). P(exec)/Expected Score left null -- no ask price, no deal status, no documented fallback band fits."
+  },
+  "archived_pre_v03_reference": {
+    "note": "Historical only -- screened 2026-06-09, before the 2026-07-14 RCT v03 recalibration. NOT the diff target. A separate, unscored duplicate Notion row (Date Seen 2026-05-17) also exists for this address and was not used.",
+    "combined": 53,
+    "category_breakdown": {
+      "basis": 20,
+      "basis_flag": "[est]",
+      "yield": 0,
+      "yield_flag": "[est]",
+      "product_physical": 10,
+      "market_location": 10,
+      "seller_motivation": 5,
+      "tenancy_lease": 3,
+      "value_add": 5
+    },
+    "expected_score": 4.8,
+    "p_exec_pct": 10,
+    "archived_verdict_tier": "T2 WATCH (bands_predicted_tier from pre-v03 Combined 53 was PASS-band per current STAGE 2.5 disambiguation -- an inconsistency present even before the v03 boundary issue)"
+  },
+  "diff_policy": {
+    "primary_signal": "combined_score",
+    "tolerance_combined_pts": 5.0,
+    "tolerance_rationale": "Widened harness-wide from an initial arbitrary 3.0 after a repeatability check on the 2 HIGH-confidence deals showed a 3-run range as large as 4.5 pts on identical inputs/doctrine. Moot for this LOW-confidence row's pass/fail (excluded from strict scoring regardless) but kept consistent across all 6 files.",
+    "tier_check": "informational_only",
+    "reason": "LOW confidence: baseline replay has 2 of 7 categories null plus null Expected Score/P(exec), driven by frozen-input-packet incompleteness (no OM/financials ever existed for this deal, so this may be close to the practical ceiling of what any input packet could supply)."
+  }
+}

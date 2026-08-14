@@ -1,0 +1,74 @@
+{
+  "deal_id": "e-fulton-st-portfolio-columbus-oh",
+  "deal_name": "E Fulton St Portfolio (3492, 3530-3540, 3483-3585), Columbus OH 43227",
+  "mode": "SCREEN",
+  "date_seen": "2026-06-09",
+  "source": "Notion Deal Sourcing Log (collection://9a6ae219-85a3-4621-899c-c757fd062f8b), pre-Phase-II snapshot, queried 2026-08-14",
+  "confidence": "LOW",
+  "known_gaps": [
+    "RE-BASELINED 2026-08-14 (see harness README 'RCT v03 date-boundary finding'): original 2026-06-09 screen predates the 2026-07-14 RCT v03 recalibration. archived_pre_v03_reference is historical only. The `golden` block is a fresh 2026-08-14 replay under current doctrine, still using ONLY the pre-Phase-II facts by design (the deal's later 2026-07-09 environmental termination postdates this snapshot and is intentionally excluded).",
+    "DECLASSIFIED 2026-07-09 per Gabriel (projects.md) -- no confidentiality restriction on citing these facts, confirmed before use.",
+    "The 2026-08-14 baseline replay has 2 of 7 categories null (Product & Physical, Tenancy & Lease) -- Quality (22.0) is a partial lower bound; replay's own analysis puts max attainable Combined at 74 if both unknowns scored perfectly, so this remains PASS-band-consistent but is not a tight estimate.",
+    "NOI is not disclosed on this 6/9 snapshot; Basis (25.0, full points) rests on an [est] price+closing-only all-in with unknown CapEx (roof reports were due the week of 6/9, per the frozen facts) -- flagged as [est] in the replay itself."
+  ],
+  "inputs": {
+    "address": "3492, 3530-3540, 3483-3585 E Fulton St, Columbus, OH 43227",
+    "market": "Columbus OH",
+    "asking_price": 4000000,
+    "price_used_for_scoring": 4000000,
+    "building_sf": 202164,
+    "building_sf_pipeline_variant_post_phase2": 202703,
+    "year_built": 1966,
+    "occupancy_pct": null,
+    "asset_type": "Multi-building industrial portfolio, 5 parcels",
+    "noi_annual": null,
+    "noi_basis": "Not disclosed on the 6/9 SCREEN row. A later pipeline cap rate (8.91%, POST-Phase-II) exists but is out of scope for this frozen pre-Phase-II snapshot.",
+    "physical": {
+      "parcel_count": 5,
+      "acreage": 15.67,
+      "basis_per_sf": 19.79
+    },
+    "environmental_notes": "As of 6/9 (pre-Phase-II): DD-Critical shows 'FEMA UNK; Phase II + roof reports due wk of 6/9; rent roll unreconciled; zoning variance CV91-002A documented.' The confirmed TCE/chlorinated-solvent finding that later terminated this acquisition (2026-07-09) postdates this snapshot and is intentionally excluded.",
+    "other_facts": "Foreclosure seller (Stearns v. SIJ, lis pendens) -- named seller-motivation signal."
+  },
+  "golden": {
+    "baselined_date": "2026-08-14",
+    "baselined_against_skill_sha": "83547a76651c53c8f3311c2f30db53cbf16fd219",
+    "quality": 22.0,
+    "quality_note": "Partial lower bound -- Product & Physical, Tenancy & Lease null on the frozen input packet (max attainable Combined if both scored perfectly: 74).",
+    "economics": 25.0,
+    "economics_note": "[est] -- Basis at full points on a price+2%-closing-only all-in; CapEx/roof unknown at this snapshot date, headroom to top-of-scale (~$35/SF) makes the floor result robust to plausible CapEx scenarios.",
+    "combined": 47.0,
+    "category_breakdown": {
+      "basis": 25.0,
+      "yield": 0.0,
+      "product_physical": null,
+      "market_location": 9.0,
+      "seller_motivation": 9.0,
+      "tenancy_lease": null,
+      "value_add": 4.0
+    },
+    "expected_score": 18.8,
+    "p_exec_pct": 40.0,
+    "verdict_tier": "PASS-band (T2 WATCH ceiling in effect from DD-Critical unknowns; ENV-WATCH)",
+    "floor_result": "Basis floor PASS [est] (~91.2% discount to RCT v03 Columbus LOW $229.65 vs 65% ramp floor at 1966 vintage); Yield/IRR/DSCR/carrying-cost floors UNRESOLVED (no NOI; no millage pull in frozen replay); no confirmed breach",
+    "replay_notes": "Foreclosure/lis pendens = named lender-pressure distress signal -> Seller & Motivation 9/10. Bear-mode UNKNOWN -> OFF, T2 ceiling (moot -- Tenancy null anyway). P(exec) 40% = midpoint of the 'gap 10-25% with motivation signals' band (single qualifying signal). Per-building <50K SF gate leg and portfolio allocation test not runnable -- no per-building SF disclosed."
+  },
+  "archived_pre_v03_reference": {
+    "note": "Historical only -- screened 2026-06-09 (pre-Phase-II), before the 2026-07-14 RCT v03 recalibration. NOT the diff target.",
+    "quality": 40,
+    "economics": 25,
+    "combined": 65,
+    "quality_plus_economics_check": "40 + 25 = 65, matches archived Combined exactly.",
+    "expected_score": 58.5,
+    "p_exec_pct": 90,
+    "archived_verdict_tier": "T2 WATCH (consistent with pre-v03 VERDICT BANDS applied to Combined=65)"
+  },
+  "diff_policy": {
+    "primary_signal": "combined_score",
+    "tolerance_combined_pts": 5.0,
+    "tolerance_rationale": "Widened harness-wide from an initial arbitrary 3.0 after a repeatability check on the 2 HIGH-confidence deals showed a 3-run range as large as 4.5 pts on identical inputs/doctrine. Moot for this LOW-confidence row's pass/fail (excluded from strict scoring regardless) but kept consistent across all 6 files.",
+    "tier_check": "informational_only",
+    "reason": "LOW confidence: baseline replay has 2 of 7 categories null and Basis rests on an [est] all-in with unknown CapEx. Runs and reports; excluded from strict pass/fail."
+  }
+}
