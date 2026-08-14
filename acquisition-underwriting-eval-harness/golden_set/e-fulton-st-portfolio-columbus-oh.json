@@ -64,6 +64,16 @@
     "combined_stdev": 1.04,
     "combined_stdev_note": "REFUTE finding F7: corrected from an initial 0.85 (population stdev, ddof=0) to 1.04 (sample stdev, ddof=1/Bessel's correction) -- matches the methodology actually used on the Port Sheldon (2.36) and Liberty (0.58) repeatability checks, verified by recomputing both from their raw runs. The original 0.85 was an inconsistency, not a deliberate choice.",
     "combined_range": 2.0,
+    "additional_samples_2026-08-14_scheduled_poll": {
+      "note": "1 further replay collected by the 2026-08-14 scheduled-poll run, against the POST-enrichment input packet and the same doctrine hash. NOT folded into `golden.combined`: the n=4 mean is 56.88 vs the shipped golden 57.17, a 0.29-pt shift inside noise. Recorded because this deal was enriched and rebaselined mid-run by a concurrent session, so its sample provenance is worth an explicit trail.",
+      "runs": [
+        {"combined": 56.0, "quality": 31.0, "economics": 25.0, "category_breakdown": {"basis": 25.0, "yield": 0.0, "product_physical": 10.0, "market_location": 8.0, "seller_motivation": 8.0, "tenancy_lease": 0.0, "value_add": 5.0}, "note": "run 4 (scheduled-poll; re-replayed against the enriched packet after the mid-run rebaseline)"}
+      ],
+      "combined_mean_all_4": 56.88,
+      "combined_stdev_all_4": 1.03,
+      "combined_range_all_4": 2.0,
+      "n_all": 4
+    },
     "consistency_note": "Tighter than the Port Sheldon/Liberty repeatability check that set the harness-wide 5.0-pt tolerance (that check saw up to a 4.5-pt range). All 3 runs independently agreed on GATE-FLAGGED (per-building size cap), Basis 25.0/25 full points, Yield 0.0/20, Tenancy null, Value-Add 5.0/6, and a $450K CapEx point estimate (same $150K-partial-roof + $200-400K-contingency-midpoint reasoning, converged on independently). Variance concentrated entirely in Product & Physical (11.0/9.0/10.5) flowing through to Combined."
   },
   "golden": {
