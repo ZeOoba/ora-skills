@@ -1,3 +1,0 @@
-run_timestamp,run_label,skill_sha,total_deals,scored_deals,informational_deals,scored_pass,scored_flag,snapshot_file
-2026-08-14T205042Z,baseline-rebaselined,83547a76651c53c8f3311c2f30db53cbf16fd219,6,2,4,2,0,2026-08-14T205042Z_baseline-rebaselined.json
-2026-08-14T212717Z,REDACTED-043-baseline,83547a76651c53c8f3311c2f30db53cbf16fd219,6,3,3,3,0,2026-08-14T212717Z_REDACTED-043-baseline.json
