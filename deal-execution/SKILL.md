@@ -1,6 +1,6 @@
 ---
 name: deal-execution
-description: 'Oxford Realty Advisors deal execution skill covering PSA negotiation through closing. Use when the user mentions: PSA, purchase and sale agreement, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel, closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance. Also trigger before SENDING any draft: send the PSA, before this goes out, pre-send check, clear to send. Workflow 2A reviews ANY inbound draft against the executed LOI + deal-terms register; Workflow 2B gates every OUTBOUND draft against prior review memos, the LOI, the register, and the 6 mandatory buyer protections. Handles Litera/Workshare compare files, which carry no tracked changes. v1.3'
+description: 'Oxford Realty Advisors deal execution skill covering PSA negotiation through closing. Use when the user mentions: PSA, purchase and sale agreement, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel, closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance. Also trigger before SENDING any draft: send the PSA, before this goes out, pre-send check, clear to send. Workflow 2A reviews ANY inbound draft against the executed LOI + deal-terms register; Workflow 2B gates every OUTBOUND draft against prior review memos, the LOI, the register, and the 6 mandatory buyer protections. Handles Litera/Workshare compare files, which carry no tracked changes. v1.4'
 ---
 
 You are operating as deal execution counsel and advisor for Oxford Realty Advisors (ORA). You handle everything from PSA generation through post-closing integration. The acquisition-underwriting skill covers pre-LOI work; this skill picks up at executed LOI.
@@ -58,7 +58,7 @@ When Gabriel says "generate PSA" or "draft PSA" for a property:
 3. Generate PSA incorporating all 17 articles and 6 mandatory buyer-protective provisions
 4. Run the 46-point quality gate checklist (see below)
 5. Output as DOCX using the docx skill
-6. File naming: per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Settings v2.0, 2026-06-11 — do NOT unify). PSA deliverables are deal-bound → use the deal-file schema `[Address] [Purpose] [MM-YYYY]`. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
+6. File naming: per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Operating Prompt v3.0, 2026-07-16 — do NOT unify; supersedes the archived v2.0/2026-06-11 doc of the same ratified rule). PSA deliverables are deal-bound → use the deal-file schema `[Address] [Purpose] [MM-YYYY]`. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
 
 ### 46-Point Quality Gate Checklist
 
@@ -474,7 +474,7 @@ Two consumers read this field and both are hardened against a bad value: `ora-de
 - PSA: DOCX (use docx skill)
 - Redline Analysis: DOCX structured memo
 - Closing Checklist: Notion page or DOCX
-- File naming: per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Settings v2.0, 2026-06-11 — do NOT unify). Redline/closing deliverables are deal-bound → use the deal-file schema `[Address] [Purpose] [MM-YYYY]`. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
+- File naming: per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Operating Prompt v3.0, 2026-07-16 — do NOT unify; supersedes the archived v2.0/2026-06-11 doc of the same ratified rule). Redline/closing deliverables are deal-bound → use the deal-file schema `[Address] [Purpose] [MM-YYYY]`. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
 
 ## SCRIPTS
 
@@ -487,6 +487,7 @@ Both are stdlib-only (`zipfile` + `ElementTree`); no python-docx, no lxml. Run f
 
 ## Changelog
 
+- v1.4 (2026-08-15): New finding (coverage-gap-3, stale file-naming-standard citation). Both file-naming citations (PSA generation step; Redline/Closing deliverables) updated from the archived "ORA Cowork Global Settings v2.0" (2026-06-11) to the current "ORA Cowork Global Operating Prompt v3.0" (2026-07-16) — the underlying three-schema rule is unchanged, only the version/document-name citation.
 - v1.3 (2026-08-01): three fixes from the 754 Old State Route 74 seller-redline round.
   1. **Workflow 2 Step 0 — revision-encoding detection.** The workflow assumed "DOCX with tracked changes." Litera/Workshare/Word compare outputs carry ZERO `<w:ins>`/`<w:del>` and encode revisions as strikethrough and coloured underline formatting, so a tracked-change parse returns nothing and reads as "seller accepted everything." New `scripts/extract_revisions.py` detects all three encodings, hard-stops (exit 2) on a clean file whose name says redline, and surfaces the compare summary's BASE document — the fact that establishes what the counterparty accepted rather than merely left uncommented. Also new Step 7: a quiet round is a finding; enumerate what was accepted.
   2. **New Workflow 2B — outbound draft gate.** 2A guarded inbound paper only. On 7/22 an outbound draft dropped nine of the fifteen recommendations from the 7/21 review memo — four of them ORA's own mandatory buyer-protective provisions, three of them executed-LOI terms, two ORA standing positions — and seller never rejected them because they were never sent. 2B runs five checks before any draft leaves ORA: prior-memo delta (LANDED/DROPPED/WAIVED/SUPERSEDED), the mandatory 6, LOI + register re-check, mechanical completeness sweep, and self-expiring terms. Workflow 2A Step 5 now also requires review-memo recommendations be written so they can be mechanically verified later.
