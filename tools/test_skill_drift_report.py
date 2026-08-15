@@ -658,5 +658,46 @@ class UnreadableStoreNeverFabricates(FixtureTestCase):
         self.assertEqual(rep['skills'], {})
 
 
+class PublishStatusRendering(FixtureTestCase):
+    """Regression tests for --publish-status (2026-08-15, Rev 10 remediation): a
+    citation-ready INSTALLED/NOT-INSTALLED line sourced live from the runtime cache at
+    render time, so a future Rev-log entry never has to carry forward an unverified
+    prior claim about whether a skill is published. Motivating incident: a Rev 5 log
+    recorded capex-budgeting Gabriel-confirmed unpublished as of 2026-08-09 while the
+    Code catalog separately carried a 2026-08-12 update, with nothing having re-checked
+    live state between the two records."""
+
+    def test_installed_skill_reads_installed(self):
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        _write(self.cache / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        rep = sdr.report(self.repo, self.cache, skills=['demo'])
+        out = sdr.render_publish_status(rep)
+        self.assertIn('demo: INSTALLED', out)
+        self.assertIn('verdict=IN-SYNC', out)
+        self.assertIn('checked_at=', out)
+
+    def test_never_installed_reads_not_installed(self):
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        rep = sdr.report(self.repo, self.cache, skills=['demo'])  # cache left empty
+        out = sdr.render_publish_status(rep)
+        self.assertIn('demo: NOT INSTALLED', out)
+
+    def test_broken_install_is_distinguished_from_not_installed(self):
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        (self.cache / 'demo').mkdir()  # cache dir exists, no SKILL.md inside
+        rep = sdr.report(self.repo, self.cache, skills=['demo'])
+        out = sdr.render_publish_status(rep)
+        self.assertIn('demo: BROKEN INSTALL', out)
+
+    def test_unreadable_cache_root_refuses_to_claim_a_status(self):
+        """The whole point of this mode is a trustworthy citation — an unreadable
+        cache must refuse to assert INSTALLED/NOT-INSTALLED for anything, not default
+        to either."""
+        rep = sdr.report(self.repo, self.tmp / 'nonexistent', skills=['demo'])
+        out = sdr.render_publish_status(rep)
+        self.assertIn('CACHE ROOT UNREADABLE', out)
+        self.assertIn('do not report', out)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
