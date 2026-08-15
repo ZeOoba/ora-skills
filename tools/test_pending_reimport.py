@@ -666,5 +666,79 @@ class WinLongNonWindowsNoOp(unittest.TestCase):
         self.assertTrue(result.startswith('\\\\?\\'))
 
 
+class DeliberatelyUnpublished(FixtureTestCase):
+    """Skills in DELIBERATELY_UNPUBLISHED (package_skills.py) must never surface
+    as a candidate, from either the ledger or a fresh sweep -- OI-157:
+    capex-budgeting was deliberately unpublished 2026-08-09, then a docs-only
+    repo commit on 2026-08-12 made it look like ordinary reimport drift, got it
+    staged, and Gabriel accidentally re-registered it in a routine Save-skill
+    batch click on 2026-08-13. candidates() is the single consumption contract
+    every downstream caller (package-and-stage-skill Entry Point A included)
+    reads from, so filtering there closes the gap regardless of whether a given
+    skill's drift was detected via the post-commit ledger or the full sweep."""
+
+    def test_ledger_entry_for_unpublished_skill_is_suppressed(self):
+        ledger_path = self.tmp / 'PENDING_REIMPORT.md'
+        _write(ledger_path, '# header\n\n- retired-skill | pending since 2026-08-12T00:00Z | commit abc123\n')
+
+        with unittest.mock.patch.object(pr, 'DELIBERATELY_UNPUBLISHED', frozenset({'retired-skill'})):
+            result = pr.candidates(repo_root=self.repo, cache_root=self.cache, ledger_path=ledger_path)
+
+        self.assertNotIn('retired-skill', result)
+
+    def test_sweep_drift_for_unpublished_skill_is_suppressed(self):
+        _write(self.repo / 'retired-skill' / 'SKILL.md', 'v2\n')
+        _write(self.cache / 'retired-skill' / 'SKILL.md', 'v1\n')
+        ledger_path = self.tmp / 'PENDING_REIMPORT.md'
+
+        with unittest.mock.patch.object(pr, 'DELIBERATELY_UNPUBLISHED', frozenset({'retired-skill'})):
+            result = pr.candidates(repo_root=self.repo, cache_root=self.cache, ledger_path=ledger_path)
+
+        self.assertNotIn('retired-skill', result)
+
+    def test_unrelated_skill_still_surfaces_normally(self):
+        # Regression guard: the exclusion set must not swallow unrelated skills.
+        _write(self.repo / 'active-skill' / 'SKILL.md', 'v2\n')
+        _write(self.cache / 'active-skill' / 'SKILL.md', 'v1\n')
+        ledger_path = self.tmp / 'PENDING_REIMPORT.md'
+
+        with unittest.mock.patch.object(pr, 'DELIBERATELY_UNPUBLISHED', frozenset({'retired-skill'})):
+            result = pr.candidates(repo_root=self.repo, cache_root=self.cache, ledger_path=ledger_path)
+
+        self.assertIn('active-skill', result)
+
+    def test_real_capex_budgeting_is_in_the_exclusion_set(self):
+        # Pins the production set that motivated this class -- OI-157 is a real,
+        # already-happened incident, not a hypothetical. If this set legitimately
+        # changes (e.g. Gabriel republishes one of the six), update this test
+        # deliberately rather than letting it silently drift.
+        self.assertEqual(
+            pr.DELIBERATELY_UNPUBLISHED,
+            frozenset({
+                'annual-cycle', 'capex-budgeting', 'cash-position-monitor',
+                'deal-retirement', 'investor-relations', 'vendor-management',
+            }),
+        )
+
+    def test_cmd_candidates_reports_suppressed_skills(self):
+        # cmd_candidates() must not silently drop these -- "no silent caps" is
+        # this codebase's own standing rule (e.g. _print_shared_dep_advisory).
+        # candidates()/read_entries()/sweep_drift() default arguments bind to
+        # REPO/CACHE_ROOT/LEDGER at function-DEFINITION time, so patching those
+        # module attributes afterward has no effect on cmd_candidates()'s
+        # already-bound defaults -- mock the functions cmd_candidates() actually
+        # calls instead (name lookups inside a function body ARE late-bound).
+        with unittest.mock.patch.object(pr, 'DELIBERATELY_UNPUBLISHED', frozenset({'retired-skill'})), \
+             unittest.mock.patch.object(pr, 'candidates', return_value={}), \
+             unittest.mock.patch.object(pr, 'read_entries', return_value={'retired-skill': '- retired-skill | ...'}), \
+             unittest.mock.patch.object(pr, 'sweep_drift', return_value=[]), \
+             unittest.mock.patch.object(pr, '_print_shared_dep_advisory'), \
+             unittest.mock.patch('sys.stdout', new_callable=__import__('io').StringIO) as out:
+            pr.cmd_candidates()
+
+        self.assertIn('retired-skill', out.getvalue())
+        self.assertIn('suppressed', out.getvalue())
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
