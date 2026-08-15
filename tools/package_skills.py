@@ -30,6 +30,23 @@ REPO = Path(__file__).resolve().parent.parent
 SKIP = {'_archive', 'tools', '.git'}
 MAX_DESC = 1024  # platform limit: importer rejects 'description' > 1024 chars (hit 2026-06-11)
 
+# Skills deliberately unpublished from the Cowork/claude.ai skill store (Gabriel's
+# own ruling 2026-08-09) that must NEVER resurface as a pending_reimport candidate
+# just because their repo copy gets an ordinary edit. OI-157: a 2026-08-12 docs-only
+# commit to capex-budgeting (already unpublished 3 days earlier) made it look like
+# routine reimport drift to pending_reimport.candidates(), got it packaged and
+# staged, and Gabriel accidentally re-registered it in an unrelated 2026-08-13
+# Save-skill batch click. A skill leaves this set only on Gabriel's explicit
+# re-publish decision -- do not add/remove entries speculatively.
+DELIBERATELY_UNPUBLISHED: frozenset[str] = frozenset({
+    'annual-cycle',
+    'capex-budgeting',
+    'cash-position-monitor',
+    'deal-retirement',
+    'investor-relations',
+    'vendor-management',
+})
+
 
 def _scan_named_counts(text: str) -> tuple[list[str], list[str]]:
     """Core 'N-Point'/'N-item' header-vs-actual-count scan, shared by check_named_counts

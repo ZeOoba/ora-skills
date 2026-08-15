@@ -49,7 +49,8 @@ from pathlib import Path
 # a repo-root dependency.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from package_skills import (  # noqa: E402
-    REPO, SKIP, SHARED_ROOT_DEPS, is_bundled, plugin_of, skill_source_files,
+    REPO, SKIP, SHARED_ROOT_DEPS, DELIBERATELY_UNPUBLISHED, is_bundled, plugin_of,
+    skill_source_files,
 )
 from skill_md_normalize import normalize_skill_md_text  # noqa: E402
 
@@ -328,13 +329,25 @@ def candidates(
 ) -> dict[str, str]:
     """The consumption contract for every downstream consumer: UNION of ledger
     entries and a fresh full sweep, never "ledger OR derive". Read-only -- never
-    writes the ledger (see backfill() to persist sweep findings)."""
+    writes the ledger (see backfill() to persist sweep findings).
+
+    Skills in DELIBERATELY_UNPUBLISHED (package_skills.py) are filtered out
+    unconditionally, from either source -- OI-157: a deliberately-unpublished
+    skill's repo copy can still drift from its (stale or absent) cache entry
+    for ordinary reasons (a docs fix, a shared repo-root dep changing), and
+    that drift must never be surfaced as reimport work a Save-skill batch click
+    could accidentally re-register. This is the single choke point every
+    downstream caller (package-and-stage-skill Entry Point A, ora-skill-store-
+    drift-check) already reads through, so filtering here closes the gap
+    regardless of which of the two sources first detected the drift."""
     result = dict(read_entries(ledger_path))
     for skill in sweep_drift(repo_root, cache_root):
         result.setdefault(
             skill,
             f'- {skill} | source: sweep (no ledger entry) | trigger: full repo-vs-cache SHA256 sweep',
         )
+    for skill in DELIBERATELY_UNPUBLISHED:
+        result.pop(skill, None)
     return result
 
 
@@ -562,6 +575,20 @@ def cmd_candidates() -> None:
         print(f'pending_reimport: {len(result)} candidate(s) (ledger UNION full sweep):')
         for skill in sorted(result):
             print(f'   {result[skill]}')
+    # No silent caps: a DELIBERATELY_UNPUBLISHED skill's drift is real and worth
+    # knowing about even though candidates() must never turn it into reimport
+    # work (OI-157) -- report it as its own line rather than a bare omission.
+    suppressed = sorted(
+        s for s in DELIBERATELY_UNPUBLISHED
+        if s in read_entries() or s in sweep_drift()
+    )
+    if suppressed:
+        print(
+            f'pending_reimport: {len(suppressed)} deliberately-unpublished skill(s) have repo '
+            f'drift but are suppressed from candidates (package_skills.DELIBERATELY_UNPUBLISHED, '
+            f'OI-157) -- not staged, not a candidate, review manually if this is unexpected: '
+            f'{", ".join(suppressed)}'
+        )
     # A shared-dep mismatch shows up in the sweep once per consumer with no direction;
     # append the deduped, direction-aware view so the audit says reimport vs commit.
     _print_shared_dep_advisory()
