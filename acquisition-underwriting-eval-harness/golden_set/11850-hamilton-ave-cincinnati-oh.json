@@ -6,9 +6,11 @@
   "source": "Notion Deal Sourcing Log (collection://9a6ae219-85a3-4621-899c-c757fd062f8b), scored row (pre-v03 Combined 53), queried 2026-08-14; cross-referenced Acquisition Pipeline Tracker row 'Dollar General Quasi-IOS'",
   "confidence": "LOW",
   "known_gaps": [
-    "RE-BASELINED 2026-08-14 (see harness README 'RCT v03 date-boundary finding'): original 2026-06-09 screen predates the 2026-07-14 RCT v03 recalibration. archived_pre_v03_reference is historical only, not the diff target. The `golden` block is a fresh 2026-08-14 replay under current doctrine.",
-    "The 2026-08-14 baseline replay has 2 of 7 categories null (Product & Physical, Tenancy & Lease) and both Expected Score and P(exec)% are null -- every P(exec) band is gap-to-ask or deal-status keyed and this deal has no ask price and no LOI/PSA status in the frozen facts, so no band was derivable (the replay correctly declined to invent one rather than guess).",
-    "NOI is not disclosed -- only derivable via a later pipeline record's implied cap rate, which the replay used ONLY as an explicitly flagged assumption to solve the unpriced/no-NOI walk price (per the skill's own documented convention). Basis (7.4) and the floor result are therefore assumption-contingent; Yield (0.0) is assumption-independent since it binds by construction at the solved walk price."
+    "RE-BASELINED 2026-08-14 (see harness README 'RCT v03 date-boundary finding'): original 2026-06-09 screen predates the 2026-07-14 RCT v03 recalibration. archived_pre_v03_reference is historical only, not the diff target.",
+    "REBASELINED 2026-08-15 (n=1 -> n=4 raw / n=3 clean, deal-decision-ledger leakage fix, Gabriel-directed): the 2026-08-14 golden was a single unreplicated run (Combined 22.4). The 2026-08-15 forced-repeatability run added 3 more independent replays (23.4/18.4/21.0), one of which read `memory/deal-decision-ledger.md` and cited that file's row recording this exact property's real 2026-07-09 outcome (PARKED) -- an answer-key leak, structurally the same failure mode as Port Sheldon's SKILL.md-citation leakage, just a different file. See SKILL.md's 'Fourth pass' Limitations entry for the fix (the replay prompt now explicitly bars reading memory/ files). That run (18.4, the low outlier) is EXCLUDED from the golden mean for the same reason Port Sheldon's leaked run is excluded: a fixed-prompt replay population should no longer produce this draw. Golden Combined moved 22.4 -> 22.27 (mean of the 3 clean samples: 22.4/23.4/21.0) -- a small shift, but the METHOD changed from a single unreplicated run to an actual (if thin) repeatability-checked mean.",
+    "n=3 is a THIN sample -- only 3 clean draws exist post-exclusion (4 raw). This deal is informational_only regardless (LOW confidence, per-category nulls below), so the thin n does not affect any gate; it is noted for transparency, not as a blocking gap. Future runs will add to this sample as the polling task fires again.",
+    "The 2026-08-15 baseline replays have 2 of 7 categories null (Product & Physical, Tenancy & Lease) in every clean run, and both Expected Score and P(exec)% are null in every run -- every P(exec) band is gap-to-ask or deal-status keyed and this deal has no ask price and no LOI/PSA status in the frozen facts, so no band was derivable (the replays correctly declined to invent one rather than guess).",
+    "NOI is not disclosed -- only derivable via a later pipeline record's implied cap rate, which the replays used ONLY as an explicitly flagged assumption to solve the unpriced/no-NOI walk price (per the skill's own documented convention). Basis (mean 6.93) and the floor result are therefore assumption-contingent; Yield (0.0) is assumption-independent since it binds by construction at the solved walk price."
   ],
   "inputs": {
     "address": "11850 Hamilton Ave, Cincinnati, OH 45231",
@@ -30,27 +32,44 @@
     "environmental_notes": null,
     "other_facts": "Single-tenant Dollar General, DD-Critical items (FEMA, zoning, roof, reassessed tax) all unknown at screen time -- no OM/financials ever produced."
   },
+  "repeatability": {
+    "runs": [
+      {"combined": 22.4, "quality": 15.0, "economics": 7.4, "expected_score": null, "p_exec_pct": null, "category_breakdown": {"basis": 7.4, "yield": 0.0, "product_physical": null, "market_location": 8.0, "seller_motivation": 4.0, "tenancy_lease": null, "value_add": 3.0}, "note": "run 1 (2026-08-14 baseline, unreplicated at the time) -- as originally recorded in this file before the 2026-08-15 rebaseline"},
+      {"combined": 23.4, "quality": 16.0, "economics": 7.4, "expected_score": null, "p_exec_pct": null, "category_breakdown": {"basis": 7.4, "yield": 0.0, "product_physical": null, "market_location": 9.0, "seller_motivation": 4.0, "tenancy_lease": null, "value_add": 3.0}, "note": "run 2 (2026-08-15 forced-repeatability run, replay A)"},
+      {"combined": 18.4, "quality": 11.0, "economics": 7.4, "expected_score": null, "p_exec_pct": null, "category_breakdown": {"basis": 7.4, "yield": 0.0, "product_physical": null, "market_location": 8.0, "seller_motivation": 3.0, "tenancy_lease": null, "value_add": null}, "note": "run 3 (2026-08-15 forced-repeatability run, replay B) -- read memory/deal-decision-ledger.md and cited this deal's actual PARKED outcome; the low outlier", "excluded_from_golden": true, "exclusion_reason": "deal-decision-ledger answer-key leakage (fixed 2026-08-15, see known_gaps); kept for audit trail, not averaged into golden"},
+      {"combined": 21.0, "quality": 15.0, "economics": 6.0, "expected_score": null, "p_exec_pct": null, "category_breakdown": {"basis": 6.0, "yield": 0.0, "product_physical": null, "market_location": 8.0, "seller_motivation": 4.0, "tenancy_lease": null, "value_add": 3.0}, "note": "run 4 (2026-08-15 forced-repeatability run, replay C)"}
+    ],
+    "combined_mean": 22.27,
+    "combined_stdev": 1.21,
+    "combined_sem": 0.7,
+    "combined_range": 2.4,
+    "n": 3,
+    "n_raw_including_excluded": 4,
+    "sampling_note": "Run 1 was a lone 2026-08-14 baseline; runs 2-4 added by the 2026-08-15 forced-repeatability run (Gabriel-directed), the first real repeatability check for this deal. Run 3 is EXCLUDED from `n`/`combined_mean`/etc. above (deal-decision-ledger leakage, see known_gaps); `n_raw_including_excluded` is the full draw count. n=3 clean is thin -- this deal is informational_only regardless, so the thin sample does not affect any gate."
+  },
   "golden": {
-    "baselined_date": "2026-08-14",
+    "baselined_date": "2026-08-15",
     "baselined_against_skill_sha": "83547a76651c53c8f3311c2f30db53cbf16fd219",
-    "quality": 15.0,
-    "quality_note": "Partial lower bound -- Product & Physical and Tenancy & Lease null on the frozen input packet.",
-    "economics": 7.4,
-    "combined": 22.4,
+    "baselined_method": "mean of 3 independent replays, EXCLUDING the deal-decision-ledger-leaked run 3 (see repeatability block); REBASELINED 2026-08-15 from the earlier single-run value 22.4 (that run had no repeatability data collected behind it)",
+    "quality": 15.33,
+    "quality_note": "Partial lower bound -- Product & Physical and Tenancy & Lease null in all 3 clean runs on the frozen input packet.",
+    "economics": 6.93,
+    "combined": 22.27,
     "category_breakdown": {
-      "basis": 7.4,
+      "basis": 6.93,
       "yield": 0.0,
       "product_physical": null,
-      "market_location": 8.0,
+      "market_location": 8.33,
       "seller_motivation": 4.0,
       "tenancy_lease": null,
       "value_add": 3.0
     },
+    "category_breakdown_sum_check": "0(basis)+0(yield)+8.33(ml)+4.0(sm)+0(pp,tl null)+3.0(va) = 15.33 Quality-side, matching golden.quality; + Economics 6.93 (basis mean) = 22.27, matching Combined exactly (6.9333+15.3333=22.2667).",
     "expected_score": null,
     "p_exec_pct": null,
     "verdict_tier": "PASS-band · GATE-FLAGGED (retail-only)",
-    "floor_result": "Basis floor CLEARS (67.2% vs 63.5% ramp floor at 1998 vintage) but only at an assumption-contingent solved walk price ~$937K; DENOMINATOR-SENSITIVE (3.7 pts from floor); Yield floor binds by construction (walk solved to 8.0% YoC)",
-    "replay_notes": "Unpriced/no-NOI Stage 1 convention applied -- walk price solved to 8% YoC floor using the implied $76,450 NOI as a flagged assumption. Retail-only Gate 6 triggers GATE-FLAGGED (Dollar General). Bear-mode UNKNOWN -> OFF, T2 ceiling (moot below 60). P(exec)/Expected Score left null -- no ask price, no deal status, no documented fallback band fits."
+    "floor_result": "Basis floor CLEARS (~64-67% vs 63.5% ramp floor at 1998 vintage) but only at an assumption-contingent solved walk price (~$937K-$956K across the 3 clean runs); DENOMINATOR-SENSITIVE (within 5 pts of floor in all 3); Yield floor binds by construction (walk solved to 8.0% YoC)",
+    "replay_notes": "Unpriced/no-NOI Stage 1 convention applied in all 3 clean runs -- walk price solved to 8% YoC floor using the implied ~$76,450 NOI as a flagged assumption. Retail-only Gate 6 triggers GATE-FLAGGED (Dollar General) in all 3. Bear-mode UNKNOWN -> OFF, T2 ceiling (moot below 60). P(exec)/Expected Score left null in all 3 -- no ask price, no deal status, no documented fallback band fits. Stage -1 item 5 (ledger precedent check) is now explicitly NOT PERFORMABLE per the fixed replay prompt -- see known_gaps."
   },
   "archived_pre_v03_reference": {
     "note": "Historical only -- screened 2026-06-09, before the 2026-07-14 RCT v03 recalibration. NOT the diff target. A separate, unscored duplicate Notion row (Date Seen 2026-05-17) also exists for this address and was not used.",
@@ -75,6 +94,6 @@
     "tolerance_combined_pts": 5.0,
     "tolerance_rationale": "Widened harness-wide from an initial arbitrary 3.0 after a repeatability check on the 2 HIGH-confidence deals showed a 3-run range as large as 4.5 pts on identical inputs/doctrine. Moot for this LOW-confidence row's pass/fail (excluded from strict scoring regardless) but kept consistent across all 6 files.",
     "tier_check": "informational_only",
-    "reason": "LOW confidence: baseline replay has 2 of 7 categories null plus null Expected Score/P(exec), driven by frozen-input-packet incompleteness (no OM/financials ever existed for this deal, so this may be close to the practical ceiling of what any input packet could supply)."
+    "reason": "LOW confidence: baseline replays have 2 of 7 categories null plus null Expected Score/P(exec) in every run, driven by frozen-input-packet incompleteness (no OM/financials ever existed for this deal, so this may be close to the practical ceiling of what any input packet could supply). Also the deal whose 2026-08-15 repeatability check surfaced the deal-decision-ledger leakage finding -- see known_gaps."
   }
 }

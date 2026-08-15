@@ -12,7 +12,9 @@
     "PER-BUILDING SIZE-GATE FINDING (surfaced by the enrichment, not previously known): the researched per-building breakdown shows the North portfolio's 'Main Building' (126,924 SF) is either a single building over the skill's 50,000 SF/building gate, or an internal split into a 74,700 SF 'Building A' section plus a 52,224 SF 'remainder' section -- EITHER reading breaches the 50K/building gate (both sub-figures individually exceed it too). Building-count ambiguity is unresolved from available sources (the OM describes it as one main building with named internal areas, which reads as a single structure, not multiple discrete buildings). The original 6/9 screen never caught this because per-building SF was completely unknown at that time -- a genuine screen-time gap, not something Ruling 5 already flagged. Frozen as `main_building_sf_ambiguity` below; the replay should screen this as a GATE-FLAGGED exception (Ruling 5: flag, not kill) given every plausible reading breaches.",
     "Year-built cross-source conflict (reported, not resolved): Notion Deal Sourcing Log / this golden set = 1966; Franklin County Auditor CAMA (parcel 010-099214-00) = 1967 (immaterial to the vintage ramp -- both are far below the 1995 floor-ramp threshold); a LATER (post-7/9-termination) re-listing of the north parcels states 1998, which is inadmissible here -- that OM is a post-freeze re-marketing of the property, not a fact knowable at the 6/9 screen, and is used ONLY for its time-invariant structural details (construction type, clear height, loading), never its stated vintage, price, or 'value-add' framing.",
     "South-parcel loading detail (docks/drive-ins) was not found in any sourced document -- only the North parcels' OM had full loading detail. South parcels' construction/loading fields below are partially null as a result; this is a smaller, honestly-flagged residual gap, not swept into the Tenancy discussion above.",
-    "NOI is not disclosed on this 6/9 snapshot; Basis rests on an [est] all-in build. The enrichment adds a real, sourced pre-6/9 CapEx input (roof/structural repair estimate) that materially changes this from the original replay's price+closing-only all-in -- see inputs.structural_condition."
+    "NOI is not disclosed on this 6/9 snapshot; Basis rests on an [est] all-in build. The enrichment adds a real, sourced pre-6/9 CapEx input (roof/structural repair estimate) that materially changes this from the original replay's price+closing-only all-in -- see inputs.structural_condition.",
+    "REBASELINED 2026-08-15 (n=3/4 -> n=7 for Combined/Quality/Economics, Gabriel-directed): 3 more replays (56.0/59.0/55.0) collected by the forced-repeatability run, same doctrine SHA, same enriched input packet. No leakage risk identified on this deal (not cited in SKILL.md's own text; the ledger-leakage finding was specific to 11850 Hamilton, whose ledger row happens to record a settled outcome -- this deal's own ledger entry, if any, was not read by any of these replays). Golden Combined moved 57.17 -> 56.79 (mean of all 7 known Combined values: the 3 original + the 1 unfolded 2026-08-14 scheduled-poll sample + the 3 new 2026-08-15 samples), a 0.38-pt shift, inside noise.",
+    "CATEGORY-LEVEL DATA IS PARTIAL (n=4 of 7): the original 3 baseline replays (2026-08-14) recorded only combined/quality/economics/expected_score/p_exec_pct in `repeatability.runs` -- their per-category breakdowns were never captured in this file. Only the 2026-08-14 scheduled-poll's 1 extra sample and the 3 new 2026-08-15 samples have full category_breakdown data (n=4). `golden.category_breakdown` below is therefore the mean of those 4 runs, NOT the same 7-run population as `golden.combined`/`quality`/`economics` -- flagged explicitly rather than silently mixing populations. The two are close (category sum on the n=4 subset is 56.5 vs the n=7 scalar mean of 56.79) but are not the same statistic."
   ],
   "inputs": {
     "address": "3492, 3530-3540, 3483-3585 E Fulton St, Columbus, OH 43227",
@@ -54,47 +56,48 @@
     "other_facts": "Foreclosure seller (Stearns v. SIJ, lis pendens) -- named seller-motivation signal."
   },
   "repeatability": {
-    "note": "3 independent fable-pinned replays against the identical enriched input packet, 2026-08-14.",
+    "note": "7 independent fable-pinned replays against the identical enriched input packet, spanning 2026-08-14 and 2026-08-15. The first 3 (2026-08-14 baseline) never recorded per-category detail -- category_breakdown is null for those, not because the underlying replay had no categories, but because this file's original schema only captured combined/quality/economics/expected_score/p_exec_pct for that batch. See known_gaps 'CATEGORY-LEVEL DATA IS PARTIAL'.",
     "runs": [
-      {"combined": 58.0, "quality": 33.0, "economics": 25.0, "expected_score": 23.2, "p_exec_pct": 40.0},
-      {"combined": 56.0, "quality": 31.0, "economics": 25.0, "expected_score": 19.6, "p_exec_pct": 35.0},
-      {"combined": 57.5, "quality": 32.5, "economics": 25.0, "expected_score": 20.1, "p_exec_pct": 35.0}
+      {"combined": 58.0, "quality": 33.0, "economics": 25.0, "expected_score": 23.2, "p_exec_pct": 40.0, "category_breakdown": null, "note": "run 1 (2026-08-14 baseline)"},
+      {"combined": 56.0, "quality": 31.0, "economics": 25.0, "expected_score": 19.6, "p_exec_pct": 35.0, "category_breakdown": null, "note": "run 2 (2026-08-14 baseline)"},
+      {"combined": 57.5, "quality": 32.5, "economics": 25.0, "expected_score": 20.1, "p_exec_pct": 35.0, "category_breakdown": null, "note": "run 3 (2026-08-14 baseline)"},
+      {"combined": 56.0, "quality": 31.0, "economics": 25.0, "expected_score": null, "p_exec_pct": null, "category_breakdown": {"basis": 25.0, "yield": 0.0, "product_physical": 10.0, "market_location": 8.0, "seller_motivation": 8.0, "tenancy_lease": 0.0, "value_add": 5.0}, "note": "run 4 (2026-08-14 scheduled-poll; re-replayed against the enriched packet after a mid-run rebaseline by a concurrent session) -- recorded that same day but left unfolded from golden.combined at the time (n=4 mean 56.88 vs shipped golden 57.17, a 0.29-pt shift inside noise)"},
+      {"combined": 56.0, "quality": 31.0, "economics": 25.0, "expected_score": 50.4, "p_exec_pct": 90.0, "category_breakdown": {"basis": 25.0, "yield": 0.0, "product_physical": 10.0, "market_location": 9.0, "seller_motivation": 8.0, "tenancy_lease": null, "value_add": 4.0}, "note": "run 5 (2026-08-15 forced-repeatability run, replay A)"},
+      {"combined": 59.0, "quality": 34.0, "economics": 25.0, "expected_score": 23.6, "p_exec_pct": 40.0, "category_breakdown": {"basis": 25.0, "yield": 0.0, "product_physical": 10.0, "market_location": 10.0, "seller_motivation": 9.0, "tenancy_lease": 0.0, "value_add": 5.0}, "note": "run 6 (2026-08-15 forced-repeatability run, replay B)"},
+      {"combined": 55.0, "quality": 30.0, "economics": 25.0, "expected_score": 22.0, "p_exec_pct": 40.0, "category_breakdown": {"basis": 25.0, "yield": 0.0, "product_physical": 9.0, "market_location": 8.0, "seller_motivation": 8.0, "tenancy_lease": 0.0, "value_add": 5.0}, "note": "run 7 (2026-08-15 forced-repeatability run, replay C)"}
     ],
-    "combined_mean": 57.17,
-    "combined_stdev": 1.04,
-    "combined_stdev_note": "REFUTE finding F7: corrected from an initial 0.85 (population stdev, ddof=0) to 1.04 (sample stdev, ddof=1/Bessel's correction) -- matches the methodology actually used on the Port Sheldon (2.36) and Liberty (0.58) repeatability checks, verified by recomputing both from their raw runs. The original 0.85 was an inconsistency, not a deliberate choice.",
-    "combined_range": 2.0,
-    "additional_samples_2026-08-14_scheduled_poll": {
-      "note": "1 further replay collected by the 2026-08-14 scheduled-poll run, against the POST-enrichment input packet and the same doctrine hash. NOT folded into `golden.combined`: the n=4 mean is 56.88 vs the shipped golden 57.17, a 0.29-pt shift inside noise. Recorded because this deal was enriched and rebaselined mid-run by a concurrent session, so its sample provenance is worth an explicit trail.",
-      "runs": [
-        {"combined": 56.0, "quality": 31.0, "economics": 25.0, "category_breakdown": {"basis": 25.0, "yield": 0.0, "product_physical": 10.0, "market_location": 8.0, "seller_motivation": 8.0, "tenancy_lease": 0.0, "value_add": 5.0}, "note": "run 4 (scheduled-poll; re-replayed against the enriched packet after the mid-run rebaseline)"}
-      ],
-      "combined_mean_all_4": 56.88,
-      "combined_stdev_all_4": 1.03,
-      "combined_range_all_4": 2.0,
-      "n_all": 4
-    },
-    "consistency_note": "Tighter than the Port Sheldon/Liberty repeatability check that set the harness-wide 5.0-pt tolerance (that check saw up to a 4.5-pt range). All 3 runs independently agreed on GATE-FLAGGED (per-building size cap), Basis 25.0/25 full points, Yield 0.0/20, Tenancy null, Value-Add 5.0/6, and a $450K CapEx point estimate (same $150K-partial-roof + $200-400K-contingency-midpoint reasoning, converged on independently). Variance concentrated entirely in Product & Physical (11.0/9.0/10.5) flowing through to Combined."
+    "combined_mean": 56.79,
+    "combined_stdev": 1.41,
+    "combined_sem": 0.53,
+    "combined_stdev_note": "REFUTE finding F7 (carried forward from the original 3-run computation): sample stdev (ddof=1/Bessel's correction) throughout, matching the methodology used on Port Sheldon and Liberty.",
+    "combined_range": 4.0,
+    "n": 7,
+    "category_breakdown_n": 4,
+    "category_breakdown_note": "Only runs 4-7 recorded per-category detail (n=4 of 7) -- runs 1-3 (the original 2026-08-14 baseline) did not. golden.category_breakdown is therefore a 4-run mean, distinct from golden.combined's 7-run mean. See golden.category_breakdown_note.",
+    "consistency_note": "Tighter than the Port Sheldon/Liberty repeatability check that set the harness-wide 5.0-pt tolerance (that check saw up to a 4.5-pt range, pre-leakage-fix). All 7 runs to date independently agreed on GATE-FLAGGED (per-building size cap), Basis 25.0/25 full points every time, Yield 0.0/20 every time. Variance concentrated in Product & Physical (9.0-10.0 across the 4 runs with category detail) and, to a lesser extent, Market & Location and Seller & Motivation, flowing through to Combined."
   },
   "golden": {
-    "baselined_date": "2026-08-14",
+    "baselined_date": "2026-08-15",
     "baselined_against_skill_sha": "83547a76651c53c8f3311c2f30db53cbf16fd219",
-    "baselined_method": "mean of 3 independent enrichment replays -- see repeatability block",
-    "quality": 32.17,
+    "baselined_method": "combined/quality/economics = mean of 7 independent replays (see repeatability block); category_breakdown = mean of the 4 replays with recorded category-level detail (see known_gaps 'CATEGORY-LEVEL DATA IS PARTIAL'); REBASELINED 2026-08-15 from the n=3 value 57.17 (an n=4 additional-samples figure of 56.88 was recorded 2026-08-14 but left unfolded at the time)",
+    "quality": 31.79,
     "economics": 25.0,
-    "combined": 57.17,
+    "combined": 56.79,
     "category_breakdown": {
       "basis": 25.0,
       "yield": 0.0,
-      "product_physical": 10.17,
-      "market_location": 9.0,
-      "seller_motivation": 8.0,
+      "product_physical": 9.75,
+      "market_location": 8.75,
+      "seller_motivation": 8.25,
       "tenancy_lease": null,
-      "value_add": 5.0
+      "value_add": 4.75
     },
-    "expected_score": 20.97,
-    "p_exec_pct": 36.67,
-    "p_exec_pct_caveat": "REFUTE finding F7: this mean (of 40/35/35) is informational only, not a real P(exec) value -- P(exec) is assigned from discrete named bands (SKILL.md STAGE 2.2), and no single run actually produced 36.67; averaging across runs that picked different discrete bands manufactures false precision. Do not cite this figure as an authoritative P(exec) band placement.",
+    "category_breakdown_n": 4,
+    "category_breakdown_note": "This breakdown is the mean of only the 4 runs (of 7) that recorded per-category detail -- see known_gaps 'CATEGORY-LEVEL DATA IS PARTIAL'. Its own category sum (25+0+9.75+8.75+8.25+0+4.75=56.5) does not exactly equal golden.combined (56.79) because they are means over different n (4 vs 7). Do not treat this as an inconsistency in aggregate_replays.py -- it is a data-availability gap in the original 3 baseline runs, documented rather than backfilled.",
+    "expected_score": 26.48,
+    "expected_score_note": "Mean of the 6 runs with a recorded expected_score (23.2/19.6/20.1/50.4/23.6/22.0); the 2026-08-14 scheduled-poll's extra run (run 4) did not record one and is excluded from this mean, not treated as 0.",
+    "p_exec_pct": 46.67,
+    "p_exec_pct_caveat": "REFUTE finding F7 (carried forward): this mean is informational only, not a real P(exec) value -- P(exec) is assigned from discrete named bands (SKILL.md STAGE 2.2), and no single run actually produced this exact figure; averaging across runs that picked different discrete bands manufactures false precision. Do not cite this figure as an authoritative P(exec) band placement. Computed over the 6 runs with a recorded p_exec_pct (40/35/35/90/40/40); the 2026-08-15 run 5's 90.0% is a notably different band placement than the other 5 (35-40%) -- run 5's own notes placed it in the 'under LOI/PSA' band on the theory that the 6/9 DD-Critical record shows Phase II + roof reports already commissioned, a reading the other 5 runs didn't share. Worth a closer look if this deal is ever re-scored live, but not adjudicated here.",
     "verdict_tier": "PASS-band (GATE-FLAGGED -- per-building 50K SF cap breached under every reading of the North Main Building; T2 WATCH ceilings from bear-mode UNKNOWN + FEMA UNK + unresolved reassessed tax are non-binding on a sub-60 raw score, per the Stage 2.5 disambiguation)",
     "floor_result": "Basis floor CLEARS (~90.2% discount to RCT v03 Columbus LOW $229.65/SF at an all-in of ~$22.41/SF, vs the 65% vintage-ramp floor; every building individually clears at its Portfolios-sub-rule allocated price). Yield/IRR/DSCR/carrying-cost floors UNRESOLVABLE from frozen facts (no NOI, no millage pull permitted) -- flagged unknown, not breached.",
     "replay_notes": "Enrichment closed the Economics-blind-spot this row previously represented (Basis moved from an [est] price+closing-only figure to a real CapEx-supported build using the sourced structural-condition finding) and surfaced a genuine new Gate 2 breach (per-building SF cap) the original 6/9 screen could not have caught -- no per-building SF existed in the archive until this enrichment. Tenancy & Lease stays null by design: occupancy was a confirmed unknown at screen time ('rent roll unreconciled'), and per the skill's own vacancy-reallocation rule, an UNKNOWN occupancy is not the same as a CONFIRMED-vacant one, so VA does not absorb Tenancy's 7 points here the way it does on Port Sheldon (which was confirmed 0% occupied). All 3 replay runs applied this distinction identically without being told to reason about it beyond the frozen facts -- a good sign the skill's documented vacancy-reallocation rule is unambiguous on this point."

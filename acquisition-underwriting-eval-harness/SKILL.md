@@ -98,31 +98,37 @@ runs independently flagged this as GATE-FLAGGED.
 ## Golden set
 
 `golden_set/*.json` — 6 frozen deals, schema documented in `golden_set/SCHEMA.md`. `golden` =
-the 2026-08-14 re-baseline (finding 1 above); confidence reflects how many of that replay's 7
-scorecard categories are null (finding 3), except where a null is structurally irreducible rather
-than a research gap (finding 4 — E Fulton's Tenancy & Lease):
+the 2026-08-15 re-baseline (see the "Fourth pass" Limitations entry); confidence reflects how many
+of a replay's 7 scorecard categories are null (finding 3), except where a null is structurally
+irreducible rather than a research gap (finding 4 — E Fulton's Tenancy & Lease):
 
 | Deal | Confidence | Scored (gates PASS/FLAG)? | Golden Combined | Observed range |
 |---|---|---|---|---|
-| 2196 Port Sheldon St, Jenison MI | HIGH (0 nulls) | Yes | 28.08 (mean of 6) | **7.0 pts (n=6)** |
-| Liberty Office Park, West Chester OH | HIGH (0 nulls) | Yes | 28.67 (mean of first 3) | 2.0 pts (n=6) |
-| E Fulton St Portfolio, Columbus OH | MEDIUM (1 null, irreducible — see finding 4) | Yes | 57.17 (mean of first 3) | 2.0 pts (n=4) |
-| 11850 Hamilton Ave, Cincinnati OH | LOW (2 nulls, no ask/NOI) | No — informational only | 22.4 (1 run) | n/a |
-| 1333 Research Rd, Gahanna OH | LOW (3 nulls) | No — informational only | 9.0 (1 run) | n/a |
-| 470 McCormick Blvd, Columbus OH | LOW (3 nulls, Quality fully null) | No — informational only | 0.0 (1 run) | n/a |
+| 2196 Port Sheldon St, Jenison MI | HIGH (0 nulls) | Yes | 26.81 (mean of 8, leaked run excluded) | 3.5 pts (n=8 clean) |
+| Liberty Office Park, West Chester OH | HIGH (0 nulls) | Yes | 28.11 (mean of 9) | 2.0 pts (n=9) |
+| E Fulton St Portfolio, Columbus OH | MEDIUM (1 null, irreducible — see finding 4) | Yes | 56.79 (mean of 7) | 4.0 pts (n=7) |
+| 11850 Hamilton Ave, Cincinnati OH | LOW (2 nulls, no ask/NOI) | No — informational only | 22.27 (mean of 3, leaked run excluded) | 2.4 pts (n=3 clean) |
+| 1333 Research Rd, Gahanna OH | LOW (3 nulls) | No — informational only | 11.75 (mean of 4) | **6.0 pts (n=4) — exceeds tolerance** |
+| 470 McCormick Blvd, Columbus OH | LOW (3 nulls, Quality mostly null) | No — informational only | 12.38 (mean of 4) | **20.0 pts (n=4) — see caveat below** |
 
-`golden.combined` for the scored deals is the mean of N independent replays. Port Sheldon's is
-the mean of all 6. Liberty's and E Fulton's remain the mean of their **first 3** — their extra
-2026-08-14 samples are recorded under `repeatability.additional_samples_2026-08-14_scheduled_poll`
-in each file but deliberately did NOT move their goldens, because the resulting shifts (28.67 →
-28.33 and 57.17 → 56.88) are both under 0.4 pts, i.e. pure noise, and churning a stable baseline
-for that buys nothing. Port Sheldon was rebaselined because its n=6 dispersion materially changed
-the picture. The 3 LOW deals are single-run values, run and reported for completeness but
-excluded from strict pass/fail regardless of any future repeatability finding.
+`golden.combined` for every deal is now a repeatability-checked mean, not a single unreplicated
+run — the 2026-08-15 rebaseline (Gabriel-directed forced run, see the "Fourth pass" Limitations
+entry) extended this to all 6 deals, including the 3 that previously had no repeatability data at
+all. Two deals (Port Sheldon, Hamilton) exclude one contaminated sample each — see the leakage
+findings above and each file's `known_gaps` for why. 470 McCormick's 20.0-pt range is NOT ordinary
+replay noise: it is largely an artifact of its original 2026-08-14 single run being an explicitly
+documented lower bound (most categories null) rather than a comparable full replay to the 3 newer
+ones — see that file's `known_gaps` before reading its dispersion as representative. 1333 Research
+Rd's 6.0-pt range appears to be genuine judgment variance, consistent with its null-heavy input
+packet. Both LOW-confidence deals are informational_only regardless, so neither dispersion
+finding gates anything, but both are recorded rather than smoothed over.
 
 **Every run gates on the MEAN of 3 replays per deal, never a single draw** (Steps 1–3 below).
-This is the direct consequence of the n=6 finding: Port Sheldon's single-draw range is 7.0 pts
-against a 5.0-pt tolerance, so one replay could false-FLAG on noise alone. See "Limitations".
+This is the direct consequence of the n=6 finding: at the time, Port Sheldon's single-draw range
+was 7.0 pts against a 5.0-pt tolerance, so one replay could false-FLAG on noise alone. (That
+figure was itself partly a leakage artifact, fixed 2026-08-15 — see "Limitations"; the clean
+range is now 3.5 pts. The mean-of-3 gate stays regardless, since even 3.5 pts of genuine
+judgment variance benefits from averaging.) See "Limitations".
 
 **`runs/` is git-ignored** (2026-08-14) — snapshots are machine-local run state, not source of
 truth, and a daily fire writing into a tracked directory inside a single-writer checkout
@@ -158,8 +164,9 @@ git -C <ora-skills repo root> log -1 --format=%H -- acquisition-underwriting/SKI
 **Step 1 — for each `golden_set/*.json` file**, spawn **3 independent subagents** (Agent tool,
 `model: "fable"` — this replays scored/financial logic and must never run below the Fable
 floor), each with the SAME prompt built from the template below. Three, not one: a single replay
-is not a stable measurement (n=6 finding — Port Sheldon's single-draw range is 7.0 pts against a
-5.0-pt tolerance), and the gate compares the mean of the 3 in Step 3.
+is not a stable measurement (n=6 finding — Port Sheldon's single-draw range was 7.0 pts at the
+time against a 5.0-pt tolerance, since partly attributable to leakage now fixed — see
+Limitations), and the gate compares the mean of the 3 in Step 3.
 
 Send all 3 in one message so they run concurrently, and do NOT vary the prompt between them —
 identical prompts are what make them samples of one distribution rather than three different
@@ -178,12 +185,28 @@ UNDERWRITING CONVENTIONS + the Replacement Cost Table supply RCT v03 figures.)
 
 Apply SCREEN mode's Stage -1 through Stage 2.2 mechanics to ONLY the frozen facts below.
 Do NOT fetch live data of any kind — no Notion query, no market-monitor query, no web search,
-no comp pull, no county/GIS lookup. Where the documented procedure calls for a live check you
-cannot perform in frozen-replay mode (e.g. Stage 2.1 bear-mode via market-monitor, Stage 2.3
-concentration check via live portfolio composition), apply the skill's own DOCUMENTED FALLBACK
-for that case (e.g. "If BOTH sources are unavailable: record bear-mode state as UNKNOWN,
-proceed with bear-mode OFF for scoring... cap the screen at T2 WATCH") and state which fallback
-you used in `notes`. Do not invent a value a live check would have supplied.
+no comp pull, no county/GIS lookup, and no read of ANY file under `memory/` or any other
+session-context/memory store (this specifically includes `memory/deal-decision-ledger.md` and
+any Notion-mirrored deal-decision or event log — these can record this exact deal's actual
+historical outcome, which is an answer key, not a live-data source, but is exactly as
+contaminating). Stage -1 item 5's "ledger precedent check" is NOT PERFORMABLE in frozen-replay
+mode for this reason — skip it and say so in `notes`; do not read the ledger to answer it. Where
+the documented procedure calls for a live check you cannot perform in frozen-replay mode (e.g.
+Stage 2.1 bear-mode via market-monitor, Stage 2.3 concentration check via live portfolio
+composition), apply the skill's own DOCUMENTED FALLBACK for that case (e.g. "If BOTH sources are
+unavailable: record bear-mode state as UNKNOWN, proceed with bear-mode OFF for scoring... cap the
+screen at T2 WATCH") and state which fallback you used in `notes`. Do not invent a value a live
+check would have supplied.
+
+If the SKILL.md text you just read discusses THIS EXACT property (by street address) anywhere
+outside the frozen facts below — e.g. as a worked example, a validation case for a rule, or a
+price-watch/re-engage citation — you MUST disregard that discussion entirely for scoring
+purposes. Score using ONLY the frozen facts below; do not award points, assumptions, or
+characterizations (e.g. seller motivation, occupancy status, condition) that come from SKILL.md's
+own narrative text about this address rather than from the frozen facts. If you noticed such a
+citation and excluded it, say so explicitly in `notes`; if you are not sure whether something you
+used came from the frozen facts or from SKILL.md's own text about this address, treat it as
+inadmissible and drop it.
 
 FROZEN FACTS:
 <paste the golden file's "inputs" block verbatim>
@@ -226,8 +249,10 @@ against `golden.combined` — never a single draw.
 If a deal's own `aggregate.combined_range` exceeds its `diff_policy.tolerance_combined_pts`,
 report that alongside the verdict: the replays disagreed with each other by more than the gate's
 own width, so that deal's PASS/FLAG is weakly supported this run regardless of which way it
-landed. Port Sheldon does this routinely (range 7.0 vs tolerance 5.0) — it is the known-noisy
-row, not a new finding.
+landed. Port Sheldon had a range of 7.0 vs the 5.0 tolerance at n=6 (partly a leakage artifact,
+fixed 2026-08-15 — clean range is now 3.5, see Limitations). As of the fix, a >5.0-pt range on
+Port Sheldon in a single 3-replay run is NOT expected to be routine — treat it as worth
+investigating, not as the known-noisy row it used to be.
 
 **Step 4 — snapshot.** Collect all `diff_verdict()` results into a list and call
 `lib.record_run.record_run(results, run_dir="runs/", skill_sha=<Step 0 hash>, run_label=<your
@@ -288,6 +313,48 @@ Found by two mandatory adversarial REFUTE passes (2026-08-14, both Fable-pinned)
 against the original 6-deal build, the second against the E Fulton enrichment + scheduled-task
 registration — listed here rather than silently fixed where fixing would have meant fabricating
 data this harness doesn't actually have:
+
+**Fourth pass (2026-08-15, forced repeatability run, Gabriel-directed) — 2 leakage findings, both
+fixed same-day, plus a full rebaseline:**
+1. **Second answer-key surface: the deal-decision-ledger.** The replay prompt's "do not fetch
+   live data" list enumerated Notion/market-monitor/web/comp-pull/county-GIS but never named
+   local memory files. One 2026-08-15 replay of 11850 Hamilton Ave read
+   `memory/deal-decision-ledger.md` (visible as an extra tool_use versus every other replay of the
+   same deal) and cited the ledger row recording this exact property's real 2026-07-09 outcome
+   (PARKED, "out-of-box standing retail") — an answer key, structurally identical to the
+   SKILL.md-citation leakage below, just a different file. It returned the sample's low outlier
+   (18.4 vs. 23.4/21.0 for the two clean replays). **Fixed:** the prompt template (see "Prompt
+   template" above) now explicitly bars reading `memory/` or any session-context/memory store,
+   names the ledger file directly, and instructs replays to treat Stage -1 item 5 (ledger
+   precedent check) as NOT PERFORMABLE rather than reading the ledger to answer it. Hamilton's
+   golden was rebaselined excluding the contaminated sample — see golden_set file — the same
+   treatment already established for Port Sheldon's SKILL.md-citation leak (finding 2 below), for
+   the same reason: a future clean-prompt replay population no longer contains this failure mode,
+   so the golden should reflect the corrected process, not the contaminated one.
+2. **SKILL.md-citation leakage, re-confirmed and now guarded against.** Previously documented
+   (see "SKILL.md-citation leakage" under Data-quality findings) as a standing, unfixed 1-in-6
+   risk on Port Sheldon specifically, because SKILL.md's own text cites that address by name as a
+   worked validation example. Rather than continuing to just document the risk, the prompt
+   template now instructs every replay to disregard any SKILL.md narrative text about the exact
+   frozen address and score from the frozen facts only, flagging in `notes` if it noticed and
+   excluded such a citation. The 3 replays run 2026-08-15 under the fixed prompt showed no
+   leakage (Seller & Motivation scored 0.0 in all three, vs. the 5.0 the original leaked run
+   awarded) — consistent with, though not proof against, the fix working; the failure mode was
+   probabilistic (~1-in-6) even before the fix, so a 3-sample clean run is expected either way.
+3. **Full rebaseline, 2026-08-15.** All 6 goldens updated to the mean of every same-doctrine,
+   non-contaminated sample now on file (Port Sheldon n=8 of 9, excluding the one leaked run;
+   Hamilton n=3 of 4, excluding the one ledger-read run; Liberty n=9; E Fulton n=7 for
+   Combined/Quality/Economics, n=4 for category-level detail — the original 3 baseline runs never
+   recorded per-category breakdowns; 1333 Research Rd and 470 McCormick n=4 each — each pools its
+   original 2026-08-14 single baseline run with 3 new 2026-08-15 replays, its first-ever
+   repeatability check). See each golden_set file's `known_gaps` for the deal-specific numbers
+   and `baselined_method`. Both LOW-confidence deals' NEW 2026-08-15 samples came in noisier than
+   the scored set on their own (1333 Research Rd's 3 new replays ranged 9.0-15.0; 470 McCormick's
+   ranged 14.0-20.0), and both files' full n=4 range (6.0 and 20.0 pts respectively) exceeds the
+   5.0-pt harness-wide tolerance — consistent with their null-heavy input packets; this is
+   evidence for, not against, keeping them out of the strict pass/fail gate. 470 McCormick's
+   20.0-pt range is additionally inflated by its original run being a documented lower-bound
+   construction rather than a comparable full replay — see that file's `known_gaps`.
 
 **Second REFUTE pass (E Fulton enrichment + scheduled task) — 2 HIGH-severity findings, both
 fixed same-day, not deferred:**
@@ -363,18 +430,24 @@ latent defects surfaced on the first real diff:**
    `git log`/mtimes on `golden_set/` immediately before Step 4 and discard any deal whose golden
    moved mid-run — do not record or alert on it. `ora-skills` is a single-writer checkout;
    prefer an isolated worktree for any harness edit.
-- **SKILL.md-citation leakage on named-example deals** (re-measured at n=6). Port Sheldon is
-  cited by address in SKILL.md's own text as the worked validation example for the price-watch
-  trigger. One replay drew on that citation (awarding Seller & Motivation points for an
-  owner-user-vacating characterization not present in the frozen `inputs`); **all five other
-  replays declined to**, several explicitly noting the citation was inadmissible as it wasn't in
-  the frozen fact set. So the leakage rate is 1-in-6, not the 1-in-3 the n=3 sample implied —
-  and that single leaked run is also the high outlier (32.0) inflating this deal's dispersion.
-  This is a narrow, real, and only partially mitigable risk for any
-  future golden deal that also happens to be named in SKILL.md's own worked examples — a frozen
-  replay reading the full skill file sees its own answer key for that one input. No golden deal in
-  this set other than Port Sheldon is currently affected (checked: none of the others are cited by
-  address in SKILL.md).
+- **SKILL.md-citation leakage on named-example deals — MITIGATED 2026-08-15 (was: unfixed
+  standing risk).** Port Sheldon is cited by address in SKILL.md's own text as the worked
+  validation example for the price-watch trigger. The original baseline run (measured at n=6)
+  found one replay drew on that citation (awarding Seller & Motivation points for an
+  owner-user-vacating characterization not present in the frozen `inputs`) while all five other
+  replays declined to — a leakage rate of 1-in-6, and that single leaked run was also the high
+  outlier (32.0) inflating this deal's dispersion. This was originally documented as "only
+  partially mitigable" because fixing it looked like it required either stripping the citation
+  from SKILL.md (out of scope, read-only) or excluding self-citing deals from the golden set. The
+  2026-08-15 fourth pass (see Limitations, "Fourth pass" finding 2) found a third option: the
+  replay prompt itself can instruct the subagent to disregard SKILL.md's own narrative discussion
+  of the exact frozen address. The leaked sample was excluded from Port Sheldon's golden
+  (rebaselined to n=8 of 9, see golden_set file) on the same reasoning already used for the
+  2026-08-15 deal-decision-ledger leak: a fixed-prompt replay population no longer produces this
+  draw, so the golden should reflect the corrected process. No golden deal in this set other than
+  Port Sheldon has ever shown this failure mode (checked: none of the others are cited by address
+  in SKILL.md) — the fix is general (any future self-citing deal is covered), but only Port
+  Sheldon has evidence either way.
 - **RESOLVED 2026-08-14 — the strict-scoring gate could not previously see an Economics-side
   doctrine edit.** Both HIGH deals (Port Sheldon, Liberty) breach both the Basis and Yield floors,
   pinning Economics at 0.0 in every run; a future edit to the Basis linear scale, the Yield slope,
