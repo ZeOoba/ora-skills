@@ -1,11 +1,6 @@
 ---
 name: solar-lease-underwriting
-description: "Oxford Realty Advisors rooftop solar / community-solar lease underwriting skill. Use when evaluating, negotiating, or reviewing a rooftop solar, community solar, or PPA-style lease proposal (King Energy or any developer) before signature, or auditing an already-executed one. Trigger on: solar lease, rooftop lease, community solar, King Energy, roof rent, solar PPA, Site Access Fee, ITC, SREC, solar rent benchmark, should we lease our roof, solar developer proposal, solar lease economics, King Energy pitch. Companion to legal-intelligence (clause-level contract review) and acquisition-underwriting (whole-property acquisition) — this skill owns the counterparty-economics and rent-benchmarking layer specific to third-party rooftop energy leases. v1.0 (2026-07-26, built from the King Energy Red Branch Rd / Northwood Dr lease review)."
----
-
----
-name: solar-lease-underwriting
-description: "Oxford Realty Advisors rooftop solar / community-solar lease underwriting skill. Use when evaluating, negotiating, or reviewing a rooftop solar, community solar, or PPA-style lease proposal (King Energy or any developer) before signature, or auditing an already-executed one. Trigger on: solar lease, rooftop lease, community solar, King Energy, roof rent, solar PPA, Site Access Fee, ITC, SREC, solar rent benchmark, should we lease our roof, solar developer proposal, solar lease economics, King Energy pitch. Companion to legal-intelligence (clause-level contract review) and acquisition-underwriting (whole-property acquisition) — this skill owns the counterparty-economics and rent-benchmarking layer specific to third-party rooftop energy leases. v1.0 (2026-07-26, built from the King Energy Red Branch Rd / Northwood Dr lease review)."
+description: "Oxford Realty Advisors rooftop solar / community-solar lease underwriting skill. Use when evaluating, negotiating, or reviewing a rooftop solar, community solar, or PPA-style lease proposal (King Energy or any developer) before signature, or auditing an already-executed one. Trigger on: solar lease, rooftop lease, community solar, King Energy, roof rent, solar PPA, Site Access Fee, ITC, SREC, solar rent benchmark, should we lease our roof, solar developer proposal, solar lease economics, King Energy pitch. Companion to legal-intelligence (clause-level contract review) and acquisition-underwriting (whole-property acquisition) — this skill owns the counterparty-economics and rent-benchmarking layer specific to third-party rooftop energy leases. v1.1 (2026-08-15: see Changelog)."
 ---
 
 # Solar / Rooftop Lease Underwriting (ORA) — v1.0
@@ -37,7 +32,7 @@ Compute, on the actual (not headline) rent schedule:
 
 - **$/kW-DC/yr** and **$/SF/yr**, both as a 25-year average (including any zero-rent years) and as the peak-tier rate
 - Compare against recent ORA precedent for the same counterparty/program type before treating any single number as "market" — ORA's own two King Energy MD community solar deals priced within $41-60/kW/yr average and $0.41-0.73/SF/yr average but arrived there via very different zero-rent windows (5 vs. 10 years), so a same-counterparty comp can still hide a materially different NPV
-- Never accept a comparison against a single anchor deal as sufficient — pull 2-3 external comps if available via rent-comp or market-monitor before calling a rate fair
+- Never accept a comparison against a single anchor deal as sufficient — pull 2-3 external comps if available via acquisition-underwriting's COMP GRID DISCIPLINE (industrial comps only — see the gap noted in "Known gaps to close" below for why no solar-specific comp source exists yet) or market-monitor before calling a rate fair
 - A **flat, non-escalating, non-revenue-linked** rent structure is the market default for this product — the negotiating lever is the floor rent and the length of any zero-rent period, not the escalated out-year rate, which developers will concede more easily since it's discounted furthest
 
 ## Step 3 — Model the developer's expected returns (SPECULATIVE unless developer discloses actuals)
@@ -74,6 +69,10 @@ Produce: (1) a term sheet extraction, (2) the rent benchmark table, (3) the sens
 
 ## Known gaps to close on the next cycle
 
-- No external solar-rooftop-lease comp set exists yet in ORA's systems (rent-comp and market-monitor are built for industrial rent/sale comps, not solar). Building one is the single highest-value follow-on to this skill.
+- No external solar-rooftop-lease comp set exists yet in ORA's systems (acquisition-underwriting's COMP GRID DISCIPLINE and market-monitor are built for industrial rent/sale comps, not solar; the retired `rent-comp` skill, gone since 2026-08-05, never had one either). Building one is the single highest-value follow-on to this skill.
+
+## Changelog
+
+- v1.1 (2026-08-15): HIGH fix (Skill Text Audit finding F2). Step 2 and the "Known gaps" comp-sourcing mentions repointed from the retired `rent-comp` skill (gone 2026-08-05) to acquisition-underwriting's COMP GRID DISCIPLINE section (absorbed there 2026-08-12). Also deduplicated an accidentally doubled YAML frontmatter block (lines 1-9 previously repeated the `---`/`name`/`description` block twice) — no content or trigger-vocabulary change from the dedup itself. Description trimmed to a single trailing version tag with this history moved here, after the trim itself pushed the field to 1,035 chars (over the platform's 1,024-char limit that has broken `package_skills.py` before — see `parcel-data-recovery` v1.3). No benchmarking method, red-flag checklist, or pro-forma math changed.
 - Subscription/bill-credit pricing for MD (and any future state) community solar programs is not sourced anywhere in ORA's knowledge base — worth a one-time research pass to replace the [SPECULATIVE] band in Step 3 with an actual cited range.
 

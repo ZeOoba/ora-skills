@@ -1,6 +1,6 @@
 ---
 name: tenant-email
-description: Draft a tenant communication email. Use when writing to tenants about renewals, notices, maintenance, rent, or introductions. v1.1 (2026-07-24: fixed missing entity-awareness — every draft signed as plain "Gabriel Goldberg" with no property-LLC lookup, root cause of the recurring Outbox QC Check D defect; now resolves and embeds the property LLC signature block as literal text). v1.2 (2026-08-03: signature block signed Gabriel as "Principal" against CLAUDE.md's ratified "VP Acquisitions" — corrected; caught by doctrine-integrity-probe Check 13, which compares the Identity line against live emitters)
+description: Draft a tenant communication email. Use when writing to tenants about renewals, notices, maintenance, rent, or introductions. v1.3 (2026-08-15: see Changelog)
 user-invocable: true
 allowed-tools: Read Glob Grep WebFetch mcp__c0ea3c01-b8f1-4371-aa06-08a1449f59fc__outlook_email_search mcp__a3e380ce-2ea9-4b42-92d9-37c588a4b760__search_crm_objects
 ---
@@ -26,3 +26,9 @@ Draft a tenant email for $ARGUMENTS.
    - If the draft is later opened/finished in Outlook and a generic default signature auto-populates on top of this block, delete the auto-inserted one before send — the block above is the one that must remain.
 6. If this is a renewal notice, reference the lease expiration date and proposed new terms
 7. If this is a welcome letter for a new acquisition, include property management contact info and rent payment instructions
+
+## Changelog
+
+- v1.3 (2026-08-15): LOW fix (Skill Text Audit finding F9). Moved the v1.2/v1.1 changelog prose that had accumulated in the frontmatter `description` field down here — this is the first `## Changelog` heading in this file. Description now carries a single trailing version tag. No drafting instruction, signature-block logic, or trigger vocabulary changed.
+- v1.2 (2026-08-03): Signature block signed Gabriel as "Principal" against CLAUDE.md's ratified "VP Acquisitions" — corrected; caught by doctrine-integrity-probe Check 13, which compares the Identity line against live emitters.
+- v1.1 (2026-07-24): Fixed missing entity-awareness — every draft signed as plain "Gabriel Goldberg" with no property-LLC lookup, root cause of the recurring Outbox QC Check D defect; now resolves and embeds the property LLC signature block as literal text.

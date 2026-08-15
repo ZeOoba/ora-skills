@@ -1,6 +1,6 @@
 ---
 name: submarket-spatial-analysis
-description: Submarket and spatial analysis for ORA properties and acquisition candidates. Use when the user mentions: submarket, spatial analysis, drive time, isochrone, intermodal proximity, highway access, last-mile, demographics, employment density, population growth, MSA, micropolitan, traffic count, locational benchmark, location quality score, GIS, mapping, or any task requiring geographic analysis of properties relative to demand drivers. v1.4 (2026-08-12: census-acs-extract refs tombstoned; component 4 attainment is now a MANUAL pull). v1.3 (2026-07-20: reconciled two independent lines of work — a real Drive-Time Method ladder (ORS keyed API -> keyless OSRM public server -> straight-line last resort, OSRM live-verified 2026-07-18/19) recovered from the stale next5-sourcing-data branch, plus Location Score step 4 now calling census-acs-extract for a CONFIRMED metro labor-quality sub-finding)
+description: Submarket and spatial analysis for ORA properties and acquisition candidates. Use when the user mentions: submarket, spatial analysis, drive time, isochrone, intermodal proximity, highway access, last-mile, demographics, employment density, population growth, MSA, micropolitan, traffic count, locational benchmark, location quality score, GIS, mapping, or any task requiring geographic analysis of properties relative to demand drivers. v1.5 (2026-08-15: see Changelog)
 license: ORA Internal
 ---
 
@@ -86,13 +86,14 @@ Never present a tier-3 estimate as a routed figure; the tier label is mandatory 
 ## Dependencies
 
 - acquisition-underwriting skill (consumes location score for IC memo)
+- acquisition-underwriting skill's COMP GRID DISCIPLINE section (rental rate inputs — flows the opposite direction from the location-score dependency above; the retired `rent-comp` skill, gone 2026-08-05, previously supplied this)
 - market-monitor skill (submarket trends)
-- rent-comp skill (rental rate inputs)
 - docx skill (memo deliverables)
 - **(no successor):** `census-acs-extract` retired 2026-08-05 — Location Score component 4 (metro labor-quality/attainment) now needs a manual ACS pull; archived script at `_archive/census-acs-extract_retired-2026-08-05/census_acs_extract.py`
 
 ## Changelog
 
+- v1.5 (2026-08-15): HIGH fix (Skill Text Audit finding F3) + LOW fix (finding F9). The Dependencies list's `rent-comp skill (rental rate inputs)` line was orphaned by that skill's 2026-08-05 retirement; repointed to acquisition-underwriting's COMP GRID DISCIPLINE section (absorbed there 2026-08-12) and reworded to avoid reading as a duplicate of the existing acquisition-underwriting (location-score) dependency above it — the two flow in opposite directions. Also moved the v1.4/v1.3 changelog prose that had accumulated in the description field down here (both already existed in this section, so the description copies were pure duplication); description now carries a single trailing version tag. No Location Score weight, Drive-Time Method rung, or scoring math changed.
 - v1.4 (2026-08-12): Tombstoned the three `census-acs-extract` references left dangling by that skill's 2026-08-05 retirement (zero-use, no successor named). Location Score component 4's attainment sub-step is now an explicit MANUAL pull, with a pointer to the still-runnable archived script (`_archive/census-acs-extract_retired-2026-08-05/census_acs_extract.py`, whose `extract_metro_attainment(year)` and `ANCHORS` dict both still work). The step was previously an unexecutable instruction naming a skill that no longer exists. No Location Score weight or Drive-Time Method rung changed.
 
 - **v1.3 (2026-07-20):** Reconciled two independent, previously-unmerged lines of work that had drifted into a version collision:

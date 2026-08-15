@@ -1,6 +1,6 @@
 ---
 name: daily-brief
-description: 'Oxford Realty Advisors daily morning intelligence brief. Covers CRE news, industrial transactions, market rates, portfolio watch, ops tip, reading list, CRE law/regulatory watch, shallow bay case study, and competitive intelligence. Use when the user says: daily brief, news, morning brief, market update, CRE news, what''s happening today, what should I know. v2.8 (2026-07-25)'
+description: 'Oxford Realty Advisors daily morning intelligence brief. Covers CRE news, industrial transactions, market rates, portfolio watch, ops tip, reading list, CRE law/regulatory watch, shallow bay case study, and competitive intelligence. Use when the user says: daily brief, news, morning brief, market update, CRE news, what''s happening today, what should I know. v2.10 (2026-08-15: Louisville KY added to Sections 1-2 geographic scope; frontmatter version corrected to match body Changelog)'
 ---
 
 You are generating the Oxford Realty Advisors daily intelligence brief. Execute all 9 sections in sequence and present as a structured report. Target length: concise but complete.
@@ -92,6 +92,7 @@ Search the last 24 hours for significant industrial/shallow-bay news in:
 - MI (Grand Rapids) — entry/beachhead target, added 2026-05-30
 - VA (Richmond) — entry/beachhead target, added 2026-05-30
 - IA (Des Moines) — entry/beachhead target, added 2026-05-30
+- KY (Louisville) — entry/beachhead target, added 2026-08-05
 - TN (pipeline/watch market)
 
 Source priority: [REBusinessOnline.com](http://REBusinessOnline.com), [ConnectCRE.com](http://ConnectCRE.com), [GlobeSt.com](http://GlobeSt.com), Commercial Observer, CoStar (if accessible), local business journals.
@@ -108,7 +109,7 @@ Search for industrial sale transactions matching ORA criteria:
 
 - Sub-$10M total consideration
 - Shallow-bay, flex, office-warehouse product type
-- Target markets: OH, MD, IN, MO, KS, WI (Columbus, Cincinnati, Baltimore/DC, Indianapolis, Kansas City, Madison) + entry-phase MI (Grand Rapids), VA (Richmond), IA (Des Moines); TN watch
+- Target markets: OH, MD, IN, MO, KS, WI (Columbus, Cincinnati, Baltimore/DC, Indianapolis, Kansas City, Madison) + entry-phase MI (Grand Rapids), VA (Richmond), IA (Des Moines), KY (Louisville); TN watch
 - Multi-tenant preferred; sub-50,000 SF per building preferred
 
 Include when available: Price, SF, price/SF, cap rate, buyer, seller, broker. Sources: LoopNet recent sales, CoStar comps, REBusinessOnline, Crexi recent closings. Flag with ⚠️ any deal that would have passed ORA's investment screen.
@@ -347,4 +348,5 @@ Minimum 3 items; maximum 6. Prioritize items requiring action within 72 hours.
 
 ## CHANGELOG
 
+- **v2.10 (2026-08-15):** HIGH fix (Skill Text Audit finding F6). Sections 1-2 geographic scope had zero Louisville/Kentucky mentions despite `target-markets.json` ratifying Louisville KY as the 10th canonical cluster (entry-phase, 2026-08-05) 10 days earlier — added `KY (Louisville) — entry/beachhead target, added 2026-08-05` to both lists, matching the existing MI/VA/IA wording pattern. Section 7's law/regulatory-watch state bracket already omitted MI/VA/IA (a pre-existing gap predating this fix, not introduced by it) and was left as-is rather than expanding scope beyond the Louisville parity gap — flagged for a separate finding, not fixed here. Also corrected a frontmatter/body version mismatch: the `description` tag had drifted to v2.8 while this Changelog was already at v2.9 (same doctrine class this audit itself checks for) — frontmatter now reads v2.10 to match. No news-filter, transaction-screen, or workflow logic changed.
 - **v2.9 (2026-08-11):** Corrected the Patch 3 pre-create dedup guard's 1-match branch — overwrite is now permitted only for a page this session created; any other match is a completed prior run (skip publication AND the send). Full history back to v2.0: `versions/CHANGELOG-v2.0-v2.9.md`.

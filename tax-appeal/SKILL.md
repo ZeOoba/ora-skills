@@ -1,6 +1,6 @@
 ---
 name: tax-appeal
-description: "Property tax assessment analysis and appeal decision engine for Oxford Realty Advisors. Use this skill whenever the user mentions: property tax, tax assessment, tax appeal, assessed value, tax reduction, county assessor, millage rate, tax bill, reassessment, tax protest, tax grievance, income approach valuation, or any request to evaluate whether a property tax assessment should be appealed. Also trigger when the user uploads a property tax bill or assessment notice. v1.1 (2026-07-08: file-naming citations repointed from the superseded single 2026-05-14 standard to the ratified three-schema doctrine)"
+description: "Property tax assessment analysis and appeal decision engine for Oxford Realty Advisors. Use this skill whenever the user mentions: property tax, tax assessment, tax appeal, assessed value, tax reduction, county assessor, millage rate, tax bill, reassessment, tax protest, tax grievance, income approach valuation, or any request to evaluate whether a property tax assessment should be appealed. Also trigger when the user uploads a property tax bill or assessment notice. v1.2 (2026-08-15: comp-grid pointers repointed from market-monitor to acquisition-underwriting's COMP GRID DISCIPLINE; file-naming citation updated to Cowork Global Operating Prompt v3.0). v1.1 (2026-07-08: file-naming citations repointed from the superseded single 2026-05-14 standard to the ratified three-schema doctrine)"
 ---
 
 # Property Tax Appeal Decision Engine
@@ -49,7 +49,7 @@ Income Approach Value = Stabilized NOI / Market Cap Rate
 - Include management fee (even if self-managed, impute 3-5% for valuation)
 
 **Cap Rate Selection:**
-- Use the market-monitor skill (`rent-comp` retired 2026-08-05, comp-sourcing discipline absorbed by market-monitor v1.2) to pull recent sale comps and extract cap rates
+- Use the acquisition-underwriting skill's COMP GRID DISCIPLINE section (`rent-comp` retired 2026-08-05; comp-grid mechanics absorbed into acquisition-underwriting v4.11, 2026-08-12 — market-monitor's Sourcing Discipline section covers vendor-report credibility only, not comp-grid method) to pull recent sale comps and extract cap rates
 - Or search: "[city] [property type] cap rate [year]"
 - Apply appropriate cap rate for property class and condition
 - Use cap rate RANGE to establish value range (not single point)
@@ -66,7 +66,7 @@ Income Approach Value = Stabilized NOI / Market Cap Rate
 | Income Value (high) | $X |
 
 ### B. Comparable Sales Approach
-- Use the market-monitor skill (`rent-comp` retired 2026-08-05) to pull 3-6 recent comparable sales
+- Use the acquisition-underwriting skill's COMP GRID DISCIPLINE section (`rent-comp` retired 2026-08-05; absorbed into acquisition-underwriting v4.11, 2026-08-12) to pull 3-6 recent comparable sales
 - Calculate median and mean price/SF from comps
 - Apply to subject property: `Comparable Value = Median Price/SF × Subject SF`
 - Adjust for: age, condition, location, occupancy, lease quality
@@ -132,7 +132,7 @@ Use the docx skill to produce an appeal letter including:
    - D: Market report excerpts supporting cap rate
    - E: Photos of deferred maintenance or functional obsolescence (if applicable)
 
-File naming: per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Settings v2.0, 2026-06-11 — do NOT unify). This appeal package is a session/analysis output → use `YYYY-MM-DD_[Topic]_[DocType]_v##.ext` in an `/outputs/` subfolder. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
+File naming: per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Operating Prompt v3.0, 2026-07-16 — do NOT unify; supersedes the archived v2.0/2026-06-11 doc of the same ratified rule). This appeal package is a session/analysis output → use `YYYY-MM-DD_[Topic]_[DocType]_v##.ext` in an `/outputs/` subfolder. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
 
 ### Attorney Referral
 Reference the Gibbs Firm (Oxford's property tax counsel) for jurisdictions requiring legal representation. Include:
@@ -190,17 +190,18 @@ When requested, run the assessment analysis across the entire portfolio:
 5. Produce a priority list: which properties to appeal first
 6. Calculate total portfolio tax savings opportunity
 
-Output as XLSX per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Settings v2.0, 2026-06-11 — do NOT unify). This portfolio tax-savings workbook is a session/analysis output → use `YYYY-MM-DD_[Topic]_[DocType]_v##.ext` in an `/outputs/` subfolder. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
+Output as XLSX per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Operating Prompt v3.0, 2026-07-16 — do NOT unify; supersedes the archived v2.0/2026-06-11 doc of the same ratified rule). This portfolio tax-savings workbook is a session/analysis output → use `YYYY-MM-DD_[Topic]_[DocType]_v##.ext` in an `/outputs/` subfolder. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
 
 ## Changelog
 
+- v1.2 (2026-08-15): HIGH fix (Skill Text Audit findings F1/coverage-gap-3). §2.A/§2.B comp-grid pointers repointed from market-monitor (which never had comp-grid mechanics — its "absorbed" claim didn't survive inspection) to acquisition-underwriting's COMP GRID DISCIPLINE section, absorbed there 2026-08-12 per Gabriel's scoped-restore ruling; §7 cross-skill integration line repointed to match. File-naming citations in §4/§6 updated from the archived "ORA Cowork Global Settings v2.0" (2026-06-11) to the current "ORA Cowork Global Operating Prompt v3.0" (2026-07-16) — the underlying three-schema rule is unchanged, only the version/document-name citation. No scoring, threshold, or valuation math changed.
 - v1.1 (2026-07-08): HIGH fix (beyond formal Skill Text Audit scope, same doctrine class as finding 5) — both file-naming citations (Appeal package, §4; Portfolio-wide XLSX, §6) repointed from the superseded single "ORA File-Naming Standard 2026-05-14.md" to the ratified three-schema doctrine (ORA Cowork Global Settings v2.0, 2026-06-10/11).
 
 ---
 
 ## 7. CROSS-SKILL INTEGRATION
 
-- **market-monitor:** Pull sale comps for comparable sales approach and cap rate data for income approach (`rent-comp` retired 2026-08-05, absorbed here)
+- **acquisition-underwriting:** Pull sale comps for comparable sales approach and cap rate data for income approach via its COMP GRID DISCIPLINE section (`rent-comp` retired 2026-08-05, absorbed into acquisition-underwriting v4.11, 2026-08-12)
 - **acquisition-underwriting:** Tax analysis is a standard component of deal underwriting — feed assessed value and tax rate into pro forma
 - **(no successor):** `maintenance-analytics` retired 2026-08-05 with no successor named — deferred-maintenance depreciation arguments in the cost approach need a manual source until one exists
 - **ora-pm-ledger:** Track appeal deadlines in the daily ops ledger, flag upcoming deadlines in the monthly checklist (`re-operations` retired 2026-08-05, redundant with named ops siblings)
