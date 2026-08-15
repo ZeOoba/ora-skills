@@ -10,11 +10,13 @@ taught it to count Markdown TABLE rows (e.g. loi-generation/references/
 qc-gate.md presents its gate as a numbered table, not a checkbox list).
 """
 import io
+import json
 import subprocess
 import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout, redirect_stderr
+from datetime import datetime
 from pathlib import Path
 
 # package_skills.py is a sibling, imported flat rather than package-relative.
@@ -34,6 +36,7 @@ from package_skills import (  # noqa: E402  (deliberate: needs the path bootstra
     resolve_outdir_collision,
     staged_skill_dirs,
     validate_skill_frontmatter,
+    write_staging_manifest,
 )
 
 
@@ -525,6 +528,53 @@ class IsBundledExclusions(unittest.TestCase):
         self.assertFalse(is_bundled('PACKAGING-NOTE.md'))
         self.assertFalse(is_bundled('references/PACKAGING-NOTE.md'))
         self.assertFalse(is_bundled('versions/20260716_snapshot.md'))
+
+
+class StagingManifest(unittest.TestCase):
+    """Regression tests for the 2026-08-15 staging sentinel (Rev 10 remediation): a
+    downstream consumer pointed at an outdir this script never wrote to had no way to
+    tell "not staged yet" apart from "staged, produced zero packages" or "staged at a
+    different path than the one it was told" without a manual tree walk. Tested
+    directly against write_staging_manifest() rather than through package() — package()
+    reads the module-global REPO constant with no repo= override (unlike
+    resolve_outdir_collision/check_tree_hygiene), so it isn't fixture-testable; the
+    manifest writer itself takes only Path/list-of-Path arguments and needs no repo."""
+
+    def test_manifest_records_every_package_with_size(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outdir = Path(tmp)
+            a = outdir / 'skill-a.skill'
+            a.write_bytes(b'PK\x03\x04' + b'x' * 10)
+            b = outdir / 'skill-b.skill'
+            b.write_bytes(b'PK\x03\x04' + b'y' * 20)
+            sentinel = write_staging_manifest(outdir, [a, b])
+            self.assertEqual(sentinel, outdir / '_STAGED.ok')
+            self.assertTrue(sentinel.is_file())
+            manifest = json.loads(sentinel.read_text(encoding='utf-8'))
+            self.assertEqual(manifest['outdir'], str(outdir.resolve()))
+            self.assertIn('staged_at', manifest)
+            packages = {p['skill']: p for p in manifest['packages']}
+            self.assertEqual(set(packages), {'skill-a', 'skill-b'})
+            self.assertEqual(packages['skill-a']['file'], 'skill-a.skill')
+            self.assertEqual(packages['skill-a']['bytes'], a.stat().st_size)
+            self.assertEqual(packages['skill-b']['bytes'], b.stat().st_size)
+
+    def test_empty_batch_still_writes_a_manifest(self):
+        """A zero-skill run (e.g. a typo'd skill filter) must still leave a sentinel —
+        the whole point is distinguishing 'ran, staged nothing' from 'never ran'."""
+        with tempfile.TemporaryDirectory() as tmp:
+            outdir = Path(tmp)
+            sentinel = write_staging_manifest(outdir, [])
+            self.assertTrue(sentinel.is_file())
+            manifest = json.loads(sentinel.read_text(encoding='utf-8'))
+            self.assertEqual(manifest['packages'], [])
+
+    def test_staged_at_is_utc_iso8601(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sentinel = write_staging_manifest(Path(tmp), [])
+            manifest = json.loads(sentinel.read_text(encoding='utf-8'))
+            # e.g. 2026-08-15T13:04:22Z — raises ValueError if the format drifts
+            datetime.strptime(manifest['staged_at'], '%Y-%m-%dT%H:%M:%SZ')
 
 
 if __name__ == '__main__':
