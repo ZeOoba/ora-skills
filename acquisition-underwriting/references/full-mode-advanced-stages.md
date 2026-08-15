@@ -4,7 +4,7 @@ Extracted verbatim from `acquisition-underwriting/SKILL.md` (2026-08-13, progres
 
 ## STAGE 2.7 — SPATIAL / LOCATION ANALYSIS (v3.9; runs automatically in UNDERWRITE and FULL modes)
 
-Auto-invokes `ora-operations-extensions:submarket-spatial-analysis` on every UNDERWRITE and FULL evaluation — no separate manual skill call. Trigger is mode-based (UNDERWRITE or FULL selected per ROUTING), independent of Stage 2.6's T1-PURSUE gate: a directly-requested "build the model" fires this stage even for a deal that never ran through SCREEN.
+Auto-invokes `submarket-spatial-analysis` on every UNDERWRITE and FULL evaluation — no separate manual skill call. Trigger is mode-based (UNDERWRITE or FULL selected per ROUTING), independent of Stage 2.6's T1-PURSUE gate: a directly-requested "build the model" fires this stage even for a deal that never ran through SCREEN.
 
 **Default workflows — both run every time, standard case, no elicitation form:**
 1. **Acquisition Location Score (1–100)** — composite: highway distance (25%) + intermodal distance (20%) + 30-min drive-time population (15%) + 30-min drive-time labor pool (15%) + submarket vacancy/rent-growth trend (15%) + major-employer/anchor proximity (10%), per the spatial skill's own weighting.

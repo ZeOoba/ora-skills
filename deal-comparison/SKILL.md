@@ -1,6 +1,6 @@
 ---
 name: deal-comparison
-description: "Side-by-side deal comparison and portfolio-fit analysis for Oxford Realty Advisors. Use when comparing 2+ acquisition candidates, scoring deals against portfolio fit, or benchmarking against historical Oxford deals. Triggers: compare deals, side by side, which deal is better, deal comparison, portfolio fit, score deal, rank acquisitions, compare to historical, deal matrix. v1.0"
+description: "Side-by-side deal comparison and portfolio-fit analysis for Oxford Realty Advisors. Use when comparing 2+ acquisition candidates, scoring deals against portfolio fit, or benchmarking against historical Oxford deals. Triggers: compare deals, side by side, which deal is better, deal comparison, portfolio fit, score deal, rank acquisitions, compare to historical, deal matrix. v1.1 (2026-08-15: Louisville KY added to the entry/beachhead Market Cluster Fit list — see Changelog)"
 ---
 
 You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side-by-side analysis of 2+ acquisition candidates scored on financial merit and portfolio fit. Pull deal data from Notion Acquisition Pipeline Tracker when available. For deals not in Notion, ask Gabriel to provide key inputs.
@@ -89,7 +89,7 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 
 **Market Cluster Fit — designated target markets (canonical source: `target-markets.json` v1.0+ (bundled into this skill's own package as of 2026-07-09 — master copy at repo root `ora-skills/target-markets.json`); narrative twin: memory "ORA Target Markets / Primary Clusters", updated 2026-05-30):**
 - Established clusters (score 6) = Columbus OH, Kansas City MO/KS, Indianapolis IN, Maryland, Cincinnati OH, Madison WI.
-- Entry/beachhead clusters (score **4 — "new target market," NOT "isolated=1"**) = Grand Rapids MI, Richmond VA, Des Moines IA. These are designated targets with no existing ORA exposure; a deal here earns the new-target-market credit and graduates to "existing cluster = 6" once a beachhead property closes. Operational Leverage will score "New platform=1" until a PM platform is established locally.
+- Entry/beachhead clusters (score **4 — "new target market," NOT "isolated=1"**) = Grand Rapids MI, Richmond VA, Des Moines IA, Louisville KY (added 2026-08-05). These are designated targets with no existing ORA exposure; a deal here earns the new-target-market credit and graduates to "existing cluster = 6" once a beachhead property closes. Operational Leverage will score "New platform=1" until a PM platform is established locally.
 
 ---
 
@@ -147,3 +147,7 @@ TOP 3 RISKS: [Deal] — 1) ... 2) ... 3) ...
 ```
 
 Save output as `ORA_DealComparison_[Deal1]_vs_[Deal2]_[YYYY-MM-DD].xlsx` or HTML artifact.
+
+## Changelog
+
+- v1.1 (2026-08-15): HIGH fix (Skill Text Audit finding F5). Added Louisville KY to the entry/beachhead Market Cluster Fit list (score 4, "new target market") — ratified in `target-markets.json` 2026-08-05 as the 10th canonical cluster but never reflected here. No scoring weight, threshold, or point value changed; Louisville simply joins the existing score-4 bucket alongside Grand Rapids/Richmond/Des Moines.

@@ -1,6 +1,6 @@
 ---
 name: market-monitor
-description: "Industrial real estate market monitoring and analysis for Oxford Realty Advisors target markets. Use when researching market conditions, comparing markets, tracking demand drivers, or preparing market intelligence reports. Triggers: market update, market conditions, vacancy rate, industrial market, rent growth, supply pipeline, absorption, market comparison, submarket analysis, cap rate trends. v1.2 (2026-07-25: added a Sourcing Discipline pointer to acquisition-underwriting's vendor/operator-report rule — vendor \"state of the market\" content-marketing reports are directional-only, never a live data source here; no market data or workflow changed). v1.1 (2026-07-08: Cincinnati OH profile added, Madison WI corrected to Primary Markets, Grand Rapids/Richmond/Des Moines entry-cluster profiles added, Toledo/Nashville reclassified as Watch/Adjacent — parity restored with target-markets.json)"
+description: "Industrial real estate market monitoring and analysis for Oxford Realty Advisors target markets. Use when researching market conditions, comparing markets, tracking demand drivers, or preparing market intelligence reports. Triggers: market update, market conditions, vacancy rate, industrial market, rent growth, supply pipeline, absorption, market comparison, submarket analysis, cap rate trends. v1.3 (2026-08-15: Louisville KY entry/beachhead profile added — see Changelog for full history)."
 ---
 
 You are the Oxford Realty Advisors market intelligence engine. You monitor industrial real estate conditions across all ORA target markets, track demand drivers, and produce actionable market intelligence for acquisition decisions.
@@ -55,9 +55,9 @@ You are the Oxford Realty Advisors market intelligence engine. You monitor indus
 - Demand drivers: State government, UW-Madison, biotech/health-tech, strong small-business tenant base. NOTE: thin pure-industrial inventory — screen carefully for product fit.
 - Data sources: Madison region CoStar, In Business Madison, Dane County economic data
 
-### Entry/Beachhead Markets (added 2026-05-30 — designated targets, NO existing ORA exposure; market fundamentals NOT yet validated)
+### Entry/Beachhead Markets (Grand Rapids/Richmond/Des Moines added 2026-05-30, Louisville added 2026-08-05 — designated targets, NO existing ORA exposure; market fundamentals NOT yet validated)
 
-> Baseline metrics below were populated 2026-05-30 from brokerage research (Colliers/CBRE/C&W; sources cited inline) and must be REFRESHED each quarter before relying on them. Cap rates and replacement-cost $/SF remain soft for all three — no firm publishes a sub-$10M multi-tenant/flex cap series for these metros — so confirm those two at the deal level. Graduate-migration is a secondary vitality proxy, not a primary industrial signal: these are entry/beachhead markets and the first underwrite must still validate vacancy, rent, and basis-to-replacement against live CoStar/CBRE data.
+> Baseline metrics for Grand Rapids/Richmond/Des Moines were populated 2026-05-30 from brokerage research (Colliers/CBRE/C&W; sources cited inline) and must be REFRESHED each quarter before relying on them. Cap rates and replacement-cost $/SF remain soft for all three — no firm publishes a sub-$10M multi-tenant/flex cap series for these metros — so confirm those two at the deal level. Graduate-migration is a secondary vitality proxy, not a primary industrial signal: these are entry/beachhead markets and the first underwrite must still validate vacancy, rent, and basis-to-replacement against live CoStar/CBRE data. Louisville's baseline (below) was sourced differently — see its own profile note.
 
 **Grand Rapids, MI** (Tier 1 graduate-migration, 5.1%/yr recent)
 - Product focus: Shallow-bay/flex, multi-tenant light industrial
@@ -82,6 +82,14 @@ You are the Oxford Realty Advisors market intelligence engine. You monitor indus
 - Demand drivers: Insurance/financial HQ base (Principal, Nationwide), ag-logistics, central-US distribution (I-35/I-80 crossroads)
 - Data sources: Business Record (Des Moines), CoStar Des Moines, Colliers Des Moines, CBRE/JLL Iowa
 - Market metrics (refresh quarterly): Vacancy 7.5% overall (Colliers, Q4 2025; up from ~6.1% Q1 2025 on new deliveries); NNN asking rent $6.90/SF overall — manufacturing ~$6.40, warehouse/bulk ~$7.00, office-service/flex ~$9.40 (Colliers, Q1/Q4 2025); YTD net absorption +239K SF, ~300K SF under construction, developers favoring pre-leased (Colliers, Q4 2025); sub-$10M multi-tenant/flex cap ~7.0–7.6% [SPECULATIVE — aggregator/Matthews 2025, no metro broker print]; sale $/SF ~$121 (LoopNet, 2025). Replacement/new-construction $/SF: [VALIDATE].
+
+**Louisville, KY** (added 2026-08-05; graduate-migration not yet pulled — not tiered against the other nine clusters on that metric)
+- Product focus: Shallow-bay/flex, multi-tenant light industrial — Midwest Tier-2 distribution comp to Kansas City/Indianapolis
+- Key submarkets (geography only): Riverport
+- ORA current exposure: None — entry/beachhead phase; Kentucky sits outside ORA's preferred-state list (acceptable_states) — target-activity addition, not a current-holdings state (mirrors how MI/VA/IA were added 2026-05-30)
+- Demand drivers: UPS Worldport permanent air-cargo hub (anchor tenant/employer); GE Appliances $490M reshoring investment (announced June 2025); adjacent to the Indiana established cluster
+- Data sources: acquisition-underwriting SKILL.md STAGE 0 Gate 3 rationale (June 2026 sourcing pass). Unlike Grand Rapids/Richmond/Des Moines (dedicated Colliers/CBRE/C&W brokerage research, 2026-05-30), no dedicated brokerage-research pass has been run for Louisville yet — treat below as directional until refreshed.
+- Market metrics (as of 2026-06-22): Sale asking NNN $3.90–5.00/SF, ~40% below MSA average; 13–14 active Riverport listings; metro grade B+ (all per the acquisition-underwriting sourcing pass above). **Vacancy rate, net absorption, and under-construction SF: not sourced yet — no figure exists, do not guess or estimate one.** Replacement/new-construction $/SF: [VALIDATE — no credible metro source located]. Exit cap 7.75% ratified within `acquisition-underwriting` v3.4 (2026-06-22) as a Midwest Tier-2 comp to Kansas City/Richmond — carried here for parity, not independently re-derived by this skill.
 
 ### Watch / Adjacent Markets (monitor only — not target clusters)
 
@@ -164,14 +172,14 @@ WATCH: [Any upcoming supply delivery, major tenant departure, or policy change]
 ```
 
 ### Market Comparison Table
-Compare across the nine target clusters (one column per market; established first, entry-phase last). Established: Columbus, Kansas City, Indianapolis, Maryland/DC, Cincinnati, Madison. Entry-phase (mark inputs `[VALIDATE]` until live-sourced): Grand Rapids, Richmond, Des Moines.
+Compare across the ten target clusters (one column per market; established first, entry-phase last). Established: Columbus, Kansas City, Indianapolis, Maryland/DC, Cincinnati, Madison. Entry-phase (mark inputs `[VALIDATE]` until live-sourced): Grand Rapids, Richmond, Des Moines, Louisville.
 ```
 MARKET COMPARISON — [Date]
-                     Columbus  KC MO   Indy IN  MD/DC   Cincy   Madison | GrandRapids  Richmond  DesMoines
-Vacancy Rate          X.X%     X.X%    X.X%     X.X%    X.X%    X.X%    |  [VAL]       [VAL]     [VAL]
-Avg Rent ($/SF NNN)   $X.XX    $X.XX   $X.XX    $X.XX   $X.XX   $X.XX   |  [VAL]       [VAL]     [VAL]
-Cap Rate Range        X-X%     X-X%    X-X%     X-X%    X-X%    X-X%    |  [VAL]       [VAL]     [VAL]
-Replacement Cost      $XX/SF   $XX/SF  $XX/SF   $XX/SF  $XX/SF  $XX/SF  |  [VAL]       [VAL]     [VAL]
+                     Columbus  KC MO   Indy IN  MD/DC   Cincy   Madison | GrandRapids  Richmond  DesMoines  Louisville
+Vacancy Rate          X.X%     X.X%    X.X%     X.X%    X.X%    X.X%    |  [VAL]       [VAL]     [VAL]      [VAL]
+Avg Rent ($/SF NNN)   $X.XX    $X.XX   $X.XX    $X.XX   $X.XX   $X.XX   |  [VAL]       [VAL]     [VAL]      [VAL]
+Cap Rate Range        X-X%     X-X%    X-X%     X-X%    X-X%    X-X%    |  [VAL]       [VAL]     [VAL]      [VAL]
+Replacement Cost      $XX/SF   $XX/SF  $XX/SF   $XX/SF  $XX/SF  $XX/SF  |  [VAL]       [VAL]     [VAL]      [VAL]
 Conditions           [🟢/🟡/🔴] ...
 ORA Deployment Priority: [rank all active markets]
 ```
@@ -179,6 +187,7 @@ The `|` separates established clusters (live metrics expected) from entry-phase 
 
 ## Changelog
 
+- v1.3 (2026-08-15): HIGH fix (Skill Text Audit finding F4) + LOW fix (finding F9). Added the Louisville KY entry/beachhead profile — ratified in `target-markets.json` 2026-08-05 (10th canonical cluster, entry-phase, market_cluster_fit_score 4) but never added here, leaving this skill out of parity for 10 days. Sourced strictly from `target-markets.json`'s Louisville cluster entry (acquisition-underwriting STAGE 0 Gate 3 rationale, June 2026 sourcing pass); vacancy/absorption/construction-pipeline figures are explicitly marked "not sourced yet" rather than estimated, since the JSON carries them as null. "Nine target clusters" corrected to "ten" in the Market Comparison Table lead-in; ASCII table template gained a Louisville column. Also moved the v1.2/v1.1 changelog prose that had accumulated in the frontmatter `description` field down here (it duplicated this section); description now carries a single trailing version tag. No scoring weight, cap-rate assumption, or workflow changed.
 - v1.2 (2026-07-25): Added a SOURCING DISCIPLINE section pointing to the vendor/operator-report rule now defined in `acquisition-underwriting` Stage 2.1 (WareSpace "State of Micro-Bay Industrial Real Estate 2026" review) — this skill's own CoStar/CBRE/JLL/Colliers-sourced data stays the live source for vacancy/rent/absorption/cap-rate figures; vendor content-marketing reports are directional-only. No target-market data, comparison-matrix mechanics, or workflow changed.
 - v1.1 (2026-07-08): HIGH fix (Skill Text Audit finding 3). This repo copy was already current (Cincinnati OH primary profile present since 2026-05-13; Madison WI correctly tiered under Primary Markets; Grand Rapids/Richmond/Des Moines entry-cluster profiles present since 2026-05-30; Toledo OH and Nashville TN correctly isolated under "Watch / Adjacent Markets (monitor only — not target clusters)"). The audit finding described the stale installed Cowork runtime copy, which still had Cincinnati missing, Madison mis-tiered under "Expansion Markets," and Grand Rapids/Richmond/Des Moines entirely absent — confirmed by direct comparison against the runtime cache. No content edit needed here beyond this changelog; repackage and reinstall via `package-and-stage-skill` to close the drift. Cross-checked against `target-markets.json` (v1.0, 2026-05-30) — full parity confirmed.
 

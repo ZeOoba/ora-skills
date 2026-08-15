@@ -1,6 +1,6 @@
 ---
 name: owner-outreach
-description: Oxford Realty Advisors weekly off-market owner cold-outreach pipeline. Use whenever the user mentions owner outreach, off-market letters, T1 letter pack, cold outreach queue, owner mailing, motivated seller outreach, off-market owner letters, or asks to refresh/run/check the weekly owner-outreach cycle -- even if they just say "run outreach" or "what's in the owner outreach queue this week." Promotes qualifying parcels from the off-market master (built by parcel-data-recovery / acquisition-underwriting off-market screens) into a dated queue, dedups against the Notion Owner Outreach ledger, drafts T1 cold-outreach letters on ORA letterhead, and reports promoted/net-new counts. DRAFT ONLY -- this is outbound counterparty communication (Hard Invariant 1); nothing is ever sent without Gabriel's explicit confirmation. v1.0 (2026-07-11, built from the three project scripts). v1.1 (2026-08-14: cadence gate, salutations, --wave-cap landed; path/--strict-age doc fixed; v2.0 + T2-T4 rendering pending -- see body).
+description: Oxford Realty Advisors weekly off-market owner cold-outreach pipeline. Use whenever the user mentions owner outreach, off-market letters, T1 letter pack, cold outreach queue, owner mailing, motivated seller outreach, off-market owner letters, or asks to refresh/run/check the weekly owner-outreach cycle -- even if they just say "run outreach" or "what's in the owner outreach queue this week." Promotes qualifying parcels from the off-market master (built by parcel-data-recovery / acquisition-underwriting off-market screens) into a dated queue, dedups against the Notion Owner Outreach ledger, drafts T1 cold-outreach letters on ORA letterhead, and reports promoted/net-new counts. DRAFT ONLY -- this is outbound counterparty communication (Hard Invariant 1); nothing is ever sent without Gabriel's explicit confirmation. v1.2 (2026-08-15: see Changelog).
 metadata:
   type: ora-operations
 ---
@@ -137,3 +137,9 @@ refresh on a cadence that keeps this skill's weekly run meaningful — that refr
 scope. Until that's addressed, expect this pipeline to legitimately halt most weeks on a stale-master
 FATAL rather than produce a queue. Report the halt and the master's age plainly rather than working
 around it.
+
+## Changelog
+
+- v1.2 (2026-08-15): LOW fix (Skill Text Audit finding F9). Moved the v1.1/v1.0 changelog prose that had accumulated in the frontmatter `description` field down here — this is the first `## Changelog` heading in this file (the existing "What changed 2026-07-11" / "What changed 2026-08-14" sections above remain as the detailed operational history; this section is the short version-tag log matching other skills' convention). Description now carries a single trailing version tag. No pipeline logic, cadence-gate behavior, or trigger vocabulary changed.
+- v1.1 (2026-08-14): Cadence gate (`mail-log.csv` / `MIN_TOUCH_GAP_DAYS`), named salutations (`principal-overrides.csv`), and `--wave-cap N` landed; `Scripts` path and `--strict-age` doc description corrected. v2.0 rewrite and T2-T4 multi-touch rendering still pending. Full detail: "What changed 2026-08-14" above.
+- v1.0 (2026-07-11): Built from the three project scripts; audited and patched against defects found in the 2026-06-15/2026-06-22 manual runs. Full detail: "What changed 2026-07-11" above.
