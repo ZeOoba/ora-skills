@@ -8,15 +8,22 @@ with invalid characters". Python's zipfile always normalizes to forward slashes.
 RULE: never package skills with Compress-Archive; always use this script.
 
 Usage: python tools/package_skills.py <outdir> [skill ...]
-       (no skill args = all top-level skill dirs containing SKILL.md)
+       (no skill args = all top-level skill dirs containing SKILL.md; after every
+       named skill packages successfully, writes a completion sentinel/manifest
+       `<outdir>/_STAGED.ok` — JSON: staged_at, outdir, and one {skill, file, bytes}
+       entry per package. Added 2026-08-15 so a downstream consumer can tell "not
+       staged yet" from "staged, zero packages" from "staged at a different path
+       than expected" without walking the tree by hand.)
        python tools/package_skills.py --check-staged
        (validates frontmatter for every skill dir with staged changes; used by
        tools/hooks/pre-commit — exit 0 clean, exit 1 blocked)
 """
+import json
 import re
 import subprocess
 import sys
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -530,6 +537,36 @@ def package(skill: str, outdir: Path) -> Path:
     return dest
 
 
+def write_staging_manifest(outdir: Path, packaged: list[Path]) -> Path:
+    """Write a completion sentinel into outdir after a packaging batch finishes, so a
+    downstream consumer (e.g. package-and-stage-skill, or a Cowork remediation pass
+    reading a handoff folder cold) can tell "nothing has been staged here yet" apart
+    from "staging finished and produced zero packages" or "staging is still running."
+
+    Motivated 2026-08-15 (Rev 10 remediation): a Cowork session was pointed at an
+    outdir that this script never wrote to — at least one package from that batch had
+    actually landed in a DIFFERENT outdir (a plain argument-path mismatch upstream of
+    this script, not a packaging bug) — and had no way to distinguish "not run yet"
+    from "ran, wrong target, folder legitimately doesn't exist" without a human
+    walking the whole tree by hand. A sentinel makes that a one-file check.
+
+    Always written last, after every package() in the batch has succeeded — package()
+    raises SystemExit on any failure, so a manifest's presence is itself proof every
+    named skill in `packaged` packaged cleanly, not just that the script started.
+    """
+    manifest = {
+        'staged_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'outdir': str(outdir.resolve()),
+        'packages': [
+            {'skill': p.stem, 'file': p.name, 'bytes': p.stat().st_size}
+            for p in packaged
+        ],
+    }
+    sentinel = outdir / '_STAGED.ok'
+    sentinel.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+    return sentinel
+
+
 def main() -> None:
     if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
         print(__doc__.strip())
@@ -557,8 +594,9 @@ def main() -> None:
     skills = sys.argv[2:] or [
         d.name for d in REPO.iterdir() if d.is_dir() and is_skill_dir(d.name)
     ]
-    for s in skills:
-        package(s, outdir)
+    packaged = [package(s, outdir) for s in skills]
+    sentinel = write_staging_manifest(outdir, packaged)
+    print(f'staged {len(packaged)} package(s); manifest: {sentinel.name}')
 
 
 if __name__ == '__main__':

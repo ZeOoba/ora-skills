@@ -627,13 +627,72 @@ def render_text(rep: dict) -> str:
     return '\n'.join(lines)
 
 
+INSTALLED_VERDICTS = {IN_SYNC, REPO_NEWER, CACHE_NEWER, MANUAL_MERGE, CACHE_ONLY, UNREADABLE}
+
+
+def render_publish_status(rep: dict) -> str:
+    """One line per named skill, citation-ready for a Rev-log/advisory entry: whether
+    the skill is CURRENTLY installed in the runtime cache, sourced from a live read of
+    CACHE_ROOT at read_at — never from memory or a prior Rev-log's own claim.
+
+    Added 2026-08-15 (Rev 10 remediation): a Rev 5 log had recorded capex-budgeting as
+    Gabriel-confirmed UNPUBLISHED as of 2026-08-09, while the Code catalog separately
+    carried a 2026-08-12 update — nothing re-checked live state between the two records,
+    so they silently diverged with no way to tell which was current short of a manual
+    ListSkills/cache walk. This mode exists so any future Rev-log entry making a
+    publish/unpublished claim can cite a fresh, timestamped run of this flag instead of
+    carrying a prior claim forward unverified.
+
+    NOTE: this reads the LOCAL Windows runtime-cache mirror (CACHE_ROOT) — the same
+    store install/uninstall drives — not the account's live claude.ai/Cowork ListSkills
+    API directly. The two are expected to agree (the cache IS how a Save-skill install
+    reaches this machine) but a Cowork-side ListSkills call remains the independent
+    cross-check if the two were ever suspected to disagree.
+    """
+    if rep['cache_root_unreadable']:
+        return (f"CACHE ROOT UNREADABLE: {rep['cache_root']} — no publish-status could "
+                 f"be read; do not report a publish/unpublished claim from this run")
+    lines = []
+    for skill, r in sorted(rep['skills'].items()):
+        pit = r['point_in_time']
+        if r['verdict'] == NOT_INSTALLED:
+            status = 'NOT INSTALLED'
+        elif r['verdict'] == BROKEN_INSTALL:
+            status = 'BROKEN INSTALL — cache dir exists, no SKILL.md'
+        else:
+            status = 'INSTALLED'
+        lines.append(
+            f"{skill}: {status} (verdict={r['verdict']}, "
+            f"cache_version={pit.get('cache_version_token', '-')}, "
+            f"checked_at={pit['read_at']})"
+        )
+    if rep.get('unknown_skills'):
+        lines.append(
+            f"UNKNOWN (name matched neither store, nothing was read): "
+            f"{', '.join(rep['unknown_skills'])}"
+        )
+    return '\n'.join(lines)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('skills', nargs='*', help='skill names (default: all)')
     ap.add_argument('--json', action='store_true', help='emit the full report as JSON')
+    ap.add_argument(
+        '--publish-status', action='store_true',
+        help='print one citation-ready INSTALLED/NOT-INSTALLED line per named skill, '
+             'sourced live from the runtime cache — run this before recording any '
+             'publish/unpublished claim in a Rev-log rather than carrying one forward '
+             '(added 2026-08-15, Rev 10 remediation)',
+    )
     args = ap.parse_args()
     rep = report(skills=args.skills or None)
-    print(json.dumps(rep, indent=2) if args.json else render_text(rep))
+    if args.publish_status:
+        print(render_publish_status(rep))
+    elif args.json:
+        print(json.dumps(rep, indent=2))
+    else:
+        print(render_text(rep))
     # Exit non-zero when nothing could be checked, so a typo'd skill name or an
     # unreachable cache can never be mistaken for a clean result by a caller that
     # only reads the exit code.
