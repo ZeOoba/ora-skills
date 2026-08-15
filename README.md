@@ -173,6 +173,16 @@ consumed by `acquisition-underwriting`, `daily-brief`, `deal-comparison`, and
   frontmatter (see `acquisition-underwriting`). Optional fields observed: `user-invocable:
   true` (slash-invocable) and `allowed-tools: <space-separated list>` (an explicit
   tool/MCP allow-list, e.g. `tenant-email`, `deploy-site`, `lease-renewal-pipeline`).
+- **Token-budget-as-contract for retrieval-heavy steps.** A skill step that fans out into
+  multiple tool calls, file reads, or MCP lookups before it produces anything (comp
+  pulls, county GIS/parcel lookups, multi-file lease abstraction, cross-repo greps)
+  should state an explicit ceiling in the body — e.g. "≤5 tool calls / ≤800 tokens before
+  synthesizing" — rather than leaving the loop open-ended. This is a minimal-diff idea
+  grafted 2026-08-14 from evaluating the external `code-review-graph` repo, whose skill
+  files bake an explicit tool-call/token budget into every retrieval step; it isn't
+  installed here (its actual mechanism is an MIT-licensed MCP graph server, not
+  applicable to ORA's domain skills) but the authoring discipline is worth carrying
+  forward on any new or edited skill with an open-ended retrieval loop.
 - **Versioning is inline, not a separate CHANGELOG file.** Skills carry their version and
   a dated changelog directly in the H1 heading and/or body paragraphs (e.g. `# Acquisition
   Underwriting — Oxford Realty Advisors (v4.4 — Buy Box & Scorecard v1.1)`, followed by
