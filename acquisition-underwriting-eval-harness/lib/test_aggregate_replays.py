@@ -45,13 +45,29 @@ class TestCoreAggregation(unittest.TestCase):
         self.assertEqual(out["aggregate"]["combined_stdev"], 2.5)
         self.assertEqual(out["aggregate"]["combined_sem"], 1.44)  # 2.5 / sqrt(3)
 
-    def REDACTED-075n6_reproduces_the_rebaselined_golden(self):
-        """The six real 2026-08-14 samples must yield the 28.08 golden value."""
+    def REDACTED-075n6_2026_08_14_contaminated_snapshot(self):
+        """HISTORICAL regression pin, not the current golden. These are the 6 real
+        2026-08-14 samples (including the SKILL.md-citation-leaked run 1, 32.0) --
+        golden_set/REDACTED-024.json no longer uses 28.08 as its
+        baseline (rebaselined 2026-08-15 to 26.81 on 8 leakage-excluded samples, see
+        the companion test below). Kept to pin aggregate_replays()'s arithmetic
+        against a known historical input set, independent of what golden_set stores
+        today."""
         samples = [32.0, 27.5, 28.5, 25.0, 28.5, 27.0]
         out = aggregate_replays([_replay(s) for s in samples])
         self.assertEqual(out["combined"], 28.08)
         self.assertEqual(out["aggregate"]["combined_range"], 7.0)
         self.assertEqual(out["aggregate"]["combined_stdev"], 2.31)
+
+    def REDACTED-075n8_2026_08_15_leakage_excluded_reproduces_current_golden(self):
+        """The 8 samples golden_set/REDACTED-024.json's golden.combined
+        is actually computed from (run 1, the 32.0 SKILL.md-citation leak, excluded) must
+        yield 26.81 -- pins the CURRENT golden, unlike the historical test above."""
+        samples = [27.5, 28.5, 25.0, 28.5, 27.0, 25.0, 26.0, 27.0]
+        out = aggregate_replays([_replay(s) for s in samples])
+        self.assertEqual(out["combined"], 26.81)
+        self.assertEqual(out["aggregate"]["combined_range"], 3.5)
+        self.assertEqual(out["aggregate"]["combined_stdev"], 1.39)
 
 
 class TestSingleSample(unittest.TestCase):
