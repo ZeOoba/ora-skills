@@ -576,6 +576,72 @@ class StagingManifest(unittest.TestCase):
             # e.g. 2026-08-15T13:04:22Z — raises ValueError if the format drifts
             datetime.strptime(manifest['staged_at'], '%Y-%m-%dT%H:%M:%SZ')
 
+    def test_second_batch_preserves_first_batchs_entries(self):
+        """Regression for the 2026-08-15 same-day fix: a shared outdir (e.g.
+        `_staging/<date>/`) routinely collects multiple unrelated packaging runs.
+        The manifest must ACCUMULATE, not overwrite — the exact bug that made
+        automation-health-monitor.skill invisible to a later downstream freshness
+        check after an unrelated insurance-renewal-review + package-and-stage-skill
+        batch overwrote its entry out of _STAGED.ok."""
+        with tempfile.TemporaryDirectory() as tmp:
+            outdir = Path(tmp)
+            first = outdir / 'automation-health-monitor.skill'
+            first.write_bytes(b'PK\x03\x04' + b'a' * 10)
+            write_staging_manifest(outdir, [first])
+
+            second = outdir / 'insurance-renewal-review.skill'
+            second.write_bytes(b'PK\x03\x04' + b'b' * 20)
+            third = outdir / 'package-and-stage-skill.skill'
+            third.write_bytes(b'PK\x03\x04' + b'c' * 30)
+            sentinel = write_staging_manifest(outdir, [second, third])
+
+            manifest = json.loads(sentinel.read_text(encoding='utf-8'))
+            packages = {p['skill']: p for p in manifest['packages']}
+            self.assertEqual(
+                set(packages),
+                {'automation-health-monitor', 'insurance-renewal-review', 'package-and-stage-skill'},
+            )
+            self.assertEqual(packages['automation-health-monitor']['bytes'], first.stat().st_size)
+
+    def test_repackaging_same_skill_refreshes_not_duplicates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outdir = Path(tmp)
+            v1 = outdir / 'daily-brief.skill'
+            v1.write_bytes(b'PK\x03\x04' + b'x' * 10)
+            write_staging_manifest(outdir, [v1])
+
+            v1.write_bytes(b'PK\x03\x04' + b'x' * 999)  # simulate a repackage in place
+            sentinel = write_staging_manifest(outdir, [v1])
+
+            manifest = json.loads(sentinel.read_text(encoding='utf-8'))
+            self.assertEqual(len(manifest['packages']), 1)
+            self.assertEqual(manifest['packages'][0]['bytes'], v1.stat().st_size)
+
+    def test_last_batch_reflects_only_the_current_invocation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outdir = Path(tmp)
+            a = outdir / 'skill-a.skill'
+            a.write_bytes(b'PK\x03\x04' + b'a' * 10)
+            write_staging_manifest(outdir, [a])
+
+            b = outdir / 'skill-b.skill'
+            b.write_bytes(b'PK\x03\x04' + b'b' * 10)
+            sentinel = write_staging_manifest(outdir, [b])
+
+            manifest = json.loads(sentinel.read_text(encoding='utf-8'))
+            self.assertEqual(manifest['last_batch'], ['skill-b'])
+            self.assertEqual({p['skill'] for p in manifest['packages']}, {'skill-a', 'skill-b'})
+
+    def test_corrupt_existing_sentinel_does_not_block_a_fresh_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outdir = Path(tmp)
+            (outdir / '_STAGED.ok').write_text('not valid json {{{', encoding='utf-8')
+            a = outdir / 'skill-a.skill'
+            a.write_bytes(b'PK\x03\x04' + b'a' * 10)
+            sentinel = write_staging_manifest(outdir, [a])
+            manifest = json.loads(sentinel.read_text(encoding='utf-8'))
+            self.assertEqual({p['skill'] for p in manifest['packages']}, {'skill-a'})
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
