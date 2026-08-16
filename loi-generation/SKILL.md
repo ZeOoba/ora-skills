@@ -1,6 +1,6 @@
 ---
 name: loi-generation
-description: "Oxford Realty Advisors letter-of-intent drafting skill. Use whenever the user mentions: draft LOI, produce LOI, create LOI, generate LOI, build LOI, ship LOI, LOI for a property, letter of intent, offer letter, or non-binding proposal to purchase; when an OM, broker package, or listing PDF is uploaded with intent to make an offer; or when an acquisition-underwriting evaluation advances to an offer. Encodes: STANDARD and CONDENSED (sophisticated-seller) formats, four conditional blocks, seven state overlays (OH/MD/IN/MO/KS/WI/TN) incl. Franklin County long proration and the HB 126 BOR dual-threshold rule, seller entity-interest matching, 1031-cooperation default with concealment overlay and leak-check, vacancy preservation covenant, single-source deposit token, a 16-point QC Gate, and a mandatory deal-folder DEAL-TERMS-REGISTER (off-LOI terms tracked to the PSA). Outputs versioned DOCX and extractable-text PDF on ORA letterhead (301.512.6125, street-address footer, proof-of-funds line on final page). v1.5"
+description: "Oxford Realty Advisors letter-of-intent drafting skill. Use whenever the user mentions: draft LOI, produce LOI, create LOI, generate LOI, build LOI, ship LOI, LOI for a property, letter of intent, offer letter, or non-binding proposal to purchase; when an OM, broker package, or listing PDF is uploaded with intent to make an offer; or when an acquisition-underwriting evaluation advances to an offer. Encodes: STANDARD and CONDENSED (sophisticated-seller) formats, four conditional blocks, seven state overlays (OH/MD/IN/MO/KS/WI/TN) incl. Franklin County long proration and the HB 126 BOR dual-threshold rule, seller entity-interest matching, 1031-cooperation default with concealment overlay and leak-check, vacancy preservation covenant, single-source deposit token, a 16-point QC Gate, and a mandatory deal-folder DEAL-TERMS-REGISTER (off-LOI terms tracked to the PSA). Outputs versioned DOCX and extractable-text PDF on ORA letterhead (301.512.6125, street-address footer, proof-of-funds line on final page). v1.6"
 ---
 
 # LOI Generation — Oxford Realty Advisors (v1.4 — 2026-06-11: + mandatory Deal Terms Register at draft + execution)
@@ -358,6 +358,32 @@ The register is the deal's tracking point for every material term — especially
 4. Downstream: deal-execution Workflow 2A reads this register at every PSA draft/redline round — every OPEN "Must land in: PSA" item missing from a draft is an automatic CRITICAL. psa-reconciliation validates the executed PSA against it.
 5. Confidential-deal overlay: for hook-protected deals, the register stays in the deal folder / approved staging paths only (rules.md §7a) — never in outputs/ trees bound for external surfaces.
 
+### Phase 6c — Lost-Deal Ledger capture (MANDATORY — at draft time)
+Write ORA's own offer into structured Notion fields the moment the LOI exists. **Every value below is already in working memory at this point in the run — capturing it now is free, and reconstructing it in six months is expensive or impossible.** This is the capture half of the lost-deal post-mortem ledger; the outcome half is written later by `ora-passed-deal-tracker` Step 4b.
+
+1. Locate the deal's row in the Notion **Deal Sourcing Log** (`collection://9a6ae219-85a3-4621-899c-c757fd062f8b`), matching on normalized street address. **If no row exists, create one** — a deal that reached LOI without a sourcing row is a gap, not a reason to skip capture. **If more than one row matches, do not guess:** write to the row with the most complete underwriting and flag the duplicate to Gabriel (this is live — `511 Industrial Mile Road` currently has two rows).
+
+2. Set these properties (Block A):
+
+   | Property | Value |
+   |---|---|
+   | `LOI Sent Date` | the date the LOI is actually delivered (leave NULL at draft if unshipped) |
+   | `ORA Offer Price` | the purchase price in the LOI |
+   | `ORA Offer $/SF` | offer ÷ Total SF |
+   | `ORA Basis @ Offer (% RCT LOW)` | all-in basis ÷ RCT v03 LOW for the market |
+   | **`ORA Max Defensible Price`** | **see §3 — the load-bearing number** |
+   | `Offer: DD Days` / `Offer: Close Days` / `Offer: Deposit $` | from the LOI terms |
+   | `Offer: All-Cash` / `Offer: Financing Contingency` | from the LOI terms |
+   | `LOI Outcome` | `PENDING` |
+
+3. **`ORA Max Defensible Price` — compute it NOW, at LOI time.** It is the price at which this deal *first breaches a Stage 1 floor* (the vintage-ramp basis floor or the 8% YoC floor, whichever binds first) — i.e. the most ORA could have paid without breaking a ratified governor. It is fixed at this moment and **never recomputed at outcome time**; recomputing it once the winning price is known is hindsight bias, and the downstream classifier explicitly refuses to run on a value written after the fact. Without this number a lost deal can never be classified as basis-vs-execution and the row is permanently `UNCLASSIFIED` — which is precisely the hole this phase closes.
+
+   It is a *different number from `Walk Price`*, and both must be internally consistent with `ORA Offer Price`. **An offer above the walk price is a contradiction — stop and resolve it, do not write both.** (Live example of the failure: `511 Industrial Mile Road` carries Walk $930,000 against a $1,450,000 LOI, and its loss is stuck unclassifiable as a result.)
+
+4. `LOI Sent Date` is written at Phase 7 SHIP, not here. A drafted LOI that never ships is a real and recorded failure mode — 470 McCormick Blvd's LOI FINAL v2 lapsed 21 days unsent — and it is logged as `LOI Outcome = EXPIRED-UNSENT` with `ORA Offer Price` left **BLANK**: an unsent LOI has no offer price, and treating a drafted figure as an offer corrupts every downstream aggregate.
+
+5. This phase writes ORA's own numbers only. It never records a competitor's price, never estimates one, and never recommends an offer level.
+
 ### Phase 7 — Optional SHIP mode
 If user requested ship:
 1. Draft the email for Gabriel's review. (Composio `OUTLOOK_*` retired 2026-06-11 — connector removed, no fallback. The approved send, if Gabriel green-lights, runs via Outlook COM `C:\Users\Owner\.claude\scheduled-tasks\_shared\send-via-outlook.ps1`, the SOLE send path.)
@@ -465,6 +491,7 @@ Full overlay text in `references/state-overlays.md`. Summary of §6 distinguishi
 
 ## VERSIONING
 
+- v1.6 — 2026-08-16, Lost-Deal Ledger capture: new mandatory Phase 6c writes ORA's own offer terms into structured Deal Sourcing Log fields at draft time — in particular `ORA Max Defensible Price` (the first-floor-breach price, fixed at LOI time and never recomputed at outcome time). Consumed by `ora-passed-deal-tracker` Step 4b, which supplies the winning price and the basis-vs-execution `Loss Class`. Deliverables item 10 added. Origin: ORA had no structured record of any LOI loss — `Kill Reason` was populated on 1 of 20 Pipeline Tracker rows, and the one priced competitive loss on record (511 Industrial Mile, lost 2026-07-17 at $1.575M vs ORA's $1.45M) is unclassifiable because its walk price and offer contradict each other. Gabriel-ratified 2026-08-16.
 - v1.4 — 2026-06-11, Deal Terms Register: new mandatory Phase 6b writes DEAL-TERMS-REGISTER.md (off-LOI terms / strategy constraints / tracking items) to the deal folder at draft and execution; consumed by deal-execution Workflow 2A and psa-reconciliation. Origin: 754 Old State easement gap.
 - v1.3 — 2026-06-11, Composio-retirement merge (recovered v1.2 base from 2026-06-10 upload package after cache-mirror clobber). SHIP mode re-pointed to Outlook COM sole send path; CC discipline applied (cc per thread context, no blanket cc of both principals, never ze@); connectors table Outlook row → COM.
 - v1.0 — Initial release, May 2026. Based on 511 Industrial Mile Columbus and 1333 Research Rd Gahanna condensed deliverables.
@@ -497,3 +524,4 @@ Every successful run of this skill produces:
 7. Footer keyed to property street address
 8. "Proof of funds available upon request." centered italic at bottom of final page
 9. `DEAL-TERMS-REGISTER.md` created (or updated) in the deal folder per Phase 6b
+10. Deal Sourcing Log row carries the Phase 6c Block A capture — in particular a non-NULL **`ORA Max Defensible Price`** and `LOI Outcome = PENDING`. A blank Max Defensible price means this deal can never be classified if it is lost; treat it as an incomplete deliverable, not a nice-to-have.
