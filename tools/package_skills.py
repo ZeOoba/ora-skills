@@ -10,10 +10,12 @@ RULE: never package skills with Compress-Archive; always use this script.
 Usage: python tools/package_skills.py <outdir> [skill ...]
        (no skill args = all top-level skill dirs containing SKILL.md; after every
        named skill packages successfully, writes a completion sentinel/manifest
-       `<outdir>/_STAGED.ok` — JSON: staged_at, outdir, and one {skill, file, bytes}
-       entry per package. Added 2026-08-15 so a downstream consumer can tell "not
-       staged yet" from "staged, zero packages" from "staged at a different path
-       than expected" without walking the tree by hand.)
+       `<outdir>/_STAGED.ok` — JSON: staged_at, outdir, packages (one {skill, file,
+       bytes} entry per package, ACCUMULATED across every batch ever written into
+       this outdir — fixed 2026-08-15, see write_staging_manifest() docstring), and
+       last_batch (just this call's skill names). Added 2026-08-15 so a downstream
+       consumer can tell "not staged yet" from "staged, zero packages" from "staged
+       at a different path than expected" without walking the tree by hand.)
        python tools/package_skills.py --check-staged
        (validates frontmatter for every skill dir with staged changes; used by
        tools/hooks/pre-commit — exit 0 clean, exit 1 blocked)
@@ -570,16 +572,51 @@ def write_staging_manifest(outdir: Path, packaged: list[Path]) -> Path:
     Always written last, after every package() in the batch has succeeded — package()
     raises SystemExit on any failure, so a manifest's presence is itself proof every
     named skill in `packaged` packaged cleanly, not just that the script started.
+
+    ACCUMULATES across batches into the same outdir, never overwrites (fixed
+    2026-08-15, same day as the field's introduction). The first cut wrote a fresh
+    `packages` list from just this call's `packaged` arg every time — so a SECOND
+    batch into a shared outdir (e.g. `_staging/<date>/`, which routinely collects
+    multiple unrelated packaging runs across a day) silently erased the first
+    batch's entries from the manifest, even though the .skill files themselves were
+    still sitting right there on disk untouched. Caught live: an
+    `automation-health-monitor.skill` packaged ~24 minutes before a later
+    `insurance-renewal-review` + `package-and-stage-skill` batch had its manifest
+    line vanish from `_STAGED.ok` — a downstream Cowork session doing freshness
+    triage read the missing entry as "not corroborated as packaged today" and had to
+    fall back to a manual per-file git-log/hash check to confirm it wasn't stale.
+    Now: prior entries for skills NOT in this batch are preserved; a skill named in
+    both the prior manifest and this batch is refreshed to the new entry (repackaged
+    = newer, never older); `last_batch` records just the current call's skills so a
+    caller can still tell "this specific invocation packaged zero things" (e.g. a
+    typo'd skill filter) apart from "the accumulated outdir has zero packages ever."
+    A corrupt or unreadable prior sentinel is never fatal — this manifest is a
+    convenience index, not a source of truth (repo/cache hash comparisons remain
+    authoritative) — treated as no prior entries and overwritten cleanly.
     """
+    sentinel = outdir / '_STAGED.ok'
+    existing_packages: dict[str, dict] = {}
+    if sentinel.is_file():
+        try:
+            prior = json.loads(sentinel.read_text(encoding='utf-8'))
+            for entry in prior.get('packages', []):
+                name = entry.get('skill')
+                if name:
+                    existing_packages[name] = entry
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+            existing_packages = {}
+    this_batch = [
+        {'skill': p.stem, 'file': p.name, 'bytes': p.stat().st_size}
+        for p in packaged
+    ]
+    for entry in this_batch:
+        existing_packages[entry['skill']] = entry
     manifest = {
         'staged_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'outdir': str(outdir.resolve()),
-        'packages': [
-            {'skill': p.stem, 'file': p.name, 'bytes': p.stat().st_size}
-            for p in packaged
-        ],
+        'packages': list(existing_packages.values()),
+        'last_batch': [entry['skill'] for entry in this_batch],
     }
-    sentinel = outdir / '_STAGED.ok'
     sentinel.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     return sentinel
 
