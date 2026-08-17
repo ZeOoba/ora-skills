@@ -84,13 +84,15 @@ python3 scripts/pma_qc.py <agreement.docx|pdf|txt> [more ...] [--allow-tokens] [
 ```
 
 Extraction, OCR fallback, and the report/CLI harness live in `ora_doc_qc.py`
-(shared with `listing-agreement-qc` and `lease-form-qc` once their own
-retrofits land — see that module's migration notes). A copy ships in this
-skill's `scripts/` so pma-qc installs and runs standalone; once
-`tools/package_skills.py`'s `SHARED_ROOT_DEPS` injects it from the repo root
-the same way it already does for `target-markets.json`, the in-skill copy
-should be removed. Prints one line per FAIL with severity and the standing
-position it enforces. Exits non-zero on any failure or on UNREADABLE.
+(shared with `listing-agreement-qc` and `lease-form-qc`). The module is not
+vendored inside this skill's `scripts/` directory — `tools/package_skills.py`'s
+`SHARED_ROOT_DEPS` injects a copy from the repo root at packaging time (the
+same pattern `target-markets.json` already uses for four other skills),
+landing at `scripts/ora_doc_qc.py` inside the packaged `.skill` so pma-qc
+installs and runs standalone. In a raw repo/worktree checkout, `pma_qc.py`'s
+sys.path fallback resolves the repo-root `tools/` copy instead. Prints one
+line per FAIL with severity and the standing position it enforces. Exits
+non-zero on any failure or on UNREADABLE.
 
 ### Step 2 — Trust the OCR gate; never read a low word count as clean
 
