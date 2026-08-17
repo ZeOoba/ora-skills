@@ -4,98 +4,44 @@ listing_qc.py — Oxford Realty Advisors brokerage listing agreement QC gate.
 
 Scans a broker listing agreement (sale, lease, or sale-and-lease) for the 25
 systemic defects catalogued in the C&W form register. Reads DOCX (via
-word/document.xml), PDF (via pdftotext), or plain text.
+word/document.xml), PDF (via pdftotext, with OCR fallback), or plain text.
 
 Usage:
-    python3 listing_qc.py <agreement.docx|pdf|txt> [more ...] [--allow-tokens] [--json]
+    python3 listing_qc.py <agreement.docx|pdf|txt> [more ...] [--allow-tokens]
+                          [--no-ocr] [--json]
 
-Exit codes: 0 = clean, 1 = one or more failures, 2 = usage/extraction error.
+Exit codes: 0 = clean, 1 = one or more failures, 2 = usage/extraction/
+UNREADABLE error.
 
 Severity: BLOCK (do not execute) / HIGH / MED / LOW.
 
 Checks are written to FAIL on the DEFECT. A check that does not fire means the
 protective language was found. Every check reports the ORA standing position it
 enforces (see references/standing-positions.md).
+
+Extraction, the OCR fallback, the UNREADABLE gate, and the report/CLI harness
+now live in ora_doc_qc.py (shared with pma-qc and lease-form-qc). This
+retrofit closes a real bug: this file's own former extract() had no OCR
+fallback and no "insufficient words" floor, so a scanned counterparty PDF with
+no text layer extracted to an empty string, tripped zero of the 25 checks, and
+the tool reported the document clean — the worst failure mode a pre-signature
+QC gate can have. See ora_doc_qc.py's docstring for the incident that
+prompted it.
+
+A copy of ora_doc_qc.py ships inside this skill's scripts/ directory so
+listing-agreement-qc installs and runs standalone today, mirroring pma-qc.
+Once tools/package_skills.py's SHARED_ROOT_DEPS is updated to inject it from
+the repo root, this in-skill copy should be removed in favor of the injected
+one — do not let the two drift.
 """
 
-import argparse
-import json
-import os
 import re
-import subprocess
-import sys
-import zipfile
 
-# ---------------------------------------------------------------- extraction
-
-def _strip_xml(x):
-    x = re.sub(r"</w:p>", "\n", x)
-    x = re.sub(r"<w:tab/>", "\t", x)
-    x = re.sub(r"<[^>]+>", "", x)
-    return x
-
-
-def extract(path):
-    """Return (body_text, meta) for a docx / pdf / txt listing agreement."""
-    meta = {"format": None, "tracked_changes": 0, "comments": False,
-            "headers": "", "creator": None, "company": None}
-    ext = os.path.splitext(path)[1].lower()
-
-    if ext in (".docx", ".dotx"):
-        meta["format"] = "docx"
-        with zipfile.ZipFile(path) as z:
-            names = z.namelist()
-            doc = z.read("word/document.xml").decode("utf8", "replace")
-            meta["tracked_changes"] = len(re.findall(r"<w:(ins|del) ", doc))
-            meta["comments"] = "word/comments.xml" in names
-            hdr = []
-            for n in names:
-                if re.match(r"word/(header|footer)\d*\.xml", n):
-                    hdr.append(_strip_xml(z.read(n).decode("utf8", "replace")))
-            meta["headers"] = " ".join(hdr)
-            if "docProps/core.xml" in names:
-                c = z.read("docProps/core.xml").decode("utf8", "replace")
-                m = re.search(r"<dc:creator>([^<]*)</dc:creator>", c)
-                meta["creator"] = m.group(1) if m else None
-            if "docProps/app.xml" in names:
-                a = z.read("docProps/app.xml").decode("utf8", "replace")
-                m = re.search(r"<Company>([^<]*)</Company>", a)
-                meta["company"] = m.group(1) if m else None
-            body = _strip_xml(doc)
-            # numbering: does any body paragraph rely on auto-numbering?
-            meta["auto_numbered_paras"] = len(re.findall(r"<w:numPr>", doc))
-            meta["manual_numbered_paras"] = len(
-                re.findall(r"<w:t[^>]*>\s*\d{1,2}\.\s*</w:t>", doc))
-
-    elif ext == ".pdf":
-        meta["format"] = "pdf"
-        try:
-            body = subprocess.run(["pdftotext", "-layout", path, "-"],
-                                  capture_output=True, check=True).stdout.decode("utf8", "replace")
-        except Exception as e:                                    # noqa: BLE001
-            print(f"ERROR: pdftotext failed on {path}: {e}", file=sys.stderr)
-            return None, meta
-    else:
-        meta["format"] = "text"
-        body = open(path, encoding="utf8", errors="replace").read()
-
-    return body, meta
-
-
-def norm(t):
-    t = (t.replace("’", "'").replace("‘", "'")
-          .replace("“", '"').replace("”", '"')
-          .replace("–", "-").replace("—", "-").replace(" ", " "))
-    return re.sub(r"\s+", " ", t)
-
+from ora_doc_qc import new_registry, has, norm, run_cli
 
 # ------------------------------------------------------------------- checks
 # Each check: (id, severity, title, position_ref, fn(ctx) -> None | detail str)
 # ctx = {"t": normalized text, "raw": raw text, "meta": meta, "name": filename}
-
-
-def has(ctx, pattern):
-    return re.search(pattern, ctx["t"], re.I) is not None
 
 
 def is_sale_scope(ctx):
@@ -106,14 +52,7 @@ def has_lease_schedule(ctx):
     return has(ctx, r"\bLEASES?\b\s*Rate:") or has(ctx, r"Lease\s+Commission\s+Percentage")
 
 
-CHECKS = []
-
-
-def check(cid, sev, title, pos):
-    def deco(fn):
-        CHECKS.append((cid, sev, title, pos, fn))
-        return fn
-    return deco
+check, CHECKS = new_registry()
 
 
 # ---- BLOCK -----------------------------------------------------------------
@@ -411,77 +350,5 @@ def _l25(ctx):
 
 # --------------------------------------------------------------------- driver
 
-SEV_ORDER = {"BLOCK": 0, "HIGH": 1, "MED": 2, "LOW": 3}
-
-
-def scan(path, allow_tokens=False):
-    body, meta = extract(path)
-    if body is None:
-        return None
-    ctx = {"t": norm(body), "raw": body, "meta": meta,
-           "name": os.path.basename(path), "allow_tokens": allow_tokens}
-    results = []
-    for cid, sev, title, pos, fn in CHECKS:
-        try:
-            detail = fn(ctx)
-        except Exception as e:                                    # noqa: BLE001
-            detail = f"check error: {e}"
-            sev = "MED"
-        if detail:
-            results.append({"id": cid, "severity": sev, "title": title,
-                            "position": pos, "detail": detail})
-    results.sort(key=lambda r: (SEV_ORDER[r["severity"]], r["id"]))
-    scope = ("SALE + LEASE" if has_lease_schedule(ctx)
-             else "SALE ONLY" if is_sale_scope(ctx) else "UNDETERMINED")
-    return {"file": ctx["name"], "format": meta["format"], "scope": scope,
-            "tracked_changes": meta["tracked_changes"], "comments": meta["comments"],
-            "creator": meta.get("creator"), "company": meta.get("company"),
-            "checks_run": len(CHECKS), "failures": results}
-
-
-def main():
-    ap = argparse.ArgumentParser(description="ORA listing agreement QC gate")
-    ap.add_argument("files", nargs="+")
-    ap.add_argument("--allow-tokens", action="store_true",
-                    help="suppress the unfilled-token BLOCK (working drafts / templates)")
-    ap.add_argument("--json", action="store_true")
-    a = ap.parse_args()
-
-    reports, bad = [], 0
-    for f in a.files:
-        r = scan(f, a.allow_tokens)
-        if r is None:
-            bad = 2
-            continue
-        reports.append(r)
-
-    if a.json:
-        print(json.dumps(reports, indent=2))
-    else:
-        for r in reports:
-            print("=" * 78)
-            print(f"FILE   {r['file']}  [{r['format']}]")
-            print(f"SCOPE  {r['scope']}")
-            enc = ("tracked changes: %d" % r["tracked_changes"]) if r["tracked_changes"] \
-                else "no tracked changes (clean or compare-tool output)"
-            print(f"ENC    {enc}; comments.xml: {'yes' if r['comments'] else 'no'}")
-            if r.get("company"):
-                print(f"ORIGIN creator={r.get('creator')!r} company={r.get('company')!r}")
-            print(f"RESULT {len(r['failures'])} of {r['checks_run']} checks FAILED")
-            print("-" * 78)
-            for x in r["failures"]:
-                print(f"[{x['severity']:<5}] {x['id']:<4} {x['title']}  ({x['position']})")
-                for line in re.findall(r".{1,72}(?:\s|$)", x["detail"]):
-                    if line.strip():
-                        print(f"          {line.strip()}")
-            if not r["failures"]:
-                print("  clean - no defects detected")
-            print()
-
-    if any(r["failures"] for r in reports):
-        sys.exit(1)
-    sys.exit(bad)
-
-
 if __name__ == "__main__":
-    main()
+    run_cli(CHECKS, "ORA listing agreement QC gate")
