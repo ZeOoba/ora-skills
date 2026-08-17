@@ -33,7 +33,7 @@ flowchart TD
         Root["Repo root"]
         S1["acquisition-underwriting/"]
         S2["loi-generation/"]
-        S3["...55 more skill folders\n(57 total)"]
+        S3["...56 more skill folders\n(58 total)"]
         Shared["target-markets.json\n(shared buy-box market data)"]
         Tools["tools/\npackage_skills.py, build_plugin.py,\npending_reimport.py, hooks/"]
         Plugins["plugins/\nora-operations-extensions/\n(plugin-build.json bundles)"]
@@ -85,7 +85,7 @@ that turn, optionally pulling from `references/` as it goes).
 
 ## Directory / skill inventory
 
-**57 git-tracked skill directories** (each contains its own `SKILL.md`), plus four
+**58 git-tracked skill directories** (each contains its own `SKILL.md`), plus four
 non-skill support directories: `tools/` (packaging/build/hook scripts), `plugins/`
 (version-controlled Cowork plugin bundles), `_staging/` (dated pending-reimport batches,
 plus the gitignored `PENDING_REIMPORT.md`/`STORE_AHEAD_OF_REPO.md` drift ledgers), and
@@ -108,6 +108,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `loi-generation` — the sole letter-of-intent drafting path
 - `deal-execution` — PSA negotiation through closing (redlines, DD checklist, closing statement)
 - `psa-reconciliation` — PSA fact extraction/cascade reconciliation against the LOI
+- `settlement-basis-extraction` — extracts HUD-1/ALTA settlement statements into a capitalizable-basis register (CHARGE_DETAIL, BASIS_REGISTER, EXCHANGE_1031) at every acquisition/disposition closing
 - `deal-retirement` — retires deal artifacts/tasks on close or kill; appends the decision ledger
 
 **Portfolio & asset operations**
