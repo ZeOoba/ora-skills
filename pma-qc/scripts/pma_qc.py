@@ -19,9 +19,9 @@ language was found. Every check reports the ORA standing position it enforces
 (see references/standing-positions.md — PM-1 .. PM-18, PROPOSED not ratified).
 
 Extraction, the OCR fallback, the UNREADABLE gate, and the report/CLI harness
-now live in ora_doc_qc.py (shared with listing-agreement-qc and lease-form-qc
-once their own retrofits land — see that module's migration notes). This file
-is the reference port: everything below the imports is pma-qc's own 32 checks.
+now live in ora_doc_qc.py, shared with listing-agreement-qc and lease-form-qc
+(both retrofitted onto it on this same branch). This file was the reference
+port: everything below the imports is pma-qc's own 32 checks.
 
 ora_doc_qc.py itself is NOT vendored inside this skill's scripts/ directory —
 it fans out from the repo-root tools/ora_doc_qc.py via package_skills.py's
