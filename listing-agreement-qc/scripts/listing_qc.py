@@ -368,4 +368,9 @@ def _l25(ctx):
 # --------------------------------------------------------------------- driver
 
 if __name__ == "__main__":
-    run_cli(CHECKS, "ORA listing agreement QC gate", want_footer=True)
+    run_cli(CHECKS, "ORA listing agreement QC gate", want_footer=True,
+            ocr_absence_note=("Absence findings (L2, L3, L5, L7, L8, L11, "
+                              "L12-L17, L19) are PROVISIONAL - OCR text is "
+                              "lossy, so confirm against the page images "
+                              "before reporting a missing carve-out or "
+                              "clause to a counterparty."))
