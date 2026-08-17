@@ -157,6 +157,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - ~~`oxford-cc-strategic-audit`~~ — retired 2026-08-05 (hygiene commits exist, but no evidence a full audit run/report was produced or consumed)
 - `package-and-stage-skill` — packaging/staging helper for this repo itself
 - `file-reconciliation` — hash-diff dedupe/reconciliation between file trees
+- `repo-architecture-review` — cross-repo architecture-diagram audit (unbounded loops, off-fleet automation, dual-write drift, disconnected build steps, dead links, missing financial-code gates); read-only, hands off fixes to normal lane triage
 - ~~`build-with-gate-reviews`~~ — retired 2026-08-05 (zero use across three independent verification passes)
 - `cowork-settings` — version/diff/publish the Cowork Global Settings document
 
