@@ -108,8 +108,13 @@ python3 scripts/lease_qc.py <lease.docx|pdf|txt> [more ...] [--allow-tokens]
 ```
 
 Extraction, the OCR fallback, the UNREADABLE gate, and the report/CLI harness come
-from the shared `ora_doc_qc.py` (also used by `pma-qc` and `listing-agreement-qc`); a
-copy ships in `scripts/` so the skill runs standalone. DOCX is read from
+from the shared `ora_doc_qc.py` (also used by `pma-qc` and `listing-agreement-qc`). The
+module is not vendored inside this skill's `scripts/` directory — `tools/
+package_skills.py`'s `SHARED_ROOT_DEPS` injects a copy from the repo root at
+packaging time, landing at `scripts/ora_doc_qc.py` inside the packaged `.skill` so
+lease-form-qc installs and runs standalone. In a raw repo/worktree checkout,
+`lease_qc.py`'s sys.path fallback resolves the repo-root `tools/` copy instead. DOCX
+is read from
 `word/document.xml`, PDF via `pdftotext` with an OCR fallback, and plain text
 directly — useful for bulk-scanning historical leases pulled from SharePoint. The
 report opens with a FILE / EXTRACTION / ENC / RESULT block, then one line per FAIL

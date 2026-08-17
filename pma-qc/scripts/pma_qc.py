@@ -37,18 +37,18 @@ import re
 import sys
 from pathlib import Path
 
-# Dev-checkout fallback: a packaged .skill ships ora_doc_qc.py alongside this
-# script (via SHARED_ROOT_DEPS, see module docstring above) — Python already
-# puts this script's own directory at sys.path[0] on startup, so the packaged
-# copy resolves there before this insert is ever consulted. A raw repo/worktree
-# checkout has no such copy, so this fallback resolves the repo-root tools/
-# directory instead — the only place the path below ever actually exists is a
-# dev checkout (`.../ora-skills/pma-qc/scripts/` -> parent.parent.parent ->
-# `.../ora-skills/tools/`); in every packaged/extracted-.skill location the
-# equivalent path doesn't exist on disk and Python silently skips it, so this
-# never shadows the packaged copy. Verified 2026-08-17 against a real
-# extracted .skill (see task-4-report.md).
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / 'tools'))
+# Dev-checkout fallback: Python already puts this script's own directory at
+# sys.path[0] on startup, so append (not insert) the repo-root tools/
+# directory as a lower-priority fallback — a packaged .skill ships
+# ora_doc_qc.py alongside this script (via SHARED_ROOT_DEPS, see module
+# docstring above), so that co-located copy is always tried first,
+# structurally, regardless of what does or doesn't exist under an install
+# root's own tools/ directory. A raw repo/worktree checkout has no such
+# co-located copy, so the appended repo-root tools/ path is what resolves
+# ora_doc_qc there (`.../ora-skills/pma-qc/scripts/` -> parent.parent.parent
+# -> `.../ora-skills/tools/`). Verified 2026-08-17 against both a raw
+# worktree checkout and a real extracted .skill (see task-4-fix-report.md).
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent / 'tools'))
 
 from ora_doc_qc import new_registry, has, quote, run_cli
 
