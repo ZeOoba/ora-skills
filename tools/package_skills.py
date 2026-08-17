@@ -421,7 +421,22 @@ SHARED_ROOT_DEPS = {
     'deal-comparison': ['target-markets.json'],
     'market-monitor': ['target-markets.json'],
     'acquisition-underwriting': ['target-markets.json'],
+    'pma-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
+    'listing-agreement-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
+    'lease-form-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
 }
+
+
+def _dep_pair(dep) -> tuple[str, str]:
+    """Normalize one SHARED_ROOT_DEPS list entry to (repo_root_relpath,
+    skill_relpath). A plain string means source and destination share the same
+    relative name (the target-markets.json pattern — fans out to the skill's
+    own root under the identical name). A 2-tuple is (source, dest) for a
+    shared file whose repo-root location differs from where it must land
+    inside the skill."""
+    if isinstance(dep, tuple):
+        return dep
+    return dep, dep
 
 
 def is_bundled(rel_posix: str) -> bool:
@@ -519,9 +534,10 @@ def skill_source_files(skill: str, repo_root: Path = REPO) -> dict[str, Path]:
         if p.is_file() and is_bundled(p.relative_to(src).as_posix())
     }
     for dep in SHARED_ROOT_DEPS.get(skill, []):
-        dep_path = repo_root / dep
+        dep_src, dep_dest = _dep_pair(dep)
+        dep_path = repo_root / dep_src
         if dep_path.is_file():
-            files[dep] = dep_path
+            files[dep_dest] = dep_path
     return files
 
 
@@ -542,10 +558,11 @@ def package(skill: str, outdir: Path) -> Path:
                 assert '\\' not in arc, arc
                 z.write(p, arc)
         for shared_name in SHARED_ROOT_DEPS.get(skill, []):
-            shared_path = REPO / shared_name
+            dep_src, dep_dest = _dep_pair(shared_name)
+            shared_path = REPO / dep_src
             if not shared_path.is_file():
-                raise SystemExit(f'{skill}: declared shared dep {shared_name} not found at {shared_path}')
-            z.write(shared_path, f'{skill}/{shared_name}')
+                raise SystemExit(f'{skill}: declared shared dep {dep_src} not found at {shared_path}')
+            z.write(shared_path, f'{skill}/{dep_dest}')
     with zipfile.ZipFile(dest) as z:
         bad = [n for n in z.namelist() if '\\' in n]
         if bad:
