@@ -671,6 +671,114 @@ class TestTokenGate(TempDirCase):
         self.assertEqual(rc, 0, out)
         self.assertIn("0 of 52 checks FAILED", out)
 
+    # ---- T1 must scan the FOOTER, not only the body -----------------------
+    #
+    # The retrofit's removal of text_of()'s '[[FOOTER]]' splice fixed a real
+    # false BLOCK (above) but, registered via the shared
+    # unfilled_token_check(), it also silently dropped the footer from T1's
+    # coverage: that helper reads ctx["raw"] only, and extract(want_footer=True)
+    # routes footer text to ctx["meta"]["footer"]. lease_qc._t1 restores it.
+
+    # Real footer text of ORA's own v2.6 master (word/footer2.xml and
+    # word/footer3.xml), tokens and all.
+    _REAL_TEMPLATE_FOOTER = ("[PREMISES ADDRESS]  •  [TENANT ENTITY]  "
+                             "•  Page 3 of 19  •  "
+                             "ORA Master Lease v2.6 – August 2026")
+
+    def test_the_real_master_template_footer_really_does_carry_tokens(self):
+        """Premise check for the two tests below — if ORA ever detokenizes the
+        master's footer this stops being a live hazard, and this test says so
+        rather than letting the others quietly test nothing."""
+        _body, meta = extract(str(MASTER_V26), want_footer=True)
+        found = sorted(set(lease_qc.TOKEN_RE.findall(meta["footer"])))
+        self.assertIn("[PREMISES ADDRESS]", found, meta["footer"][:300])
+        self.assertIn("[TENANT ENTITY]", found, meta["footer"][:300])
+
+    def test_unfilled_footer_tokens_block_a_filled_body_lease(self):
+        """THE regression this deviation exists to prevent.
+
+        A lease drafted from the v2.6 master with the BODY filled in and the
+        FOOTER left untouched. Under a body-only T1 it scores clean on the
+        token gate and goes out for signature with '[PREMISES ADDRESS]' and
+        '[TENANT ENTITY]' printed on every page."""
+        p = make_docx(self.tmp / "Lease_AcmeHoldings_08172026.docx", [
+            "LEASE AGREEMENT between Oxford Realty Advisors LLC and Acme Holdings LLC.",
+            "The premises are 4,200 square feet at 123 Main Street, Columbus, Ohio.",
+        ], footer_text=self._REAL_TEMPLATE_FOOTER)
+
+        # The body itself is clean — this is not a body-token test in disguise.
+        body, meta = extract(p, want_footer=True)
+        self.assertEqual(lease_qc.TOKEN_RE.findall(body), [],
+                         "fixture body was supposed to be fully filled")
+        self.assertTrue(lease_qc.TOKEN_RE.findall(meta["footer"]))
+
+        rc, out = run_cli(p)
+        self.assertEqual(rc, 1, out)
+        self.assertIn("] T1 ", out, out)
+        self.assertIn("BLOCK", out)
+        self.assertIn("[PREMISES ADDRESS]", out, out)
+        self.assertIn("[TENANT ENTITY]", out, out)
+        self.assertIn("2 unfilled token(s)", out, out)
+
+    def test_the_shared_body_only_helper_would_have_missed_it(self):
+        """Pins WHY T1 is not registered via unfilled_token_check(): run the
+        shared helper over the same ctx and show it returns clean. If the
+        shared helper ever learns to read meta["footer"], this test fails and
+        the local _t1 can be retired — which is the point."""
+        from ora_doc_qc import unfilled_token_check
+        p = make_docx(self.tmp / "footer_tokens_only.docx", [
+            "LEASE AGREEMENT between Oxford Realty Advisors LLC and Acme Holdings LLC.",
+            "The premises are 4,200 square feet at 123 Main Street, Columbus, Ohio.",
+        ], footer_text=self._REAL_TEMPLATE_FOOTER)
+        body, meta = extract(p, want_footer=True)
+        ctx = {"t": norm(body), "raw": body, "meta": meta,
+               "name": os.path.basename(p), "allow_tokens": False,
+               "is_template": False}
+
+        shared_fn = unfilled_token_check(pattern=lease_qc.TOKEN_RE.pattern)[4]
+        self.assertIsNone(shared_fn(ctx),
+                          "shared helper unexpectedly saw the footer — "
+                          "if it now reads meta['footer'], retire lease_qc._t1")
+
+        local_fn = {c[0]: c[4] for c in lease_qc.CHECKS}["T1"]
+        self.assertIsNotNone(local_fn(ctx))
+
+    def test_footer_scanning_does_not_reintroduce_the_false_block(self):
+        """Re-verification of the original fix, now that T1 reads the footer
+        again. A lease with a filled body AND a filled footer — the real
+        template footer with its tokens replaced — must NOT fire T1. The old
+        '[[FOOTER]]' marker that used to trip it is gone entirely, so there is
+        no artifact left for the widened scan to match."""
+        filled_footer = ("123 Main Street, Columbus, Ohio  •  "
+                         "Acme Holdings LLC  •  Page 3 of 19  •  "
+                         "ORA Master Lease v2.6 – August 2026")
+        p = make_docx(self.tmp / "Lease_AcmeHoldings_filled.docx", [
+            "LEASE AGREEMENT between Oxford Realty Advisors LLC and Acme Holdings LLC.",
+            "The premises are 4,200 square feet at 123 Main Street, Columbus, Ohio.",
+        ], footer_text=filled_footer)
+        body, meta = extract(p, want_footer=True)
+        self.assertNotIn("[[FOOTER]]", body)
+        self.assertNotIn("[FOOTER]", body + meta["footer"])
+        rc, out = run_cli(p)
+        self.assertNotIn("] T1 ", out, out)
+        self.assertNotIn("Unfilled template tokens", out, out)
+
+    def test_footer_tokens_still_honor_both_gates(self):
+        """--allow-tokens and the _TEMPLATE filename must suppress a
+        footer-sourced BLOCK exactly as they do a body-sourced one — the gate
+        logic is copied from the shared helper, so prove the copy is faithful."""
+        body_paras = ["LEASE AGREEMENT between Oxford Realty Advisors LLC and Acme Holdings LLC.",
+                      "The premises are 4,200 square feet at 123 Main Street, Columbus, Ohio."]
+        p1 = make_docx(self.tmp / "draft_footer_tokens.docx", body_paras,
+                       footer_text=self._REAL_TEMPLATE_FOOTER)
+        rc, out = run_cli(p1, "--allow-tokens")
+        self.assertNotIn("] T1 ", out, out)
+
+        p2 = make_docx(self.tmp / "ORA_Lease_v9_TEMPLATE.docx", body_paras,
+                       footer_text=self._REAL_TEMPLATE_FOOTER)
+        rc, out = run_cli(p2)
+        self.assertNotIn("] T1 ", out, out)
+
 
 # --------------------------------------------------------------------------
 # 6. Registry integrity + CLI contract
