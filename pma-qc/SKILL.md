@@ -96,11 +96,13 @@ non-zero on any failure or on UNREADABLE.
 
 ### Step 2 — Trust the OCR gate; never read a low word count as clean
 
-**This is the trap this scanner exists to close, and the sibling skill has it.**
-The KRG agreement is a scanned image with **no text layer** — `pdftotext`
-returns zero bytes. A checker that scans an empty string finds no defects and
-reports *clean*. `listing_qc.py` (`listing-agreement-qc` v1.0) has this failure
-mode today and should be patched the same way.
+**This is the trap this scanner exists to close, and the sibling skills had it
+too.** The KRG agreement is a scanned image with **no text layer** —
+`pdftotext` returns zero bytes. A checker that scans an empty string finds no
+defects and reports *clean*. `listing_qc.py` (`listing-agreement-qc`) and
+`lease_qc.py` (`lease-form-qc`) carried the same failure mode; both are now
+retrofitted onto the same shared `ora_doc_qc.py` UNREADABLE gate described
+below (`listing-agreement-qc` v1.1, `lease-form-qc` v2.5.1).
 
 `pma_qc.py` therefore refuses to score a document it could not read:
 
