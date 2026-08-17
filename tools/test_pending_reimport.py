@@ -440,6 +440,44 @@ class SharedDepClassify(unittest.TestCase):
             pr.classify_shared_copy('same', 'same', None, None), 'IN-SYNC')
 
 
+class AffectedSkills(unittest.TestCase):
+    """affected_skills() recognizes a repo-root SHARED_ROOT_DEPS file as a shared
+    dep regardless of whether its source path lives at the repo root or nested in
+    a subdirectory.
+
+    Regression for the tuple-form fix (2026-08-17): the original guard was
+    `if '/' not in f and f in SHARED_CONSUMERS`, which only ever worked because the
+    sole real consumer at the time (target-markets.json) happens to sit at the repo
+    root. Once tools/ora_doc_qc.py -- a SLASHED source path -- became a shared-dep
+    source, that guard would have silently stopped firing the fast per-commit hook
+    path for it: a commit touching tools/ora_doc_qc.py would never queue its three
+    consumers into PENDING_REIMPORT.md via this fast path, only the slower full
+    sweep_drift() SHA256 sweep would eventually catch it."""
+
+    def test_top_level_dep_still_recognized(self):
+        with unittest.mock.patch.object(
+            pr, 'SHARED_CONSUMERS', {'target-markets.json': [('daily-brief', 'target-markets.json')]}
+        ):
+            hits = pr.affected_skills(['target-markets.json'])
+        self.assertIn('daily-brief', hits)
+        self.assertIn('target-markets.json (shared dep)', hits['daily-brief'])
+
+    def test_nested_path_dep_now_recognized(self):
+        with unittest.mock.patch.object(
+            pr, 'SHARED_CONSUMERS', {'tools/shared.py': [('demo-skill', 'scripts/shared.py')]}
+        ):
+            hits = pr.affected_skills(['tools/shared.py'])
+        self.assertIn('demo-skill', hits)
+        self.assertIn('tools/shared.py (shared dep)', hits['demo-skill'])
+
+    def test_unrelated_nested_file_is_not_a_false_positive(self):
+        with unittest.mock.patch.object(
+            pr, 'SHARED_CONSUMERS', {'tools/shared.py': [('demo-skill', 'scripts/shared.py')]}
+        ):
+            hits = pr.affected_skills(['some-other-skill/scripts/unrelated.py'])
+        self.assertNotIn('demo-skill', hits)
+
+
 def _git(repo: Path, *args: str) -> None:
     subprocess.run(['git', '-C', str(repo), *args], check=True,
                     capture_output=True, text=True)
@@ -586,6 +624,41 @@ class SharedDepGitIntegration(FixtureTestCase):
         self.assertEqual(
             pr.classify_shared_copy('cachehash', 'repohash', ancestor, all_hist),
             'UNKNOWN')
+
+
+class SharedDepReportTupleForm(FixtureTestCase):
+    """shared_dep_report() resolves a tuple-form SHARED_CONSUMERS entry's DEST path
+    -- not its source path -- when checking the runtime cache. Same source!=dest
+    gap as AffectedSkills above, on the report/classify side instead of the fast
+    per-commit hook side: SHARED_CONSUMERS now stores (skill, dest) pairs, and both
+    the cache-existence check and the hash comparison must key off `dest`."""
+
+    def test_report_reads_cache_at_dest_path_not_source_path(self):
+        # No git init: classify_shared_copy() degrades gracefully without git
+        # history (see test_in_sync_wins_even_when_git_history_is_unavailable
+        # above) -- IN-SYNC still wins on matching content with no history at all.
+        # This test only needs to prove the DEST path is what gets checked.
+        _write(self.repo / 'tools' / 'shared.py', 'x = 1\n')
+        _write(self.cache / 'demo-skill' / 'scripts' / 'shared.py', 'x = 1\n')
+
+        with unittest.mock.patch.object(
+            pr, 'SHARED_CONSUMERS', {'tools/shared.py': [('demo-skill', 'scripts/shared.py')]}
+        ):
+            report = pr.shared_dep_report(repo_root=self.repo, cache_root=self.cache)
+
+        self.assertEqual(report['tools/shared.py']['demo-skill'], 'IN-SYNC')
+
+    def test_missing_in_cache_checked_at_dest_path(self):
+        _write(self.repo / 'tools' / 'shared.py', 'x = 1\n')
+        (self.cache / 'demo-skill').mkdir(parents=True)
+        # cache dir exists (skill installed) but nothing at scripts/shared.py.
+
+        with unittest.mock.patch.object(
+            pr, 'SHARED_CONSUMERS', {'tools/shared.py': [('demo-skill', 'scripts/shared.py')]}
+        ):
+            report = pr.shared_dep_report(repo_root=self.repo, cache_root=self.cache)
+
+        self.assertEqual(report['tools/shared.py']['demo-skill'], 'MISSING-IN-CACHE')
 
 
 class LedgerLineRouting(unittest.TestCase):
