@@ -18,6 +18,7 @@ import unittest
 from contextlib import redirect_stdout, redirect_stderr
 from datetime import datetime
 from pathlib import Path
+from unittest import mock
 
 # package_skills.py is a sibling, imported flat rather than package-relative.
 # `python tools/test_package_skills.py` gets tools/ on sys.path for free (script
@@ -26,14 +27,20 @@ from pathlib import Path
 # dependency rather than a cwd problem. Make both entry points work.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import package_skills  # noqa: E402  (needed as a module object so tests can
+# mock.patch.object(package_skills, 'SHARED_ROOT_DEPS', ...) — the plain `from
+# package_skills import SHARED_ROOT_DEPS` below binds a name in THIS module's
+# namespace, which patching the source module would not update.)
 from package_skills import (  # noqa: E402  (deliberate: needs the path bootstrap above)
     REPO,
+    _dep_pair,
     _staged_content,
     check_named_counts,
     check_staged,
     check_tree_hygiene,
     is_bundled,
     resolve_outdir_collision,
+    skill_source_files,
     staged_skill_dirs,
     validate_skill_frontmatter,
     write_staging_manifest,
@@ -641,6 +648,80 @@ class StagingManifest(unittest.TestCase):
             sentinel = write_staging_manifest(outdir, [a])
             manifest = json.loads(sentinel.read_text(encoding='utf-8'))
             self.assertEqual({p['skill'] for p in manifest['packages']}, {'skill-a'})
+
+
+class DepPair(unittest.TestCase):
+    """_dep_pair() normalizes a SHARED_ROOT_DEPS list entry to (source, dest).
+
+    Added alongside the tuple-form extension (2026-08-17: pma-qc/listing-agreement-qc/
+    lease-form-qc need ora_doc_qc.py to land at scripts/ora_doc_qc.py even though its
+    repo-root source is tools/ora_doc_qc.py — the plain-string target-markets.json
+    pattern assumes source and dest share a name, which doesn't hold here)."""
+
+    def test_plain_string_means_source_equals_dest(self):
+        self.assertEqual(_dep_pair('target-markets.json'), ('target-markets.json', 'target-markets.json'))
+
+    def test_tuple_is_returned_unchanged(self):
+        pair = ('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')
+        self.assertEqual(_dep_pair(pair), pair)
+
+
+class SkillSourceFilesSharedDeps(unittest.TestCase):
+    """skill_source_files() fans SHARED_ROOT_DEPS into the returned {skill-relative
+    path: absolute path} dict. Existing behavior (plain string, source==dest) must
+    keep working unchanged; the new tuple form must key the dict by the DEST path,
+    not the source path — packaging and drift-detection both index this dict by
+    skill-relative (i.e. dest) path, so a source-keyed entry would silently vanish
+    from every downstream consumer."""
+
+    def test_plain_string_dep_keyed_by_shared_name_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            (repo_root / 'demo-skill').mkdir()
+            (repo_root / 'demo-skill' / 'SKILL.md').write_text('name: demo-skill\n', encoding='utf-8')
+            (repo_root / 'target-markets.json').write_text('{}\n', encoding='utf-8')
+
+            with mock.patch.object(package_skills, 'SHARED_ROOT_DEPS', {'demo-skill': ['target-markets.json']}):
+                files = skill_source_files('demo-skill', repo_root)
+
+            self.assertIn('target-markets.json', files)
+            self.assertEqual(files['target-markets.json'], repo_root / 'target-markets.json')
+
+    def test_tuple_dep_keyed_by_dest_not_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            (repo_root / 'demo-skill').mkdir()
+            (repo_root / 'demo-skill' / 'SKILL.md').write_text('name: demo-skill\n', encoding='utf-8')
+            (repo_root / 'tools').mkdir()
+            (repo_root / 'tools' / 'shared.py').write_text('x = 1\n', encoding='utf-8')
+
+            with mock.patch.object(
+                package_skills, 'SHARED_ROOT_DEPS',
+                {'demo-skill': [('tools/shared.py', 'scripts/shared.py')]},
+            ):
+                files = skill_source_files('demo-skill', repo_root)
+
+            self.assertIn('scripts/shared.py', files)
+            self.assertEqual(files['scripts/shared.py'], repo_root / 'tools' / 'shared.py')
+            self.assertNotIn('tools/shared.py', files)
+
+    def test_missing_tuple_dep_source_is_silently_skipped(self):
+        """Matches the pre-existing plain-string behavior: skill_source_files() has
+        never raised on a missing SHARED_ROOT_DEPS source (unlike package(), which
+        does) — confirming the tuple form doesn't change that asymmetry."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            (repo_root / 'demo-skill').mkdir()
+            (repo_root / 'demo-skill' / 'SKILL.md').write_text('name: demo-skill\n', encoding='utf-8')
+            # no tools/shared.py created
+
+            with mock.patch.object(
+                package_skills, 'SHARED_ROOT_DEPS',
+                {'demo-skill': [('tools/shared.py', 'scripts/shared.py')]},
+            ):
+                files = skill_source_files('demo-skill', repo_root)
+
+            self.assertNotIn('scripts/shared.py', files)
 
 
 if __name__ == '__main__':
