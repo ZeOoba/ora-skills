@@ -365,6 +365,56 @@ class PointInTimeFiguresAreStamped(FixtureTestCase):
         self.assertEqual(rep['skills']['demo']['stability'], sdr.STABLE)
 
 
+class VersionTokenSearchesBothFrontmatterAndBody(FixtureTestCase):
+    """acquisition-underwriting's frontmatter description reads 'schema rev 1.1'
+    (no vX.Y marker) while its body header reads 'v4.12 -- Buy Box & Scorecard
+    v1.1' -- the version token lives in the BODY, not the frontmatter. The
+    2026-08-17 drift-check run returned repo_version_token=None and
+    cache_version_token=None for this skill (and rent-roll-reconciliation, same
+    shape) because version_token_of() was only ever called against the raw
+    frontmatter slice (repo_fm_raw / cache_fm_raw), never the body -- despite its
+    own docstring promising the "First vX.Y marker" with no such scope limit."""
+
+    def test_version_token_found_in_body_header_not_frontmatter(self):
+        desc = 'ORA acquisition underwriting -- Buy Box & Scorecard schema rev 1.1'
+        body = 'v4.12 -- Buy Box & Scorecard v1.1\n\nSome content.\n'
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md(desc, body))
+        _write(self.cache / 'demo' / 'SKILL.md', _skill_md(desc, body))
+        r = self._report_for()
+        pit = r['point_in_time']
+        self.assertEqual(pit['repo_version_token'], 'v4.12')
+        self.assertEqual(pit['cache_version_token'], 'v4.12')
+
+    def test_frontmatter_marker_still_wins_when_present(self):
+        # Frontmatter carries its own vX.Y and a DIFFERENT one sits in the body --
+        # "first" marker means frontmatter-before-body, not the body overriding it.
+        desc = 'd v1.0'
+        body = 'v9.9 unrelated later marker\n'
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md(desc, body))
+        _write(self.cache / 'demo' / 'SKILL.md', _skill_md(desc, body))
+        r = self._report_for()
+        self.assertEqual(r['point_in_time']['repo_version_token'], 'v1.0')
+
+    def test_no_marker_anywhere_still_reports_none(self):
+        desc = 'no version marker here'
+        body = 'plain body text\n'
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md(desc, body))
+        _write(self.cache / 'demo' / 'SKILL.md', _skill_md(desc, body))
+        r = self._report_for()
+        self.assertIsNone(r['point_in_time']['repo_version_token'])
+
+    def test_verdict_and_findings_unaffected_by_where_the_token_lives(self):
+        # The version token is REPORTED ONLY -- widening its search must never
+        # change the verdict, parts, or findings for an otherwise-identical skill.
+        desc = 'd, schema rev 1.1'
+        body = 'v4.12 header\n'
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md(desc, body))
+        _write(self.cache / 'demo' / 'SKILL.md', _skill_md(desc, body))
+        r = self._report_for()
+        self.assertEqual(r['verdict'], sdr.IN_SYNC)
+        self.assertEqual(r['findings'], [])
+
+
 class AbsentGitHistoryNeverPrescribesAPull(FixtureTestCase):
     """A CACHE-AHEAD direction is INFERRED FROM ABSENCE: the cache content matches
     no commit anywhere. That inference is only valid if we could actually LOOK.
