@@ -230,8 +230,17 @@ def bool_check(cid, sev, title, test, pos=None):
 def unfilled_token_check(cid="TOK", sev="BLOCK", title="Unfilled template tokens remain",
                           pos=None, pattern=r"\[[A-Z][A-Z0-9 _/,.'&-]{2,40}\]",
                           template_marker="_TEMPLATE"):
-    """Shared token-gate check (pma-qc's P5, listing-agreement-qc's L9,
-    lease-form-qc's T1 are all this same rule with cosmetic differences).
+    """Shared token-gate check. pma-qc's P5, listing-agreement-qc's L9, and
+    lease-form-qc's T1 are all this same rule — but as of 2026-08-17 none of
+    the three actually call this helper; each is still a locally hand-written
+    check (pma_qc.py's _p5, listing_qc.py's _l9, lease_qc.py's _t1) that
+    duplicates the pattern rather than sharing this implementation of it. T1
+    in particular could not simply be swapped for a call to this helper: it
+    also scans footer text (ctx["meta"]["footer"]) in addition to body text,
+    which this helper does not read (it only reads ctx["raw"], the body) —
+    see lease_qc.py's _t1 and its own comment. P5/L9 have no such constraint
+    and are the more plausible future callers of this helper as-is; T1 would
+    need the helper extended to cover the footer first.
     Register it into a tool's own registry with:
         CHECKS.append(unfilled_token_check())
     or, to keep the tool's existing check ID/title, pass those explicitly."""
@@ -417,55 +426,8 @@ def run_cli(checks, description, ocr_absence_note=None, want_footer=False):
     sys.exit(bad)
 
 
-# ---------------------------------------------------------- migration notes
-#
-# listing_qc.py (listing-agreement-qc):
-#   1. Replace its local extract()/norm()/quote()/has() with imports from
-#      this module. Its checks are already in the (id, sev, title, pos, fn)
-#      detail-string shape — no check-body changes needed.
-#   2. Replace its bespoke CHECKS list/decorator with new_registry().
-#   3. Swap its scan()/main() for scan()/run_cli() from this module. This is
-#      the change that actually fixes the false-clean bug: today
-#      listing_qc.py's extract() has no OCR fallback and no unreadable floor,
-#      so a scanned counterparty PDF (a real scenario — brokers send scans)
-#      silently reports 0/25 failures. Verify the fix against a synthetic
-#      no-text-layer PDF fixture, not just the two real DOCX benchmarks in
-#      the v1.0 changelog.
-#   4. listing-agreement-qc is ALREADY committed to the ora-skills repo (PR
-#      #44, landed 2026-08-17, same day as this module's authoring — this
-#      note was accurate at authoring time and went stale within the day).
-#      Verify fresh with `git ls-tree -r main --name-only | grep listing`
-#      before assuming otherwise. This retrofit is an ordinary follow-up
-#      commit against the already-shipped skill, not a first-ever capture.
-#
-# lease_qc.py (lease-form-qc):
-#   1. Larger lift. Its 51 checks are (id, sev, label, fn(text)->bool) — wrap
-#      each with bool_check(id, sev, label, fn, pos=None) rather than
-#      rewriting the test lambdas. Positions: lease-form-qc does not
-#      currently cross-reference a standing-positions doc the way
-#      listing-agreement-qc (SP-*) and pma-qc (PM-*) do; leave pos=None
-#      unless/until one is authored.
-#   2. Its text_of() is DOCX-only with a raw-text fallback for anything else
-#      — a PDF handed to it today is read as if it were UTF-8 text, which
-#      garbles rather than empties, so it fails almost everything instead of
-#      nothing. Different failure shape than the false-clean bug, same root
-#      cause (no real format detection). Replace with this module's extract()
-#      and add the OCR fallback + unreadable gate lease_qc.py has never had.
-#   3. Its footer-concatenation for F18 ('[[FOOTER]] ' + footer text) is
-#      supported here via extract(..., want_footer=True) -> meta["footer"].
-#      F18's test currently does `t.split('[[FOOTER]]')[1]` against the
-#      combined string; either keep appending footer text into ctx["t"] the
-#      same way, or rewrite F18 to read ctx["meta"]["footer"] directly — the
-#      latter is cleaner and is the recommended fix, not a mechanical port.
-#   4. lease-form-qc is a live, per-outbound-lease compliance gate (run before
-#      every tenant/broker-facing lease, per its own SKILL.md). It has no
-#      references/ or fixtures/ directory in the repo today — regression-test
-#      the refactor against real executed ORA leases (Claude_Workspace deal
-#      folders) before treating it as done, not just a synthetic sample.
-#      Highest blast radius of the three — do this one under full EOS
-#      discipline (TDD, lint, full-suite, independent review), not as a
-#      mechanical pass.
-#
-# pma_qc.py (pma-qc) — reference port, already done as of this file's
-#   authoring; see pma-qc/scripts/pma_qc.py in the same commit for the
-#   worked example of what "already migrated" looks like.
+# DONE: pma-qc, listing-agreement-qc, and lease-form-qc are all retrofitted
+# onto this module (see commit history and each skill's SKILL.md changelog
+# for the specifics of its own port). new_registry(), bool_check(), and
+# unfilled_token_check() above carry the reusable porting guidance for any
+# future consumer; there is nothing migration-specific left to say here.
