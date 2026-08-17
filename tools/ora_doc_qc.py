@@ -113,11 +113,13 @@ def extract(path, allow_ocr=True, min_words=DEFAULT_MIN_WORDS, want_footer=False
 
     meta always carries: format, extraction ("native"|"ocr"), words,
     tracked_changes, comments, headers, footer (if want_footer), creator,
-    company. DOCX-only fields default sanely for PDF/text input.
+    company, auto_numbered_paras, manual_numbered_paras. DOCX-only fields
+    default sanely for PDF/text input (0 / False / "" / None as fits).
     """
     meta = {"format": None, "extraction": "native", "tracked_changes": 0,
             "comments": False, "headers": "", "footer": "", "creator": None,
-            "company": None, "words": 0}
+            "company": None, "words": 0, "auto_numbered_paras": 0,
+            "manual_numbered_paras": 0}
     ext = os.path.splitext(path)[1].lower()
 
     if ext in (".docx", ".dotx"):
@@ -127,6 +129,9 @@ def extract(path, allow_ocr=True, min_words=DEFAULT_MIN_WORDS, want_footer=False
             doc = z.read("word/document.xml").decode("utf8", "replace")
             meta["tracked_changes"] = len(re.findall(r"<w:(ins|del) ", doc))
             meta["comments"] = "word/comments.xml" in names
+            meta["auto_numbered_paras"] = len(re.findall(r"<w:numPr>", doc))
+            meta["manual_numbered_paras"] = len(
+                re.findall(r"<w:t[^>]*>\s*\d{1,2}\.\s*</w:t>", doc))
             hdr = [_strip_xml(z.read(n).decode("utf8", "replace"))
                    for n in names if re.match(r"word/header\d*\.xml", n)]
             meta["headers"] = " ".join(hdr)
