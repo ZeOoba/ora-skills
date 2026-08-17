@@ -1,6 +1,6 @@
 ---
 name: listing-agreement-qc
-description: "Pre-execution QC gate for BROKER LISTING AGREEMENTS on counterparty paper (Cushman & Wakefield, CBRE, JLL, Colliers, Newmark) where Oxford Realty Advisors is the Owner. Use when the user says: QC this listing agreement, check this listing before I sign, review the brokerage agreement, listing agreement review, compare listing agreements, exclusive right to sell, exclusive right to lease, commission schedule, broker engagement, or uploads a DOCX/PDF that is a listing agreement. Run before ANY listing is signed or countersigned. Scans 25 systemic defects (dual gross-price definitions, missing excluded-prospect and affiliate carve-outs, automatic holdover, unconditioned tail, lease language in a sale-only instrument, blanket dual agency, missing lender-consent and Ohio agency-disclosure hooks) with BLOCK/HIGH/MED/LOW severity. Carries ORA's sixteen ratified standing listing positions (2026-08-17). Distinct from lease-form-qc (ORA's own lease paper) and legal-intelligence. v1.0"
+description: "Pre-execution QC gate for BROKER LISTING AGREEMENTS on counterparty paper (Cushman & Wakefield, CBRE, JLL, Colliers, Newmark) where Oxford Realty Advisors is the Owner. Use when the user says: QC this listing agreement, check this listing before I sign, review the brokerage agreement, listing agreement review, compare listing agreements, exclusive right to sell, exclusive right to lease, commission schedule, broker engagement, or uploads a DOCX/PDF that is a listing agreement. Run before ANY listing is signed or countersigned. Scans 25 systemic defects (dual gross-price definitions, missing excluded-prospect and affiliate carve-outs, automatic holdover, unconditioned tail, lease language in a sale-only instrument, blanket dual agency, missing lender-consent and Ohio agency-disclosure hooks) with BLOCK/HIGH/MED/LOW severity. Carries ORA's sixteen ratified standing listing positions (2026-08-17). Distinct from lease-form-qc (ORA's own lease paper) and legal-intelligence. v1.1"
 ---
 
 # Listing Agreement QC — counterparty brokerage paper
@@ -64,13 +64,18 @@ be shortened:
 ### Step 1 — Automated scan
 
 ```bash
-python3 scripts/listing_qc.py <agreement.docx|pdf|txt> [more ...] [--allow-tokens] [--json]
+python3 scripts/listing_qc.py <agreement.docx|pdf|txt> [more ...] [--allow-tokens] [--no-ocr] [--json]
 ```
 
 Reads `word/document.xml` directly for DOCX (so it sees headers, footers,
 tracked changes, comments, and the numbering layer), `pdftotext -layout` for
-PDF, raw for text. Prints one line per FAIL with severity and the standing
-position it enforces. Exits non-zero on any failure.
+PDF with an OCR fallback (poppler + tesseract) when the text layer is too
+thin, raw for text. A document that still can't be read to at least 150 words
+reports `RESULT UNREADABLE` and exits 2 — it is never scored as "clean," which
+is the failure mode this scanner used to have on a scanned, no-text-layer PDF.
+Prints one line per FAIL with severity and the standing position it enforces.
+Exit codes: 0 clean, 1 one or more failures, 2 usage/extraction/UNREADABLE
+error.
 
 The scanner auto-detects **scope** (`SALE ONLY` / `SALE + LEASE`) and suppresses
 the lease-residue checks (L10, L11) when a lease commission schedule is actually
@@ -191,6 +196,25 @@ explicit in-turn confirmation (standing invariant 1).
 
 ## Changelog
 
+- **v1.1 (2026-08-17)** — Retrofit onto the shared `tools/ora_doc_qc.py`
+  extraction/report module (also used by `pma-qc`). Closes a real false-clean
+  bug: the old bespoke `extract()` had no OCR fallback and no minimum-words
+  floor, so a scanned counterparty PDF with no text layer extracted to an
+  empty (or near-empty) string; several of this scanner's checks fire on
+  *absence* of protective language, so a near-empty extraction didn't even
+  read as a flat "0 of 25 clean" — it silently produced a plausible-looking
+  partial report (verified: 4 of 25 FAILED on a synthetic 6-word fixture,
+  exit code 1, no signal the document was never really read). Now: any
+  document extracting to under 150 words reports `RESULT UNREADABLE` and
+  exits 2. Regression fixture at `tests/build_no_text_layer_fixture.py` /
+  `tests/no_text_layer_fixture.pdf`. No check-body changes; all 25 checks
+  unchanged. One behavior change: the printed/JSON `SCOPE` line is dropped
+  (nothing downstream parsed it — grep-verified) — scope detection still
+  drives L10/L11 internally. Re-benchmarked against both v1.0 documents,
+  unchanged: 18/25 (Zettler 8.13.26). Livingston re-check found 15/25 against
+  the actual C&W-authored `... Clean 4.20.2026 ...` file (this table's "14/25"
+  and "4.21.26" predate a file-identification correction and are carried here
+  unedited pending reconciliation — not introduced by this retrofit).
 - **v1.0 (2026-08-17)** — Initial. 25 checks, 16 ratified standing positions,
   excluded-prospects builder, deal-folder checklist, C&W form defect register.
   Benchmarked at 18/25 (Zettler 8.13.26) and 14/25 (Livingston 4.20.26).
