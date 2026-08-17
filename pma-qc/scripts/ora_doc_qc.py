@@ -299,6 +299,7 @@ def scan(path, checks, allow_tokens=False, allow_ocr=True,
     return {"file": name, "format": meta["format"], "extraction": meta["extraction"],
             "words": meta["words"], "unreadable": False,
             "tracked_changes": meta["tracked_changes"], "comments": meta["comments"],
+            "strike": meta["strike"],
             "creator": meta.get("creator"), "company": meta.get("company"),
             "checks_run": len(checks), "failures": failures}
 
@@ -338,7 +339,9 @@ def print_report(r, ocr_absence_note=None):
         print()
         return
     enc = (f"tracked changes: {r['tracked_changes']}" if r.get("tracked_changes")
-           else "no tracked changes (clean or compare-tool output)")
+           else "compare-tool formatting (strikethrough), no tracked changes"
+           if r.get("strike")
+           else "no tracked changes (clean)")
     print(f"ENC        {enc}; comments.xml: {'yes' if r.get('comments') else 'no'}")
     if r.get("company"):
         print(f"ORIGIN     creator={r.get('creator')!r} company={r.get('company')!r}")
