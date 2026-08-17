@@ -877,13 +877,25 @@ class TestRegistryAndCli(TempDirCase):
                              f"{banned!r} is back in lease_qc.py's executable code")
         self.assertIn("ora_doc_qc", code)
 
-    def test_vendored_shared_module_matches_the_repo_root_copy(self):
-        """pma-qc and listing-agreement-qc each ship a copy so the skill runs
-        standalone. lease-form-qc's copy must not drift from tools/."""
-        import hashlib
-        a = hashlib.sha256((REPO / "tools" / "ora_doc_qc.py").read_bytes()).hexdigest()
-        b = hashlib.sha256((SCRIPTS / "ora_doc_qc.py").read_bytes()).hexdigest()
-        self.assertEqual(a, b, "vendored ora_doc_qc.py has drifted from tools/")
+    def test_ora_doc_qc_resolves_to_the_repo_root_canonical_copy(self):
+        """2026-08-17 retrofit: pma-qc, listing-agreement-qc, and lease-form-qc no
+        longer vendor their own committed copy of ora_doc_qc.py -- it fans out from
+        tools/ora_doc_qc.py at packaging time via package_skills.py's
+        SHARED_ROOT_DEPS (landing at scripts/ora_doc_qc.py inside the packaged
+        .skill). In a dev checkout with no packaged copy present, lease_qc.py's own
+        sys.path fallback (see its module docstring) must resolve the import to the
+        canonical repo-root copy -- not silently fail, and not pick up a stray
+        leftover file that would then drift unnoticed. Replaces the old drift-check
+        (hash-compared two committed copies) now that there is only ever one."""
+        import ora_doc_qc
+        self.assertFalse(
+            (SCRIPTS / "ora_doc_qc.py").exists(),
+            "in-skill vendored copy should no longer be committed -- "
+            "see package_skills.SHARED_ROOT_DEPS")
+        self.assertEqual(
+            Path(ora_doc_qc.__file__).resolve(),
+            (REPO / "tools" / "ora_doc_qc.py").resolve(),
+            "ora_doc_qc import did not resolve to the repo-root canonical copy")
 
 
 if __name__ == "__main__":
