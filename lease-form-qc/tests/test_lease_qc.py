@@ -898,5 +898,92 @@ class TestRegistryAndCli(TempDirCase):
             "ora_doc_qc import did not resolve to the repo-root canonical copy")
 
 
+# --------------------------------------------------------------------------
+# 7. sys.path shim ordering -- append, never insert(0, ...)
+# --------------------------------------------------------------------------
+
+class TestDevCheckoutFallbackOrdering(TempDirCase):
+    """Regression guard for the dev-checkout sys.path shim shared by all
+    three scanner scripts (pma_qc.py, listing_qc.py, lease_qc.py):
+
+        sys.path.append(str(Path(__file__).resolve().parent.parent.parent / 'tools'))
+
+    This line was `sys.path.insert(0, ...)` once. insert(0, ...) puts the
+    repo-root tools/ fallback AHEAD of the script's own directory (which
+    Python puts at sys.path[0] automatically at interpreter startup), so a
+    packaged .skill's co-located ora_doc_qc.py copy gets silently shadowed by
+    whatever sits under an install root's own tools/ directory -- the
+    opposite of "lowest-priority dev-checkout fallback". Fixed to append,
+    but test_ora_doc_qc_resolves_to_the_repo_root_canonical_copy (above) is
+    ordering-agnostic: this repo's own dev checkout has no co-located copy to
+    shadow, so that test passes identically whether the code used
+    insert(0, ...) or append(...). Nothing else in the repo catches a silent
+    revert.
+
+    This test extracts the LIVE shim line straight out of lease_qc.py --
+    not a hand-copied duplicate that could drift from it -- and executes it
+    for real inside a synthetic tree that DOES have a co-located copy, the
+    one scenario where the two orderings actually disagree. It runs as a
+    real subprocess, not importlib: Python's automatic
+    sys.path[0] = script's-own-directory behavior -- the entire mechanism
+    under test -- is a startup-time interpreter behavior that
+    importlib.import_module() does not reproduce.
+
+    Directory depth matters: the shim's `parent.parent.parent` walks
+    script -> scripts/ -> skill/ -> repo-root, so the synthetic tree below
+    mirrors that exact three-level layout (repo/skill/scripts/probe.py,
+    with the poisoned copy at repo/tools/) rather than the shallower
+    two-level sketch this task was framed with -- a shallower tree makes the
+    appended path miss the poisoned file entirely and stops testing the
+    ordering.
+    """
+
+    def _extract_shim_line(self):
+        src = LEASE_QC.read_text(encoding="utf-8")
+        m = re.search(r"^sys\.path\.\w+\([^\n]*\)\s*$", src, re.M)
+        self.assertIsNotNone(
+            m, "could not find the sys.path shim line in lease_qc.py -- "
+               "update this extraction regex, don't let it pass vacuously")
+        return m.group(0)
+
+    def test_dev_checkout_fallback_never_shadows_a_co_located_module(self):
+        # Deliberately NOT asserting the extracted line says "append" here --
+        # that would make this a source-text diff instead of a behavior test.
+        # The extracted line (whatever it says) is executed for real below;
+        # the SENTINEL assertion at the end is what actually proves ordering.
+        shim_line = self._extract_shim_line()
+
+        repo = self.tmp / "repo"
+        scripts = repo / "skill" / "scripts"
+        tools = repo / "tools"
+        scripts.mkdir(parents=True)
+        tools.mkdir(parents=True)
+
+        probe = scripts / "probe.py"
+        probe.write_text(
+            "import sys\n"
+            "from pathlib import Path\n"
+            f"{shim_line}\n"
+            "import ora_doc_qc\n"
+            "print(ora_doc_qc.SENTINEL)\n",
+            encoding="utf-8",
+        )
+        # Co-located copy -- what a packaged .skill ships alongside the
+        # script via SHARED_ROOT_DEPS. Must win.
+        (scripts / "ora_doc_qc.py").write_text('SENTINEL = "correct"\n', encoding="utf-8")
+        # Repo-root tools/ copy -- the dev-checkout-only fallback target.
+        # Must lose whenever a co-located copy exists.
+        (tools / "ora_doc_qc.py").write_text('SENTINEL = "WRONG"\n', encoding="utf-8")
+
+        p = subprocess.run([sys.executable, str(probe)],
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(
+            p.stdout.strip(), "correct",
+            "dev-checkout tools/ fallback shadowed the co-located module -- "
+            "lease_qc.py's sys.path shim regressed to insert(0, ...)")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
