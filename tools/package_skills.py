@@ -451,6 +451,15 @@ def is_bundled(rel_posix: str) -> bool:
         has always SKIPped cowork-settings\versions; excluding it here keeps packager, the
         post-commit hook (tools/pending_reimport.py imports this), and the drift-check in
         agreement so a versions/-only commit never falsely flags a reimport (2026-07-16).
+      - a top-level tests/ directory: developer-side regression fixtures and harnesses
+        (pma-qc, listing-agreement-qc, lease-form-qc all added one on the
+        shared-doc-qc-module-retrofit branch, 2026-08-17) — never shippable skill
+        content, same reasoning as versions/ above. Before that branch no skill had a
+        tests/ dir, so this gap went unnoticed; left unexcluded, a 52KB test file
+        outweighing the skill's own SKILL.md would ship inside the runtime-installed
+        .skill, and every edit to a test file would mark the skill's cache stale for
+        reimport purposes (pending_reimport.py's drift detection also calls
+        is_bundled()).
       - Python bytecode caches (__pycache__/ at any level, and any *.pyc/*.pyo): build
         residue from running a skill's own scripts/ locally. .gitignore already keeps
         these out of git, so they are invisible to a repo diff — but the packager walked
@@ -463,6 +472,8 @@ def is_bundled(rel_posix: str) -> bool:
     if parts[-1] == 'PACKAGING-NOTE.md':
         return False
     if parts[0] == 'versions':
+        return False
+    if parts[0] == 'tests':
         return False
     if '__pycache__' in parts:
         return False

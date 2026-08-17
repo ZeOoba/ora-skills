@@ -536,6 +536,18 @@ class IsBundledExclusions(unittest.TestCase):
         self.assertFalse(is_bundled('references/PACKAGING-NOTE.md'))
         self.assertFalse(is_bundled('versions/20260716_snapshot.md'))
 
+    def test_excludes_top_level_tests_dir(self):
+        self.assertFalse(is_bundled('tests/test_lease_qc.py'))
+        self.assertFalse(is_bundled('tests/no_text_layer_fixture.pdf'))
+        self.assertFalse(is_bundled('tests/build_no_text_layer_fixture.py'))
+
+    def test_does_not_exclude_non_top_level_tests_dir(self):
+        # Only a top-level tests/ dir is developer-side scaffolding; a nested
+        # directory that merely happens to be named "tests" (e.g. shipped
+        # sample data under references/) is real skill content and still bundles.
+        self.assertTrue(is_bundled('references/tests/sample.md'))
+        self.assertTrue(is_bundled('scripts/tests/fixture.json'))
+
 
 class StagingManifest(unittest.TestCase):
     """Regression tests for the 2026-08-15 staging sentinel (Rev 10 remediation): a
