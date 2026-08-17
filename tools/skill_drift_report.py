@@ -509,8 +509,8 @@ def skill_md_report(repo_root: Path, cache_root: Path, skill: str, read_at=None)
         # consumer can mistake it for the verdict's evidence.
         'point_in_time': {
             'read_at': read_at,
-            'repo_version_token': version_token_of(repo_fm_raw),
-            'cache_version_token': version_token_of(cache_fm_raw),
+            'repo_version_token': version_token_of(repo_text),
+            'cache_version_token': version_token_of(cache_text),
             'repo_bytes': len(repo_raw),
             'cache_bytes': len(cache_raw),
             'repo_desc_chars': len(repo_desc),
