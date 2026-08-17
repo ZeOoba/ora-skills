@@ -7,7 +7,16 @@
 # after v4.1 b76bf94 was pushed). This hook detects that gap at commit time; it does NOT and
 # cannot reimport. See tools/pending_reimport.py; ledger _staging/PENDING_REIMPORT.md (untracked).
 #
-# Non-blocking by design: post-commit exit status is ignored by git, and the helper swallows
-# its own errors, so this can never disrupt or fail a commit.
+# Rule (2026-08-16, Automation Audit R13-2 fix): also re-sync any LOCAL Code-surface
+# mirror under ~/.claude/skills/<skill> — a separate store from the Cowork/AppData
+# runtime cache above, and the one the `Skill` tool actually resolves for Code
+# sessions on this machine. Nothing previously kept it in sync, which is exactly
+# how ora-setup-audit itself sat at a stale v1.3 local mirror while the repo had
+# moved to v1.4. Update-in-place only — never creates a new local mirror. See
+# tools/sync_local_skills_mirror.py.
+#
+# Non-blocking by design: post-commit exit status is ignored by git, and both
+# helpers swallow their own errors, so this can never disrupt or fail a commit.
 python tools/pending_reimport.py record HEAD 2>/dev/null || true
+python tools/sync_local_skills_mirror.py HEAD 2>/dev/null || true
 exit 0
