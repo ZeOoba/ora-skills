@@ -45,15 +45,11 @@ tests/test_lease_qc.py:
     gate on the "0 failures" exit code, which is unchanged.
   * T1 is a registered check rather than a finding synthesized inside the old
     scan(), so it participates in --json and the checks_run total (52, not 51).
+    It reads BODY + meta["footer"] (see _t1) - the footer half is not optional
+    coverage, ORA's own master carries real tokens down there.
   * F18 reads meta["footer"] instead of parsing a '[[FOOTER]]' marker that
     text_of() spliced onto the body. That splice also leaked footer
     boilerplate into every other check's body text; it is gone.
-  * the ENC line no longer distinguishes "compare-tool formatting
-    (strikethrough)" from "clean" - ora_doc_qc.scan() does not carry
-    extract()'s meta["strike"] into its report dict, so print_report() reports
-    both as "no tracked changes (clean or compare-tool output)". SKILL.md
-    Step 2 still requires stating the encoding, and the line still does; it is
-    one bit less precise until the shared module propagates `strike`.
 
 WHY THREE CHECKS ARE NOT bool_check()-WRAPPED
 ---------------------------------------------
@@ -85,7 +81,7 @@ the current v2.6 master, so ORA's own paper is unaffected.
 
 import re
 
-from ora_doc_qc import bool_check, run_cli, unfilled_token_check
+from ora_doc_qc import bool_check, run_cli
 
 Q = '["“”‘’«»]'
 
@@ -275,19 +271,47 @@ CHECKS = [
 # This skill's own token pattern, deliberately NOT the shared module's default
 # (which adds '_' to the class and caps the run at 40 chars). Swapping it would
 # be an unrequested, unverified change to what counts as an unfilled token, so
-# the local regex is handed to the shared helper verbatim. Pinned by
+# the local regex stays in force. Pinned by
 # tests/test_lease_qc.py::test_local_token_regex_is_preserved_not_the_shared_default.
 TOKEN_RE = re.compile(r"\[[A-Z][A-Z0-9 /,.'&-]{2,}\]")
 
-# T1 was previously synthesized ad hoc inside scan() only when tokens were
-# found. It is now registered once and evaluated like every other check, so it
-# appears in --json and in the checks_run denominator. The shared helper
-# already applies the same two gates the old scan() did: '_TEMPLATE' in the
-# filename, and --allow-tokens.
-CHECKS.append(unfilled_token_check(
-    cid="T1", sev="BLOCK", title="Unfilled template tokens remain",
-    pattern=TOKEN_RE.pattern,
-))
+
+def _t1(ctx):
+    """Unfilled template tokens remain — scanned in the BODY *and* the FOOTER.
+
+    T1 was previously synthesized ad hoc inside the old scan() only when tokens
+    were found; it is now registered once and evaluated like every other check,
+    so it appears in --json and in the checks_run denominator.
+
+    It is NOT registered via ora_doc_qc.unfilled_token_check(), for one reason:
+    that helper scans ctx["raw"] alone, and extract(want_footer=True) routes
+    footer text to ctx["meta"]["footer"], a channel the helper never reads. The
+    pre-retrofit text_of() covered the footer by splicing it onto the body; the
+    splice is gone (it caused its own false BLOCK — see the module docstring),
+    so the footer must be scanned explicitly or the coverage silently vanishes.
+    That is not hypothetical: ORA's own v2.6 master carries
+    '[PREMISES ADDRESS]' and '[TENANT ENTITY]' in word/footer2.xml and
+    word/footer3.xml, so a lease drafted from it with the body filled and the
+    footer left untouched would clear a body-only T1 and go out for signature
+    with both tokens printed on every page — the exact failure this BLOCK
+    exists to prevent. Pinned by
+    tests/test_lease_qc.py::TestTokenGate::test_unfilled_footer_tokens_block_a_filled_body_lease.
+
+    The two gates ('_TEMPLATE' in the filename, --allow-tokens), the BLOCK
+    severity, and the detail-string shape are reproduced from the shared helper
+    verbatim; only the scanned text differs.
+    """
+    if ctx.get("is_template") or ctx.get("allow_tokens"):
+        return None
+    hay = ctx["raw"] + "\n" + ctx["meta"].get("footer", "")
+    toks = sorted(set(TOKEN_RE.findall(hay)))
+    if not toks:
+        return None
+    shown = ", ".join(toks[:6]) + ("..." if len(toks) > 6 else "")
+    return f"{len(toks)} unfilled token(s): {shown}"
+
+
+CHECKS.append(("T1", "BLOCK", "Unfilled template tokens remain", None, _t1))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 ---
 name: lease-form-qc
-description: "Pre-execution QC gate for leases drafted on Oxford Realty Advisors own landlord form (Fairground Village Center / 1100 Rarig Ave / Sepich portfolio paper). Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, is this lease ready to send, review our lease draft, new tenant lease, lease from the template, or uploads a DOCX that is an ORA-form lease. Also run before ANY outbound lease goes to a tenant or broker. Scans 51 systemic defects in the ORA base form (dead cross-references, undefined terms, OpEx billing machinery, obsolete statutory cites, Ohio mitigation exposure, F10-F13) with PASS/FAIL severity. Carries ORA's six ratified standing lease positions (2026-08-03). Distinct from legal-intelligence (counterparty paper): this audits ORA's OWN paper. v2.5 (2026-08-17: shared ora_doc_qc extraction — real PDF/OCR handling + UNREADABLE gate; T1 registered; 52 checks)"
+description: "Pre-execution QC gate for leases drafted on Oxford Realty Advisors own landlord form (Fairground Village Center / 1100 Rarig Ave / Sepich portfolio paper). Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, is this lease ready to send, review our lease draft, new tenant lease, lease from the template, or uploads a DOCX that is an ORA-form lease. Also run before ANY outbound lease goes to a tenant or broker. Scans 51 systemic defects in the ORA base form (dead cross-references, undefined terms, OpEx billing machinery, obsolete statutory cites, Ohio mitigation exposure, F10-F13) with PASS/FAIL severity. Carries ORA's six ratified standing lease positions (2026-08-03). Distinct from legal-intelligence (counterparty paper): this audits ORA's OWN paper. v2.5.1 (2026-08-17: shared ora_doc_qc extraction — real PDF/OCR handling + UNREADABLE gate; T1 registered, scans body + footer; 52 checks)"
 ---
 
 # Lease Form QC — Oxford Realty Advisors own paper
@@ -123,13 +123,16 @@ prose and reported ~16 mojibake "failures" including BLOCKs. Never report a QC r
 for a file that exited 2 — supply a text-layer copy, or install poppler-utils +
 tesseract.
 
-Benchmarks (scanner v2.5, 52 checks = 51 defect checks + T1): untouched ORA-form lease
+Benchmarks (scanner v2.5.1, 52 checks = 51 defect checks + T1): untouched ORA-form lease
 ≈ **39–48 failures**; a v2.4.1-derived lease fails exactly F10–F13 (+F14–F18); a
 v2.5-derived lease fails exactly **F14–F18**; a v2.6-derived lease = **0 of 52**
 (re-verified 2026-08-17 on the OH master and all five rebased property templates).
 The scanner also enforces a **T1 token gate**: any
-unfilled `[TOKEN]` in a file whose name lacks `_TEMPLATE` is a BLOCK failure (drafted
-leases must be fully filled; pass `--allow-tokens` to scan a working draft). Anything
+unfilled `[TOKEN]` **in the body or the footer** of a file whose name lacks
+`_TEMPLATE` is a BLOCK failure (drafted leases must be fully filled; pass
+`--allow-tokens` to scan a working draft). The footer half matters — the master's
+footer carries `[PREMISES ADDRESS]` and `[TENANT ENTITY]`, and a token fill that
+edits only the body leaves them printing on every page. Anything
 above 0 on a template-derived lease means a token fill introduced a defect. **Scan clean or accepted documents only** — a tracked-change
 redline contains both old and new text and will spuriously fail (~15 checks); run
 `accept_changes.py` first.
@@ -141,14 +144,11 @@ elements and encodes revisions as strikethrough plus coloured underline. Counsel
 comments live in `word/comments.xml` and are invisible to a tracked-change parse.
 State the detected encoding at the top of every report.
 
-⚠️ **v2.5 limitation.** The shared `print_report()` ENC line reports tracked-change
-count and `comments.xml` presence, but reads `no tracked changes (clean or
-compare-tool output)` for BOTH a clean document and a compare-tool output —
-`ora_doc_qc.scan()` does not yet carry `extract()`'s `meta["strike"]` into its report
-dict, so the scanner can no longer tell you which. Until it does: if a document shows
-zero tracked changes AND an unusually high failure count (~15 above the expected
-benchmark), suspect compare-tool output and run `accept_changes.py` before believing
-the findings.
+The scanner does this for you. The ENC line distinguishes all three states:
+`tracked changes: <n>` (real OOXML `w:ins`/`w:del`), `compare-tool formatting
+(strikethrough), no tracked changes` (Litera/Workshare/Word-compare output — run
+`accept_changes.py` before believing the ~15 spurious failures), and `no tracked
+changes (clean)`. It also reports `comments.xml: yes|no`.
 
 ### Step 3 — Report
 
@@ -295,6 +295,21 @@ Section 24 defect was born.
 
 ## Changelog
 
+### v2.5.1 (2026-08-17) — review fixes, before v2.5 ever shipped
+
+Both items below were caught by independent review of the v2.5 retrofit and fixed on
+the same branch, so no operator ever saw the defective behavior.
+
+| Change | Why |
+|---|---|
+| **T1 scans the FOOTER again** | v2.5 registered T1 via the shared `unfilled_token_check()`, which reads the document BODY only. Footer text lives in `meta["footer"]`, a channel that helper never looks at — so removing the old `[[FOOTER]]` splice silently dropped the footer from the token gate. ORA's own v2.6 master carries `[PREMISES ADDRESS]` and `[TENANT ENTITY]` in `word/footer2.xml`/`footer3.xml`: a lease with a filled body and an untouched footer cleared T1 and would have gone out for signature with both tokens on every page. T1 is now a local ctx-aware check scanning body **and** footer with the same regex, the same two gates (`_TEMPLATE` filename, `--allow-tokens`), and the same BLOCK severity. |
+| **ENC precision restored** (supersedes the v2.5 "ENC precision lost" row, now removed) | `ora_doc_qc.scan()` now carries `extract()`'s `meta["strike"]` into its report dict and `print_report()` branches on it, so the ENC line again distinguishes compare-tool strikethrough from a genuinely clean document. The Step 2 workaround heuristic this briefly required is deleted. |
+
+Regression evidence: 47 unit tests in `tests/` (5 new, all on the footer-token path,
+including one that asserts the shared body-only helper *would* have missed it and
+that the v2.5 `[[FOOTER]]` false BLOCK does not return); `pma-qc` and
+`listing-agreement-qc` fixtures re-run unchanged.
+
 ### v2.5 (2026-08-17) — retrofit onto the shared `ora_doc_qc.py`
 
 Extraction, OCR fallback, UNREADABLE gate, report, and CLI now come from the shared
@@ -309,7 +324,6 @@ module. Check logic is unchanged except where noted. Intentional behavior change
 | **T1 is a registered check** | Was synthesized ad hoc inside `scan()`. Now in the registry, so it appears in `--json` and the denominator (**52**, not 51). |
 | **F18 reads `meta["footer"]`** | Replaces the `[[FOOTER]]` parsing trick. Same four-row truth table; footer boilerplate no longer leaks into every other check's body text. |
 | **Report format** | Shared `print_report()` block. Nothing parses this script's stdout; `masterlease-revision-cycle` / `-jurisdiction-rebase` gate on the exit code, unchanged. |
-| **ENC precision lost** | See the v2.5 limitation note under Step 2. |
 
 Regression evidence: 42 unit tests in `tests/`; 23 real ORA files (10 executed leases,
 7 addenda/intake copies, 6 v2.6 templates) diffed pre- vs post-retrofit with **zero
