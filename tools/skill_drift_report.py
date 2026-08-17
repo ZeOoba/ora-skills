@@ -105,6 +105,13 @@ STOCK_SKILLS = frozenset({
     # "authoritative source" for a skill ORA does not own, which would then read as
     # drift on every platform update forever.
     'morning',
+    # 'explain-usage' added 2026-08-17 (drift-check remediation pass, item 6) after
+    # confirming CACHE-ONLY on a live run. Same class as 'morning': zero Oxford/ORA
+    # mentions, first-person personal-productivity voice ("Explain where this
+    # session's tokens went"), platform-shipped token-usage explainer with no ORA
+    # doctrine or branding. Same rationale applies -- capturing it would manufacture
+    # a bogus authoritative source for a skill ORA does not own.
+    'explain-usage',
 })
 
 REMEDY = {
