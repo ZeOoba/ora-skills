@@ -1,0 +1,7 @@
+memory(event_log): commit this session's 4-entry package-and-stage-skill backlog
+
+Isolated-hunk technique (per reference_event_log_uncommitted_backlog.md) --
+staged only this session's 4 entries (market-monitor v1.4, 3-skill batch
+triage, register-scheduled-task v2.9, repo-architecture-review already-in-sync)
+via git apply --cached onto a HEAD-based reconstruction, leaving every other
+concurrent session's uncommitted working-tree content untouched.
