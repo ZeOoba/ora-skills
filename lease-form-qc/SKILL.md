@@ -1,6 +1,6 @@
 ---
 name: lease-form-qc
-description: "Pre-execution QC gate for leases drafted on Oxford Realty Advisors own landlord form (Fairground Village Center / 1100 Rarig Ave / Sepich portfolio paper). Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, is this lease ready to send, review our lease draft, new tenant lease, lease from the template, or uploads a DOCX that is an ORA-form lease. Also run before ANY outbound lease goes to a tenant or broker. Scans 51 systemic defects in the ORA base form (dead cross-references, undefined terms, OpEx billing machinery, obsolete statutory cites, Ohio mitigation exposure, F10-F13) with PASS/FAIL severity. Carries ORA's six ratified standing lease positions (2026-08-03). Distinct from legal-intelligence (counterparty paper): this audits ORA's OWN paper. v2.4 (2026-08-04: scanner 46->51 — F14-F18 v2.6 standards + T1 unfilled-token gate; review-packet rule; template pointer v2.6 / Exhibit B v1.2)"
+description: "Pre-execution QC gate for leases drafted on Oxford Realty Advisors own landlord form (Fairground Village Center / 1100 Rarig Ave / Sepich portfolio paper). Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, is this lease ready to send, review our lease draft, new tenant lease, lease from the template, or uploads a DOCX that is an ORA-form lease. Also run before ANY outbound lease goes to a tenant or broker. Scans 51 systemic defects in the ORA base form (dead cross-references, undefined terms, OpEx billing machinery, obsolete statutory cites, Ohio mitigation exposure, F10-F13) with PASS/FAIL severity. Carries ORA's six ratified standing lease positions (2026-08-03). Distinct from legal-intelligence (counterparty paper): this audits ORA's OWN paper. v2.5 (2026-08-17: shared ora_doc_qc extraction — real PDF/OCR handling + UNREADABLE gate; T1 registered; 52 checks)"
 ---
 
 # Lease Form QC — Oxford Realty Advisors own paper
@@ -103,17 +103,31 @@ made on. The template now cites the county parcel number in the building descrip
 ### Step 1 — Automated scan
 
 ```bash
-python3 scripts/lease_qc.py <lease.docx> [more.docx ...]
+python3 scripts/lease_qc.py <lease.docx|pdf|txt> [more ...] [--allow-tokens]
+                            [--no-ocr] [--json]
 ```
 
-Reads `word/document.xml` directly, reports revision encoding, prints one line per
-FAIL with severity (BLOCK / HIGH / MED / LOW), exits non-zero on any failure. Also
-accepts plain text for bulk-scanning historical leases pulled from SharePoint.
+Extraction, the OCR fallback, the UNREADABLE gate, and the report/CLI harness come
+from the shared `ora_doc_qc.py` (also used by `pma-qc` and `listing-agreement-qc`); a
+copy ships in `scripts/` so the skill runs standalone. DOCX is read from
+`word/document.xml`, PDF via `pdftotext` with an OCR fallback, and plain text
+directly — useful for bulk-scanning historical leases pulled from SharePoint. The
+report opens with a FILE / EXTRACTION / ENC / RESULT block, then one line per FAIL
+with severity (BLOCK / HIGH / MED / LOW).
 
-Benchmarks (scanner v2.4, 51 checks): untouched ORA-form lease ≈ **39–48 failures**; a
-v2.4.1-derived lease fails exactly F10–F13 (+F14–F18); a v2.5-derived lease fails exactly
-**F14–F18**; a v2.6-derived lease = **0 of 51** (verified 2026-08-04 on the master and all
-four rebased property templates). The scanner also enforces a **T1 token gate**: any
+**Exit codes: 0 = clean, 1 = one or more failures, 2 = usage / extraction /
+UNREADABLE.** Exit 2 is the important one: a document that will not yield enough text
+to scan (a scanned PDF with no text layer, OCR unavailable) now gets **no QC verdict
+at all** rather than a fabricated one. Before v2.5 a PDF was read as if it were UTF-8
+prose and reported ~16 mojibake "failures" including BLOCKs. Never report a QC result
+for a file that exited 2 — supply a text-layer copy, or install poppler-utils +
+tesseract.
+
+Benchmarks (scanner v2.5, 52 checks = 51 defect checks + T1): untouched ORA-form lease
+≈ **39–48 failures**; a v2.4.1-derived lease fails exactly F10–F13 (+F14–F18); a
+v2.5-derived lease fails exactly **F14–F18**; a v2.6-derived lease = **0 of 52**
+(re-verified 2026-08-17 on the OH master and all five rebased property templates).
+The scanner also enforces a **T1 token gate**: any
 unfilled `[TOKEN]` in a file whose name lacks `_TEMPLATE` is a BLOCK failure (drafted
 leases must be fully filled; pass `--allow-tokens` to scan a working draft). Anything
 above 0 on a template-derived lease means a token fill introduced a defect. **Scan clean or accepted documents only** — a tracked-change
@@ -126,6 +140,15 @@ A Litera / Workshare / Word-compare output carries **zero** `<w:ins>`/`<w:del>`
 elements and encodes revisions as strikethrough plus coloured underline. Counsel
 comments live in `word/comments.xml` and are invisible to a tracked-change parse.
 State the detected encoding at the top of every report.
+
+⚠️ **v2.5 limitation.** The shared `print_report()` ENC line reports tracked-change
+count and `comments.xml` presence, but reads `no tracked changes (clean or
+compare-tool output)` for BOTH a clean document and a compare-tool output —
+`ora_doc_qc.scan()` does not yet carry `extract()`'s `meta["strike"]` into its report
+dict, so the scanner can no longer tell you which. Until it does: if a document shows
+zero tracked changes AND an unusually high failure count (~15 above the expected
+benchmark), suspect compare-tool output and run `accept_changes.py` before believing
+the findings.
 
 ### Step 3 — Report
 
@@ -269,3 +292,26 @@ included). Never copy the last executed lease. After filling tokens, run this QC
 anyway — token fills introduce their own errors. **After inserting or removing any
 section, re-verify every numeric cross-reference** — that is exactly how the v2.2
 Section 24 defect was born.
+
+## Changelog
+
+### v2.5 (2026-08-17) — retrofit onto the shared `ora_doc_qc.py`
+
+Extraction, OCR fallback, UNREADABLE gate, report, and CLI now come from the shared
+module. Check logic is unchanged except where noted. Intentional behavior changes:
+
+| Change | Why |
+|---|---|
+| **Exit 2 added** for usage / extraction / UNREADABLE | A PDF used to be read as UTF-8 prose. Measured on a 8-word no-text-layer PDF: **16 of 51 "FAILED", 2 BLOCK, exit 1** — a verdict on a document never read. Such input now returns no QC result. |
+| **T1 stopped firing on `[FOOTER]`** | `text_of()` spliced a `[[FOOTER]]` marker onto every DOCX and `TOKEN_RE` matched the inner `[FOOTER]`. On all 10 real executed ORA leases regression-tested, that was the **only** token T1 ever found — a spurious **BLOCK** on every non-`_TEMPLATE` lease. Marker gone, false BLOCK gone. |
+| **F6 now fires on ORA's own paper** | ORA paper writes "five `\xa0` (5) Business Days…"; the old pipeline never folded the non-breaking space, so F6's plain-space pattern silently never matched. It fired on 8 of 10 real leases once folded — a real defect that had been invisible. |
+| **A3 / A9 now catch smart-quoted cross-references** | They match an ASCII `"` class; Word emits curly quotes, so they used to miss every real instance. Neither fires on the v2.6 master. |
+| **T1 is a registered check** | Was synthesized ad hoc inside `scan()`. Now in the registry, so it appears in `--json` and the denominator (**52**, not 51). |
+| **F18 reads `meta["footer"]`** | Replaces the `[[FOOTER]]` parsing trick. Same four-row truth table; footer boilerplate no longer leaks into every other check's body text. |
+| **Report format** | Shared `print_report()` block. Nothing parses this script's stdout; `masterlease-revision-cycle` / `-jurisdiction-rebase` gate on the exit code, unchanged. |
+| **ENC precision lost** | See the v2.5 limitation note under Step 2. |
+
+Regression evidence: 42 unit tests in `tests/`; 23 real ORA files (10 executed leases,
+7 addenda/intake copies, 6 v2.6 templates) diffed pre- vs post-retrofit with **zero
+unexplained verdict changes** — every delta traced to a row above. All six v2.6
+templates: **0 of 52**, identical before and after.
