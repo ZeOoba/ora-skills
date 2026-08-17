@@ -23,15 +23,32 @@ now live in ora_doc_qc.py (shared with listing-agreement-qc and lease-form-qc
 once their own retrofits land — see that module's migration notes). This file
 is the reference port: everything below the imports is pma-qc's own 32 checks.
 
-A copy of ora_doc_qc.py ships inside this skill's scripts/ directory so
-pma-qc installs and runs standalone today. Once tools/package_skills.py's
-SHARED_ROOT_DEPS is updated to inject it from the repo root (the same pattern
-target-markets.json already uses for four other skills), this in-skill copy
-should be removed in favor of the injected one — do not let the two drift.
+ora_doc_qc.py itself is NOT vendored inside this skill's scripts/ directory —
+it fans out from the repo-root tools/ora_doc_qc.py via package_skills.py's
+SHARED_ROOT_DEPS (the same pattern target-markets.json already uses for four
+other skills), landing at scripts/ora_doc_qc.py inside the packaged .skill so
+this skill installs and runs standalone. In a raw repo/worktree checkout
+(where nothing has been packaged yet), the sys.path shim below falls back to
+the repo-root tools/ directory so `python pma-qc/scripts/pma_qc.py ...` still
+works for local development.
 """
 
 import re
 import sys
+from pathlib import Path
+
+# Dev-checkout fallback: a packaged .skill ships ora_doc_qc.py alongside this
+# script (via SHARED_ROOT_DEPS, see module docstring above) — Python already
+# puts this script's own directory at sys.path[0] on startup, so the packaged
+# copy resolves there before this insert is ever consulted. A raw repo/worktree
+# checkout has no such copy, so this fallback resolves the repo-root tools/
+# directory instead — the only place the path below ever actually exists is a
+# dev checkout (`.../ora-skills/pma-qc/scripts/` -> parent.parent.parent ->
+# `.../ora-skills/tools/`); in every packaged/extracted-.skill location the
+# equivalent path doesn't exist on disk and Python silently skips it, so this
+# never shadows the packaged copy. Verified 2026-08-17 against a real
+# extracted .skill (see task-4-report.md).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / 'tools'))
 
 from ora_doc_qc import new_registry, has, quote, run_cli
 
