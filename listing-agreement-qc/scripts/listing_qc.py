@@ -345,7 +345,7 @@ def _l23(ctx):
 
 @check("L24", "LOW", "Template residue in header / footer", "SP-14")
 def _l24(ctx):
-    h = ctx["meta"].get("headers", "")
+    h = ctx["meta"].get("headers", "") + " " + ctx["meta"].get("footer", "")
     if re.search(r"A PROPOSAL FOR|DRAFT|\[Property\]|Insert ", h, re.I):
         return f"Running header/footer carries template residue: '{norm(h)[:90].strip()}'."
     return None
@@ -368,4 +368,4 @@ def _l25(ctx):
 # --------------------------------------------------------------------- driver
 
 if __name__ == "__main__":
-    run_cli(CHECKS, "ORA listing agreement QC gate")
+    run_cli(CHECKS, "ORA listing agreement QC gate", want_footer=True)
