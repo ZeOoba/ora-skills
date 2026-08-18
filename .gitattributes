@@ -2,3 +2,13 @@
 # Added 2026-07-12 to end perpetual phantom-modified flags from pre-existing CRLF blobs.
 * text=auto
 tools/hooks/* text eol=lf
+
+# PDFs are binary and must never be line-ending converted. `text=auto` relies on
+# git sniffing a NUL byte in the first 8k, which real-world PDFs happen to have
+# but reportlab-generated test fixtures (uncompressed, ASCII-only) do not. Both
+# QC-scanner no-text-layer fixtures were being smudged on checkout — verified
+# 2026-08-17 via `git checkout-index` into a temp tree: 1386 -> 1454 bytes with
+# 68 CRs injected, silently corrupting the xref table of a fixture whose whole
+# job is to be read by pdftotext. Stored blobs were always correct; only the
+# checkout filter was wrong, so no re-normalization is needed.
+*.pdf binary

@@ -55,7 +55,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from package_skills import SHARED_ROOT_DEPS, is_bundled  # noqa: E402
+from package_skills import SHARED_ROOT_DEPS, _dep_pair, is_bundled  # noqa: E402
 from pending_reimport import (  # noqa: E402
     CACHE_ROOT,
     REPO,
@@ -236,7 +236,7 @@ def classify_skill(skill: str, repo_root: Path = REPO, cache_root: Path = CACHE_
     # pending_reimport.shared_dep_report()/classify_shared_copy() already direction-
     # checks these correctly against their true repo-root source; exclude them here
     # rather than duplicate (and potentially disagree with) that logic.
-    shared_deps = set(SHARED_ROOT_DEPS.get(skill, []))
+    shared_deps = {_dep_pair(d)[1] for d in SHARED_ROOT_DEPS.get(skill, [])}
 
     for rel in repo_rels:
         repo_p, cache_p = repo_root / skill / rel, cache_dir / rel
