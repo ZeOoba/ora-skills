@@ -50,7 +50,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from package_skills import (  # noqa: E402
     REPO, SKIP, SHARED_ROOT_DEPS, DELIBERATELY_UNPUBLISHED, is_bundled, plugin_of,
-    skill_source_files,
+    skill_source_files, _dep_pair,
 )
 from skill_md_normalize import normalize_skill_md_text  # noqa: E402
 
@@ -66,11 +66,12 @@ CACHE_ROOT = Path(
     r'\583f08bc-0123-4111-8158-8fe3d927e350\a6ad2c61-c3c8-4a48-98a5-e40c1db22ad3\skills'
 )
 
-# reverse map: shared repo-root file -> [consumer skills that bundle it]
-SHARED_CONSUMERS: dict[str, list[str]] = {}
+# reverse map: shared repo-root file -> [(consumer skill, skill-relative dest path)]
+SHARED_CONSUMERS: dict[str, list[tuple[str, str]]] = {}
 for _skill, _deps in SHARED_ROOT_DEPS.items():
     for _d in _deps:
-        SHARED_CONSUMERS.setdefault(_d, []).append(_skill)
+        _src, _dest = _dep_pair(_d)
+        SHARED_CONSUMERS.setdefault(_src, []).append((_skill, _dest))
 
 HEADER = (
     '# PENDING REIMPORT — repo is ahead of the Cowork runtime cache\n'
@@ -125,8 +126,8 @@ def affected_skills(files: list[str]) -> dict[str, set[str]]:
         if len(parts) > 1 and is_skill_dir(top) and is_bundled('/'.join(parts[1:])):
             hits.setdefault(top, set()).add(f)
         # (b) a repo-root shared dependency fans out to every consumer skill.
-        if '/' not in f and f in SHARED_CONSUMERS:
-            for consumer in SHARED_CONSUMERS[f]:
+        if f in SHARED_CONSUMERS:
+            for consumer, _dest in SHARED_CONSUMERS[f]:
                 hits.setdefault(consumer, set()).add(f'{f} (shared dep)')
     return hits
 
@@ -492,14 +493,14 @@ def shared_dep_report(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT):
         repo_hash = _normalized_hash(repo_file) if repo_file.is_file() else None
         ancestor_hashes, all_history_hashes = _file_history_hashes(repo_root, dep)
         rows: dict[str, str] = {}
-        for skill in sorted(SHARED_CONSUMERS[dep]):
+        for skill, dest in sorted(SHARED_CONSUMERS[dep]):
             if not _isdir_long(cache_root / skill):
                 rows[skill] = 'NOT-INSTALLED'
-            elif not _isfile_long(cache_root / skill / dep):
+            elif not _isfile_long(cache_root / skill / dest):
                 rows[skill] = 'MISSING-IN-CACHE'
             else:
                 rows[skill] = classify_shared_copy(
-                    _normalized_hash(cache_root / skill / dep),
+                    _normalized_hash(cache_root / skill / dest),
                     repo_hash, ancestor_hashes, all_history_hashes,
                 )
         report[dep] = rows
