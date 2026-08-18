@@ -184,6 +184,24 @@ class ClassifySkill(FixtureTestCase):
         self.assertEqual(verdict, 'IN-SYNC')
         self.assertNotIn('shared.json', [rel for rel, _ in per_file])
 
+    def test_shared_root_dep_tuple_form_dest_is_not_a_false_positive(self):
+        # Tuple-form SHARED_ROOT_DEPS entry (source != dest, e.g. ora_doc_qc.py landing at
+        # scripts/) must exclude by DEST path, not the raw tuple -- the plain-string case
+        # above puts the string itself into shared_deps and it matches rel directly, but a
+        # 2-tuple put into that set unnormalized would never match a string rel and the
+        # exclusion would silently stop working for every tuple-form consumer.
+        _commit(self.repo, 'demo-skill/SKILL.md', 'name: demo-skill\n', 'init')
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'name: demo-skill\n')
+        _write(self.cache / 'demo-skill' / 'scripts' / 'shared.py', 'x = 1\n')
+
+        with mock.patch.object(
+            rfc, 'SHARED_ROOT_DEPS', {'demo-skill': [('tools/shared.py', 'scripts/shared.py')]}
+        ):
+            verdict, per_file = rfc.classify_skill('demo-skill', self.repo, self.cache)
+
+        self.assertEqual(verdict, 'IN-SYNC')
+        self.assertNotIn('scripts/shared.py', [rel for rel, _ in per_file])
+
 
 class RecordLedger(FixtureTestCase):
     """The durable STORE_AHEAD_OF_REPO ledger — the reverse-direction companion to
