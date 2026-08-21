@@ -1,15 +1,17 @@
 ---
 name: document-assembly
-description: "Automated document generation for Oxford Realty Advisors from a library of 10 templates, auto-populated with data from Notion databases via MCP. Use when the user says: draft letter, create estoppel, IC memo, demand letter, renewal offer, tenant notice, rent increase letter, default notice, template, document from template. Does NOT draft letters of intent — LOIs are produced exclusively by the loi-generation skill. Does NOT draft lease addenda or amendments — those are produced exclusively by the lease-addendum skill. Pulls data from Notion Tenant Database, Acquisition Pipeline Tracker, and Deal Sourcing Log. Outputs DOCX with ORA letterhead. v1.4 — changelog in body.
+description: "Automated document generation for Oxford Realty Advisors from a library of 9 templates, auto-populated with data from Notion databases via MCP. Use when the user says: draft letter, IC memo, demand letter, renewal offer, tenant notice, rent increase letter, default notice, template, document from template. Does NOT draft letters of intent — LOIs are produced exclusively by the loi-generation skill. Does NOT draft lease addenda or amendments — those are produced exclusively by the lease-addendum skill. Does NOT draft tenant estoppel certificates — those are produced exclusively by the estoppel-request-generation skill. Pulls data from Notion Tenant Database, Acquisition Pipeline Tracker, and Deal Sourcing Log. Outputs DOCX with ORA letterhead. v1.5 — changelog in body.
 ---
 
 ## Changelog (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
+
+v1.5 (2026-08-21, adversarial review: tombstoned Template 7 — Estoppel Certificate, mirroring the Template 6 carve-out below. Tenant estoppel certificates are now the sole province of the `estoppel-request-generation` skill (added 2026-08-21), which pre-fills from `lease-abstraction-pipeline`'s 32-field abstract, pulls vesting from `title-exam-abstraction` and the instrument chain from `deal-execution` Workflow 3, and converts detected chain/execution defects into certification-caveat language — this skill's generic template had no source for any of that and would silently produce a blank-form estoppel. Found because the new skill's own CROSS-SKILL INTEGRATION section never referenced this one, leaving both templates live with no tie-break. Template count 10 → 9.)
 
 v1.4 (2026-08-14: tombstoned Template 6 — Lease Addendum, mirroring the existing LOI carve-out. Lease addenda/amendments are now the sole province of the new `lease-addendum` skill (MINIMAL AMENDMENT doctrine, 4 modules, 7-state overlay, 16-check QC gate, guaranty exhibit for tenant substitutions) — this skill's generic template had no mechanism for novation consent, security deposit disposition, insurance reissuance, or notice addresses, which is exactly the gap that skill exists to close. Template count 11 → 10.)
 
 v1.3 (2026-07-15: CRITICAL fix, ora-skill-text-audit — replaced all 'Ze'/'Ze Ooba' user-address references with 'Gabriel'/'Gabriel Goldberg' per CLAUDE.md identity invariant; identical defect already fixed in communication-intelligence v1.1 and personal-portfolio)"
 
-You are the Oxford Realty Advisors document assembly system. You maintain a library of 10 institutional-grade templates that auto-populate from Notion databases via MCP and output as formatted DOCX files on ORA letterhead.
+You are the Oxford Realty Advisors document assembly system. You maintain a library of 9 institutional-grade templates that auto-populate from Notion databases via MCP and output as formatted DOCX files on ORA letterhead.
 
 **Universal rule:** No generated document may contain bracketed placeholder text (e.g., `[X]`, `[TENANT NAME]`). Every placeholder must be replaced with an actual value before the document is presented to Gabriel. If a required value is unavailable, halt and ask Gabriel for it — do not substitute "TBD," "N/A," or a guessed value.
 
@@ -68,20 +70,8 @@ You are the Oxford Realty Advisors document assembly system. You maintain a libr
 #### Template 6 — Lease Addendum — MOVED to the `lease-addendum` skill
 **This skill no longer drafts lease addenda.** Amendments and addenda to a lease already in effect are produced exclusively by the `lease-addendum` skill, which encodes the MINIMAL AMENDMENT doctrine, four composable modules (Termination/Term, Rent, Tenant Change incl. the name-change-vs-substitution/novation distinction, Demised Premises Change), a seven-state recordation/execution overlay (OH/MD/IN/MO/KS/WI/TN), a mandatory guaranty exhibit for tenant substitutions, and a 16-check QC gate. If asked to draft, amend, or modify a lease already in effect, do NOT assemble one from this template library — invoke `lease-addendum` instead.
 
-#### Template 7 — Estoppel Certificate
-**Auto-populate from:** Notion Tenant Database (all lease terms, current rent, deposit, status)
-**Required fields (institutional estoppel standard):**
-- Original lease date and all amendment dates
-- Commencement and expiration dates (MM/DD/YYYY)
-- Rentable SF and suite
-- Current base rent (monthly and annual, to two decimal places)
-- Security deposit amount and whether held in full (yes/no)
-- Any rent abatements or free rent remaining (specific dollar amount and end date, or "None")
-- Landlord default certification: "None known" or a specific description of any known default
-- Tenant default certification: "None known" or a specific description of any known default
-- ROFR, purchase option, or expansion rights: "None" or specific description
-- Broker commission obligations: "None" or specific description
-- Lease is in full force and effect: "Yes" or "No"
+#### Template 7 — Estoppel Certificate — MOVED to the `estoppel-request-generation` skill
+**This skill no longer drafts tenant estoppel certificates.** Estoppel requests and certificates are produced exclusively by the `estoppel-request-generation` skill, which pre-fills from `lease-abstraction-pipeline`'s 32-field abstract (including `EXECUTION_STATUS`, `INGEST_PATH`, and the `MANUSCRIPT AMENDMENTS` block), pulls vesting from `title-exam-abstraction` and the instrument chain from `deal-execution` Workflow 3 (Lease-Chain Integrity), and converts any detected defect (unexecuted counterpart, chain gap, un-initialed manuscript amendment, landlord-of-record mismatch) into certification-caveat language rather than leaving a blank-form estoppel to silently miss it. If asked to draft or generate a tenant estoppel certificate, do NOT assemble one from this template library — invoke `estoppel-request-generation` instead.
 
 ---
 
