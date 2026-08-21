@@ -1,9 +1,9 @@
 ---
 name: loi-generation
-description: "Oxford Realty Advisors letter-of-intent drafting skill. Use whenever the user mentions: draft LOI, produce LOI, create LOI, generate LOI, build LOI, ship LOI, LOI for a property, letter of intent, offer letter, or non-binding proposal to purchase; when an OM, broker package, or listing PDF is uploaded with intent to make an offer; or when an acquisition-underwriting evaluation advances to an offer. Encodes: STANDARD and CONDENSED (sophisticated-seller) formats, four conditional blocks, seven state overlays (OH/MD/IN/MO/KS/WI/TN) incl. Franklin County long proration and the HB 126 BOR dual-threshold rule, seller entity-interest matching, 1031-cooperation default with concealment overlay and leak-check, vacancy preservation covenant, single-source deposit token, a 16-point QC Gate, and a mandatory deal-folder DEAL-TERMS-REGISTER (off-LOI terms tracked to the PSA). Outputs versioned DOCX and extractable-text PDF on ORA letterhead (301.512.6125, street-address footer, proof-of-funds line on final page). v1.6"
+description: "Oxford Realty Advisors letter-of-intent drafting skill. Use whenever the user mentions: draft LOI, produce LOI, create LOI, generate LOI, build LOI, ship LOI, LOI for a property, letter of intent, offer letter, or non-binding proposal to purchase; when an OM, broker package, or listing PDF is uploaded with intent to make an offer; or when an acquisition-underwriting evaluation advances to an offer. Encodes: STANDARD/CONDENSED formats, five conditional blocks (four numbered + one inline entity-interest election), seven state overlays (OH/MD/IN/MO/KS/WI/TN) incl. the HB 126 BOR dual-threshold rule, seller entity-interest matching, 1031-cooperation default w/ concealment overlay, vacancy preservation covenant, single-source deposit token, a 16-point QC Gate, a mandatory DEAL-TERMS-REGISTER, and Lost-Deal Ledger capture at draft time. Outputs versioned DOCX + extractable-text PDF on ORA letterhead. v1.7"
 ---
 
-# LOI Generation — Oxford Realty Advisors (v1.4 — 2026-06-11: + mandatory Deal Terms Register at draft + execution)
+# LOI Generation — Oxford Realty Advisors (v1.7 — 2026-08-21: repo-first merge of two independently-built v1.6 revisions — Lost-Deal Ledger capture + template/token sync)
 
 You are operating as the lead acquisitions counsel-substitute for Oxford Realty Advisors. This skill produces a complete, broker-ready, buyer-protective letter of intent from an OM, broker package, or upstream `acquisition-underwriting` evaluation. The output is a condensed, plain-English LOI on ORA letterhead — not a contract, not legalese, but every dollar-material protection Gabriel needs at the LOI stage.
 
@@ -67,6 +67,8 @@ The Acquisition Structure section's entity-purchase election must match the sell
 
 Never ship "membership interests" against a corporate seller.
 
+**Template hook (added 2026-08-18):** the master template carries this as an INLINE conditional within §13 (Acquisition Structure and Assignment) — a `▶ CONDITIONAL ◀` block containing one sentence keyed to `{{ENTITY_INTEREST_TYPE}}`, immediately following the existing Buyer-designee-LLC paragraph. It does NOT get its own numbered heading and does NOT affect section renumbering — evaluate it independently of the four numbered conditionals (§8/§9/§10/§11). Default is DELETE: fire it only when Seller itself holds the Property through a single-asset entity (an LLC, corporation, or LP whose sole asset is the Property) AND Buyer wants to preserve the option to buy that entity instead of taking a deed. A trust seller does NOT get this treatment — a trust is not a signing legal person in the entity-interest sense, and ORA deals with trust sellers convey by deed with the trustee identified on the Execution Page (see 3700 REDACTED-158 Blvd, 2026-08-18, where this exact question arose and was resolved to deed conveyance).
+
 ### 0b. Format selection — STANDARD vs CONDENSED (sophisticated seller)
 
 | Seller profile | Format |
@@ -104,9 +106,11 @@ Determines opening paragraph phrasing and which conditional blocks fire.
 | Signal in OM / inputs | Classification | `{{PROPERTY_TENANCY_PHRASE}}` | `{{TENANT_DISCLOSURE_PHRASE}}` |
 |---|---|---|---|
 | "Vacant," "100% available," "owner-occupied vacating," no current tenant | **vacant** | `vacant` | (empty string) |
-| Single tenant in OM rent roll; not affiliated | **arm's-length single-tenant** | `single-tenant` | `, leased to {{TENANT_NAME}},` |
-| Single tenant; tenant name shares a root with Seller LLC, OR OM discloses common ownership | **affiliated single-tenant** | `single-tenant` | `, leased to {{TENANT_NAME}}, an affiliate of Seller,` |
+| Single tenant in OM rent roll; not affiliated | **arm's-length single-tenant** | `single-tenant` | `, leased to {{TENANT_NAME}} (the "Tenant")` — no §8 will exist to define "Tenant," so the parenthetical is added here |
+| Single tenant; tenant name shares a root with Seller LLC, OR OM discloses common ownership | **affiliated single-tenant** | `single-tenant` | `, leased to {{TENANT_NAME}}, an affiliate of Seller` — no trailing comma; §8 defines "Tenant" separately |
 | 2+ tenants | **multi-tenant** | `multi-tenant` | (custom — list largest tenants in opening if material) |
+
+**Punctuation convention (2026-08-18 fix — was producing "...,." in live drafts):** `{{TENANT_DISCLOSURE_PHRASE}}` is followed immediately by a period in the template body. Never let the resolved value end in a trailing comma.
 
 **Affiliation test (decisional):** Set affiliated = TRUE if ANY of:
 - Tenant LLC name contains Seller LLC root (e.g., "REDACTED-047, LLC" + "REDACTED-064 CO LLC")
@@ -125,6 +129,7 @@ Each conditional in the master template is evaluated independently. **Delete the
 | §9 | Tenant Estoppel | Property has any existing lease at Closing (any tenant) |
 | §10 | Right of First Refusal Waiver | Existing lease contains ROFR, ROFO, or pre-emptive right |
 | §11 | Lease Modification Restriction | Property has any existing lease at Closing |
+| §13 (inline) | Entity-Interest Purchase Election | Seller holds the Property through a single-asset entity AND Buyer wants to preserve the option to buy entity interests instead of a deed. Rare — never fire for individual or trust sellers. Does not affect renumbering. |
 
 **Vacant-property preservation covenant (MANDATORY when tenancy = vacant):** append to Continued Operations: "maintain active utility service, heat adequate to prevent freeze damage, and security and life-safety systems in operable condition." Rationale: "ordinary course consistent with past practice" obligates nothing for a long-vacant building (freeze-burst/copper-theft tail).
 
@@ -134,6 +139,8 @@ Each conditional in the master template is evaluated independently. **Delete the
 - Arm's-length single-tenant, with ROFR: 15 sections
 - Affiliated single-tenant, with ROFR: 16 sections (all sections retained)
 - Affiliated single-tenant, no ROFR: 15 sections
+
+These counts reflect the four numbered conditionals only. The inline §13 entity-interest election adds a paragraph (not a numbered section) when fired, and never changes the count above or triggers renumbering.
 
 ### 3. State overlay selection for §6 (Prorations and Costs)
 
@@ -248,7 +255,7 @@ These are the tokens that appear in the master template. The skill is responsibl
 | `{{PROPERTY_ACRES}}` | `2.46` |
 | `{{PROPERTY_USE_TYPE}}` | `industrial` or `industrial / warehouse` or `flex` |
 | `{{PROPERTY_TENANCY_PHRASE}}` | `vacant` / `single-tenant` / `multi-tenant` |
-| `{{PROPERTY_ZONING_PHRASE}}` | `zoned M2 Manufacturing` — VERBATIM from the OM/listing (replaces the generic "commercially zoned industrial land"; never invent a designation not in the marketing materials or a verified GIS pull) |
+| `{{PROPERTY_ZONING_PHRASE}}` | `zoned M2 Manufacturing` — VERBATIM from the OM/listing. Body sentence reads "...acres of land {{PROPERTY_ZONING_PHRASE}}", so the value should read naturally after "land" (e.g. `zoned M2 Manufacturing`, `zoned CC`). Never invent a designation not in the marketing materials or a verified GIS pull — if unknown, ask rather than defaulting to a generic phrase. |
 | `{{ENTITY_INTEREST_TYPE}}` | `membership interests` / `equity interests` / `partnership interests` per Decision Rule 0 |
 | `{{PROPERTY_JURISDICTION_PHRASE}}` | `the City of Gahanna and Franklin County` |
 | `{{KNOWN_CONDITION_CARVEOUT}}` | `(except for the roof, which the parties acknowledge is approximately twenty-one (21) years old and approaching the end of its useful life)` or empty |
@@ -267,7 +274,7 @@ These are the tokens that appear in the master template. The skill is responsibl
 | Token | Example |
 |---|---|
 | `{{TENANT_NAME}}` | `REDACTED-047, LLC` |
-| `{{TENANT_DISCLOSURE_PHRASE}}` | `, leased to REDACTED-047, LLC, an affiliate of Seller,` |
+| `{{TENANT_DISCLOSURE_PHRASE}}` | Arm's-length: `, leased to REDACTED-047, LLC (the "Tenant")`. Affiliated: `, leased to REDACTED-047, LLC, an affiliate of Seller`. Never end in a trailing comma — a period follows immediately in the template. |
 
 ### Buyer signatory
 | Token | Example |
@@ -305,10 +312,11 @@ Use `python-docx` to:
 3. Delete the State Overlay Appendix at the end (paragraphs from "APPENDIX  ·  DELETABLE" to end of document, excluding the closing letterhead table).
 4. Replace each `{{TOKEN}}` with its resolved value, preserving gold sans-serif formatting only for unresolved tokens (none should remain).
 5. For each conditional block: if criterion met, strip the `▶ CONDITIONAL ◀` and `◀ END CONDITIONAL` marker paragraphs; if criterion not met, delete all paragraphs between markers (inclusive).
-6. Renumber sections sequentially (§1, §2, … §N) after conditional deletions.
+6. Renumber sections sequentially (§1, §2, … §N) after conditional deletions. The inline §13 entity-interest conditional (added 2026-08-18) does NOT participate in renumbering — evaluate and strip/retain it independently of the four numbered conditionals.
 7. Update Non-Binding paragraph cross-references to match the new section numbers.
 8. Replace §6 body with the matching state overlay if non-Ohio.
 9. If known condition exists, replace `{{KNOWN_CONDITION_CARVEOUT}}` with the carveout text. Otherwise, delete the token cleanly (no stray punctuation).
+10. Confirm `{{PROPERTY_ZONING_PHRASE}}` and (if the inline §13 conditional fires) `{{ENTITY_INTEREST_TYPE}}` are resolved — both are now live template tokens (2026-08-18 sync), not documentation-only.
 
 ### Phase 5 — QC Gate (refuse to save if any item fails)
 
@@ -469,7 +477,7 @@ Full overlay text in `references/state-overlays.md`. Summary of §6 distinguishi
 
 ### Vacant property
 - All four conditionals DELETE
-- `{{TENANT_DISCLOSURE_PHRASE}}` = empty string (resulting opening reads "... commercially zoned industrial land.")
+- `{{TENANT_DISCLOSURE_PHRASE}}` = empty string (resulting opening reads "... acres of land {{PROPERTY_ZONING_PHRASE}}.")
 - §4 may include vacant-building maintenance covenant (heat/sprinkler) — the master template already contains this in §7 bullets
 
 ### Property in unfamiliar state (not in seven-state overlay list)
@@ -491,6 +499,8 @@ Full overlay text in `references/state-overlays.md`. Summary of §6 distinguishi
 
 ## VERSIONING
 
+- v1.7 — 2026-08-21, repo-first reconciliation: merges two independently-built v1.6 revisions that collided on the same version number after diverging from a common v1.5 base without either side knowing about the other. Combines the Lost-Deal Ledger capture (Phase 6c, below) with the 2026-08-18 template/token sync pass. `templates/LOI_Master_Template_Condensed.docx` replaced with the platform-side v1.1 copy carrying the template-mechanics fixes; Phase 6c writes only to Notion and required no template changes, so nothing from the repo side was lost in the swap. Discovered via `tools/repo_first_check.py`'s full sweep (`_staging/STORE_AHEAD_OF_REPO.md`, pending since 2026-08-21T21:39Z); reconciled per Gabriel's direction.
+- v1.6 — 2026-08-18, template/skill sync pass (triggered by 3700 REDACTED-158 Blvd / Madison WI deal, where both gaps surfaced live). Master template `LOI_Master_Template_Condensed.docx` bumped to its own v1.1: (1) `{{PROPERTY_ZONING_PHRASE}}` wired into the opening paragraph, replacing the hardcoded "commercially zoned industrial land" — Variable Reference table updated with a matching row; (2) `{{ENTITY_INTEREST_TYPE}}` wired in as a new INLINE conditional within §13 (Acquisition Structure), independent of the four numbered conditionals and section renumbering — Conditional Sections Key table updated with a 5th row; (3) fixed a live defect where the EXECUTION PAGE subtitle rendered as literal "Letter of Intent · , ," (no tokens were ever wired in) — now reads from `{{PROPERTY_STREET_ADDRESS}}`, `{{PROPERTY_CITY}}`, `{{PROPERTY_STATE_ABBR}}`; (4) fixed a punctuation defect where `{{TENANT_DISCLOSURE_PHRASE}}` examples ended in a trailing comma immediately before the template's hardcoded period, producing "...,." — corrected in both the template's Variable Reference table and this file's Decision Logic §1 table and Token Reference table; the arm's-length example now carries its own `(the "Tenant")` parenthetical since no §8 exists to define the term when the tenant is unaffiliated. Regression-tested against the 3700 REDACTED-158 Blvd deal (arm's-length single-tenant, no ROFR, WI overlay) — output unchanged from the hand-patched original delivered that day. Template asset unreviewed by counsel prior to first live use of the new §13 conditional; flag for review before it next fires. Built platform-side; never committed to the repo until the v1.7 reconciliation above.
 - v1.6 — 2026-08-16, Lost-Deal Ledger capture: new mandatory Phase 6c writes ORA's own offer terms into structured Deal Sourcing Log fields at draft time — in particular `ORA Max Defensible Price` (the first-floor-breach price, fixed at LOI time and never recomputed at outcome time). Consumed by `ora-passed-deal-tracker` Step 4b, which supplies the winning price and the basis-vs-execution `Loss Class`. Deliverables item 10 added. Origin: ORA had no structured record of any LOI loss — `Kill Reason` was populated on 1 of 20 Pipeline Tracker rows, and the one priced competitive loss on record (511 REDACTED-091, lost 2026-07-17 at $1.575M vs ORA's $1.45M) is unclassifiable because its walk price and offer contradict each other. Gabriel-ratified 2026-08-16.
 - v1.4 — 2026-06-11, Deal Terms Register: new mandatory Phase 6b writes DEAL-TERMS-REGISTER.md (off-LOI terms / strategy constraints / tracking items) to the deal folder at draft and execution; consumed by deal-execution Workflow 2A and psa-reconciliation. Origin: 754 Old State easement gap.
 - v1.3 — 2026-06-11, Composio-retirement merge (recovered v1.2 base from 2026-06-10 upload package after cache-mirror clobber). SHIP mode re-pointed to Outlook COM sole send path; CC discipline applied (cc per thread context, no blanket cc of both principals, never ze@); connectors table Outlook row → COM.
