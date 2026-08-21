@@ -1,6 +1,6 @@
 ---
 name: dirty-tree-triage
-description: Safely triage uncommitted "dirty" git working trees across ORA's shared checkouts (~/.claude, ora-skills, website-canonical, oxford-command-center) — enumerate what's uncommitted, attribute it to a session with real evidence (never a guess), settle it with a two-pass mtime check, then isolate-and-commit only what's genuinely safe via commit_isolated_replacement(). Contested or live WIP is reported, never force-resolved. Use when the user says dirty tree(s), clean up the dirty repos, investigate and fix dirty trees, uncommitted files backlog, who owns this WIP, reconcile the shared checkout, or git status is a mess across my repos. v1.0
+description: Safely triage uncommitted "dirty" git working trees across ORA's shared checkouts (~/.claude, ora-skills, website-canonical, oxford-command-center) — enumerate what's uncommitted, attribute it to a session with real evidence (never a guess), settle it with a two-pass mtime check, then isolate-and-commit only what's genuinely safe via commit_isolated_replacement(). Contested or live WIP is reported, never force-resolved. Use when the user says dirty tree(s), clean up the dirty repos, investigate and fix dirty trees, uncommitted files backlog, who owns this WIP, reconcile the shared checkout, or git status is a mess across my repos. v1.1 (2026-08-21: step 7's ora-skills check now pairs with a claim_work.py claim — OI-203)
 license: ORA Internal
 ---
 
@@ -39,7 +39,7 @@ Mechanical enumeration + evidence-gated isolation-commit of settled, attributabl
 
 6. **Contested or live WIP: report, don't act.** Anything that fails settlement (mtime moved) or is attributed to a currently-running session stays untouched — surface it in the report. A large multi-session backlog (the primary checkout has run into a 100+-file version of exactly this) resolves session-by-session, never as one batch housekeeping action — do not try to shortcut that by force-switching, resetting, or rebasing the checkout on the theory that it would "clear the noise."
 
-7. **`ora-skills` gets an independent single-writer check first**, before touching anything there regardless of the steps above: `git log --oneline -1` + `git status`. If HEAD is newer than session start, or there's uncommitted work that isn't yours, stop and surface the conflict.
+7. **`ora-skills` gets an independent single-writer check first**, before touching anything there regardless of the steps above: `git log --oneline -1` + `git status`. If HEAD is newer than session start, or there's uncommitted work that isn't yours, stop and surface the conflict. **Pair it with a claim (added 2026-08-21, `open-items-tracker.md#OI-203`):** run `python hooks/lib/claim_work.py claim ora-skills-housekeeping "<what/why>" --paths <target files/dirs>` before starting any actual triage work on `ora-skills`. Git state alone is structurally blind to a concurrent session — commits on this shared checkout carry the same handful of human author identities regardless of which session made them, so a clean `git status` and a normal-looking HEAD can both be true while another session is mid-triage on the exact same folder. Confirmed live 2026-08-21: two sessions independently ran this skill's full workflow against the same `_staging` folders with neither claiming first — the collision was caught only by accident, when one session's archive `mv` found its source already moved by the other. `claim_work.py`'s own docstring documents the identical failure from 2026-08-12 as the reason the module exists; running the git check without the claim only re-derives half the protection.
 
 8. **Report.** One table per repo — file, category, attribution, settlement status, action (isolated+committed / proposed-archive / left-untouched-contested). Log a single consolidated `event_log.md` entry for whatever was actually committed or archived, not one line per file.
 
@@ -62,4 +62,8 @@ Mechanical enumeration + evidence-gated isolation-commit of settled, attributabl
 ## Dependencies
 
 - `hooks/lib/isolated_commit.py`'s `commit_isolated_replacement()` (primary checkout only).
-- `claim_work.py` for any hands-on session in `hooks/`, override/auth logic, or repo housekeeping broader than this skill's mechanical scope.
+- `hooks/lib/claim_work.py` — required for step 7's `ora-skills` single-writer check (see step 7), and for any hands-on session in `hooks/`, override/auth logic, or repo housekeeping broader than this skill's mechanical scope.
+
+## Changelog
+
+- v1.1 (2026-08-21, `open-items-tracker.md#OI-203`): step 7's `ora-skills` single-writer check now requires a `claim_work.py claim ora-skills-housekeeping` call alongside the existing `git log -1`/`git status` check. Root cause: two sessions independently ran this skill's full workflow against the same `ora-skills/_staging` folders on 2026-08-21 with neither claiming first — git state alone can't see a concurrent session (shared author identity across sessions), so both saw a clean tree and proceeded. Caught only by accident when one session's archive `mv` found its source already moved by the other. No procedure logic changed beyond the new claim step.
