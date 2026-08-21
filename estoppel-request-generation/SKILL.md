@@ -1,6 +1,6 @@
 ---
 name: estoppel-request-generation
-description: 'Build tenant estoppel certificate requests for Oxford Realty Advisors directly from abstracted lease data, so every certified fact is pre-filled from the lease and every known defect is put to the tenant to cure. Use when the user mentions: estoppel, estoppel certificate, tenant estoppel, estoppel request, send estoppels, estoppel form, SNDA, subordination non-disturbance attornment, tenant acknowledgment, or asks what the estoppels should say. Also trigger during DD on any acquisition with occupied suites, and whenever lease-abstraction-pipeline or deal-execution surfaces a chain gap, an unexecuted counterpart, a manuscript amendment or a landlord-of-record mismatch. Pre-fills from the 32-field abstract, converts each quality flag into a certification, and produces one tailored form per tenant plus a cover letter. DRAFT ONLY — outbound counterparty send requires Gabriel confirmation. v1.0'
+description: 'Build tenant estoppel certificate requests for Oxford Realty Advisors directly from abstracted lease data, so every certified fact is pre-filled from the lease and every known defect is put to the tenant to cure. Use when the user mentions: estoppel, estoppel certificate, tenant estoppel, estoppel request, send estoppels, estoppel form, SNDA, subordination non-disturbance attornment, tenant acknowledgment, or asks what the estoppels should say. Also trigger during DD on any acquisition with occupied suites, and whenever lease-abstraction-pipeline or deal-execution surfaces a chain gap, an unexecuted counterpart, a manuscript amendment or a landlord-of-record mismatch. Pre-fills from the 32-field abstract, converts each quality flag into a certification, and produces one tailored form per tenant plus a cover letter. DRAFT ONLY — outbound counterparty send requires Gabriel confirmation. v1.1'
 ---
 
 # Estoppel Request Generation — Oxford Realty Advisors
@@ -26,7 +26,10 @@ Required before drafting:
 
 - The **32-field abstract** per tenant from `lease-abstraction-pipeline`, including `EXECUTION_STATUS`,
   `INGEST_PATH`, the `MANUSCRIPT AMENDMENTS` block, and all STEP 5 quality flags.
-- The **instrument chain** per suite from `deal-execution` Workflow 3 (Lease-Chain Integrity).
+- The **instrument chain** per suite from `deal-execution` Workflow 3 (Lease-Chain Integrity). **If this skill is
+  invoked earlier in DD than Workflow 3 has run for a given suite** (this skill's own trigger fires broadly "during DD
+  on any acquisition with occupied suites," which can precede Workflow 3's completion) — don't block drafting or assume
+  a clean chain. Draft with the chain check noted as outstanding and flag it for a follow-up pass once Workflow 3 runs.
 - **Vesting** from `title-exam-abstraction` — the landlord name that should appear on every form.
 - The **PSA estoppel article** — threshold SF, delivery deadline, condition-precedent status, and the
   agreed form if one is attached as an exhibit.
@@ -123,7 +126,14 @@ Then hold for Gabriel's confirmation before anything leaves ORA.
 - `communication-intelligence` — drafts the counterparty cover letter.
 - `lease-addendum` — the correct path for anything that amends rather than certifies.
 - `legal-intelligence` — counsel review of any non-standard certification.
+- `document-assembly` — its former Template 7 (Estoppel Certificate) is tombstoned in favor of this skill (2026-08-21);
+  do not draft estoppels from that generic template library.
 
 ## Changelog
 
+- v1.1 (2026-08-21, adversarial review): added the `document-assembly` cross-reference (its Template 7 is now
+  tombstoned in favor of this skill — the two templates were left live with no tie-break, risking a "create estoppel"
+  request routing to the wrong one). Added a fallback to STEP 1 for when `deal-execution` Workflow 3's Lease-Chain
+  Integrity hasn't run yet for a suite this skill is asked to cover, since this skill's own trigger can fire before
+  Workflow 3 completes.
 - v1.0 (2026-08-21): initial. Built after the 754 Old State Route 74 lease review, where the estoppels were the natural cure for four separate defects — an unexecuted base lease amended by an executed First Amendment, a three-year renewal evidenced only by a handwritten margin note, an initialed manuscript change to a lease expiry, and a landlord named in the lease who was not the seller — none of which a blank-form estoppel would have reached.

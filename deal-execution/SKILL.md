@@ -1,6 +1,6 @@
 ---
 name: deal-execution
-description: 'Oxford Realty Advisors deal execution skill covering PSA negotiation through closing. Use when the user mentions: PSA, purchase and sale agreement, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel, closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance. Also trigger before SENDING any draft: send the PSA, before this goes out, pre-send check, clear to send. Workflow 2A reviews ANY inbound draft against the executed LOI + deal-terms register; Workflow 2B gates every OUTBOUND draft against prior review memos, the LOI, the register, and the 6 mandatory buyer protections. Handles Litera/Workshare compare files, which carry no tracked changes. v1.5'
+description: 'Oxford Realty Advisors deal execution skill covering PSA negotiation through closing. Use when the user mentions: PSA, purchase and sale agreement, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel content/DD conformance (drafting an actual certificate routes to estoppel-request-generation), closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance. Also trigger before SENDING any draft: send the PSA, before this goes out, pre-send check, clear to send. Workflow 2A reviews ANY inbound draft against the executed LOI + deal-terms register; Workflow 2B gates every OUTBOUND draft against prior review memos, the LOI, the register, and the 6 mandatory buyer protections. Handles Litera/Workshare compare files, which carry no tracked changes. v1.6'
 ---
 
 You are operating as deal execution counsel and advisor for Oxford Realty Advisors (ORA). You handle everything from PSA generation through post-closing integration. The acquisition-underwriting skill covers pre-LOI work; this skill picks up at executed LOI.
@@ -205,7 +205,7 @@ Extract each negotiated LOI term, locate its PSA counterpart, and status every r
 9. Proration method, tax treatment, BOR/appeal rights — and their survival of closing
 10. Casualty: threshold, proceeds + deductible assignment, termination right
 11. Condemnation: threshold, award assignment
-12. Estoppels: content (including NO renewal/extension/purchase options where the thesis depends on it; the full instrument chain by date; and verbatim reproduction of any manuscript amendment, signed by every party to it), timing, condition-precedent status. Where the lease-chain integrity check found a gap, an unexecuted counterpart or a landlord-of-record mismatch, the estoppel is the instrument that cures it — draft it to say so explicitly.
+12. Estoppels: content (including NO renewal/extension/purchase options where the thesis depends on it; the full instrument chain by date; and verbatim reproduction of any manuscript amendment, signed by every party to it), timing, condition-precedent status. Where the lease-chain integrity check found a gap, an unexecuted counterpart or a landlord-of-record mismatch, the estoppel is the instrument that cures it — draft it to say so explicitly. **If Lease-Chain Integrity hasn't run yet for this suite** (Workflow 2A's PSA review commonly precedes Workflow 3's DD, where the check actually executes): don't assume a clean chain — note that the check is outstanding and flag estoppel content as provisional pending it, rather than silently omitting the cure language.
 13. Interim operating covenants — the lease lockdown must cover AMENDMENTS to existing leases, concessions, and consents, not just new leases; capex consent threshold; insurance maintenance; service-contract controls and termination at closing
 14. Personal property: Bill of Sale, schedule, free-and-clear delivery; tenant security deposit transfer
 15. 1031 cooperation — mutual per ORA default, never seller-only
@@ -342,7 +342,7 @@ Generate a full checklist in XLSX format with:
 
 **TITLE & SURVEY (20 items)**
 
-- Preliminary title commitment (Schedule A and B)
+- Preliminary title commitment (Schedule A and B) — abstract via `title-exam-abstraction`, which also supplies the vesting record Lease-Chain Integrity below checks landlord identity against
 - Review and approve/object to all Schedule B exceptions
 - ALTA/NSPS survey
 - Confirm survey matches legal description
@@ -356,7 +356,7 @@ Generate a full checklist in XLSX format with:
 **LEGAL DD (24 items)**
 
 - All leases and amendments (every tenant) — **EXECUTED counterparts, not file copies (see Lease-Chain Integrity below)**
-- Estoppel certificates from all tenants
+- Estoppel certificates from all tenants — draft via `estoppel-request-generation`, which pre-fills from the lease abstract and converts Lease-Chain Integrity/other DD defects into certification-caveat language; do not draft blank-form estoppels by hand
 - Subordination, Non-Disturbance, Attornment (SNDA) from lender if encumbered
 - Guaranty review for each tenant
 - Notice of assignment delivery requirements in each lease
@@ -367,7 +367,7 @@ Generate a full checklist in XLSX format with:
 - Operating hours requirements
 - Prohibited uses
 
-**LEASE-CHAIN INTEGRITY (run on every occupied suite — added v1.5)**
+**LEASE-CHAIN INTEGRITY (Category: Legal — run on every occupied suite — added v1.5)**
 
 > Origin: 2026-08-21, 754 Old State Route 74. Two separate defects surfaced on one small multi-tenant building. The
 > anchor's base lease in the seller's file was **unexecuted** — blank signature lines, page struck diagonally, annotated
@@ -382,10 +382,13 @@ For each occupied suite, reconstruct and verify the full chain before waiving th
   term evidenced only by a margin note, an email, or a rent-roll line is a **gap**, not a term.
 - Confirm an **executed counterpart exists for every link**, not merely a copy. Blank signature blocks, "sent" annotations
   and diagonal strikes mark transmittal drafts. Add missing executed originals to the seller's closing-deliverable list.
-- Confirm the **landlord named in each lease is the seller** (or a predecessor whose interest demonstrably ran to the
-  seller). A mismatch is an authority defect, not a typo: it raises whether the seller can convey the leasehold stream and
-  whether the tenant owes rent to the party ORA is buying from. Two mismatches across two leases is a papering pattern —
-  escalate to an affirmative PSA representation rather than a one-off correction.
+- Confirm the **landlord named in each lease matches title vesting** — the authoritative source is `title-exam-abstraction`'s
+  vesting record, not the self-reported "seller" field on the deal (a DBA or predecessor-entity mismatch that title vesting
+  would catch can pass a bare seller-name comparison clean). If `title-exam-abstraction` hasn't run yet for this deal, fall
+  back to comparing against the seller (or a predecessor whose interest demonstrably ran to the seller) and flag the check
+  as provisional pending the title abstract. A mismatch is an authority defect, not a typo: it raises whether the seller can
+  convey the leasehold stream and whether the tenant owes rent to the party ORA is buying from. Two mismatches across two
+  leases is a papering pattern — escalate to an affirmative PSA representation rather than a one-off correction.
 - Catalogue every **manuscript amendment** on the face of each lease (struck clauses, interlineated dates or rents,
   hand-completed party lines) and confirm each is initialed by all parties. See `lease-abstraction-pipeline` STEP 2A —
   OCR does not see ink, so this requires reading page images.
@@ -512,6 +515,20 @@ Both are stdlib-only (`zipfile` + `ElementTree`); no python-docx, no lxml. Run f
 
 ## Changelog
 
+- v1.6 (2026-08-21, adversarial review): v1.5's LEASE-CHAIN INTEGRITY landlord check compared against the self-reported
+  "seller" field with no tie to actual title vesting, and neither it nor lease-abstraction-pipeline's parallel
+  landlord-mismatch flag referenced the `title-exam-abstraction` skill added in the same v1.5 round — now wired: the
+  landlord check and the TITLE & SURVEY item both point to `title-exam-abstraction` as the vesting source, with a
+  provisional seller-name fallback when it hasn't run yet. Also: Workflow 2A item 12 and Workflow 3's LEASE-CHAIN
+  INTEGRITY reference each other's output with no fallback for the (common) case where 2A's PSA review precedes
+  Workflow 3's DD-period execution — item 12 now flags itself provisional when the chain check hasn't run. The
+  LEASE-CHAIN INTEGRITY heading now states its DD Category (Legal) explicitly, since it sits as a sibling heading rather
+  than nested under LEGAL DD and its title matched none of the 8-value Category enum the checklist XLSX requires. The
+  Estoppel certificates and Title & Survey DD-checklist items now point to `estoppel-request-generation` and
+  `title-exam-abstraction` respectively, closing a one-directional cross-reference (both new skills already cited this
+  file as their consumer). Also narrowed the frontmatter's bare "estoppel" trigger to the DD-conformance context this
+  skill actually covers, with a pointer to `estoppel-request-generation` for drafting — the two skills claimed the same
+  bare word with no tie-break.
 - v1.5 (2026-08-21): LEASE-CHAIN INTEGRITY added to Workflow 3 DD, and Workflow 2A item 12 (estoppel content) extended to
   require the full instrument chain and verbatim reproduction of manuscript amendments. Origin: 754 Old State Route 74 —
   the anchor's base lease in the file was an unexecuted transmittal draft amended by a fully executed First Amendment, the
