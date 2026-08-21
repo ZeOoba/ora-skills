@@ -67,6 +67,7 @@ flowchart TD
     Trigger -- "3. load SKILL.md body as instructions" --> Exec["Skill executes this turn"]
     Exec -- "4. optionally reads/runs" --> R2
 ```
+<!-- diagram-verified: 2026-08-21 -->
 
 **Reading the diagram:** everything lives flat under the repo root — each of the 57
 skill folders (`acquisition-underwriting/`, `loi-generation/`, etc.) sits directly under
