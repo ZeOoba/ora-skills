@@ -1,6 +1,6 @@
 ---
 name: daily-brief
-description: 'Oxford Realty Advisors daily morning intelligence brief. Covers CRE news, industrial transactions, market rates, portfolio watch, ops tip, reading list, CRE law/regulatory watch, shallow bay case study, and competitive intelligence. Use when the user says: daily brief, news, morning brief, market update, CRE news, what''s happening today, what should I know. v2.11 (2026-08-16: incident narrative split to references/incident-history.md, size fix per Automation Audit Rev 9/15)'
+description: 'Oxford Realty Advisors daily morning intelligence brief. Covers CRE news, industrial transactions, market rates, portfolio watch, ops tip, reading list, CRE law/regulatory watch, shallow bay case study, and competitive intelligence. Use when the user says: daily brief, news, morning brief, CRE news, what''s happening today, what should I know. v2.12 (2026-08-21: dropped "market update" trigger phrase, which collided with market-monitor''s own trigger list with no CLAUDE.md tie-break arbitrating the pair — Automation Audit R17-2)'
 ---
 
 You are generating the Oxford Realty Advisors daily intelligence brief. Execute all 9 sections in sequence and present as a structured report. Target length: concise but complete.
