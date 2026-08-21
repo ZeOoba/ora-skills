@@ -1,6 +1,6 @@
 ---
 name: lease-abstraction-pipeline
-description: 'Lease abstraction (single document or batch) and rent roll data extraction for Oxford Realty Advisors. Use whenever the user mentions: abstract this lease, abstract/parse leases, extract lease data or terms, lease abstract, summarize/read/review this lease, process lease folder, batch lease, lease pipeline, run lease abstraction, update rent roll from leases, or scheduled lease scan — for one or more commercial leases uploaded directly or in a folder, SharePoint, or Google Drive. Also trigger when an uploaded PDF/DOCX appears to be a commercial lease, or on "run the lease pipeline" / "process the leases" / "update my rent roll". Produces: 32-field abstract per lease (markdown single-doc; master XLSX batch with derived metrics, quality flags, portfolio analytics), Notion Tenant Database upsert, email summary to ggoldberg@oxfordra.net ONLY (routing canon 2026-06-10). Autonomous unattended operation — do not pause mid-run. v2.5 (2026-08-15: see Changelog)'
+description: 'Lease abstraction (single document or batch) and rent roll data extraction for Oxford Realty Advisors. Use whenever the user mentions: abstract this lease, abstract/parse leases, extract lease data or terms, lease abstract, summarize/read/review this lease, process lease folder, batch lease, lease pipeline, run lease abstraction, update rent roll from leases, or scheduled lease scan — for one or more commercial leases uploaded directly or in a folder, SharePoint, or Google Drive. Also trigger when an uploaded PDF/DOCX appears to be a commercial lease, or on "run the lease pipeline" / "process the leases" / "update my rent roll". Produces: 32-field abstract per lease (markdown single-doc; master XLSX batch with derived metrics, quality flags, portfolio analytics), Notion Tenant Database upsert, email summary to ggoldberg@oxfordra.net ONLY (routing canon 2026-06-10). Autonomous unattended operation — do not pause mid-run. v2.6 (2026-08-21: see Changelog)'
 ---
 
 # Lease Abstraction Pipeline — Oxford Realty Advisors
@@ -39,6 +39,44 @@ Skip (and log in Tab 6): files that are not leases, corrupted files, password-pr
 
 **Text PDF:** Extract via pdfplumber. **Scanned PDF:** Attempt pdfplumber first. If text yield &lt; 100 words, fall back to pytesseract OCR. Flag result as `OCR-EXTRACTED` in output — verify accuracy on flagged records. **DOCX:** Extract via python-docx. **Password-protected / corrupted:** Log in Tab 6 with error code. Skip.
 
+**Classify the ingestion path and carry it forward.** Record `INGEST_PATH` = `TEXT_LAYER` | `OCR` | `DOCX` per document.
+Any document on the `OCR` path is subject to STEP 2A below and cannot be reported as abstracted until STEP 2A has run.
+
+---
+
+## STEP 2A — MANUSCRIPT-AMENDMENT SWEEP (mandatory for every `OCR` document)
+
+> Origin: 2026-08-21, 754 Old State Route 74. A lease term of "May 31, 2030" was struck through in ink and replaced by
+> hand with "2027", the paragraph circled and initialed. Tesseract transcribed the typed layer and dropped the manuscript
+> change with no signal that anything was missing. An IC memo and a full IRR model were rebuilt around a rollover trough
+> that does not exist, and were published before Gabriel caught it. The same sweep then found four more hand changes OCR
+> had missed — including that the base lease in the file was **unexecuted**.
+
+**The rule: on a scanned document, OCR text is evidence of the FORM, not of the BARGAIN.** Commercial leases are routinely
+amended on their face — struck clauses, interlineated dates and rents, hand-completed party lines, initialed margins. OCR
+sees none of it. Never report a field from an `OCR` document until the page image for that field has been read visually.
+
+**Procedure**
+
+1. **Render.** `pdftoppm -r 300 -png <file> img/<stem>` — one PNG per page.
+2. **Contact sheet.** Tile every page into one image at ~600 px width, 4 columns (PIL). Pen strokes are large and cursive
+   and remain visible at that scale. Read the sheet before reading any extracted text.
+3. **Zoom and read visually — mandatory pages, whether or not the sheet shows marks:**
+   - every page carrying a Field 8-17 economic term (commencement, expiry, rent, escalation, free rent, options)
+   - the party/recital block (Fields 1-3)
+   - **every signature page**
+   - any page whose OCR output contains garbled fragments, stray single characters, or nonsense tokens — that noise is
+     frequently the OCR engine failing on ink
+4. **Record each manuscript item** in a new `MANUSCRIPT AMENDMENTS` block on the abstract: page, clause, typed text,
+   hand-written replacement, and whether it is initialed and by how many parties.
+5. **Where hand and type conflict, the hand controls the abstract** — and the conflict is reported, never silently resolved.
+
+**Execution check (run on every document, not only OCR ones).** Inspect the signature block and record `EXECUTION_STATUS`
+= `EXECUTED` | `UNEXECUTED` | `PARTIALLY_EXECUTED` | `INDETERMINATE`. A file copy with blank signature lines is a
+transmittal draft, not a lease — at 754 Old State the 2020 base lease was unsigned, struck diagonally, and annotated
+"Lease Sent 7/14/20", while the amendment that amends it by reference was fully executed. Where an amendment recites a
+base lease or renewal that is absent or unexecuted, flag the **chain gap** explicitly and name every missing instrument.
+
 ---
 
 ## STEP 3 — 30-FIELD EXTRACTION (per lease)
@@ -75,7 +113,7 @@ MetricFormulaRent PSF Year 1Annual base rent Yr 1 ÷ Rentable SFRent PSF Final Y
 
 ## STEP 5 — QUALITY FLAGS (per lease)
 
-SeverityFlag Condition🔴 CRITICALRent &lt; $4.00/SF NNN🔴 CRITICALMissing personal guaranty on leases &gt; $5,000/mo🔴 CRITICALAssignment permitted without landlord consent🔴 CRITICALNo default cure period stated🔴 CRITICALEnvironmental liability assigned entirely to landlord🟡 WARNINGRent &gt; $12.00/SF NNN — verify market justification🟡 WARNINGEscalation &lt; 2%/yr — below inflation target🟡 WARNINGEscalation &gt; 4%/yr — verify tenant acceptance🟡 WARNINGExtension notice period &lt; 9 months🟡 WARNINGHoldover rate &lt; 150% of base rent🟡 WARNINGSecurity deposit &lt; 2 months rent🟡 WARNINGNo SNDA provision🟡 WARNINGNo late fee provision🟡 WARNINGLease term &lt; 3 years🟡 WARNINGExtension option without market rent reset🔵 INFOAny field = NOT FOUND — manual review required🔵 INFOLease expires within 12 months — add to renewal pipeline🔵 INFOOCR-extracted document — verify accuracy
+SeverityFlag Condition🔴 CRITICALRent &lt; $4.00/SF NNN🔴 CRITICALMissing personal guaranty on leases &gt; $5,000/mo🔴 CRITICALAssignment permitted without landlord consent🔴 CRITICALNo default cure period stated🔴 CRITICALEnvironmental liability assigned entirely to landlord🟡 WARNINGRent &gt; $12.00/SF NNN — verify market justification🟡 WARNINGEscalation &lt; 2%/yr — below inflation target🟡 WARNINGEscalation &gt; 4%/yr — verify tenant acceptance🟡 WARNINGExtension notice period &lt; 9 months🟡 WARNINGHoldover rate &lt; 150% of base rent🟡 WARNINGSecurity deposit &lt; 2 months rent🟡 WARNINGNo SNDA provision🟡 WARNINGNo late fee provision🟡 WARNINGLease term &lt; 3 years🟡 WARNINGExtension option without market rent reset🔵 INFOAny field = NOT FOUND — manual review required🔵 INFOLease expires within 12 months — add to renewal pipeline🔴 CRITICAL`EXECUTION_STATUS` = UNEXECUTED or PARTIALLY_EXECUTED — file copy is a draft, not a lease🔴 CRITICALAmendment references a base lease or renewal not present in the file (chain gap)🔴 CRITICALManuscript amendment present that is NOT initialed by all parties🔴 CRITICALLandlord named in the lease does not match the owner of record🟡 WARNINGManuscript amendment present and initialed — must be reproduced verbatim in any estoppel🟡 WARNINGTenant of record is a natural person with no entity and no guaranty🟡 WARNINGTerm evidenced only by a margin note rather than a separate instrument🔵 INFOOCR-extracted document — STEP 2A sweep completed, verify accuracy🔵 INFO`INGEST_PATH` = OCR and STEP 2A not yet run — abstract is INCOMPLETE, do not publish
 
 ---
 
@@ -166,6 +204,12 @@ See `references/extraction-edge-cases.md` for guidance on:
 
 ## Changelog
 
+- v2.6 (2026-08-21): manuscript-amendment sweep. New STEP 2A makes a visual page-image review mandatory for every
+  OCR-path document before any field is reported, adds an `EXECUTION_STATUS` check and a lease-chain-gap check to every
+  document, and adds nine STEP 5 quality flags covering unexecuted counterparts, chain gaps, un-initialed hand changes,
+  landlord-of-record mismatch and natural-person tenants. Origin: 754 Old State Route 74 — OCR silently dropped an
+  initialed strike-through that moved a lease expiry by three years, and the published memo and model were both wrong
+  until Gabriel caught it. The same sweep then found an unexecuted base lease that four months of file review had missed.
 - v2.5 (2026-08-15): LOW fix (Skill Text Audit finding F9) + new finding (coverage-gap-3, stale file-naming-standard citation). Moved the v2.4/v2.3 changelog prose that had accumulated in the description field down here (both already existed in this section, so the description copies were pure duplication); description now carries a single trailing version tag. Step 6's file-naming citation updated from the archived "ORA Cowork Global Settings v2.0" (2026-06-11) to the current "ORA Cowork Global Operating Prompt v3.0" (2026-07-16) — the underlying three-schema rule is unchanged, only the version/document-name citation; same fix applied to the companion `SCHEDULED_TASK.md`. No extraction field, derived metric, or quality flag changed.
 - v2.4 (2026-08-12): Repointed the cross-skill `rent-comp` reference (retired 2026-08-05) at `acquisition-underwriting`, which absorbed the comp-grid discipline on 2026-08-12 per Gabriel's scoped-restore ruling. Below/above-market rent PSF flags now have a live method again. No extraction field, derived metric, or quality flag changed.
 

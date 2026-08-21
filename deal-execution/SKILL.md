@@ -1,6 +1,6 @@
 ---
 name: deal-execution
-description: 'Oxford Realty Advisors deal execution skill covering PSA negotiation through closing. Use when the user mentions: PSA, purchase and sale agreement, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel, closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance. Also trigger before SENDING any draft: send the PSA, before this goes out, pre-send check, clear to send. Workflow 2A reviews ANY inbound draft against the executed LOI + deal-terms register; Workflow 2B gates every OUTBOUND draft against prior review memos, the LOI, the register, and the 6 mandatory buyer protections. Handles Litera/Workshare compare files, which carry no tracked changes. v1.4'
+description: 'Oxford Realty Advisors deal execution skill covering PSA negotiation through closing. Use when the user mentions: PSA, purchase and sale agreement, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel, closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance. Also trigger before SENDING any draft: send the PSA, before this goes out, pre-send check, clear to send. Workflow 2A reviews ANY inbound draft against the executed LOI + deal-terms register; Workflow 2B gates every OUTBOUND draft against prior review memos, the LOI, the register, and the 6 mandatory buyer protections. Handles Litera/Workshare compare files, which carry no tracked changes. v1.5'
 ---
 
 You are operating as deal execution counsel and advisor for Oxford Realty Advisors (ORA). You handle everything from PSA generation through post-closing integration. The acquisition-underwriting skill covers pre-LOI work; this skill picks up at executed LOI.
@@ -205,7 +205,7 @@ Extract each negotiated LOI term, locate its PSA counterpart, and status every r
 9. Proration method, tax treatment, BOR/appeal rights — and their survival of closing
 10. Casualty: threshold, proceeds + deductible assignment, termination right
 11. Condemnation: threshold, award assignment
-12. Estoppels: content (including NO renewal/extension/purchase options where the thesis depends on it), timing, condition-precedent status
+12. Estoppels: content (including NO renewal/extension/purchase options where the thesis depends on it; the full instrument chain by date; and verbatim reproduction of any manuscript amendment, signed by every party to it), timing, condition-precedent status. Where the lease-chain integrity check found a gap, an unexecuted counterpart or a landlord-of-record mismatch, the estoppel is the instrument that cures it — draft it to say so explicitly.
 13. Interim operating covenants — the lease lockdown must cover AMENDMENTS to existing leases, concessions, and consents, not just new leases; capex consent threshold; insurance maintenance; service-contract controls and termination at closing
 14. Personal property: Bill of Sale, schedule, free-and-clear delivery; tenant security deposit transfer
 15. 1031 cooperation — mutual per ORA default, never seller-only
@@ -355,7 +355,7 @@ Generate a full checklist in XLSX format with:
 
 **LEGAL DD (24 items)**
 
-- All leases and amendments (every tenant)
+- All leases and amendments (every tenant) — **EXECUTED counterparts, not file copies (see Lease-Chain Integrity below)**
 - Estoppel certificates from all tenants
 - Subordination, Non-Disturbance, Attornment (SNDA) from lender if encumbered
 - Guaranty review for each tenant
@@ -366,6 +366,31 @@ Generate a full checklist in XLSX format with:
 - Co-tenancy clauses
 - Operating hours requirements
 - Prohibited uses
+
+**LEASE-CHAIN INTEGRITY (run on every occupied suite — added v1.5)**
+
+> Origin: 2026-08-21, 754 Old State Route 74. Two separate defects surfaced on one small multi-tenant building. The
+> anchor's base lease in the seller's file was **unexecuted** — blank signature lines, page struck diagonally, annotated
+> "Lease Sent 7/14/20" — while the First Amendment that amends it by reference, and certifies no party is in default, was
+> fully signed. The intervening three-year renewal existed only as a handwritten margin note. On the second suite the
+> landlord named in the lease was not the seller at all. Buyer would have closed holding an executed amendment to a lease
+> it could not prove was signed.
+
+For each occupied suite, reconstruct and verify the full chain before waiving the DD contingency:
+
+- Build the instrument chain end to end — base lease, every renewal, every amendment — by date and instrument name. Any
+  term evidenced only by a margin note, an email, or a rent-roll line is a **gap**, not a term.
+- Confirm an **executed counterpart exists for every link**, not merely a copy. Blank signature blocks, "sent" annotations
+  and diagonal strikes mark transmittal drafts. Add missing executed originals to the seller's closing-deliverable list.
+- Confirm the **landlord named in each lease is the seller** (or a predecessor whose interest demonstrably ran to the
+  seller). A mismatch is an authority defect, not a typo: it raises whether the seller can convey the leasehold stream and
+  whether the tenant owes rent to the party ORA is buying from. Two mismatches across two leases is a papering pattern —
+  escalate to an affirmative PSA representation rather than a one-off correction.
+- Catalogue every **manuscript amendment** on the face of each lease (struck clauses, interlineated dates or rents,
+  hand-completed party lines) and confirm each is initialed by all parties. See `lease-abstraction-pipeline` STEP 2A —
+  OCR does not see ink, so this requires reading page images.
+- Reconcile **tenant of record** against the rent roll and the estoppel. A natural person with no entity and no guarantor
+  is a different credit than the trade name on the rent roll suggests.
 
 **ZONING & PERMITS (14 items)**
 
@@ -487,6 +512,11 @@ Both are stdlib-only (`zipfile` + `ElementTree`); no python-docx, no lxml. Run f
 
 ## Changelog
 
+- v1.5 (2026-08-21): LEASE-CHAIN INTEGRITY added to Workflow 3 DD, and Workflow 2A item 12 (estoppel content) extended to
+  require the full instrument chain and verbatim reproduction of manuscript amendments. Origin: 754 Old State Route 74 —
+  the anchor's base lease in the file was an unexecuted transmittal draft amended by a fully executed First Amendment, the
+  intervening renewal existed only as a handwritten margin note, and the second suite named a landlord that was not the
+  seller. None of it was visible in the extracted text; all of it was visible on the page images.
 - v1.4 (2026-08-15): New finding (coverage-gap-3, stale file-naming-standard citation). Both file-naming citations (PSA generation step; Redline/Closing deliverables) updated from the archived "ORA Cowork Global Settings v2.0" (2026-06-11) to the current "ORA Cowork Global Operating Prompt v3.0" (2026-07-16) — the underlying three-schema rule is unchanged, only the version/document-name citation.
 - v1.3 (2026-08-01): three fixes from the 754 Old State Route 74 seller-redline round.
   1. **Workflow 2 Step 0 — revision-encoding detection.** The workflow assumed "DOCX with tracked changes." Litera/Workshare/Word compare outputs carry ZERO `<w:ins>`/`<w:del>` and encode revisions as strikethrough and coloured underline formatting, so a tracked-change parse returns nothing and reads as "seller accepted everything." New `scripts/extract_revisions.py` detects all three encodings, hard-stops (exit 2) on a clean file whose name says redline, and surfaces the compare summary's BASE document — the fact that establishes what the counterparty accepted rather than merely left uncommented. Also new Step 7: a quiet round is a finding; enumerate what was accepted.
