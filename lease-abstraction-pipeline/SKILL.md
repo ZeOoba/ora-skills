@@ -1,6 +1,6 @@
 ---
 name: lease-abstraction-pipeline
-description: 'Lease abstraction (single document or batch) and rent roll data extraction for Oxford Realty Advisors. Use whenever the user mentions: abstract this lease, abstract/parse leases, extract lease data or terms, lease abstract, summarize/read/review this lease, process lease folder, batch lease, lease pipeline, run lease abstraction, update rent roll from leases, or scheduled lease scan — for one or more commercial leases uploaded directly or in a folder, SharePoint, or Google Drive. Also trigger when an uploaded PDF/DOCX appears to be a commercial lease, or on "run the lease pipeline" / "process the leases" / "update my rent roll". Produces: 32-field abstract per lease (markdown single-doc; master XLSX batch with derived metrics, quality flags, portfolio analytics), Notion Tenant Database upsert, email summary to ggoldberg@oxfordra.net ONLY (routing canon 2026-06-10). Autonomous unattended operation — do not pause mid-run. v2.6 (2026-08-21: see Changelog)'
+description: 'Lease abstraction (single document or batch) and rent roll data extraction for Oxford Realty Advisors. Use whenever the user mentions: abstract this lease, abstract/parse leases, extract lease data or terms, lease abstract, summarize/read/review this lease, process lease folder, batch lease, lease pipeline, run lease abstraction, update rent roll from leases, or scheduled lease scan — for one or more commercial leases uploaded directly or in a folder, SharePoint, or Google Drive. Also trigger when an uploaded PDF/DOCX appears to be a commercial lease, or on "run the lease pipeline" / "process the leases" / "update my rent roll". Produces: 32-field abstract per lease (markdown single-doc; master XLSX batch with derived metrics, quality flags, portfolio analytics), Notion Tenant Database upsert, email summary to ggoldberg@oxfordra.net ONLY (routing canon 2026-06-10). Autonomous unattended operation — do not pause mid-run. v2.7 (2026-08-21: see Changelog)'
 ---
 
 # Lease Abstraction Pipeline — Oxford Realty Advisors
@@ -77,6 +77,14 @@ transmittal draft, not a lease — at 754 Old State the 2020 base lease was unsi
 "Lease Sent 7/14/20", while the amendment that amends it by reference was fully executed. Where an amendment recites a
 base lease or renewal that is absent or unexecuted, flag the **chain gap** explicitly and name every missing instrument.
 
+For a **TEXT_LAYER or DOCX** document, the signature block is ordinary extracted text and this check is satisfied by
+reading it during normal field extraction — but do not assume clean execution purely from the presence of extractable
+text. A HYBRID document (a digital body with one embedded scanned/ink signature page — e.g. a Word lease printed, signed,
+and re-scanned only for the last page) can clear the OCR-fallback threshold and never trigger STEP 2A at all. If any page
+of a TEXT_LAYER/DOCX document looks like a scanned image (no extractable text on that page specifically, even though the
+document as a whole ingested cleanly), route that page through STEP 2A's render/zoom procedure before recording
+`EXECUTION_STATUS` — never infer execution status from extraction success/absence alone.
+
 ---
 
 ## STEP 3 — 30-FIELD EXTRACTION (per lease)
@@ -113,7 +121,7 @@ MetricFormulaRent PSF Year 1Annual base rent Yr 1 ÷ Rentable SFRent PSF Final Y
 
 ## STEP 5 — QUALITY FLAGS (per lease)
 
-SeverityFlag Condition🔴 CRITICALRent &lt; $4.00/SF NNN🔴 CRITICALMissing personal guaranty on leases &gt; $5,000/mo🔴 CRITICALAssignment permitted without landlord consent🔴 CRITICALNo default cure period stated🔴 CRITICALEnvironmental liability assigned entirely to landlord🟡 WARNINGRent &gt; $12.00/SF NNN — verify market justification🟡 WARNINGEscalation &lt; 2%/yr — below inflation target🟡 WARNINGEscalation &gt; 4%/yr — verify tenant acceptance🟡 WARNINGExtension notice period &lt; 9 months🟡 WARNINGHoldover rate &lt; 150% of base rent🟡 WARNINGSecurity deposit &lt; 2 months rent🟡 WARNINGNo SNDA provision🟡 WARNINGNo late fee provision🟡 WARNINGLease term &lt; 3 years🟡 WARNINGExtension option without market rent reset🔵 INFOAny field = NOT FOUND — manual review required🔵 INFOLease expires within 12 months — add to renewal pipeline🔴 CRITICAL`EXECUTION_STATUS` = UNEXECUTED or PARTIALLY_EXECUTED — file copy is a draft, not a lease🔴 CRITICALAmendment references a base lease or renewal not present in the file (chain gap)🔴 CRITICALManuscript amendment present that is NOT initialed by all parties🔴 CRITICALLandlord named in the lease does not match the owner of record🟡 WARNINGManuscript amendment present and initialed — must be reproduced verbatim in any estoppel🟡 WARNINGTenant of record is a natural person with no entity and no guaranty🟡 WARNINGTerm evidenced only by a margin note rather than a separate instrument🔵 INFOOCR-extracted document — STEP 2A sweep completed, verify accuracy🔵 INFO`INGEST_PATH` = OCR and STEP 2A not yet run — abstract is INCOMPLETE, do not publish
+SeverityFlag Condition🔴 CRITICALRent &lt; $4.00/SF NNN🔴 CRITICALMissing personal guaranty on leases &gt; $5,000/mo🔴 CRITICALAssignment permitted without landlord consent🔴 CRITICALNo default cure period stated🔴 CRITICALEnvironmental liability assigned entirely to landlord🟡 WARNINGRent &gt; $12.00/SF NNN — verify market justification🟡 WARNINGEscalation &lt; 2%/yr — below inflation target🟡 WARNINGEscalation &gt; 4%/yr — verify tenant acceptance🟡 WARNINGExtension notice period &lt; 9 months🟡 WARNINGHoldover rate &lt; 150% of base rent🟡 WARNINGSecurity deposit &lt; 2 months rent🟡 WARNINGNo SNDA provision🟡 WARNINGNo late fee provision🟡 WARNINGLease term &lt; 3 years🟡 WARNINGExtension option without market rent reset🔵 INFOAny field = NOT FOUND — manual review required🔵 INFOLease expires within 12 months — add to renewal pipeline🔴 CRITICAL`EXECUTION_STATUS` = UNEXECUTED or PARTIALLY_EXECUTED — file copy is a draft, not a lease🔴 CRITICALAmendment references a base lease or renewal not present in the file (chain gap)🔴 CRITICALManuscript amendment present that is NOT initialed by all parties🔴 CRITICALLandlord named in the lease does not match title vesting (per `title-exam-abstraction`; fall back to the deal's self-reported seller name if title-exam-abstraction hasn't run yet, and note the check as provisional)🟡 WARNINGManuscript amendment present and initialed — must be reproduced verbatim in any estoppel🟡 WARNINGTenant of record is a natural person with no entity and no guaranty🟡 WARNINGTerm evidenced only by a margin note rather than a separate instrument🔵 INFOOCR-extracted document — STEP 2A sweep completed, verify accuracy🔵 INFO`INGEST_PATH` = OCR and STEP 2A not yet run — abstract is INCOMPLETE, do not publish
 
 ---
 
@@ -188,7 +196,9 @@ Notion: [N] updated / [N] created
 - **legal-intelligence:** Reference clause library when flagging non-standard provisions. Compare against Oxford preferred positions.
 - **tenant-intelligence:** Feed extracted data into tenant risk scoring for existing portfolio tenants.
 - **acquisition-underwriting** (successor to the retired `rent-comp`, 2026-08-05): compare extracted rent PSF against current market comps for below/above-market flags, using that skill's COMPS mode / comp-grid discipline (absorbed from `rent-comp` on 2026-08-12 — see the 2026-08-12 event_log entry).
-- **document-assembly:** Use extracted data to auto-populate estoppels, renewal offers, lease addenda.
+- **title-exam-abstraction** (2026-08-21): source of the vesting record the STEP 5 landlord-mismatch flag checks the lease's named landlord against.
+- **estoppel-request-generation** (2026-08-21): consumes the 32-field abstract (including `EXECUTION_STATUS`/`INGEST_PATH`/`MANUSCRIPT AMENDMENTS`) to pre-fill and draft tenant estoppel certificates — the sole path for that deliverable; `document-assembly`'s Template 7 is superseded, see that skill's own note.
+- **document-assembly:** Use extracted data to auto-populate renewal offers, lease addenda.
 - **lease-renewal-pipeline:** Auto-trigger for any lease flagged as expiring within 12 months.
 
 ---
@@ -204,6 +214,13 @@ See `references/extraction-edge-cases.md` for guidance on:
 
 ## Changelog
 
+- v2.7 (2026-08-21, adversarial review): the v2.6 landlord-mismatch flag had no defined source for "owner of record" —
+  now checks against `title-exam-abstraction`'s vesting record (added to CROSS-SKILL INTEGRATION), with a provisional
+  seller-name fallback when that skill hasn't run yet. The execution check's "run on every document" line had no
+  described mechanism for TEXT_LAYER/DOCX documents — STEP 2A's render/zoom procedure was OCR-scoped only; added
+  explicit routing for a hybrid document (digital body, one embedded scanned signature page) to STEP 2A regardless of
+  overall ingestion path. CROSS-SKILL INTEGRATION's estoppel line repointed from `document-assembly` (whose Template 7
+  is now superseded) to `estoppel-request-generation`.
 - v2.6 (2026-08-21): manuscript-amendment sweep. New STEP 2A makes a visual page-image review mandatory for every
   OCR-path document before any field is reported, adds an `EXECUTION_STATUS` check and a lease-chain-gap check to every
   document, and adds nine STEP 5 quality flags covering unexecuted counterparts, chain gaps, un-initialed hand changes,
