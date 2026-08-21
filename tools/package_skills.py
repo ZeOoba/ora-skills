@@ -424,6 +424,7 @@ SHARED_ROOT_DEPS = {
     'pma-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
     'listing-agreement-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
     'lease-form-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
+    'lease-addendum': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
 }
 
 
