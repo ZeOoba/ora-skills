@@ -2,9 +2,13 @@
 """
 addendum_qc.py -- QC gate for ORA lease addenda (lease-addendum skill v1.0)
 
-Usage: python3 addendum_qc.py <addendum.docx> [more.docx ...] [--allow-tokens] [--m3b]
+Usage: python3 addendum_qc.py <addendum.docx|pdf> [more ...] [--allow-tokens] [--m3b] [--m4]
+                              [--state ST]
 
-Exit 0 = no BLOCK-severity failures across all files. Exit 1 = at least one BLOCK.
+Exit 0 = no BLOCK-severity failures across all readable files.
+Exit 1 = at least one BLOCK found on a readable file (takes priority over exit 2 even if
+         another file in the same run was unreadable -- there is a real, actionable defect).
+Exit 2 = a file could not be read to at least 150 words and got no QC result at all.
 Severity is BLOCK / HIGH / MED / LOW, same convention as lease-form-qc/scripts/lease_qc.py.
 
 Pattern (zip + regex over word/document.xml, no python-docx dependency for scanning) and the
@@ -15,6 +19,38 @@ lease-form-qc/scripts/lease_qc.py -- see that script for the source of the text_
 11, 12, 16 (the M3b package) as BLOCK-severity even when the document doesn't self-declare a
 substitution (the acceptance-test failure mode this gate exists to catch is exactly a
 substitution that was drafted -- and therefore reads -- as if it were a ministerial name change).
+
+WHAT THE ora_doc_qc RETROFIT CHANGED
+-------------------------------------
+This file's former text_of() was unconditional `zipfile.ZipFile(path)` -- no format branch at
+all. A PDF (or any non-.docx path) raised an uncaught zipfile.BadZipFile, crashing the whole run
+at exit code 1 -- indistinguishable, at the exit code, from "found a real BLOCK-severity defect".
+There was also no word-count floor, so a near-empty .docx ran all 16 checks against a handful of
+words instead of being flagged as unreadable. Same root cause as the false-clean/false-BLOCK bugs
+ora_doc_qc.py was extracted to fix in pma-qc/listing-agreement-qc/lease-form-qc (no real format
+detection before applying a format-specific parser to file bytes), a third failure shape: a hard
+crash rather than a false result. extract() now does real format detection, tries pdftotext then
+OCR for a PDF, and returns UNREADABLE (exit 2) for anything that will not yield 150 words.
+Verified in tests/test_addendum_qc.py against a synthetic no-text-layer PDF fixture and a
+near-empty DOCX fixture.
+
+Checks 2 and 3 (the rent-schedule row parser, _rent_rows) read ctx["raw"] -- the shared module's
+un-normalized body text -- not ctx["t"]. ora_doc_qc.norm() collapses all whitespace, newlines
+included, and _rent_rows() depends on each table cell landing on its own line. ctx["t"] would
+silently zero out every parsed row, a silent false-negative in exactly the checks that verify
+rent-schedule arithmetic -- the same class of pitfall lease-form-qc's A2 hit with its re.M anchor.
+Pinned by tests/test_addendum_qc.py::TestRentTableParity against a frozen copy of the pre-retrofit
+line-based parser.
+
+Check 9 (ordinal consistency) previously depended on a `[[CORE_TITLE]] <title>` marker that
+text_of() spliced onto the body, then re-parsed back out with a regex -- the same pattern that
+caused lease-form-qc's F18 to trip on its own `[[FOOTER]]` marker (this one happened not to
+collide with TOKEN_RE, since TOKEN_RE's character class lacks '_', but that was luck, not design).
+It now reads a cleanly-extracted `ctx["core_title"]` (via the local _docx_title() helper, mirroring
+how ora_doc_qc.extract() already reads dc:creator/Company from the same docProps/core.xml part)
+instead of re-parsing a marker out of scanned text. The title text is still appended to ctx["t"]
+(unmarked) so check 14's token scan keeps the same coverage of metadata-embedded tokens it had
+before.
 """
 
 import json
@@ -23,9 +59,10 @@ import re
 import sys
 import zipfile
 
+from ora_doc_qc import DEFAULT_MIN_WORDS, SEV_ORDER, extract, norm, run_checks
+
 TOKEN_RE = re.compile(r"\[[A-Z][A-Z0-9 /,.'&-]{2,}\]")
 Q = '["“”‘’«»]'
-SEV_ORDER = {"BLOCK": 0, "HIGH": 1, "MED": 2, "LOW": 3}
 
 MONEY_RE = re.compile(r"\$[\d,]+\.\d{2}")
 DATE_RE = re.compile(
@@ -49,25 +86,20 @@ def load_state_overlay():
         return json.load(f)
 
 
-def text_of(path):
-    """Return (plain_text, core_title) for a .docx. plain_text has a synthetic
-    '\\n[[CORE_TITLE]] <title>' marker appended so title-drift checks can read it."""
-    with zipfile.ZipFile(path) as z:
-        xml = z.read("word/document.xml").decode("utf-8", "replace")
-        core_title = ""
-        if "docProps/core.xml" in z.namelist():
+def _docx_title(path):
+    """dc:title from docProps/core.xml, "" if the part or the tag is absent.
+    Mirrors how ora_doc_qc.extract() already reads dc:creator/Company from the
+    same part -- see the module docstring for why this replaced the old
+    [[CORE_TITLE]] marker-splice-and-re-parse."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            if "docProps/core.xml" not in z.namelist():
+                return ""
             core_xml = z.read("docProps/core.xml").decode("utf-8", "replace")
-            m = re.search(r"<dc:title>(.*?)</dc:title>", core_xml, re.S)
-            if m:
-                core_title = re.sub(r"<[^>]+>", "", m.group(1)).strip()
-    t = re.sub(r"<w:p[ >]", "\n<w:p ", xml)
-    t = re.sub(r"<w:tc[ >]", "\n<w:tc ", t)
-    t = re.sub(r"<[^>]+>", "", t)
-    for a, b in [("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", '"'), ("&apos;", "'")]:
-        t = t.replace(a, b)
-    t = re.sub(r"[ \t]+", " ", t)
-    t += f"\n[[CORE_TITLE]] {core_title}"
-    return t
+    except (zipfile.BadZipFile, KeyError, OSError):
+        return ""
+    m = re.search(r"<dc:title>(.*?)</dc:title>", core_xml, re.S)
+    return re.sub(r"<[^>]+>", "", m.group(1)).strip() if m else ""
 
 
 def _defined(t, term):
@@ -181,11 +213,9 @@ def check_ratification(t):
            "remain in full force and effect" not in t.lower()
 
 
-def check_ordinal(t):
-    m = re.search(r"\[\[CORE_TITLE\]\]\s*(.*)", t)
-    core_title = m.group(1).strip() if m else ""
+def check_ordinal(t, core_title):
     body_ord = re.search(r"\b(First|Second|Third|Fourth|Fifth|Sixth|Seventh|Eighth|Ninth|Tenth)\b\s+Addendum", t, re.I)
-    title_ord = re.search(r"\b(First|Second|Third|Fourth|Fifth|Sixth|Seventh|Eighth|Ninth|Tenth)\b\s+Addendum", core_title, re.I)
+    title_ord = re.search(r"\b(First|Second|Third|Fourth|Fifth|Sixth|Seventh|Eighth|Ninth|Tenth)\b\s+Addendum", core_title, re.I) if core_title else None
     if core_title and body_ord and title_ord:
         return body_ord.group(1).lower() != title_ord.group(1).lower()
     return False
@@ -240,46 +270,87 @@ def check_guaranty_attached(t, m3b):
     return "guaranty" not in t.lower()
 
 
+# (id, severity, title, position, fn(ctx)) -- fn returns None to PASS, True to
+# FAIL with the title as the detail (run_checks() sugar, see ora_doc_qc.py).
+# Most checks are parameterized by CLI flags (m3b/m4/state/overlay) in addition
+# to text, so unlike lease_qc.py's mostly-uniform bool_check() port, these stay
+# direct ctx-aware closures over the original check_*() bodies (unchanged).
+# Checks 2/3 read ctx["raw"] (not ctx["t"]) -- see the module docstring.
 CHECKS = [
-    ("1", "HIGH", "Circular effective date", lambda t, ctx: check_circular_effective_date(t)),
-    ("2", "HIGH", "Rent-table row with no operative clause", lambda t, ctx: check_rent_row_no_clause(t)),
-    ("3", "HIGH", "Rent arithmetic / compounding verified", lambda t, ctx: check_rent_arithmetic(t)),
-    ("4", "BLOCK", "Party-consent completeness (M3b)", lambda t, ctx: check_party_consent(t, ctx["m3b"])),
-    ("5", "BLOCK", "Security deposit disposition stated (M3b)", lambda t, ctx: check_security_deposit(t, ctx["m3b"])),
-    ("6", "BLOCK", "Entity dropped/added without release or joinder (M3b)", lambda t, ctx: check_entity_dropped(t, ctx["m3b"])),
-    ("7", "HIGH", "Cumulative term vs. state recordation threshold", lambda t, ctx: check_term_vs_recordation(t, ctx["overlay"], ctx["state"])),
-    ("8", "BLOCK", "Ratification / conflict-control clause present", lambda t, ctx: check_ratification(t)),
-    ("9", "MED", "Ordinal consistent: body title vs. document metadata Title", lambda t, ctx: check_ordinal(t)),
-    ("10", "MED", "Defined terms match the Prime Lease", lambda t, ctx: check_defined_terms(t)),
-    ("11", "BLOCK", "Insurance condition on tenant change (M3b)", lambda t, ctx: check_insurance(t, ctx["m3b"])),
-    ("12", "BLOCK", "Notice addresses present where a party changed", lambda t, ctx: check_notice_address(t, ctx["m3b"] or ctx["m4"])),
-    ("13", "MED", "Counterparts / e-signature clause", lambda t, ctx: check_counterparts(t)),
-    ("14", "BLOCK", "Unfilled [TOKEN] on non-template file", lambda t, ctx: check_unfilled_token(t, ctx["allow_tokens"])),
-    ("15", "HIGH", "Premises change without recomputed pro-rata share (M4)", lambda t, ctx: check_premises_pro_rata(t, ctx["m4"])),
-    ("16", "BLOCK", "Guaranty attached where M3b applies", lambda t, ctx: check_guaranty_attached(t, ctx["m3b"])),
+    ("1", "HIGH", "Circular effective date", None,
+     lambda ctx: True if check_circular_effective_date(ctx["t"]) else None),
+    ("2", "HIGH", "Rent-table row with no operative clause", None,
+     lambda ctx: True if check_rent_row_no_clause(ctx["raw"]) else None),
+    ("3", "HIGH", "Rent arithmetic / compounding verified", None,
+     lambda ctx: True if check_rent_arithmetic(ctx["raw"]) else None),
+    ("4", "BLOCK", "Party-consent completeness (M3b)", None,
+     lambda ctx: True if check_party_consent(ctx["t"], ctx["m3b"]) else None),
+    ("5", "BLOCK", "Security deposit disposition stated (M3b)", None,
+     lambda ctx: True if check_security_deposit(ctx["t"], ctx["m3b"]) else None),
+    ("6", "BLOCK", "Entity dropped/added without release or joinder (M3b)", None,
+     lambda ctx: True if check_entity_dropped(ctx["t"], ctx["m3b"]) else None),
+    ("7", "HIGH", "Cumulative term vs. state recordation threshold", None,
+     lambda ctx: True if check_term_vs_recordation(ctx["t"], ctx["overlay"], ctx["state"]) else None),
+    ("8", "BLOCK", "Ratification / conflict-control clause present", None,
+     lambda ctx: True if check_ratification(ctx["t"]) else None),
+    ("9", "MED", "Ordinal consistent: body title vs. document metadata Title", None,
+     lambda ctx: True if check_ordinal(ctx["t"], ctx["core_title"]) else None),
+    ("10", "MED", "Defined terms match the Prime Lease", None,
+     lambda ctx: True if check_defined_terms(ctx["t"]) else None),
+    ("11", "BLOCK", "Insurance condition on tenant change (M3b)", None,
+     lambda ctx: True if check_insurance(ctx["t"], ctx["m3b"]) else None),
+    ("12", "BLOCK", "Notice addresses present where a party changed", None,
+     lambda ctx: True if check_notice_address(ctx["t"], ctx["m3b"] or ctx["m4"]) else None),
+    ("13", "MED", "Counterparts / e-signature clause", None,
+     lambda ctx: True if check_counterparts(ctx["t"]) else None),
+    ("14", "BLOCK", "Unfilled [TOKEN] on non-template file", None,
+     lambda ctx: True if check_unfilled_token(ctx["t"], ctx["allow_tokens"]) else None),
+    ("15", "HIGH", "Premises change without recomputed pro-rata share (M4)", None,
+     lambda ctx: True if check_premises_pro_rata(ctx["t"], ctx["m4"]) else None),
+    ("16", "BLOCK", "Guaranty attached where M3b applies", None,
+     lambda ctx: True if check_guaranty_attached(ctx["t"], ctx["m3b"]) else None),
 ]
 
 
 def scan(path, m3b=False, m4=False, allow_tokens=False, state=None, overlay=None):
-    t = text_of(path)
-    is_template = "TEMPLATE" in path.upper()
-    ctx = {"m3b": m3b, "m4": m4, "allow_tokens": allow_tokens or is_template, "state": state, "overlay": overlay or {}}
-    results = []
-    for cid, sev, label, test in CHECKS:
-        if test(t, ctx):
-            results.append((cid, sev, label))
-    results.sort(key=lambda r: SEV_ORDER[r[1]])
+    """Returns "unreadable", True (a BLOCK fired), or False (readable, no BLOCK).
+    Always prints a report line to stdout for the file, same as before."""
     print(f"\n{path}")
+    if not os.path.exists(path):
+        print("  ERROR: no such file")
+        return "unreadable"
+    try:
+        body, meta = extract(path, min_words=DEFAULT_MIN_WORDS)
+    except Exception as e:                                         # noqa: BLE001
+        print(f"  ERROR: extraction failed: {e}")
+        return "unreadable"
+
+    if body is None:
+        print(f"  UNREADABLE - {meta['words']} words extracted ({meta['format']}, "
+              f"extraction={meta['extraction']}); no QC result. Install "
+              "poppler-utils + tesseract, or supply a text-layer copy.")
+        return "unreadable"
+
+    core_title = _docx_title(path) if meta["format"] == "docx" else ""
+    is_template = "TEMPLATE" in os.path.basename(path).upper()
+    combined = body + (f"\n{core_title}" if core_title else "")
+    ctx = {"t": norm(combined), "raw": body, "meta": meta, "core_title": core_title,
+           "m3b": m3b, "m4": m4, "state": state, "overlay": overlay or {},
+           "allow_tokens": allow_tokens or is_template}
+
+    results = run_checks(ctx, CHECKS)
+    results.sort(key=lambda r: (SEV_ORDER[r["severity"]], int(r["id"])))
+
     if not results:
-        print("  ---- 0 of {} checks failed".format(len(CHECKS)))
+        print(f"  ---- 0 of {len(CHECKS)} checks failed")
         return False
-    for cid, sev, label in results:
-        print(f"  [{sev:<5}] {cid:<3} FAIL  {label}")
-    counts = {s: sum(1 for r in results if r[1] == s) for s in SEV_ORDER}
+    for r in results:
+        print(f"  [{r['severity']:<5}] {r['id']:<3} FAIL  {r['title']}")
+    counts = {s: sum(1 for r in results if r["severity"] == s) for s in SEV_ORDER}
     print(f"  ---- {len(results)} of {len(CHECKS)} checks failed "
           f"(BLOCK {counts.get('BLOCK', 0)} / HIGH {counts.get('HIGH', 0)} / "
           f"MED {counts.get('MED', 0)} / LOW {counts.get('LOW', 0)})")
-    return any(sev == "BLOCK" for _, sev, _ in results)
+    return any(r["severity"] == "BLOCK" for r in results)
 
 
 if __name__ == "__main__":
@@ -296,7 +367,13 @@ if __name__ == "__main__":
         sys.exit(__doc__)
     overlay = load_state_overlay()
     any_block = False
+    any_unreadable = False
     for p in args:
-        if scan(p, m3b=m3b, m4=m4, allow_tokens=allow, state=state, overlay=overlay):
+        r = scan(p, m3b=m3b, m4=m4, allow_tokens=allow, state=state, overlay=overlay)
+        if r == "unreadable":
+            any_unreadable = True
+        elif r:
             any_block = True
-    sys.exit(1 if any_block else 0)
+    if any_block:
+        sys.exit(1)
+    sys.exit(2 if any_unreadable else 0)
