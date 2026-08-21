@@ -14,6 +14,7 @@ Every repo under the `ZeOoba` GitHub account (or whichever org is current — co
 
 ## Standard Workflow
 
+0. **Check prior art before enumerating anything.** Grep `open-items-tracker.md` (`~/.claude/projects/C--Users-Owner-OneDrive---Oxford-Capital-Partners/memory/open-items-tracker.md`) for the repo names and failure-pattern keywords from Step 5 below (e.g. `subrequest`, `Windows Task Scheduler`, `dual-write`, `drift`, `round-trip`) before reading a single diagram. A stale-but-still-relevant OI should be re-verified and its status updated in place, never silently re-filed as a fresh finding. This is a proof step, not a memory jog: a 2026-08-21 run of this skill nearly re-derived four already-closed findings (OI-162/163/164/165) before catching itself mid-run. State in the final output which prior OIs were checked and what was ruled out (still open / already fixed / not applicable) — see Outputs.
 1. **Enumerate repos**: `gh repo list <org> --json name,description,updatedAt,visibility,isArchived`. Don't assume the list from a prior session — repos get added/archived.
 2. **Locate local clones** for each repo (check `C:\Users\Owner\<repo-name>` first; ask Gabriel for any not found rather than skipping them silently — a repo with no local clone still needs its diagram read via `gh api` if it matters).
 3. **Find diagram-bearing files**: grep every local clone for `` ```mermaid `` fences (README.md and docs/** are the usual locations) and for `.drawio`/`.puml` files. A repo with zero diagrams isn't a skip — note it and read the README/docs prose directly instead.
@@ -34,9 +35,9 @@ Every repo under the `ZeOoba` GitHub account (or whichever org is current — co
 
 - Read-only by design: this skill diagnoses, it does not modify application code. Any code change is a separate, explicitly-scoped follow-up.
 - Writing to a repo under Hard Invariant 2 (oxfordra.net / website-canonical / oxford-site) still needs Gabriel's per-write confirmation even for a fix that came out of this audit — the audit finding it is not itself authorization.
-- Don't re-derive a finding this skill (or a prior run of it) already filed and is tracked in `open-items-tracker.md` — check there first for a stale-but-still-relevant OI before re-surfacing it as new.
+- Don't re-derive a finding this skill (or a prior run of it) already filed and is tracked in `open-items-tracker.md` — this is Step 0 of Standard Workflow, not optional; see there for the concrete check.
 - Registering new unattended automation (a fleet cron, a CI gate that blocks pushes) that didn't exist before is a bigger decision than fixing visibility for something already running — surface it as a choice, don't silently flip it on, even if the audit made the gap obvious.
 
 ## Outputs
 
-A prioritized punch list (chat response, or an artifact if Gabriel wants it shareable) with: the pattern, file/line evidence, stakes, and a fix direction — plus OI-tracker filings for anything worth tracking past the conversation.
+A prioritized punch list (chat response, or an artifact if Gabriel wants it shareable) with: the pattern, file/line evidence, stakes, and a fix direction — plus OI-tracker filings for anything worth tracking past the conversation. Must also state a "prior-art checked" line: which existing OIs were grepped for in Step 0, and what was found (still open / already fixed / not applicable) — proof the check ran, not just that it exists in the procedure.

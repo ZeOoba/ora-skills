@@ -32,6 +32,79 @@ DEFAULT_REPOS = [
 TRIVIAL_HINTS = ("scratch", "preview-deploy", "_archive/", ".tmp", "tmpindex")
 
 
+CLONE_ROOT = r"C:\Users\Owner"
+
+# Path substrings that mark a clone as a managed build root rather than a
+# stray -- e.g. Sync-DeployBuildRoot's own `-deploy-build` convention. Expected
+# to sit detached from a branch; never flagged.
+MANAGED_BUILD_ROOT_HINTS = ("-deploy-build",)
+
+
+def _git_remote_origin(repo_path):
+    proc = subprocess.run(
+        ["git", "-C", str(repo_path), "remote", "get-url", "origin"],
+        capture_output=True, text=True, check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.strip()
+
+
+def _normalize_remote(url):
+    if not url:
+        return url
+    u = url.strip().lower()
+    if u.endswith(".git"):
+        u = u[:-4]
+    return u
+
+
+def discover_clones_by_remote(root=CLONE_ROOT):
+    """Enumerate every direct child of `root` holding a `.git`, group by
+    normalized `origin` remote. Two or more clones sharing one remote is the
+    signal -- everything past the first is a candidate stray. Does not
+    recurse past one level (repo internals are not walked)."""
+    root_path = Path(root)
+    if not root_path.is_dir():
+        return {"error": f"not a directory: {root}"}
+
+    by_remote = {}
+    unreachable = []
+    for child in sorted(root_path.iterdir()):
+        if not child.is_dir():
+            continue
+        if not (child / ".git").exists():
+            continue
+        remote = _git_remote_origin(child)
+        if remote is None:
+            unreachable.append(str(child))
+            continue
+        key = _normalize_remote(remote)
+        by_remote.setdefault(key, []).append(str(child))
+
+    groups = []
+    for remote, paths in sorted(by_remote.items()):
+        if len(paths) < 2:
+            continue
+        classified = []
+        for i, p in enumerate(paths):
+            path_lower = p.lower()
+            if any(hint in path_lower for hint in MANAGED_BUILD_ROOT_HINTS):
+                role = "managed-build-root"
+            elif i == 0:
+                role = "primary"
+            else:
+                role = "stray"
+            classified.append({"path": p, "role": role})
+        groups.append({"remote": remote, "clones": classified})
+
+    return {
+        "root": str(root_path),
+        "remote_groups_with_duplicates": groups,
+        "unreachable": unreachable,
+    }
+
+
 def classify(porcelain_line):
     """One `git status --porcelain=v1` line -> (category, path)."""
     status = porcelain_line[:2]
@@ -89,13 +162,16 @@ def main():
     parser.add_argument("--repo", action="append", dest="repos", default=None,
                          help="Repo path to scan (repeatable). Default: the ORA known set.")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of a text table.")
+    parser.add_argument("--no-clone-discovery", action="store_true",
+                         help="Skip the stray-clone-by-remote scan (runs by default alongside the dirty scan).")
     args = parser.parse_args()
 
     repos = args.repos or DEFAULT_REPOS
     results = [scan_repo(r) for r in repos]
+    clone_discovery = None if args.no_clone_discovery else discover_clones_by_remote()
 
     if args.json:
-        print(json.dumps(results, indent=2))
+        print(json.dumps({"dirty_scan": results, "clone_discovery": clone_discovery}, indent=2))
         return
 
     for r in results:
@@ -114,6 +190,22 @@ def main():
     if total:
         print("Next: attribute + settle before touching anything -- see SKILL.md steps 3-6. "
               "This script does not commit, archive, or delete anything.")
+
+    if clone_discovery is not None:
+        print()
+        print(f"=== stray-clone discovery ({clone_discovery.get('root', '?')}) ===")
+        if "error" in clone_discovery:
+            print(f"  {clone_discovery['error']}")
+        else:
+            groups = clone_discovery["remote_groups_with_duplicates"]
+            if not groups:
+                print("  no remote shared by 2+ clones -- nothing to flag.")
+            for g in groups:
+                print(f"  remote: {g['remote']}")
+                for c in g["clones"]:
+                    print(f"    [{c['role']}] {c['path']}")
+            if clone_discovery["unreachable"]:
+                print(f"  unreachable (no readable origin remote): {clone_discovery['unreachable']}")
 
 
 if __name__ == "__main__":
