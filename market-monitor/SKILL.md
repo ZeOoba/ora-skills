@@ -1,6 +1,6 @@
 ---
 name: market-monitor
-description: "Industrial real estate market monitoring and analysis for Oxford Realty Advisors target markets. Use when researching market conditions, comparing markets, tracking demand drivers, or preparing market intelligence reports. Triggers: market update, market conditions, vacancy rate, industrial market, rent growth, supply pipeline, absorption, market comparison, submarket analysis, cap rate trends. v1.4 (2026-08-16: Columbus submarket assignment corrected — see Changelog)."
+description: "Industrial real estate market monitoring and analysis for Oxford Realty Advisors target markets. Use when researching market conditions, comparing markets, tracking demand drivers, or preparing market intelligence reports. Triggers: market update, market conditions, vacancy rate, industrial market, rent growth, supply pipeline, absorption, market comparison, submarket analysis, cap rate trends. v1.5 (2026-08-22: added run-triggered DOCTRINE-DRIFT REPORT section — see Changelog)."
 ---
 
 You are the Oxford Realty Advisors market intelligence engine. You monitor industrial real estate conditions across all ORA target markets, track demand drivers, and produce actionable market intelligence for acquisition decisions.
@@ -189,8 +189,26 @@ ORA Deployment Priority: [rank all active markets]
 ```
 The `|` separates established clusters (live metrics expected) from entry-phase clusters (cite a metric only once independently sourced; never fabricate).
 
+## DOCTRINE-DRIFT REPORT (v1.5)
+
+On every full market run, diff the live print against the corresponding standing constants in `acquisition-underwriting` and report — **never auto-update** — any divergence beyond threshold:
+
+| Constant | Source of truth | Report if divergence exceeds |
+|---|---|---|
+| Market exit cap (UNDERWRITING CONVENTIONS table) | CoStar / CBRE / JLL / Colliers / Lee & Associates quarterly print | **50 bps** |
+| Average asking rent NNN (Submarket Intelligence Reference) | same | **10%** |
+| Average sale price/SF, ORA's 20–75K SF band | same | **15%** |
+| RCT v03 per-market all-in $/SF | a **local** GC or insurance-replacement quote only | any sourced local quote outside the LOW–HIGH band |
+
+**Reporting only.** Weights and table values move solely at the annual December back-test (OUTCOME FEEDBACK, v1.1-E); this section changes no constant and must never be read as authority to change one. Its job is to ensure the back-test convenes with a list of known divergences rather than discovering them one deal at a time. Output a `DOCTRINE-DRIFT` block naming each constant, the doctrine value, the live value, the divergence, and the source with date. Where a market carries a `[PROXY]` tag in RCT v03, state that the proxy remains unvalidated and name the two local contacts most recently attempted.
+
+**Sourcing discipline unchanged:** the Stage 2.1 vendor/operator-report rule governs here too — a self-published operator or brokerage lead-gen "state of the market" report is never a valid drift input.
+
+**Residual gap (decision, Gabriel 2026-08-22):** no new scheduled task — drift reports on every full `market-monitor` run, zero new substrate. A market nobody runs between now and December drifts unseen regardless; `acquisition-underwriting`'s OUTCOME FEEDBACK carries a back-test-opening sweep across all ten canonical markets to close that gap without adding a fleet member.
+
 ## Changelog
 
+- v1.5 (2026-08-22): Added the DOCTRINE-DRIFT REPORT section above — run-triggered (never scheduled) reconciliation of this skill's live market prints against `acquisition-underwriting`'s standing exit-cap/rent/sale-price/RCT constants, reporting-only. Origin: a single Madison WI deal (3700 Kinsman Blvd, 2026-08-22) surfaced three stale constants simultaneously — exit cap doctrine 7.25% vs. verified Q2 2026 8.90% (165 bps, widening), RCT v03 all-in $229–280/SF vs. bottom-up $180–235/SF (~20% overstated), and the Submarket Reference's $148–176/SF owner-user pricing band refuted against $76–102/SF for ORA's 20–75K SF size band — none caught by the existing annual-only cadence. No target-market data, scoring weight, or governor changed.
 - v1.4 (2026-08-16): Two errors found and fixed while sourcing Columbus asking-rent comps for a Notion Tenant Database backfill. (1) The Columbus "ORA current exposure" list had never assigned properties to submarkets at all — a live C&W submarket geolocation check (verifying zip/street data per address, not trusting the flat list) found several properties assumed "Southeast, near the airport" are actually Northeast/Gahanna (392 Morrison Rd is in Whitehall 43213, John Glenn Columbus International's side — a different airport than Rickenbacker, which anchors the real Southeast/Groveport submarket where Zettler/Banwick x2/Livingston actually sit). Added a verified per-property submarket mapping. (2) "Northwood" had been listed as a Columbus property in the same line — it's actually 2203-2207 Northwood Dr, ORA's Salisbury MD (Eastern Shore) asset, mislabeled into the Columbus exposure list at some unknown point. Removed. No target-market scoring, cluster classification, or governor changed — this is a submarket/property-list correction within the existing Columbus primary-market entry.
 - v1.3 (2026-08-15): HIGH fix (Skill Text Audit finding F4) + LOW fix (finding F9). Added the Louisville KY entry/beachhead profile — ratified in `target-markets.json` 2026-08-05 (10th canonical cluster, entry-phase, market_cluster_fit_score 4) but never added here, leaving this skill out of parity for 10 days. Sourced strictly from `target-markets.json`'s Louisville cluster entry (acquisition-underwriting STAGE 0 Gate 3 rationale, June 2026 sourcing pass); vacancy/absorption/construction-pipeline figures are explicitly marked "not sourced yet" rather than estimated, since the JSON carries them as null. "Nine target clusters" corrected to "ten" in the Market Comparison Table lead-in; ASCII table template gained a Louisville column. Also moved the v1.2/v1.1 changelog prose that had accumulated in the frontmatter `description` field down here (it duplicated this section); description now carries a single trailing version tag. No scoring weight, cap-rate assumption, or workflow changed.
 - v1.2 (2026-07-25): Added a SOURCING DISCIPLINE section pointing to the vendor/operator-report rule now defined in `acquisition-underwriting` Stage 2.1 (WareSpace "State of Micro-Bay Industrial Real Estate 2026" review) — this skill's own CoStar/CBRE/JLL/Colliers-sourced data stays the live source for vacancy/rent/absorption/cap-rate figures; vendor content-marketing reports are directional-only. No target-market data, comparison-matrix mechanics, or workflow changed.
