@@ -1,0 +1,29 @@
+{
+  "staged_at": "2026-08-16T20:36:49Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-08-16",
+  "packages": [
+    {
+      "skill": "market-monitor",
+      "file": "market-monitor.skill",
+      "bytes": 23857
+    },
+    {
+      "skill": "register-scheduled-task",
+      "file": "register-scheduled-task.skill",
+      "bytes": 9207
+    },
+    {
+      "skill": "repo-architecture-review",
+      "file": "repo-architecture-review.skill",
+      "bytes": 3638
+    },
+    {
+      "skill": "package-and-stage-skill",
+      "file": "package-and-stage-skill.skill",
+      "bytes": 17443
+    }
+  ],
+  "last_batch": [
+    "package-and-stage-skill"
+  ]
+}

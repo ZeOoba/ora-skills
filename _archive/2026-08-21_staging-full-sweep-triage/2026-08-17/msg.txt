@@ -1,0 +1,20 @@
+docs(package-and-stage-skill): v1.21 - pre-flight frontmatter gate
+
+New step 2a. A description over 1024 chars, or a frontmatter name not
+matching its directory, makes the platform importer reject a .skill with
+no error text anywhere - the Save-skill click is a silent no-op.
+package_skills.py has always caught both, so the gap is only the paths
+where it cannot run: cloud Cowork sessions with no DC bridge, hand-built
+_staging packages, any .skill assembled without the repo.
+
+Found live 2026-08-17 authoring listing-agreement-qc v1.0 cloud-side
+(description 1220/1024, silent rejection). The same session then based a
+package-and-stage-skill edit on ~/.claude/skills/synced/ - the platform
+mirror, still serving v1.19 because this repo's v1.20 size fix had never
+been re-imported - and installed a conflicting "v1.20" to the platform
+that reverted that size fix. The repo was never written; caught by a
+post-hoc repo check. Step 2a's closing paragraph and the changelog now
+state that the synced mirror is never an editing basis and that a version
+number is not evidence of currency.
+
+Doc-only; no packaging, hash, or ledger logic changed.
