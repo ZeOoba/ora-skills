@@ -14,7 +14,15 @@ import json
 import unittest
 from pathlib import Path
 
-from diff_verdict import diff_verdict
+from diff_verdict import diff_verdict, _parse_floor_pair
+from diff_verdict import (
+    _YOC_LABEL_RE,
+    _DSCR_LABEL_RE,
+    _EXPLICIT_FLOOR_PCT_RE,
+    _EXPLICIT_FLOOR_X_RE,
+    _POSITIONAL_PCT_RE,
+    _POSITIONAL_X_RE,
+)
 
 GOLDEN_DIR = Path(__file__).resolve().parent.parent / "golden_set"
 
@@ -27,6 +35,7 @@ def make_golden(
     category_breakdown=None,
     known_gaps=None,
     tolerance=3.0,
+    floor_result="N/A",
 ):
     return {
         "deal_id": deal_id,
@@ -44,7 +53,7 @@ def make_golden(
             "p_exec_pct": None,
             "verdict_tier": golden_tier,
             "bands_predicted_tier": "T2 WATCH",
-            "floor_result": "N/A",
+            "floor_result": floor_result,
         },
         "diff_policy": {
             "primary_signal": "combined_score",
@@ -58,6 +67,7 @@ def make_observed(
     combined=65.0,
     verdict_tier="T2 WATCH",
     category_breakdown=None,
+    floor_result="N/A",
 ):
     return {
         "combined": combined,
@@ -66,7 +76,7 @@ def make_observed(
         "expected_score": None,
         "p_exec_pct": None,
         "verdict_tier": verdict_tier,
-        "floor_result": "N/A",
+        "floor_result": floor_result,
         "category_breakdown": category_breakdown,
         "notes": "",
     }
@@ -273,6 +283,195 @@ class TestInputValidation(unittest.TestCase):
         diff_verdict(golden, observed)
         self.assertEqual(golden, golden_copy)
         self.assertEqual(observed, observed_copy)
+
+
+class TestFloorConstantDrift(unittest.TestCase):
+    """cc-audit-army finding M18-eval-harness-cannot-detect-governor-drift (2026-08-21),
+    Gabriel-approved NARROW fix: DSCR/IRR are excluded from Combined by design, so a governor
+    change there previously produced a Combined delta of exactly zero and could never flip
+    status off PASS. These tests pin the narrow floor-constant parse/gate — DSCR and YoC only
+    (both true fixed constants across every deal), and ONLY when the floor_result prose states
+    an explicit '<observed> vs <floor>' comparison on both sides. Basis is deliberately NOT
+    covered (its floor is vintage-dependent per deal, not a fixed constant)."""
+
+    def test_matching_floor_constants_do_not_flag(self):
+        golden = make_golden(
+            combined=65.0,
+            floor_result="CLEARS (Basis 75.0% vs 65% floor; YoC 10.96% vs 8%; DSCR 1.45x vs 1.25x)",
+        )
+        observed = make_observed(
+            combined=65.0,
+            floor_result="CLEARS (Basis 74.0% vs 65% floor; YoC 11.20% vs 8%; DSCR 1.50x vs 1.25x)",
+        )
+        result = diff_verdict(golden, observed)
+        self.assertEqual(result["status"], "PASS")
+        self.assertFalse(result["floor_drift"])
+
+    def test_yoc_parses_own_clause_not_the_adjacent_basis_clause(self):
+        """Bug caught by independent review (2026-08-22): on this exact combined
+        'CLEARS (Basis ...%; YoC ...%; DSCR ...x)' string -- the module's OWN canonical
+        healthy fixture, reused above -- `_parse_floor_pair` used to return the BASIS
+        clause's numbers (75.0, 65.0) for a YoC search, because the old ±100-char window
+        around the 'YoC' label reached past the ';' back into the Basis clause and
+        _POSITIONAL_PCT_RE's optional label group let it match the leftmost '<num>% vs
+        <num>%' pair in that whole window rather than the YoC-specific one. Assert the
+        actually-parsed pair directly (not just status/floor_drift), on the healthy
+        string where the prior test passed for the WRONG reason."""
+        s = "CLEARS (Basis 75.0% vs 65% floor; YoC 10.96% vs 8%; DSCR 1.45x vs 1.25x)"
+        self.assertEqual(
+            _parse_floor_pair(s, _YOC_LABEL_RE, _EXPLICIT_FLOOR_PCT_RE, _POSITIONAL_PCT_RE),
+            (10.96, 8.0),
+        )
+        self.assertEqual(
+            _parse_floor_pair(s, _DSCR_LABEL_RE, _EXPLICIT_FLOOR_X_RE, _POSITIONAL_X_RE),
+            (1.45, 1.25),
+        )
+
+    def test_yoc_drift_inside_full_combined_clears_phrasing_flags(self):
+        """The exact defect class this fix closes: a REAL YoC governor drift (8% -> 7.5%)
+        stated inside the realistic combined 'CLEARS (Basis ...; YoC ...; DSCR ...)'
+        phrasing -- not the isolated 'YoC <n>% vs <floor>% floor' shape -- must still be
+        caught, not silently swallowed by a false match on the adjacent Basis clause."""
+        golden = make_golden(
+            combined=65.0,
+            floor_result="CLEARS (Basis 75.0% vs 65% floor; YoC 10.96% vs 8%; DSCR 1.45x vs 1.25x)",
+        )
+        observed = make_observed(
+            combined=65.0,  # identical Combined -- would PASS under the old gate alone
+            floor_result="CLEARS (Basis 75.0% vs 65% floor; YoC 10.96% vs 7.5%; DSCR 1.45x vs 1.25x)",
+        )
+        result = diff_verdict(golden, observed)
+        self.assertEqual(result["status"], "FLAG")
+        self.assertTrue(result["floor_drift"])
+        self.assertTrue(
+            any("GOVERNOR DRIFT on YoC floor" in n and "8.0" in n and "7.5" in n for n in result["notes"]),
+            result["notes"],
+        )
+
+    def test_trailing_floor_label_reversal_inside_combined_phrasing_flags_drift(self):
+        """A 'floor <N>x vs <N>x' reversal case (floor labeled AFTER the number, stated
+        FIRST) embedded inside the full multi-clause combined phrasing, not in isolation
+        -- pins that clause-scoping doesn't reintroduce the reversal bug the trailing-label
+        tests above already cover standalone."""
+        golden = make_golden(
+            floor_result="CLEARS (Basis 75.0% vs 65% floor; YoC 10.96% vs 8%; DSCR 1.25x floor vs 1.45x actual)",
+        )
+        observed = make_observed(
+            floor_result="CLEARS (Basis 75.0% vs 65% floor; YoC 10.96% vs 8%; DSCR 1.10x floor vs 1.45x actual)",
+        )
+        result = diff_verdict(golden, observed)
+        self.assertEqual(result["status"], "FLAG")
+        self.assertTrue(result["floor_drift"])
+        self.assertTrue(
+            any("GOVERNOR DRIFT on DSCR floor" in n and "1.25" in n and "1.1" in n for n in result["notes"]),
+            result["notes"],
+        )
+
+    def test_dscr_floor_drift_flags_even_though_combined_matches(self):
+        """The exact gap this fix closes: DSCR is excluded from Combined, so a real governor
+        change here must flag through floor_drift, not through combined_delta."""
+        golden = make_golden(
+            combined=65.0,
+            floor_result="CLEARS (Basis 75.0% vs 65% floor; YoC 10.96% vs 8%; DSCR 1.45x vs 1.25x)",
+        )
+        observed = make_observed(
+            combined=65.0,  # identical Combined -- would PASS under the old gate alone
+            floor_result="CLEARS (Basis 75.0% vs 65% floor; YoC 10.96% vs 8%; DSCR 1.45x vs 1.10x)",
+        )
+        result = diff_verdict(golden, observed)
+        self.assertEqual(result["status"], "FLAG")
+        self.assertTrue(result["floor_drift"])
+        self.assertTrue(
+            any("GOVERNOR DRIFT on DSCR floor" in n and "1.25" in n and "1.1" in n for n in result["notes"]),
+            result["notes"],
+        )
+
+    def test_yoc_floor_drift_flags(self):
+        golden = make_golden(floor_result="YoC 10.96% vs 8% floor")
+        observed = make_observed(floor_result="YoC 10.96% vs 7.5% floor")
+        result = diff_verdict(golden, observed)
+        self.assertEqual(result["status"], "FLAG")
+        self.assertTrue(result["floor_drift"])
+
+    def test_unparseable_prose_on_either_side_is_a_reported_gap_not_a_flag(self):
+        """The real golden_set shape: most rows never restate 'DSCR <x> vs <floor>' explicitly
+        (ranges, different orderings, or the number omitted entirely). Must never be assumed
+        clean OR guessed as drift -- reported as an explicit gap only."""
+        golden = make_golden(
+            floor_result="DSCR clears (~1.42-1.45x, LTV-bound refi) wherever computed",
+        )
+        observed = make_observed(floor_result="N/A")
+        result = diff_verdict(golden, observed)
+        self.assertFalse(result["floor_drift"])
+        self.assertEqual(result["status"], "PASS")
+        self.assertTrue(
+            any("DSCR floor constant not verified" in n for n in result["notes"]), result["notes"]
+        )
+
+    def test_both_sides_agree_but_disagree_with_canonical_is_reported_not_gated(self):
+        """Both sides parse and match EACH OTHER, but not the canonical 1.25x -- flagged as a
+        stale-fixture note, not gated (this module never 'corrects' golden values -- see
+        module docstring)."""
+        golden = make_golden(floor_result="DSCR 1.30x vs 1.10x floor")
+        observed = make_observed(floor_result="DSCR 1.30x vs 1.10x floor")
+        result = diff_verdict(golden, observed)
+        self.assertFalse(result["floor_drift"])
+        self.assertEqual(result["status"], "PASS")
+        self.assertTrue(
+            any("differs from the canonical value" in n for n in result["notes"]), result["notes"]
+        )
+
+    def test_non_string_floor_result_does_not_crash(self):
+        golden = make_golden(floor_result=None)
+        observed = make_observed(floor_result=None)
+        result = diff_verdict(golden, observed)  # must not raise
+        self.assertFalse(result["floor_drift"])
+
+    # cc-audit-army code-review finding (2026-08-22): the original regex assumed capture
+    # group 1 is always "observed" and group 2 is always "floor" -- i.e. text always reads
+    # "<observed> vs <floor>". A real golden file phrases YoC with the observed number
+    # BEFORE the floor is even labeled, and a floor-stated-first phrasing ("DSCR floor of
+    # 1.25x vs 1.45x actual") would reverse the assignment entirely, producing a
+    # confidently WRONG drift/stale-fixture verdict rather than the intended "not verified"
+    # gap.
+    def test_real_golden_file_phrasing_yoc_before_label_parses_correctly(self):
+        # Verbatim shape from golden_set/REDACTED-024.json's floor_result.
+        golden = make_golden(floor_result="Yield breached (~6.0-6.9% YoC vs 8.0% floor)")
+        result = diff_verdict(
+            golden,
+            make_observed(floor_result="Yield breached (~6.2% YoC vs 8.0% floor)"),
+        )
+        self.assertFalse(result["floor_drift"])
+        self.assertFalse(
+            any("YoC floor constant not verified" in n for n in result["notes"]), result["notes"]
+        )
+
+    def test_explicit_floor_of_phrasing_is_not_reversed(self):
+        """The floor is explicitly labeled ('floor of 1.25x') even though it's stated
+        FIRST -- must not be mistaken for the observed figure just because it's in the
+        first capture-group position."""
+        golden = make_golden(floor_result="DSCR floor of 1.25x vs 1.45x actual")
+        observed = make_observed(floor_result="DSCR floor of 1.25x vs 1.50x actual")
+        result = diff_verdict(golden, observed)
+        self.assertFalse(result["floor_drift"], "both state the same 1.25x floor -- must not read as drift")
+
+    def test_explicit_floor_of_phrasing_still_detects_real_drift(self):
+        golden = make_golden(floor_result="DSCR floor of 1.25x vs 1.45x actual")
+        observed = make_observed(floor_result="DSCR floor of 1.10x vs 1.45x actual")
+        result = diff_verdict(golden, observed)
+        self.assertTrue(result["floor_drift"])
+        self.assertTrue(
+            any("GOVERNOR DRIFT on DSCR floor" in n and "1.25" in n and "1.1" in n for n in result["notes"]),
+            result["notes"],
+        )
+
+    def test_trailing_floor_label_phrasing_is_not_reversed(self):
+        """'1.25x floor' (floor labeled AFTER the number, still stated first) must also
+        resolve correctly rather than defaulting to positional assignment."""
+        golden = make_golden(floor_result="DSCR 1.25x floor vs 1.45x actual")
+        observed = make_observed(floor_result="DSCR 1.10x floor vs 1.45x actual")
+        result = diff_verdict(golden, observed)
+        self.assertTrue(result["floor_drift"])
 
 
 class TestRealGoldenFiles(unittest.TestCase):
