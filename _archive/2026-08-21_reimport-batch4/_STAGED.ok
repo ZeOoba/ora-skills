@@ -1,0 +1,26 @@
+{
+  "staged_at": "2026-08-21T22:04:38Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-08-21_reimport-batch4",
+  "packages": [
+    {
+      "skill": "isolated-commit",
+      "file": "isolated-commit.skill",
+      "bytes": 2438
+    },
+    {
+      "skill": "lease-addendum",
+      "file": "lease-addendum.skill",
+      "bytes": 85020
+    },
+    {
+      "skill": "loi-generation",
+      "file": "loi-generation.skill",
+      "bytes": 2787768
+    }
+  ],
+  "last_batch": [
+    "isolated-commit",
+    "lease-addendum",
+    "loi-generation"
+  ]
+}

@@ -1,0 +1,22 @@
+fix(package-and-stage-skill): bridge-first freshness screen, skill-wide host-shell discipline, accumulating _STAGED.ok
+
+Three workflow-optimization fixes from tonight's Entry point B session
+(automation-health-monitor v1.5 installed; package-and-stage-skill itself
+found already at v1.17):
+
+- Entry point B gains a bridge-first freshness screen (ListSkills +
+  Desktop-Commander AppData-cache-vs-repo hash) run before the per-package
+  pre-check whenever the DC bridge is live, skipping present_files/Save-skill
+  entirely for anything already installed.
+- Host-shell discipline (2026-08-14, previously scoped to Step 3 packaging
+  only) generalized skill-wide after it recurred 3 more times in Step 7
+  verification/logging work this session -- default to a .ps1 file for every
+  DC PowerShell call in this skill.
+- tools/package_skills.py: write_staging_manifest() now accumulates
+  _STAGED.ok across batches into a shared outdir instead of overwriting --
+  the exact bug that made automation-health-monitor's own packaging
+  invisible to this session's freshness triage. Adds a last_batch field;
+  tolerates a corrupt prior sentinel. 5 new tests in StagingManifest, full
+  45-test suite green.
+
+v1.17 -> v1.18.

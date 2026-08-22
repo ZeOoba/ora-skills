@@ -1,0 +1,44 @@
+{
+  "staged_at": "2026-08-21T21:49:37Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-08-21_reimport-batch3",
+  "packages": [
+    {
+      "skill": "deal-execution",
+      "file": "deal-execution.skill",
+      "bytes": 30360
+    },
+    {
+      "skill": "debt-management",
+      "file": "debt-management.skill",
+      "bytes": 6390
+    },
+    {
+      "skill": "document-assembly",
+      "file": "document-assembly.skill",
+      "bytes": 6884
+    },
+    {
+      "skill": "estoppel-request-generation",
+      "file": "estoppel-request-generation.skill",
+      "bytes": 4666
+    },
+    {
+      "skill": "lease-abstraction-pipeline",
+      "file": "lease-abstraction-pipeline.skill",
+      "bytes": 15707
+    },
+    {
+      "skill": "legal-intelligence",
+      "file": "legal-intelligence.skill",
+      "bytes": 7839
+    }
+  ],
+  "last_batch": [
+    "deal-execution",
+    "debt-management",
+    "document-assembly",
+    "estoppel-request-generation",
+    "lease-abstraction-pipeline",
+    "legal-intelligence"
+  ]
+}

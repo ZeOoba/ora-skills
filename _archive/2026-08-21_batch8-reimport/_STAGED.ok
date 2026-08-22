@@ -1,0 +1,56 @@
+{
+  "staged_at": "2026-08-21T21:51:39Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-08-21_batch8-reimport",
+  "packages": [
+    {
+      "skill": "automation-health-monitor",
+      "file": "automation-health-monitor.skill",
+      "bytes": 8709
+    },
+    {
+      "skill": "deal-execution",
+      "file": "deal-execution.skill",
+      "bytes": 30360
+    },
+    {
+      "skill": "debt-management",
+      "file": "debt-management.skill",
+      "bytes": 6390
+    },
+    {
+      "skill": "document-assembly",
+      "file": "document-assembly.skill",
+      "bytes": 6884
+    },
+    {
+      "skill": "estoppel-request-generation",
+      "file": "estoppel-request-generation.skill",
+      "bytes": 4666
+    },
+    {
+      "skill": "lease-abstraction-pipeline",
+      "file": "lease-abstraction-pipeline.skill",
+      "bytes": 15707
+    },
+    {
+      "skill": "legal-intelligence",
+      "file": "legal-intelligence.skill",
+      "bytes": 7839
+    },
+    {
+      "skill": "repo-architecture-review",
+      "file": "repo-architecture-review.skill",
+      "bytes": 4071
+    }
+  ],
+  "last_batch": [
+    "automation-health-monitor",
+    "deal-execution",
+    "debt-management",
+    "document-assembly",
+    "estoppel-request-generation",
+    "lease-abstraction-pipeline",
+    "legal-intelligence",
+    "repo-architecture-review"
+  ]
+}

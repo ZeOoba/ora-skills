@@ -1,0 +1,32 @@
+{
+  "staged_at": "2026-08-17T17:23:42Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-08-17_item1-reimport-prep",
+  "packages": [
+    {
+      "skill": "daily-brief",
+      "file": "daily-brief.skill",
+      "bytes": 30200
+    },
+    {
+      "skill": "ora-setup-audit",
+      "file": "ora-setup-audit.skill",
+      "bytes": 7491
+    },
+    {
+      "skill": "package-and-stage-skill",
+      "file": "package-and-stage-skill.skill",
+      "bytes": 18979
+    },
+    {
+      "skill": "register-scheduled-task",
+      "file": "register-scheduled-task.skill",
+      "bytes": 10273
+    }
+  ],
+  "last_batch": [
+    "daily-brief",
+    "ora-setup-audit",
+    "package-and-stage-skill",
+    "register-scheduled-task"
+  ]
+}

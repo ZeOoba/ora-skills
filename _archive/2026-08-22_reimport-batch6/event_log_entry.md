@@ -1,0 +1,5 @@
+## 2026-08-22 -- package-and-stage-skill v1.24 installed via Gabriel's Save-skill click (dogfoods its own Local main.log fix)
+
+Entry point A (fresh package) on the item that entered `pending_reimport.py` when v1.24 itself was committed (`b07f599`, checks `AppData\Local\Claude\Logs\main.log` in addition to the Roaming copy). Skill dir confirmed git-clean and `plugin_of` returned `None` (standalone Save-skill path) before packaging. Packaged via `tools/package_skills.py`, exit 0, frontmatter gate passed (description 1010/1024). Gabriel confirmed the Save-skill click.
+
+Verification used the new v1.24 doctrine on itself: cache-directory CreationTime moved 2026-08-21 17:53:56 -> 2026-08-22 12:37:42, SKILL.md byte-identical to the packaged build. `AppData\Local\Claude\Logs\main.log` (the newly-added check) shows an exact `[SkillsPlugin] Delta: 1 to download` / `Sync complete: 1 downloaded` pair at the identical second, 12:37:42 -- first-hand, skill-specific corroboration (only one skill was installed in this window, no count-attribution ambiguity). Confirmed genuine re-import, no ambiguity. Cleared from `_staging/PENDING_REIMPORT.md` (`pending_reimport.py clear`).

@@ -1,0 +1,14 @@
+$p = 'C:\Users\Owner\ora-skills\_staging\2026-08-21_acquisition-proposal-generation-reimport\event_log_entry_apg_v3.1.md'
+$bytes = [IO.File]::ReadAllBytes($p)
+Write-Output ("BYTES=" + $bytes.Length)
+Write-Output ("FIRST3=" + (($bytes[0..2] | ForEach-Object { $_.ToString('x2') }) -join ' '))
+$txt = [Text.Encoding]::UTF8.GetString($bytes)
+$first = ($txt -split "`n")[0]
+Write-Output ("HEADER=" + $first)
+Write-Output ("HEADER_REGEX_OK=" + ($first -match '^## \d{4}-\d{2}-\d{2}\b'))
+$em   = [string][char]0x2014
+$repl = [string][char]0xFFFD
+Write-Output ("EMDASH_COUNT=" + ([regex]::Matches($txt, [regex]::Escape($em))).Count)
+Write-Output ("REPLACEMENT_CHAR_COUNT=" + ([regex]::Matches($txt, [regex]::Escape($repl))).Count)
+$nonascii = ($txt.ToCharArray() | Where-Object { [int]$_ -gt 127 } | Sort-Object -Unique | ForEach-Object { 'U+' + ([int]$_).ToString('X4') }) -join ','
+Write-Output ("NONASCII_CODEPOINTS=" + $nonascii)

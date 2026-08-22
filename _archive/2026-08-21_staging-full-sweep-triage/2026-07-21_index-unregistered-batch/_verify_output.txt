@@ -1,0 +1,63 @@
+======================================================================
+acquisition-underwriting
+  [OK] all packaged files present and content-identical in runtime cache
+======================================================================
+census-acs-extract
+  [OK] all packaged files present and content-identical in runtime cache
+======================================================================
+communication-intelligence
+  [OK] all packaged files present and content-identical in runtime cache
+======================================================================
+conversation-archival
+  [OK] all packaged files present and content-identical in runtime cache
+======================================================================
+deal-comparison
+  [OK] all packaged files present and content-identical in runtime cache
+======================================================================
+document-assembly
+  [OK] all packaged files present and content-identical in runtime cache
+======================================================================
+file-reconciliation
+  [OK] all packaged files present and content-identical in runtime cache
+======================================================================
+fleet-advisory-remediation
+  [OK] all packaged files present and content-identical in runtime cache
+======================================================================
+graph-app-registration
+  [OK] all packaged files present and content-identical in runtime cache
+======================================================================
+legal-intelligence
+  [OK] all packaged files present and content-identical in runtime cache
+======================================================================
+orphaned-task-forensics
+  [OK] all packaged files present and content-identical in runtime cache
+======================================================================
+portfolio-growth
+  [OK] all packaged files present and content-identical in runtime cache
+======================================================================
+portfolio-reporting
+  [OK] all packaged files present and content-identical in runtime cache
+======================================================================
+rent-comp
+  [OK] all packaged files present and content-identical in runtime cache
+======================================================================
+tenant-intelligence
+  [OK] all packaged files present and content-identical in runtime cache
+
+======================================================================
+SUMMARY
+  acquisition-underwriting: INSTALLED_VERIFIED
+  census-acs-extract: INSTALLED_VERIFIED
+  communication-intelligence: INSTALLED_VERIFIED
+  conversation-archival: INSTALLED_VERIFIED
+  deal-comparison: INSTALLED_VERIFIED
+  document-assembly: INSTALLED_VERIFIED
+  file-reconciliation: INSTALLED_VERIFIED
+  fleet-advisory-remediation: INSTALLED_VERIFIED
+  graph-app-registration: INSTALLED_VERIFIED
+  legal-intelligence: INSTALLED_VERIFIED
+  orphaned-task-forensics: INSTALLED_VERIFIED
+  portfolio-growth: INSTALLED_VERIFIED
+  portfolio-reporting: INSTALLED_VERIFIED
+  rent-comp: INSTALLED_VERIFIED
+  tenant-intelligence: INSTALLED_VERIFIED

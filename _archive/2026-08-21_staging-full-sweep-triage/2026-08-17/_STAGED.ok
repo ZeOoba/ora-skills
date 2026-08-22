@@ -1,0 +1,19 @@
+{
+  "staged_at": "2026-08-17T19:24:59Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-08-17",
+  "packages": [
+    {
+      "skill": "package-and-stage-skill",
+      "file": "package-and-stage-skill.skill",
+      "bytes": 18979
+    },
+    {
+      "skill": "register-scheduled-task",
+      "file": "register-scheduled-task.skill",
+      "bytes": 12936
+    }
+  ],
+  "last_batch": [
+    "register-scheduled-task"
+  ]
+}
