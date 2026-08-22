@@ -1,0 +1,41 @@
+$ErrorActionPreference = 'Stop'
+Set-Location 'C:\Users\Owner\ora-skills'
+$msg = @"
+chore(rev10): session-hygiene follow-through -- staging sentinel, publish-status live-check, insurance-renewal-review split
+
+- tools/package_skills.py: write a _STAGED.ok completion-manifest sentinel into
+  outdir after every packaging batch (JSON: staged_at, outdir, per-package
+  skill/file/bytes). Motivated by a Rev 10 remediation session pointed at an
+  outdir this script never wrote to, with no way to tell "not staged yet" from
+  "staged, wrong target" without a manual tree walk. 3 new tests
+  (tools/test_package_skills.py::StagingManifest).
+- tools/skill_drift_report.py: new --publish-status mode -- one citation-ready
+  INSTALLED/NOT-INSTALLED/BROKEN-INSTALL line per named skill, sourced live
+  from the runtime cache. Motivated by a Rev 5 log recording capex-budgeting
+  Gabriel-confirmed unpublished 2026-08-09 while the Code catalog separately
+  carried a 2026-08-12 update, with nothing re-verifying live state between
+  the two. 4 new tests (tools/test_skill_drift_report.py::PublishStatusRendering).
+- package-and-stage-skill/SKILL.md v1.15 -> v1.16: doc-only rule that any
+  Rev-log/advisory publish-state claim must cite a fresh
+  skill_drift_report.py --publish-status run (or a live Cowork ListSkills
+  call), never a prior claim carried forward.
+- insurance-renewal-review/SKILL.md v1.0 -> v1.1: size refactor -- Step 2 (OCR
+  ladder) and Step 3 (extraction checklist) moved verbatim to
+  references/ocr-and-extraction-checklist.md, no procedural change. Also
+  fixes a duplicate stacked YAML frontmatter block present since v1.0 (two
+  consecutive --- fences at the top of the file; a strict single-fence parse
+  reads only the second, truncated stub, silently shrinking the routing
+  surface to a description with no trigger phrases).
+
+All four items verified: python tools/test_package_skills.py (41 ok),
+python tools/test_skill_drift_report.py (67 ok), --check-staged exit 0,
+--check-tree-hygiene exit 0, validate_skill_frontmatter clean on both
+touched skill dirs.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+"@
+git commit -m "$msg"
+Write-Output '=== git log -1 ==='
+git log -1 --stat
+Write-Output '=== git status ==='
+git status --short

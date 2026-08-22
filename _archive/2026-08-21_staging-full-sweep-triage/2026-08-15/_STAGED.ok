@@ -1,0 +1,19 @@
+{
+  "staged_at": "2026-08-16T00:47:54Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-08-15",
+  "packages": [
+    {
+      "skill": "insurance-renewal-review",
+      "file": "insurance-renewal-review.skill",
+      "bytes": 7039
+    },
+    {
+      "skill": "package-and-stage-skill",
+      "file": "package-and-stage-skill.skill",
+      "bytes": 16530
+    }
+  ],
+  "last_batch": [
+    "package-and-stage-skill"
+  ]
+}

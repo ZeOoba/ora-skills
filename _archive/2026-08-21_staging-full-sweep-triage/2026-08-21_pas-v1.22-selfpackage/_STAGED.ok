@@ -1,0 +1,14 @@
+{
+  "staged_at": "2026-08-21T20:55:25Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-08-21_pas-v1.22-selfpackage",
+  "packages": [
+    {
+      "skill": "package-and-stage-skill",
+      "file": "package-and-stage-skill.skill",
+      "bytes": 20721
+    }
+  ],
+  "last_batch": [
+    "package-and-stage-skill"
+  ]
+}

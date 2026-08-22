@@ -1,0 +1,14 @@
+{
+  "staged_at": "2026-08-21T22:09:17Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-08-21_repo-architecture-review-desclen-fix",
+  "packages": [
+    {
+      "skill": "repo-architecture-review",
+      "file": "repo-architecture-review.skill",
+      "bytes": 4039
+    }
+  ],
+  "last_batch": [
+    "repo-architecture-review"
+  ]
+}

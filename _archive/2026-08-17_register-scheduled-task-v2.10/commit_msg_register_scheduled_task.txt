@@ -1,0 +1,11 @@
+feat(register-scheduled-task): v2.10 -- cloud-vs-on-device surface note for registry MCP tools
+
+Added a bullet to the Dual-fleet registry model section stating that
+create_scheduled_task/update_scheduled_task/delete_scheduled_task/
+list_scheduled_tasks are never present in a cloud-sandbox Cowork session
+(device-bridge only, no native app process) -- only a session running
+natively on-device carries them. Root incident: an ora-passed-deal-tracker
+LAMS id-collision deregistration was dispatched to a cloud Cowork session
+that had neither tool; per Rule 1 the session correctly stopped rather than
+improvise, but the gap should have been caught before dispatch. Doc-only;
+no procedure or behavior change.

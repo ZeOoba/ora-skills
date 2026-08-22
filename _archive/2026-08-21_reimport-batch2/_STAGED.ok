@@ -1,0 +1,26 @@
+{
+  "staged_at": "2026-08-21T21:38:19Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-08-21_reimport-batch2",
+  "packages": [
+    {
+      "skill": "insurance-renewal-review",
+      "file": "insurance-renewal-review.skill",
+      "bytes": 11545
+    },
+    {
+      "skill": "package-and-stage-skill",
+      "file": "package-and-stage-skill.skill",
+      "bytes": 20721
+    },
+    {
+      "skill": "dirty-tree-triage",
+      "file": "dirty-tree-triage.skill",
+      "bytes": 6473
+    }
+  ],
+  "last_batch": [
+    "insurance-renewal-review",
+    "package-and-stage-skill",
+    "dirty-tree-triage"
+  ]
+}

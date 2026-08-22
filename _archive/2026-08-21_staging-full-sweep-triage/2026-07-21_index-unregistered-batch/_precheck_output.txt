@@ -1,0 +1,117 @@
+======================================================================
+acquisition-underwriting
+  [OK] exists: C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\acquisition-underwriting.skill
+  entries: ['acquisition-underwriting/SKILL.md', 'acquisition-underwriting/target-markets.json']
+  [OK] all entries forward-slash
+  [OK] expected file set present
+  [OK] SKILL.md byte-identical to repo
+  [OK] target-markets.json byte-identical to repo root
+======================================================================
+census-acs-extract
+  [OK] exists: C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\census-acs-extract.skill
+  entries: ['census-acs-extract/census_acs_extract.py', 'census-acs-extract/INTEGRATION.md', 'census-acs-extract/SKILL.md']
+  [OK] all entries forward-slash
+  [OK] expected file set present
+  [OK] SKILL.md byte-identical to repo
+======================================================================
+communication-intelligence
+  [OK] exists: C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\communication-intelligence.skill
+  entries: ['communication-intelligence/SKILL.md']
+  [OK] all entries forward-slash
+  [OK] expected file set present
+  [OK] SKILL.md byte-identical to repo
+======================================================================
+conversation-archival
+  [OK] exists: C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\conversation-archival.skill
+  entries: ['conversation-archival/SKILL.md']
+  [OK] all entries forward-slash
+  [OK] expected file set present
+  [OK] SKILL.md byte-identical to repo
+======================================================================
+deal-comparison
+  [OK] exists: C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\deal-comparison.skill
+  entries: ['deal-comparison/SKILL.md', 'deal-comparison/target-markets.json']
+  [OK] all entries forward-slash
+  [OK] expected file set present
+  [OK] SKILL.md byte-identical to repo
+  [OK] target-markets.json byte-identical to repo root
+======================================================================
+document-assembly
+  [OK] exists: C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\document-assembly.skill
+  entries: ['document-assembly/SKILL.md']
+  [OK] all entries forward-slash
+  [OK] expected file set present
+  [OK] SKILL.md byte-identical to repo
+======================================================================
+file-reconciliation
+  [OK] exists: C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\file-reconciliation.skill
+  entries: ['file-reconciliation/scripts/docx_extract_text.py', 'file-reconciliation/scripts/hash_diff_buckets.py', 'file-reconciliation/SKILL.md']
+  [OK] all entries forward-slash
+  [OK] expected file set present
+  [OK] SKILL.md byte-identical to repo
+======================================================================
+fleet-advisory-remediation
+  [OK] exists: C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\fleet-advisory-remediation.skill
+  entries: ['fleet-advisory-remediation/SKILL.md']
+  [OK] all entries forward-slash
+  [OK] expected file set present
+  [OK] SKILL.md byte-identical to repo
+======================================================================
+graph-app-registration
+  [OK] exists: C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\graph-app-registration.skill
+  entries: ['graph-app-registration/SKILL.md']
+  [OK] all entries forward-slash
+  [OK] expected file set present
+  [OK] SKILL.md byte-identical to repo
+======================================================================
+legal-intelligence
+  [OK] exists: C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\legal-intelligence.skill
+  entries: ['legal-intelligence/SKILL.md']
+  [OK] all entries forward-slash
+  [OK] expected file set present
+  [OK] SKILL.md byte-identical to repo
+======================================================================
+orphaned-task-forensics
+  [OK] exists: C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\orphaned-task-forensics.skill
+  entries: ['orphaned-task-forensics/SKILL.md']
+  [OK] all entries forward-slash
+  [OK] expected file set present
+  [OK] SKILL.md byte-identical to repo
+======================================================================
+portfolio-growth
+  [OK] exists: C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\portfolio-growth.skill
+  entries: ['portfolio-growth/SKILL.md']
+  [OK] all entries forward-slash
+  [OK] expected file set present
+  [OK] SKILL.md byte-identical to repo
+======================================================================
+portfolio-reporting
+  [OK] exists: C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\portfolio-reporting.skill
+  entries: ['portfolio-reporting/SKILL.md']
+  [OK] all entries forward-slash
+  [OK] expected file set present
+  [OK] SKILL.md byte-identical to repo
+======================================================================
+rent-comp
+  [OK] exists: C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\rent-comp.skill
+  entries: ['rent-comp/SKILL.md', 'rent-comp/target-markets.json']
+  [OK] all entries forward-slash
+  [OK] expected file set present
+  [OK] SKILL.md byte-identical to repo
+  [OK] target-markets.json byte-identical to repo root
+======================================================================
+tenant-intelligence
+  [OK] exists: C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\tenant-intelligence.skill
+  entries: ['tenant-intelligence/SKILL.md']
+  [OK] all entries forward-slash
+  [OK] expected file set present
+  [OK] SKILL.md byte-identical to repo
+======================================================================
+;
+  [FAIL] .skill file missing at C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\;.skill
+======================================================================
+type
+  [FAIL] .skill file missing at C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\type.skill
+======================================================================
+_staging\2026-07-21_index-unregistered-batch\_precheck_output.txt
+  [FAIL] .skill file missing at C:\Users\Owner\ora-skills\_staging\2026-07-21_index-unregistered-batch\_staging\2026-07-21_index-unregistered-batch\_precheck_output.txt.skill
