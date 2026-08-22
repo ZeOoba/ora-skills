@@ -58,6 +58,18 @@ import os
 import re
 import sys
 import zipfile
+from pathlib import Path
+
+# Dev-checkout fallback: Python already puts this script's own directory at sys.path[0] on
+# startup, so append (not insert) the repo-root tools/ directory as a lower-priority fallback --
+# a packaged .skill ships ora_doc_qc.py alongside this script (via SHARED_ROOT_DEPS), so that
+# co-located copy is always tried first; a raw repo/worktree checkout has no such co-located
+# copy, so the appended repo-root tools/ path is what resolves ora_doc_qc there. Mirrors
+# lease-form-qc/scripts/lease_qc.py's identical shim -- the ora_doc_qc retrofit added the import
+# below to this file but omitted the shim its sibling already carries, leaving every invocation
+# of this script (and its whole test suite) unable to import ora_doc_qc at all outside a
+# packaged .skill.
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent / 'tools'))
 
 from ora_doc_qc import DEFAULT_MIN_WORDS, SEV_ORDER, extract, norm, run_checks
 
@@ -158,12 +170,63 @@ def check_rent_row_no_clause(t):
     return not any(p in t.lower() for p in BINDING_PHRASES)
 
 
+ESCALATION_RATE_RE = re.compile(
+    r"(?:escalat\w*|increas\w*)[^.]{0,60}?(\d{1,2}(?:\.\d+)?)\s*%", re.I)
+
+
+def _rent_schedule_window(t):
+    """Character span anchored on the same binding-phrase/'rent schedule' text that
+    check_rent_row_no_clause's has_table heuristic uses, extended generously to cover the
+    operative clause and the table itself. None if no such anchor exists.
+
+    Scoping the escalation-rate search to this window -- rather than the whole document,
+    ctx["raw"] -- keeps an unrelated clause elsewhere (e.g. "Tenant's share of Operating
+    Expenses shall increase 5% annually") from being picked up as the RENT escalation rate.
+    """
+    lower = t.lower()
+    positions = [lower.find(p) for p in BINDING_PHRASES if p in lower]
+    pos = min(positions) if positions else lower.find("rent schedule")
+    if pos < 0:
+        return None
+    # Backward margin stays SHORT (a short same-sentence lead-in like "escalating at 3%
+    # annually, Base Rent shall be payable in accordance..." -- a few dozen chars) rather
+    # than wide enough to reach into an entirely separate, unrelated preceding clause/
+    # paragraph.
+    return max(0, pos - 50), min(len(t), pos + 2000)
+
+
 def check_rent_arithmetic(t):
     """Table rows only (see _rent_rows) -- order-agnostic: the larger of each row's two amounts
-    should be ~12x the smaller (annual = monthly * 12), regardless of which column is which."""
-    for smaller, larger in _rent_rows(t):
+    should be ~12x the smaller (annual = monthly * 12), regardless of which column is which).
+    Also checks year-over-year escalation when the operative clause states a rate: each row's
+    annual amount should compound onto the prior row's by (1 + rate). Returns a distinguishing
+    string (not a generic True) rather than PASS (False) when a rent schedule is clearly present
+    (check_rent_row_no_clause's has_table heuristic) but no rows parsed cleanly -- "nothing wrong
+    found" and "could not check" must never read identically (verified-null-vs-inferred-null)."""
+    rows = _rent_rows(t)
+    has_table = len(rows) >= 2 or "rent schedule" in t.lower()
+    if not rows:
+        if has_table:
+            return ("rent schedule detected but no rows parsed cleanly -- compounding could NOT "
+                    "be verified (not a clean pass); confirm the table format manually")
+        return False
+
+    for smaller, larger in rows:
         if smaller > 0 and abs(smaller * 12 - larger) > 1.00:
             return True
+
+    window = _rent_schedule_window(t)
+    rate_match = ESCALATION_RATE_RE.search(t[window[0]:window[1]]) if window else None
+    if rate_match and len(rows) >= 2:
+        rate = float(rate_match.group(1)) / 100
+        # larger of each pair is the annual figure (order-agnostic, same as the pair above).
+        annuals = [larger for _smaller, larger in rows]
+        for i in range(1, len(annuals)):
+            expected = annuals[i - 1] * (1 + rate)
+            if abs(annuals[i] - expected) > max(1.00, expected * 0.005):
+                return (f"row {i + 1} annual rent {annuals[i]:.2f} does not compound onto row {i} "
+                        f"({annuals[i - 1]:.2f}) at the stated {rate * 100:.2f}% escalation "
+                        f"(expected {expected:.2f})")
     return False
 
 
@@ -173,7 +236,18 @@ def check_party_consent(t, m3b):
     outgoing = re.findall(r"Tenant\s+shall\s+be\s+([^,\.]+),?\s+d/?b/?a", t, re.I)
     if not outgoing:
         return False
-    return not _has_signature_block_for(t, "MLC") and not re.search(r"consent(s)?\s+to\s+(this\s+)?release", t, re.I)
+    # Use the PARSED outgoing-party name(s), not a hardcoded literal -- an earlier version
+    # tested the fixture name "MLC" specifically, which meant every real substitution (any
+    # party name other than "MLC") always found no signature block and was always flagged
+    # BLOCK regardless of whether a genuine consent/signature block was present.
+    #
+    # all(), not any(): a multi-tenant/co-tenant substitution can release MORE THAN ONE
+    # outgoing party in the same instrument. any() would clear (no BLOCK) the moment ONE
+    # of them has a discoverable signature block, silently missing that a second released
+    # party's consent is unconfirmed -- consent completeness means EVERY named outgoing
+    # party must have one, not just one of them.
+    return (not all(_has_signature_block_for(t, n.strip()) for n in outgoing)
+            and not re.search(r"consent(s)?\s+to\s+(this\s+)?release", t, re.I))
 
 
 def check_security_deposit(t, m3b):
@@ -282,7 +356,7 @@ CHECKS = [
     ("2", "HIGH", "Rent-table row with no operative clause", None,
      lambda ctx: True if check_rent_row_no_clause(ctx["raw"]) else None),
     ("3", "HIGH", "Rent arithmetic / compounding verified", None,
-     lambda ctx: True if check_rent_arithmetic(ctx["raw"]) else None),
+     lambda ctx: check_rent_arithmetic(ctx["raw"]) or None),
     ("4", "BLOCK", "Party-consent completeness (M3b)", None,
      lambda ctx: True if check_party_consent(ctx["t"], ctx["m3b"]) else None),
     ("5", "BLOCK", "Security deposit disposition stated (M3b)", None,
