@@ -39,11 +39,12 @@ Before reconciling anything, fetch or query the Property Register (or equivalent
 
 Fuzzy-match on contact/company name tokens (normalize case, strip legal suffixes like LLC/Inc/Corp, strip punctuation) rather than requiring exact string equality — tenant names drift between systems (nicknames, DBA vs. legal entity, contact name vs. company name). For each rent-roll row, look for a Notion record whose tenant name shares a token. Don't stop at the first plausible substring match if two different tenants share a common word (e.g. "Bay Area") — corroborate with SF/rent before accepting a match, especially across properties.
 
-This produces four buckets:
+This produces four buckets, plus a fifth exception bucket:
 - **Matched, fields agree** — nothing to do.
 - **Matched, fields differ** — SF/rent/dates/escalation need updating to the rent roll's values, and/or the property/suite tag is wrong (see step 5 for how to tell which).
 - **Notion record with no rent-roll match** — could be a phantom/stale/duplicate record, or a tenant at a property the rent roll doesn't cover at all (see step 6 — don't assume "no match" means "delete").
 - **Rent-roll row with no Notion record** — a genuine gap; confirm before creating (see step 7).
+- **Ambiguous** — 2+ rent-roll rows corroborated equally, a name-token hit whose SF/rent corroboration was attempted but disagreed, or a candidate already claimed by an earlier Notion record in the same run. `diff_tenants.py` reports these separately and never auto-applies them — resolve each by hand the same way step 5 resolves a property/suite mismatch, using SF/rent/property as the deciding evidence. (A single distinctive name-token hit where NEITHER side has any SF/rent data to corroborate against is instead accepted as a "matched, unverified" record — there is no corroborating evidence to defer to, and these are exactly the sparsest records this reconciliation exists to fill in — but it's flagged with a note so you know the match itself was never corroborated.)
 
 ### 5. Diagnosing property/suite mismatches specifically
 
