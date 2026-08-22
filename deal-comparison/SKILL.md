@@ -1,11 +1,11 @@
 ---
 name: deal-comparison
-description: "Side-by-side deal comparison and portfolio-fit analysis for Oxford Realty Advisors. Use when comparing 2+ acquisition candidates, scoring deals against portfolio fit, or benchmarking against historical Oxford deals. Triggers: compare deals, side by side, which deal is better, deal comparison, portfolio fit, score deal, rank acquisitions, compare to historical, deal matrix. v1.1 (2026-08-15: Louisville KY added to the entry/beachhead Market Cluster Fit list — see Changelog)"
+description: "Side-by-side deal comparison and portfolio-fit analysis for Oxford Realty Advisors. Use when comparing 2+ acquisition candidates, scoring deals against portfolio fit, or benchmarking against historical Oxford deals. Triggers: compare deals, side by side, which deal is better, deal comparison, portfolio fit, score deal, rank acquisitions, compare to historical, deal matrix. v1.2 (2026-08-21: DSCR retested at the correct per-property refi-sizing basis and downgraded from kill to Ruling-5 flag; Basis band now follows the vintage ramp instead of a flat cutoff — see Changelog)"
 ---
 
 You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side-by-side analysis of 2+ acquisition candidates scored on financial merit and portfolio fit. Pull deal data from Notion Acquisition Pipeline Tracker when available. For deals not in Notion, ask Gabriel to provide key inputs.
 
-**HARD FILTER:** DSCR <1.25x at 40% LTV = immediate disqualification. Check this first.
+**FLOOR FLAG (Ruling 5):** DSCR <1.25x at the deal's refi-sizing basis (the LESSER of 65% LTV per-property and 1.25x DSCR — see acquisition-underwriting Stage 1; this is the per-property governor, NOT the separate 40% portfolio-aggregate LTV governor checked elsewhere) = flag, not a kill. State the compensating factor if pursued. Check this first.
 
 ---
 
@@ -17,8 +17,8 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 |--------|-----|---------|
 | Going-In Cap Rate | 10 | ≥8.5%=10; 7.5-8.4%=8; 6.5-7.4%=5; <6.5%=2 |
 | Levered IRR (10-yr) | 10 | ≥18%=10; 15-17.9%=8; 12-14.9%=5; <12%=2 |
-| Price vs. Replacement Cost | 5 | ≤25%=5; 26-30%=4; 31-40%=3; **>40%=0 — FAILS THE BASIS HARD FLOOR** |
-| DSCR at 40% LTV | 10 | ≥2.5x=10; 2.0-2.49x=8; 1.25-1.99x=5; <1.25x=0 (DISQUALIFIED) |
+| Price vs. Replacement Cost | 5 | Linear: 0 at the deal's own **vintage-ramp floor** (LOW-end RCT v03 per-market — floor = 65% discount at ≤1995 vintage → 60% at ≥2005, linear ramp; same rule as acquisition-underwriting Stage 1) → 5 at ≥76% discount. **Below the floor = FLOOR-FLAGGED (Ruling 5, not disqualified)** — same as DSCR above (0 pts at the floor is the worst *passing* score, not a fail; Basis is governed by the identical "flags, not kills" doctrine acquisition-underwriting Stage 1 states for every Stage 1 floor). A fixed cutoff is WRONG here — the floor moves with vintage; do not substitute a flat percentage. |
+| DSCR at refi sizing (lesser of 65% LTV / 1.25x DSCR) | 10 | ≥2.5x=10; 2.0-2.49x=8; 1.25-1.99x=5; <1.25x=0 (FLOOR-FLAGGED — Ruling 5, not disqualified) |
 
 > **Price vs. Replacement changed 2026-07-14 (10 → 5 pts, bands re-cut TWICE).** Fixes:
 > (1) *Bands now respect the hard floor.* The original bands awarded points to deals
@@ -114,7 +114,7 @@ Portfolio Fit % = (Sum / 30) × 100
 | ≥75 | ≥70% | ✅ GO — proceed to LOI |
 | 55-74 | Any | ⚠️ FURTHER DILIGENCE — address flagged gaps |
 | <55 | Any | ❌ PASS |
-| Any | Any | ❌ DISQUALIFIED if DSCR <1.25x |
+| Any | Any | ⚠️ FLOOR-FLAGGED if DSCR <1.25x at refi sizing (Ruling 5 — flag, not a kill; state the compensating factor if pursued) |
 
 ---
 
@@ -128,8 +128,8 @@ DEAL COMPARISON MATRIX — [Date]
 FINANCIAL (35)
   Cap Rate                  X.X% [X]   X.X% [X]
   Levered IRR               X.X% [X]   X.X% [X]
-  Price/Replacement         XX%  [X]   XX%  [X]   <- 0 if >75% (FAILS BASIS FLOOR)
-  DSCR @ 40% LTV            X.Xx [X]   X.Xx [X]
+  Price/Replacement         XX%  [X]   XX%  [X]   <- 0 at/above the deal's OWN vintage-ramp floor (not a fixed %; see Category 1)
+  DSCR @ refi sizing        X.Xx [X]   X.Xx [X]   <- lesser of 65% LTV / 1.25x DSCR
   Subtotal                      /35        /35
 
 PHYSICAL & MARKET (30)              /30        /30
@@ -139,7 +139,7 @@ STRATEGIC FIT (15)                  /15        /15
 ───────────────────────────────────────────────────────
 TOTAL DEAL SCORE                    /100       /100
 PORTFOLIO FIT                        XX%        XX%
-DISQUALIFIED?                        Y/N        Y/N
+FLOOR-FLAGGED?                       Y/N        Y/N   <- DSCR <1.25x at refi sizing (flag, not a kill)
 ───────────────────────────────────────────────────────
 WINNER: [Deal] — [GO / FURTHER DILIGENCE / PASS]
 TOP 3 RISKS: [Deal] — 1) ... 2) ... 3) ...
@@ -150,4 +150,5 @@ Save output as `ORA_DealComparison_[Deal1]_vs_[Deal2]_[YYYY-MM-DD].xlsx` or HTML
 
 ## Changelog
 
+- v1.2 (2026-08-21): HIGH fix (cc-audit-army findings M02-deal-comparison-dscr-wrong-ltv-and-kills, M13-deal-comparison-basis-band-ignores-vintage-ramp), Gabriel-approved. Two defects that made this skill disagree with acquisition-underwriting on the firm's two hardest acquisition gates: (1) DSCR was tested at 40% LTV — the portfolio-aggregate governor, not per-property refi sizing — inflating computed DSCR ~1.6x and letting deals that would floor-flag in acquisition-underwriting score clean here; corrected to the LESSER-of-65%-LTV/1.25x-DSCR basis. (2) A breach was labeled "immediate disqualification"/"DISQUALIFIED", contradicting Ruling 5 (floors flag, never kill); corrected to FLOOR-FLAGGED throughout (HARD FILTER line, scoring table, recommendation thresholds, output template). (3) The Basis band hardcoded a flat >40%-of-RCT-LOW cutoff — only the loosest (≥2005-vintage) endpoint of the vintage ramp — so a pre-1995 building (ORA's dominant vintage) could score points at a basis acquisition-underwriting Stage 1 would already floor-flag; corrected to the same linear vintage-ramp floor (65% discount at ≤1995 → 60% at ≥2005) acquisition-underwriting uses. No governor constants changed — this only restates deal-comparison to apply the already-ratified 1.25x DSCR / RCT v03 vintage ramp correctly. Follow-up code-review pass (same day, still v1.2): the Basis row's own "FAILS THE BASIS HARD FLOOR" language was left as a kill-framing inconsistent with the DSCR row two lines above it -- acquisition-underwriting Stage 1 states the SAME "flags, not kills" doctrine for Basis as for DSCR -- corrected to "FLOOR-FLAGGED (Ruling 5, not disqualified)" for consistency.
 - v1.1 (2026-08-15): HIGH fix (Skill Text Audit finding F5). Added Louisville KY to the entry/beachhead Market Cluster Fit list (score 4, "new target market") — ratified in `target-markets.json` 2026-08-05 as the 10th canonical cluster but never reflected here. No scoring weight, threshold, or point value changed; Louisville simply joins the existing score-4 bucket alongside Grand Rapids/Richmond/Des Moines.

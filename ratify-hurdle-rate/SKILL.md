@@ -84,13 +84,20 @@ DB             : oxford-command-center / capital_config
 Proceed? (yes to confirm · no to abort · or enter a different rate, e.g. "7%")
 ```
 
-**Accept:** "yes", "y", "confirm", "proceed" → continue to Step 2.
+**Accept:** "yes", "y", "confirm", "proceed" → `confirmed_rate` = the `hurdle_rate_pct`
+read in Pre-flight (unchanged) → continue to Step 2.
 
 **Modify rate:** Gabriel gives a different percentage (e.g. "7.5%") →
 recompute to decimal (0.075), warn if outside [1%, 30%] ("Unusual value — confirm"),
-re-present the block with the new value, wait for "yes".
+re-present the block with the new value, wait for "yes" → `confirmed_rate` = the
+recomputed decimal (0.075) → continue to Step 2.
 
 **Abort:** any other input → STOP with no writes.
+
+`confirmed_rate` is whatever value was last shown in a confirmation block that Gabriel
+said "yes" to — carry it into Step 2 explicitly. Do NOT re-read `hurdle_rate_pct` from
+the DB at Step 2 and assume it already matches: on the Modify-rate path it does not,
+until Step 2's UPDATE writes it.
 
 ---
 
@@ -102,20 +109,26 @@ from datetime import date
 
 con = sqlite3.connect('C:/Users/Owner/oxford-command-center/data/warehouse/finance.sqlite')
 today = date.today().isoformat()   # e.g. '2026-06-22'
+# confirmed_rate: the decimal rate from Step 1's accepted confirmation block (e.g. 0.08,
+# or 0.075 if Gabriel modified it). ALWAYS write it explicitly — never omit hurdle_rate_pct
+# from the SET clause and assume the DB's existing value already matches; on the Modify-rate
+# path it doesn't, and a memo asserting a rate the DB never received is a Hard Invariant 4
+# breach (a ratified-but-wrong governor value).
 
 con.execute(
     """UPDATE capital_config
-       SET hurdle_rate_ratification  = 'ratified',
+       SET hurdle_rate_pct           = ?,
+           hurdle_rate_ratification  = 'ratified',
            hurdle_rate_ratified_by   = 'Gabriel Goldberg',
            hurdle_rate_ratified_date = ?
        WHERE hurdle_rate_ratification = 'proposed'""",
-    (today,)
+    (confirmed_rate, today)
 )
-con.commit()
 print(con.total_changes, "row(s) updated")
 ```
 
-Then verify:
+Then verify — BEFORE committing, so a failed assertion still leaves the DB untouched
+(the read below runs on the same connection/transaction and sees the pending write):
 
 ```python
 row = con.execute(
@@ -126,11 +139,16 @@ row = con.execute(
        LIMIT 1"""
 ).fetchone()
 print(row)
+assert row[1] == confirmed_rate, (
+    f"hurdle_rate_pct in the DB ({row[1]}) does not match the value Gabriel confirmed "
+    f"({confirmed_rate}) — the ratification memo must never assert a rate the DB doesn't hold."
+)
+con.commit()
 ```
 
-The output MUST show `hurdle_rate_ratification = 'ratified'`. If `total_changes` is 0
-or the column still shows `proposed`, STOP and surface the error. Do NOT proceed to
-the gate.
+The output MUST show `hurdle_rate_ratification = 'ratified'` AND `hurdle_rate_pct`
+equal to `confirmed_rate`. If `total_changes` is 0, the column still shows `proposed`,
+or the assertion above fails, STOP and surface the error. Do NOT proceed to the gate.
 
 ---
 

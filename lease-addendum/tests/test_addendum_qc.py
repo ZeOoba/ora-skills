@@ -515,6 +515,171 @@ class TestRentTableParity(TempDirCase):
 
 
 # --------------------------------------------------------------------------
+# 3b. Post-audit fixes (cc-audit-army 2026-08-21) — these DELIBERATELY DIVERGE
+# from the frozen pre-retrofit oracle above. The oracle proves the retrofit
+# didn't change behavior; these prove two real defects the retrofit carried
+# forward unchanged were then fixed. Do not add these to the parity sweep.
+# --------------------------------------------------------------------------
+
+class TestPartyConsentUsesParsedName(TempDirCase):
+    """M06: check 4 used to test a hardcoded 'MLC' signature block regardless of who the
+    outgoing party actually was, so any real substitution flagged BLOCK even when the real
+    outgoing party's own signature block was present."""
+
+    def test_real_outgoing_party_signature_block_is_recognized(self):
+        path = make_docx(
+            self.tmp / "real_party.docx",
+            [
+                "Tenant shall be Acme Industries, d/b/a AI, released from this Lease.",
+                "By: Acme Industries Its: President",
+            ],
+        )
+        old = _original_verdicts(path, m3b=True)
+        new = _new_verdicts(path, m3b=True)
+        # Old (hardcoded "MLC") never finds Acme Industries's own signature block and always
+        # fires — a false BLOCK on a genuinely consented substitution.
+        self.assertTrue(old["4"], "sanity: the frozen oracle still hardcodes MLC and fires here")
+        self.assertFalse(new["4"], "the fixed check must recognize Acme Industries's own signature block")
+
+    def test_missing_outgoing_party_signature_still_fires(self):
+        path = make_docx(
+            self.tmp / "no_signature.docx",
+            ["Tenant shall be Acme Industries, d/b/a AI, released from this Lease."],
+        )
+        new = _new_verdicts(path, m3b=True)
+        self.assertTrue(new["4"], "no signature block for the real outgoing party must still BLOCK")
+
+    # cc-audit-army code-review finding (2026-08-22): all(), not any() -- a multi-party
+    # release where only ONE of two outgoing tenants signed must still BLOCK.
+    def test_multi_party_release_blocks_when_only_one_party_signed(self):
+        # _has_signature_block_for is a crude +/-200-char window around the FIRST
+        # occurrence of a name -- padded here so Beta Holdings' window cannot reach
+        # Acme's real signature block above it (that's a pre-existing, separate
+        # imprecision in the helper itself, not what this test is pinning; the padding
+        # keeps the fixture from tripping over it).
+        padding = (
+            "The parties acknowledge that all other terms and conditions of the Prime "
+            "Lease, as previously amended, remain unmodified and in full force and "
+            "effect except as expressly set forth in this instrument, and no other "
+            "party shall have any claim arising from this substitution whatsoever."
+        )
+        path = make_docx(
+            self.tmp / "multi_party_partial.docx",
+            [
+                "Tenant shall be Acme Industries, d/b/a AI, released from this Lease.",
+                "By: Acme Industries Its: President",
+                padding,
+                "Tenant shall be Beta Holdings, d/b/a BH, released from this Lease.",
+                # Beta Holdings never gets its own signature block.
+            ],
+        )
+        new = _new_verdicts(path, m3b=True)
+        self.assertTrue(new["4"], "one of two released parties having no signature block must still BLOCK")
+
+    def test_multi_party_release_clears_when_both_parties_signed(self):
+        path = make_docx(
+            self.tmp / "multi_party_full.docx",
+            [
+                "Tenant shall be Acme Industries, d/b/a AI, released from this Lease.",
+                "Tenant shall be Beta Holdings, d/b/a BH, released from this Lease.",
+                "By: Acme Industries Its: President",
+                "By: Beta Holdings Its: Manager",
+            ],
+        )
+        new = _new_verdicts(path, m3b=True)
+        self.assertFalse(new["4"], "both released parties having their own signature block must clear")
+
+
+class TestRentArithmeticUnparsedAndEscalation(TempDirCase):
+    """M08: check 3 only tested annual = monthly x 12 within a row (never row-to-row
+    escalation/compounding, despite its own label), and silently PASSED when a rent
+    schedule was clearly present but no rows parsed — "nothing wrong" and "couldn't check"
+    must not read identically."""
+
+    def test_unparsed_table_is_not_a_silent_pass(self):
+        # A literal "rent schedule" mention makes has_table True by the same definition
+        # check_rent_row_no_clause uses, but the table cells below don't match the
+        # period-line/money-amount shape _rent_rows expects, so zero rows parse.
+        path = make_docx(
+            self.tmp / "unparsed.docx",
+            ["Base Rent is payable per the rent schedule attached as Exhibit A."],
+            table_rows=[("See Exhibit A", "TBD", "TBD")],
+        )
+        old = _original_verdicts(path)
+        new_raw = None
+        import addendum_qc
+        from ora_doc_qc import extract, norm
+        body, meta = extract(path)
+        ctx = {"t": norm(body), "raw": body}
+        new_raw = addendum_qc.check_rent_arithmetic(ctx["raw"])
+        self.assertFalse(old["3"], "sanity: the frozen oracle silently passes an unparsed table")
+        self.assertIsInstance(new_raw, str, "an unparsed-but-present table must return a distinguishing message, not False/True")
+        self.assertIn("could NOT be verified", new_raw)
+
+    def test_escalation_mismatch_is_caught(self):
+        path = make_docx(
+            self.tmp / "bad_escalation.docx",
+            [
+                "Base Rent shall be payable in accordance with the following schedule, "
+                "escalating at 3.00% annually:",
+            ],
+            table_rows=[
+                ("1/2024-12/2024", "$1,000.00", "$12,000.00"),
+                # Correct 3% compounding would be $12,360.00; this is wrong.
+                ("1/2025-12/2025", "$1,050.00", "$12,600.00"),
+            ],
+        )
+        old = _original_verdicts(path)
+        new = _new_verdicts(path)
+        self.assertFalse(old["3"], "sanity: the frozen oracle only checks intra-row 12x math, not escalation")
+        self.assertTrue(new["3"], "a stated escalation rate the rows don't actually compound to must fire")
+
+    def test_correct_escalation_does_not_fire(self):
+        path = make_docx(
+            self.tmp / "good_escalation.docx",
+            [
+                "Base Rent shall be payable in accordance with the following schedule, "
+                "escalating at 3.00% annually:",
+            ],
+            table_rows=[
+                ("1/2024-12/2024", "$1,000.00", "$12,000.00"),
+                ("1/2025-12/2025", "$1,030.00", "$12,360.00"),
+            ],
+        )
+        new = _new_verdicts(path)
+        self.assertFalse(new["3"], "correctly-compounded escalation must not fire")
+
+    # cc-audit-army code-review finding (2026-08-22): ESCALATION_RATE_RE used to scan the
+    # WHOLE document, so an unrelated clause elsewhere could be picked up as the rent
+    # escalation rate. Scoped to a window around the rent-schedule anchor instead.
+    def test_unrelated_escalation_language_elsewhere_in_document_is_not_used(self):
+        path = make_docx(
+            self.tmp / "unrelated_escalation.docx",
+            [
+                # An unrelated clause with its own percentage, well before the rent
+                # schedule -- the OLD (whole-document) regex would grab this 5% first.
+                "Tenant's share of Operating Expenses shall increase 5% annually under "
+                "Section 8 of the Prime Lease, unaffected by this Addendum.",
+                "Base Rent shall be payable in accordance with the following schedule, "
+                "escalating at 3.00% annually:",
+            ],
+            table_rows=[
+                ("1/2024-12/2024", "$1,000.00", "$12,000.00"),
+                # Correct 3% compounding: $12,360.00. Fixture is intentionally correct at
+                # 3% -- if the buggy whole-document search grabbed the unrelated 5% clause
+                # instead, this would incorrectly FIRE as a false positive.
+                ("1/2025-12/2025", "$1,030.00", "$12,360.00"),
+            ],
+        )
+        new = _new_verdicts(path)
+        self.assertFalse(
+            new["3"],
+            "the correctly-3%-compounded table must not fail check 3 just because an "
+            "unrelated 5% OpEx clause appears earlier in the document",
+        )
+
+
+# --------------------------------------------------------------------------
 # 4. Full parity sweep — every check, several fixtures, several flag combos
 # --------------------------------------------------------------------------
 

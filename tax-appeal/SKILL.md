@@ -77,7 +77,7 @@ Cost Approach Value = Land Value + (Replacement Cost - Depreciation)
 ```
 - **Land value:** County assessor land-only value OR comparable land sales
 - **Replacement cost:** `maintenance-analytics` retired 2026-08-05, no successor named — search construction costs directly
-- **Depreciation:** `Age / Useful Life × Replacement Cost` (straight-line, 40-year life for industrial)
+- **Depreciation:** `Age / Useful Life × Replacement Cost` (straight-line, 40-year life for industrial), **clamped to a maximum of 90% of Replacement Cost** (a 10% residual floor — conventional appraisal practice; a fully depreciated shell still has salvage/land-assemblage value). Never let Age/Useful Life exceed 1.0 before applying it — ORA's Class B/C buy-box sits at or below the ramp's 1995 vintage endpoint (see acquisition-underwriting/SKILL.md Stage 1), so buildings past the 40-year life are the norm, not the exception, and an unclamped ratio drives Depreciation above 100% of Replacement Cost, making the improvement contribution — and potentially the whole Cost Approach Value — negative. If the subject had a material renovation, use the effective vintage from acquisition-underwriting/SKILL.md's renovation effective-vintage rule (Stage 1) instead of the actual year built, so a renovated older building isn't over-depreciated.
 
 ---
 
