@@ -1,4 +1,4 @@
-# 16-Point QC Gate — LOI Pre-Transmission Checklist
+# 22-Point QC Gate — LOI Pre-Transmission Checklist
 
 This gate runs after document assembly and before the file is presented or shipped. Every item must pass; if any fails, fix and re-run. Do not present a failing file.
 
@@ -20,6 +20,12 @@ This gate runs after document assembly and before the file is presented or shipp
 | 14 | EXECUTION PAGE present with Buyer block populated, Seller entity name filled | Visual inspection |
 | 15 | Strike list clean | Grep for `\bshall\b` (excluding "shallow") — must return zero. Grep for each banned phrase — must return zero |
 | 16 | PDF generated via `soffice` (not Microsoft Print to PDF); extractable text confirmed | `pdftotext` round-trip yields readable text |
+| 17 | Pagination: Buyer Information page starts its own page (page_break_before on its heading, never stacked empty paragraphs); proof-of-funds line sits on the final page lower third; page count = 5 (CONDENSED) or 6–8 (STANDARD) | Visual inspection; strip empty/page-break-before paragraph runs during assembly — known template defect otherwise renders 7–8 pages |
+| 18 | Entity-interest language matches seller suffix (Rule 0) | "membership interests" must never ship against an Inc/Corp seller |
+| 19 | Zoning phrase matches the OM verbatim | Compare `{{PROPERTY_ZONING_PHRASE}}` against source OM/listing text |
+| 20 | If concealment overlay active (Rule 0c): leak-check confirms zero occurrences of "1031" / "exchange" / "drop-and-swap" | Grep final document text for each term — must return zero |
+| 21 | Deposit-timing consistency: all Deposit due-window mentions resolve from `{{EMD_DUE_DAYS_WORDS}}` and are identical in the final text | Grep for every deposit-due mention; confirm same value throughout |
+| 22 | Vacant deals: preservation covenant present; casualty threshold "five percent (5%) of the Purchase Price" survived CONDENSED compression | Visual inspection of Continued Operations / Casualty sections |
 
 ---
 
