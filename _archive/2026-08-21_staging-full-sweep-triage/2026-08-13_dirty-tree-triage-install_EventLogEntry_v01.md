@@ -1,0 +1,12 @@
+## 2026-08-13 — dirty-tree-triage v1.0 installed (Save-skill click)
+
+dirty-tree-triage v1.0 installed via Save-skill click, 2026-08-13T20:08:25-04:00 (2026-08-14T00:08:25Z).
+
+- **Install evidence (three independent signals, all concordant):**
+  - `main.log`: `[SkillsPlugin] Delta: 1 to download, 0 to remove` -> `Sync complete: 1 downloaded, 0 failed, 0 removed, 0 orphans cleaned` at 2026-08-13 20:08:25, i.e. after commit 3eabd33 (2026-08-13 19:53:54 -0400).
+  - Runtime cache mirror `…\skills-plugin\583f08bc…\a6ad2c61…\skills\dirty-tree-triage\` created with both shipped files, mtime 2026-08-13 20:08:25.
+  - Byte identity repo -> package -> cache: `SKILL.md` 8291 B `348D09A1300597F9`; `scripts/scan_dirty_trees.py` 4216 B `919BB4491258E482`. Raw SHA256 match, no EOL normalization required.
+- **Multi-file install path held.** `scripts/` subfolder survived import — Cowork Save-skill button used, not desktop Settings -> Capabilities (which reproducibly drops subfolder files, 2026-07-11).
+- **Packaging correction — Entry point B premise was false.** The session was dispatched to install a pre-built `dirty-tree-triage.skill` said to have been packaged from commit 3eabd33. No such package existed anywhere: session uploads empty, absent from `ora-skills\_staging` (~100 other packages present), absent from Downloads/Desktop, and a filename sweep of `C:\Users\Owner` returned zero. Commit 3eabd33 is real and was HEAD, but it added only the two source files — no packaging artifact was ever produced from it. Per the skill's stale/missing-package rule, routed back through Entry point A and packaged first: `plugin_of('dirty-tree-triage')` -> `None` (standalone, not a plugin member); repo git-clean; no pre-existing cache dir (REPO-ONLY, never installed, so the v1.13 `main.log` short-circuit gate was inapplicable); `package_skills.py` exit 0, `description 643/1024 chars OK`, `2 entries OK`, forward-slash entries confirmed.
+- **Ledger:** `pending_reimport.py clear dirty-tree-triage` run after cache verification. Entry had read `pending since 2026-08-13T23:53Z | commit 3eabd33`.
+- **Open item for root-cause:** something in the handoff chain reported a `package_skills.py` run that never happened. Same class of gap as the v1.13 Step 2 rewrite, but on the write/report side rather than the read side — a claimed-but-unexecuted packaging step is invisible to every downstream check except an existence test.

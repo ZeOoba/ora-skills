@@ -1,0 +1,14 @@
+{
+  "staged_at": "2026-08-21T21:34:35Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-08-21_insurance-renewal-review-desclen-fix",
+  "packages": [
+    {
+      "skill": "insurance-renewal-review",
+      "file": "insurance-renewal-review.skill",
+      "bytes": 11545
+    }
+  ],
+  "last_batch": [
+    "insurance-renewal-review"
+  ]
+}

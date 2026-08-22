@@ -1,0 +1,8 @@
+event_log: log 12-skill Save-skill install (Entry point B, skill-text-audit batch)
+
+Isolated-hunk commit (reference_event_log_uncommitted_backlog.md technique) --
+stages only this session's entry; other sessions' uncommitted event_log.md
+entries and unrelated dirty files (MEMORY.md, open-items-tracker.md,
+project_audit_rev9_remediation_landed_2026-08-14.md, two new project_*.md
+files, scheduled-tasks/ora-am-brief/SKILL.md) are untouched in the working
+tree, left for their own sessions to commit.

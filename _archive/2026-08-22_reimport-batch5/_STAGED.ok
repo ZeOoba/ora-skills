@@ -1,0 +1,14 @@
+{
+  "staged_at": "2026-08-22T15:46:54Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-08-22_reimport-batch5",
+  "packages": [
+    {
+      "skill": "register-scheduled-task",
+      "file": "register-scheduled-task.skill",
+      "bytes": 13990
+    }
+  ],
+  "last_batch": [
+    "register-scheduled-task"
+  ]
+}

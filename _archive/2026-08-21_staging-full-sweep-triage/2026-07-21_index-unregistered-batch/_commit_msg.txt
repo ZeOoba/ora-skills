@@ -1,0 +1,14 @@
+acquisition-underwriting: disambiguate description v1.1 token (schema rev, not file version)
+
+Frontmatter description read "Buy Box & Scorecard v1.1 (Rulings 1-5 + Amendments
+A-G ratified 2026-06-09)" -- a bare vX.Y token that a naive version-extraction
+regex reads as the skill FILE version. It is not: the scorecard schema has stayed
+v1.1 while the skill file itself is v4.3 (body H1 + changelog).
+
+Found 2026-07-21 confirming installed versions for a 15-skill Save-skill batch,
+where the regex nearly logged v1.1 to event_log.md instead of the correct v4.3.
+
+Changed "v1.1" -> "schema rev 1.1" (997/1024 chars, packager-validated). No
+ruling, scorecard weight, or governor content changed.
+
+Companion: new memory/reference_skill_description_version_extraction_gotcha.md.

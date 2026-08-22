@@ -1,0 +1,14 @@
+{
+  "staged_at": "2026-08-22T16:17:41Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-08-22_reimport-batch6",
+  "packages": [
+    {
+      "skill": "package-and-stage-skill",
+      "file": "package-and-stage-skill.skill",
+      "bytes": 22488
+    }
+  ],
+  "last_batch": [
+    "package-and-stage-skill"
+  ]
+}
