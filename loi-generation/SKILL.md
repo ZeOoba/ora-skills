@@ -1,6 +1,6 @@
 ---
 name: loi-generation
-description: "Oxford Realty Advisors letter-of-intent drafting skill. Use whenever the user mentions: draft LOI, produce LOI, create LOI, generate LOI, build LOI, ship LOI, LOI for a property, letter of intent, offer letter, or non-binding proposal to purchase; when an OM, broker package, or listing PDF is uploaded with intent to make an offer; or when an acquisition-underwriting evaluation advances to an offer. Encodes: STANDARD/CONDENSED formats, five conditional blocks (four numbered + one inline entity-interest election), seven state overlays (OH/MD/IN/MO/KS/WI/TN) incl. the HB 126 BOR dual-threshold rule, seller entity-interest matching, 1031-cooperation default w/ concealment overlay, vacancy preservation covenant, single-source deposit token, a 16-point QC Gate, a mandatory DEAL-TERMS-REGISTER, and Lost-Deal Ledger capture at draft time. Outputs versioned DOCX + extractable-text PDF on ORA letterhead. v1.7"
+description: "Oxford Realty Advisors letter-of-intent drafting skill. Use whenever the user mentions: draft LOI, produce LOI, create LOI, generate LOI, build LOI, ship LOI, LOI for a property, letter of intent, offer letter, or non-binding proposal to purchase; when an OM, broker package, or listing PDF is uploaded with intent to make an offer; or when an acquisition-underwriting evaluation advances to an offer. Encodes: STANDARD/CONDENSED formats, five conditional blocks (four numbered + one inline entity-interest election), seven state overlays (OH/MD/IN/MO/KS/WI/TN) incl. the HB 126 BOR dual-threshold rule, seller entity-interest matching, 1031-cooperation default w/ concealment overlay, vacancy preservation covenant, single-source deposit token, a 22-point QC Gate, a mandatory DEAL-TERMS-REGISTER, and Lost-Deal Ledger capture at draft time. Outputs versioned DOCX + extractable-text PDF on ORA letterhead. v1.7"
 ---
 
 # LOI Generation — Oxford Realty Advisors (v1.7 — 2026-08-21: repo-first merge of two independently-built v1.6 revisions — Lost-Deal Ledger capture + template/token sync)
@@ -529,7 +529,7 @@ Every successful run of this skill produces:
 2. A PDF preview with extractable text
 3. A presented file pair via `present_files`
 4. A Notion log entry on the Acquisition Pipeline Tracker
-5. Zero "shall" usage, zero banned phrases, full 16-point QC Gate pass
+5. Zero "shall" usage, zero banned phrases, full 22-point QC Gate pass
 6. Phone 301.512.6125 in both top and bottom letterhead
 7. Footer keyed to property street address
 8. "Proof of funds available upon request." centered italic at bottom of final page
