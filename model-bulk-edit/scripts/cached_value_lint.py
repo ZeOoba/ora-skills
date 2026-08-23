@@ -17,7 +17,7 @@ Exit codes: 0 = no dead workbooks, 1 = at least one DEAD/PARTIAL, 2 = usage erro
 Usage:
   python cached_value_lint.py <root> [--json] [--quiet]
 """
-import os, sys, json, warnings
+import os, sys, json, gc, warnings
 warnings.filterwarnings("ignore")
 
 try:
@@ -28,25 +28,40 @@ except ImportError:
 SKIP_DIRS = {"_archive", "archive", ".git", "__pycache__"}
 
 def audit(path):
-    """Return (formulas, cached, unreadable_reason)."""
+    """Return (formulas, cached, unreadable_reason).
+
+    read_only=True is LOAD-BEARING, not a nicety. Without it openpyxl builds a full
+    in-memory object tree per workbook, and this function holds TWO of them at once
+    (formulas + cached values). A sweep over ORA's Business tree reached 9.1 GB RSS
+    and exhausted the machine's paging file (2026-08-22) -- an unrelated PowerShell
+    call then died with 0x800705AF. read_only streams row-by-row and keeps the
+    footprint flat regardless of workbook size or count.
+    """
+    wf = wv = None
     try:
-        wf = openpyxl.load_workbook(path, data_only=False)
-        wv = openpyxl.load_workbook(path, data_only=True)
+        wf = openpyxl.load_workbook(path, data_only=False, read_only=True)
+        wv = openpyxl.load_workbook(path, data_only=True, read_only=True)
+        formulas = cached = 0
+        for name in wf.sheetnames:
+            fs, vs = wf[name], wv[name]
+            # zip the two streams so neither sheet is materialised in full
+            for frow, vrow in zip(fs.iter_rows(), vs.iter_rows()):
+                for fc, vc in zip(frow, vrow):
+                    if isinstance(fc.value, str) and fc.value.startswith("="):
+                        formulas += 1
+                        if vc.value is not None:
+                            cached += 1
+        return formulas, cached, None
     except Exception as e:
         return 0, 0, f"{type(e).__name__}: {e}"[:120]
-    formulas = cached = 0
-    try:
-        for ws in wf.worksheets:
-            vs = wv[ws.title]
-            for row in ws.iter_rows():
-                for c in row:
-                    if isinstance(c.value, str) and c.value.startswith("="):
-                        formulas += 1
-                        if vs.cell(row=c.row, column=c.column).value is not None:
-                            cached += 1
     finally:
-        wf.close(); wv.close()
-    return formulas, cached, None
+        for wb in (wf, wv):
+            try:
+                if wb is not None:
+                    wb.close()
+            except Exception:
+                pass
+        gc.collect()
 
 def classify(f, c):
     if f == 0:            return "NO-FORMULAS"
