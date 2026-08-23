@@ -1,6 +1,6 @@
 ---
 name: model-bulk-edit
-description: "Safely change the same input across many ORA financial models at once, and audit workbooks whose formulas carry no cached values. Use when the user says: rebase the models, update the refi rate everywhere, change an assumption across all deals, bulk edit workbooks, propagate a constant to the models, sweep the underwriting models, or after any UNDERWRITING CONVENTIONS constant moves in acquisition-underwriting. Also the SOLE path for the cached-value audit -- trigger on: nulls in the QC gate, model reads blank, dead workbook, formulas but no values, why is DSCR empty. Encodes: archive-then-verify before any write, Excel COM with CalculateFullRebuild (NEVER openpyxl for writes -- it silently destroys every cached value), constant-vs-formula pre-check, and a mandatory post-write diff of every model against its archived original. Historical models for closed or passed deals are rebased only on Gabriel's explicit instruction. v1.0"
+description: "Safely change the same input across many ORA financial models at once, and audit workbooks whose formulas carry no cached values. Use when the user says: rebase the models, update the refi rate everywhere, change an assumption across all deals, bulk edit workbooks, propagate a constant to the models, sweep the underwriting models, or after any UNDERWRITING CONVENTIONS constant moves in acquisition-underwriting. Also the SOLE path for the cached-value audit -- trigger on: nulls in the QC gate, model reads blank, dead workbook, formulas but no values, why is DSCR empty. Encodes: archive-then-verify before any write, Excel COM with CalculateFullRebuild (NEVER openpyxl for writes -- it silently destroys every cached value), constant-vs-formula pre-check, and a mandatory post-write diff of every model against its archived original. Historical models for closed or passed deals are rebased only on Gabriel's explicit instruction. v1.1"
 ---
 
 # model-bulk-edit — Oxford Realty Advisors
@@ -79,9 +79,20 @@ A recursive Excel/openpyxl walk over the Business tree takes minutes and the MCP
 around 60s. Launch detached and poll a file rather than re-running and hoping:
 
 ```powershell
-Start-Process -FilePath python -ArgumentList @($script,$root,"--quiet") `
+# quote EVERY path inside the argument string -- ORA's roots all contain spaces
+$args = '"{0}" "{1}" --quiet' -f $script, $root
+Start-Process -FilePath python -ArgumentList $args `
   -RedirectStandardOutput $out -RedirectStandardError $err -NoNewWindow
 ```
+
+**The arg-splitting trap, twice in one session.** `-ArgumentList @($script,$root,"--quiet")`
+splits `C:\Users\Owner\OneDrive - Oxford Capital Partners\Business` on its spaces, so the
+script receives `C:\Users\Owner\OneDrive` as its root. It does not error — it walks a real
+directory, finds almost nothing, and prints a confident `1 workbook(s) | 0 dead-or-partial`.
+A sweep that reports a suspiciously small count audited the wrong tree; check the root before
+believing the verdict. **If the detached-launcher pattern misbehaves at all, stop fighting it
+and run the command directly in a terminal** — the harness is not the deliverable, and a
+silent wrong-root result is worse than no result.
 
 ## STEP 5 — Diff every model against its archived original
 
@@ -99,7 +110,9 @@ wrong — fix the mechanism, do not paper over it by hand.
 
 ## STEP 6 — Cached-value audit (also runs standalone)
 
-`scripts/cached_value_lint.py <root> [--quiet] [--json]` classifies every workbook:
+`scripts/cached_value_lint.py <root> [--quiet] [--json]` classifies every workbook. It opens each
+one twice (formulas + cached values) with **`read_only=True`, which is load-bearing** — see the
+v1.1 changelog entry for what happens without it.
 
 | verdict | meaning |
 |---|---|
@@ -128,6 +141,17 @@ archive folder naming authority, method, per-model deltas, and what was delibera
 
 ## Changelog
 
+- v1.1 (2026-08-22, same day as v1.0 — shipped defect, found by running it): `cached_value_lint.py`
+  loaded each workbook twice with openpyxl's **default full-object-tree mode**, holding both trees
+  at once. Launched across the Business tree it reached **9.1 GB RSS** and exhausted the machine's
+  paging file — an unrelated PowerShell call died with `0x800705AF, The paging file is too small`,
+  and the process had to be killed by PID. Both loads now pass `read_only=True` and stream the two
+  sheets in lockstep via `zip()`, with an explicit `gc.collect()` per file: measured peak **48 MB**,
+  a ~190x reduction, flat regardless of workbook count. Also documented in STEP 4: `-ArgumentList`
+  with an array splits ORA's space-containing roots, so the sweep silently walks the wrong tree and
+  reports a confident tiny count — quote every path inside the argument string, and check the
+  workbook count before believing any verdict. **The portfolio-wide sweep has still never completed**;
+  the `125DouglasPike` DEAD finding stands alone and nothing else has been audited.
 - v1.0 (2026-08-22): initial. Extracted from the refi-rate rebase (7.00% → 6.50%, 10 workbooks),
   which established every rule above the hard way: the openpyxl cached-value trap (caught before
   the write, not after), the constant-vs-formula pre-check (`125DouglasPike` Sensitivity!B9 is a
