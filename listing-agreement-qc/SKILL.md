@@ -1,6 +1,6 @@
 ---
 name: listing-agreement-qc
-description: "Pre-execution QC gate for BROKER LISTING AGREEMENTS on counterparty paper (Cushman & Wakefield, CBRE, JLL, Colliers, Newmark) where Oxford Realty Advisors is the Owner. Use when the user says: QC this listing agreement, check this listing before I sign, review the brokerage agreement, listing agreement review, compare listing agreements, exclusive right to sell, exclusive right to lease, commission schedule, broker engagement, or uploads a DOCX/PDF that is a listing agreement. Run before ANY listing is signed or countersigned. Scans 25 systemic defects (dual gross-price definitions, missing excluded-prospect and affiliate carve-outs, automatic holdover, unconditioned tail, lease language in a sale-only instrument, blanket dual agency, missing lender-consent and Ohio agency-disclosure hooks) with BLOCK/HIGH/MED/LOW severity. Carries ORA's sixteen ratified standing listing positions (2026-08-17). Distinct from lease-form-qc (ORA's own lease paper) and legal-intelligence. v1.2"
+description: "Pre-execution QC gate for BROKER LISTING AGREEMENTS on counterparty paper where Oxford Realty Advisors is the Owner. Use when the user says: QC this listing agreement, check this listing before I sign, review the brokerage agreement, listing agreement review, compare listing agreements, exclusive right to sell, exclusive right to lease, commission schedule, broker engagement, or uploads a DOCX/PDF that is a listing agreement. Run before ANY listing is signed or countersigned. Scans 25 systemic defects (dual gross-price definitions, missing excluded-prospect and affiliate carve-outs, automatic holdover, unconditioned tail, lease language in a sale-only instrument, blanket dual agency, missing lender-consent and Ohio agency-disclosure hooks) with BLOCK/HIGH/MED/LOW severity. Carries ORA's sixteen ratified standing listing positions. Distinct from lease-form-qc (ORA's own lease paper) and legal-intelligence. v1.3"
 ---
 
 # Listing Agreement QC — counterparty brokerage paper
@@ -195,6 +195,12 @@ outbound communication to an external counterparty and requires Gabriel's
 explicit in-turn confirmation (standing invariant 1).
 
 ## Changelog
+
+- **v1.3 (2026-08-24)** — Description trimmed to restore headroom (was
+  988/1024, headroom 36 -- close-out work-order item 4). Dropped the named
+  broker-firm examples parenthetical and the ratification-date parenthetical;
+  no trigger vocabulary or named-defect clause removed.
+  `description_budget.py` now reports headroom 101.
 
 - **v1.2 (2026-08-17)** — Two fixes to the v1.1 retrofit, plus the regression
   test coverage neither shipped with.

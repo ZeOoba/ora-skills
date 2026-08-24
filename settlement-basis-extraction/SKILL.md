@@ -1,9 +1,9 @@
 ---
 name: settlement-basis-extraction
-description: Extract acquisition/disposition data from HUD-1 / ALTA settlement statements and build a capitalizable-basis register for Oxford Realty Advisors LLC (property) entities. Use when the user says: import settlement statements, build the basis register, extract closing costs, OCR the settlement PDFs, capitalize closing charges, reconcile a settlement to Schedule L, or points at a folder of HUD-1/ALTA settlement statements, deeds, or closing packages. Also trigger when a new acquisition or disposition closes and the settlement package needs to be worked into the entity's basis and the portfolio's EXCHANGE_1031 tracking. Produces a workbook (README, ENTITY_MASTER, PROPERTY_PL, BALANCE_SHEET, DEPR_COSTSEG, BASIS_REGISTER, CHARGE_DETAIL, EXCHANGE_1031, PAYMENTS, EXCEPTIONS, SOURCE_INDEX) with every figure transcribed verbatim and blank cells (not guesses) where a digit can't be read with confidence. v1.0 (2026-08-17: first cut, generalized from the manual 32-document / 27-transaction Tax & Basis Register import)
+description: Extract acquisition/disposition data from HUD-1/ALTA settlement statements and build a capitalizable-basis register for Oxford Realty Advisors property entities. Use when the user says: import settlement statements, build the basis register, extract closing costs, OCR the settlement PDFs, capitalize closing charges, reconcile a settlement to Schedule L, or points at a folder of HUD-1/ALTA settlement statements, deeds, or closing packages. Also trigger when a new acquisition or disposition closes and the settlement package needs to be worked into the entity's basis and the portfolio's EXCHANGE_1031 tracking. Produces a workbook (README, ENTITY_MASTER, PROPERTY_PL, BALANCE_SHEET, DEPR_COSTSEG, BASIS_REGISTER, CHARGE_DETAIL, EXCHANGE_1031, PAYMENTS, EXCEPTIONS, SOURCE_INDEX) with every figure transcribed verbatim and blank cells where a digit can't be read with confidence. v1.1
 ---
 
-# Settlement-Basis Extraction (ORA) — v1.0
+# Settlement-Basis Extraction (ORA) — v1.1
 
 ## When to use this
 
@@ -170,3 +170,11 @@ this list is the action item.
   exchange leg against its identification notice -- do it at closing.
 - Do not treat a land-value-zero settlement as resolved by capitalizing
   100% to improvements -- that is the exception, not the default.
+
+## Changelog
+
+- v1.1 (2026-08-24): Description trimmed to restore headroom (was 1019/1024,
+  headroom 5 -- close-out work-order item 4, the tightest of the six flagged
+  skills). Dropped the "LLC" gloss and the dated version-history parenthetical
+  ("first cut, generalized from..."); the full workbook-tab list and every
+  trigger phrase kept intact. `description_budget.py` now reports headroom 123.
