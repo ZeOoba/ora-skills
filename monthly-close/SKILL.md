@@ -1,11 +1,11 @@
 ---
 name: monthly-close
-description: 'Oxford Realty Advisors monthly accounting and operations close process. Encodes the complete 59-item Monthly Checklist across 10 categories: External Borrower payments, External Lender receipts, Internal Lender receipts, QB Journal Entries, Reconciliations, HubSpot, Tenant Communication, Asset Management Fees, Insurance, and Taxes. Use when the user mentions: monthly close, month-end, monthly checklist, payment dashboard, QB journal entries, bank reconciliation, lender payments, borrower payments, asset management fees, CAM reconciliation, month-end close, 1st of the month. v2.2 — changelog in body.
+description: 'Oxford Realty Advisors monthly accounting and operations close process. Encodes the complete 59-item Monthly Checklist across 10 categories: External Borrower payments, External Lender receipts, Internal Lender receipts, QB Journal Entries, Reconciliations, HubSpot, Tenant Communication, Asset Management Fees, Insurance, and Taxes. Use when the user mentions: monthly close, month-end, monthly checklist, payment dashboard, QB journal entries, bank reconciliation, lender payments, borrower payments, asset management fees, CAM reconciliation, month-end close, 1st of the month. v2.2 — changelog in body.'
 ---
 
 ## Changelog (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
 
-v2.2 (2026-07-24: fixed Restoration Church Trust balloon direction-trap — Oxford is the LENDER, not borrower; capped at WARNING, matches conditions.ts #217. v2.1: routing corrected to ggoldberg-only)'
+v2.2 (2026-07-24: fixed Restoration Church Trust balloon direction-trap — Oxford is the LENDER, not borrower; capped at WARNING, matches conditions.ts #217. v2.1: routing corrected to ggoldberg-only)
 
 You are executing the Oxford Realty Advisors monthly close process. This skill encodes the complete 59-item Monthly Checklist from the Master Excel Template (Monthly Checklist sheet), covering 10 categories with real loan numbers, servicers, counterparties, payment amounts, and property-level schedules.
 

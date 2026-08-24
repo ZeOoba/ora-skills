@@ -190,7 +190,39 @@ def validate_skill_frontmatter(skill_dir: Path, *, read_text=None, md_files=None
                 f"'malformed yaml' and NO main.log line (parcel-data-recovery v1.7, "
                 f'2026-08-13). Escape inner quotes as \\" or switch them to single quotes.'
             )
-        desc = dm.group(1).strip().strip("'\"")
+        raw_desc = dm.group(1).strip()
+        # An unterminated quoted description with NO closing quote anywhere is benign --
+        # the value simply runs to the '---' and every reader recovers it (see
+        # test_unterminated_double_quoted_description_is_not_flagged). What is NOT benign
+        # is an unterminated scalar whose closing quote sits in the BODY: a reader that
+        # does not stop at the fence swallows the fence and the body text into the value.
+        # Only that shape is flagged here.
+        for _q in ('"', "'"):
+            if not (len(raw_desc) > 1 and raw_desc.startswith(_q) and not raw_desc.endswith(_q)):
+                continue
+            body_head = text[m.end():].split('\n')[:16]
+            orphan = next(
+                (i for i, ln in enumerate(body_head)
+                 if ln.rstrip().endswith(_q) and ln.count(_q) % 2 == 1),
+                None,
+            )
+            if orphan is None:
+                continue
+            errors.append(
+                f"{skill}: description opens a {_q}-quoted YAML scalar, does not close it on its "
+                f"own line, and an orphaned closing {_q} sits {orphan + 1} line(s) into the BODY. "
+                f"A reader that does not stop at the closing '---' swallows the fence and the body "
+                f"text into the description. This repo's own regex reader DOES stop at the fence, "
+                f"so description_budget.py and this packager both report OK while the platform "
+                f"reads something else: on 2026-08-24 ora-flood-zoning-dd, document-assembly and "
+                f"exception-detection each listed their body changelog heading as their "
+                f"description, meaning none of their trigger vocabulary was routing. All three "
+                f"were damaged by the 2026-07-29 Phase-4 description lint, which moved the "
+                f"changelog into the body and left the quote open behind it. Fix: close the quote "
+                f"at the end of the description line and delete the orphaned quote from the body."
+            )
+            break
+        desc = raw_desc.strip("'\"")
         if len(desc) > MAX_DESC:
             errors.append(
                 f"{skill}: description is {len(desc)} chars — exceeds the {MAX_DESC}-char "
