@@ -1,6 +1,6 @@
 ---
 name: deal-execution
-description: 'Oxford Realty Advisors deal execution skill covering PSA negotiation through closing. Use when the user mentions: PSA, purchase and sale agreement, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel content/DD conformance (drafting an actual certificate routes to estoppel-request-generation), closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance. Also trigger before SENDING any draft: send the PSA, before this goes out, pre-send check, clear to send. Workflow 2A reviews ANY inbound draft against the executed LOI + deal-terms register; Workflow 2B gates every OUTBOUND draft against prior review memos, the LOI, the register, and the 6 mandatory buyer protections. Handles Litera/Workshare compare files, which carry no tracked changes. v1.6'
+description: 'Oxford Realty Advisors deal execution skill covering PSA negotiation through closing. Use when the user mentions: PSA, purchase and sale agreement, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel content/DD conformance (drafting an actual certificate routes to estoppel-request-generation), closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance. Also trigger before SENDING any draft: send the PSA, before this goes out, pre-send check, clear to send. Workflow 2A reviews ANY inbound draft against the executed LOI + deal-terms register; Workflow 2B gates every OUTBOUND draft against prior review memos, the LOI, the register, and the 6 mandatory buyer protections. Handles Litera/Workshare compare files, which carry no tracked changes. v1.7'
 ---
 
 You are operating as deal execution counsel and advisor for Oxford Realty Advisors (ORA). You handle everything from PSA generation through post-closing integration. The acquisition-underwriting skill covers pre-LOI work; this skill picks up at executed LOI.
@@ -340,7 +340,7 @@ Generate a full checklist in XLSX format with:
 - Stormwater permit review
 - Any prior remediation documentation
 
-**TITLE & SURVEY (20 items)**
+**TITLE & SURVEY (21 items)**
 
 - Preliminary title commitment (Schedule A and B) — abstract via `title-exam-abstraction`, which also supplies the vesting record Lease-Chain Integrity below checks landlord identity against
 - Review and approve/object to all Schedule B exceptions
@@ -352,6 +352,7 @@ Generate a full checklist in XLSX format with:
 - Mineral rights status
 - Flood zone determination (FEMA)
 - Zoning verification letter from municipality
+- **If the parcel sits in a PD/PUD:** obtain the approved PD plan from the planning department, plus a written statement from a named official of the **amendment tier** (minor/administrative vs. major/board) for any intended site change and for any use ORA may re-tenant into — `ora-flood-zoning-dd` Step 6A. A municipality confirming that a recorded cross-access or parking instrument is *not* a PD requirement clears the **zoning** question only: the instrument still binds every party and successor, and terminating or amending it stays a multi-party consent-and-recording deliverable. Reduced parking under a PD plan can also carry an updated-parking-plan filing on each new tenancy — a post-closing operations item, not a closing item, but it belongs in the register before it is forgotten.
 
 **LEGAL DD (24 items)**
 
@@ -515,6 +516,7 @@ Both are stdlib-only (`zipfile` + `ElementTree`); no python-docx, no lxml. Run f
 
 ## Changelog
 
+- v1.7 (2026-08-24): **PD/PUD item added to the Workflow 3 DD checklist (Title & Survey, 20 → 21 items).** The checklist carried "zoning verification letter from municipality" and nothing about planned-development districts, where the code has no use table and the governing instrument is the approved PD plan. The new item requires the plan itself plus a written amendment-tier statement (minor/administrative vs. major/board) from a named official, for the intended site change *and* for any use ORA may re-tenant into; it also separates recorded-easement clearance from zoning clearance, and flags the change-of-use parking-plan filing as a post-closing operations item that still belongs in the register. Procedure lives in `ora-flood-zoning-dd` Step 6A (new at v1.4); `acquisition-underwriting` v4.17 carries the matching pre-LOI carve-out. Origin: 754 Old State Route 74 — the Township confirmed in writing on 7/21/2026 that no special approval was needed to remove parking spaces, and that cleared the register item; the 8/2026 follow-up call named the actual mechanism (a minor amendment application to the PD plan, marked up by hand on the existing approved site plan) and disclosed that outside storage would be a major amendment. The checklist had no place to record either fact.
 - v1.6 (2026-08-21, adversarial review): v1.5's LEASE-CHAIN INTEGRITY landlord check compared against the self-reported
   "seller" field with no tie to actual title vesting, and neither it nor lease-abstraction-pipeline's parallel
   landlord-mismatch flag referenced the `title-exam-abstraction` skill added in the same v1.5 round — now wired: the
