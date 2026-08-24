@@ -1,6 +1,6 @@
 ---
 name: title-exam-abstraction
-description: 'Abstract a title exam, title commitment, preliminary report, or recorded-instrument set for Oxford Realty Advisors and turn every encumbrance into a tracked deal-terms-register item. Use when the user mentions: title exam, title commitment, title report, prelim, Schedule B, Schedule B-II exceptions, title exceptions, encumbrance review, cross-collateral, cross-default, assignment of rents, mortgage payoff, easement of record, deed restriction, chain of title, vesting, legal description, mortgage location survey, ALTA survey, or uploads a title exam / commitment / recorded instrument. Also trigger when a deal folder contains title work older than 90 days. Distinguishes what a document ESTABLISHES from what it merely reports, separates boundary surveys from mortgage location surveys, and routes every finding to a closing deliverable, a survey order, or a register item. Never substitutes for counsel. v1.0'
+description: 'Abstract a title exam, title commitment, preliminary report, or recorded-instrument set for Oxford Realty Advisors and turn every encumbrance into a tracked deal-terms-register item. Use when the user mentions: title exam, title commitment, title report, prelim, Schedule B, Schedule B-II exceptions, title exceptions, encumbrance review, cross-collateral, cross-default, assignment of rents, mortgage payoff, easement of record, deed restriction, chain of title, vesting, legal description, mortgage location survey, ALTA survey, or uploads a title exam / commitment / recorded instrument. Also trigger when a deal folder contains title work older than 90 days. Distinguishes what a document ESTABLISHES from what it merely reports, separates boundary surveys from mortgage location surveys, and routes every finding to a closing deliverable, a survey order, or a register item. Never substitutes for counsel. v1.1'
 ---
 
 # Title Exam Abstraction — Oxford Realty Advisors
@@ -124,6 +124,28 @@ Each abstracted item exits as exactly one of:
 Write the register rows in the register's own format so they can be pasted in directly, and never
 renumber existing rows.
 
+**REGISTER WRITE-BACK VERIFICATION — mandatory before any register item is reported as added (v1.1,
+2026-08-24).** Drafting a register row and landing it on disk are two different events, and only the
+second one counts. Before this run's output, a memo, or a status summary says register items were
+added:
+
+1. **Re-read `DEAL-TERMS-REGISTER.md` from disk** after writing — not from what you composed, not from
+   the tool result that reported success.
+2. **Confirm each new number is present**, and quote the highest number now in the file.
+3. **Reconcile against the numbers you intended.** If the file's highest number is lower than the rows
+   you drafted, the write did not land: say so plainly and either write it now or hand off the exact
+   rows, in the register's format, to whoever can.
+4. **Never assign a number that a prior run may already have claimed but not written.** If any earlier
+   record (a memo, a prior session's summary, project memory) says rows `N…M` were added and they are
+   not in the file, treat `N…M` as **RESERVED**, start at `M+1`, and state the reservation in the
+   register's own update log so the next writer inherits it. Reserving numbers is always cheaper than
+   a collision, because existing rows are never renumbered.
+
+Origin (754 Old State Route 74): a 2026-08-21 review recorded in project memory that it "added Items
+16–22." The register on disk ran 1–15 and had last been written a month earlier. The claim survived
+four weeks and two downstream sessions because nothing ever re-read the file, and the next writer
+would have silently reused those numbers. A one-line read-back would have caught it the same day.
+
 ---
 
 ## STEP 5 — OUTPUT
@@ -154,4 +176,5 @@ nothing here is a legal opinion on marketability or insurability.
 
 ## Changelog
 
+- v1.1 (2026-08-24): Added **REGISTER WRITE-BACK VERIFICATION** to STEP 4. STEP 4 told the reader to assign the next register number and never renumber, and stopped there — it never required confirming that the rows actually reached the file. Origin (754 Old State Route 74): a 2026-08-21 review recorded in project memory that it "added Items 16–22"; the register on disk ran 1–15 and had last been written on 2026-07-21. The claim survived four weeks and two downstream sessions unchallenged, and the next writer would have silently reused those numbers against rows that may yet be pasted in. The step now requires a post-write re-read from disk, quoting the highest number now present, an explicit reconciliation against the rows drafted, and — the part that makes the failure recoverable rather than merely visible — a **RESERVED** range recorded in the register's own update log whenever an earlier record claims rows the file does not contain, so the next writer starts above them instead of colliding. Also bumps the frontmatter version token, which sat at v1.0 with no changelog entry to move.
 - v1.0 (2026-08-21): initial. Built after the 754 Old State Route 74 file review surfaced an open mortgage, a recorded assignment of rents, and a cross-collateral / cross-default package against the parcel — none of which appeared in the deal-terms register or the DD tracker after four months — and after the folder's only survey turned out to be a 2016 mortgage location survey that expressly disclaims boundary and title research while being relied on as if it were a boundary survey.
