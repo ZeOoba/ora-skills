@@ -1,0 +1,29 @@
+{
+  "staged_at": "2026-08-22T22:16:39Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-08-22_doctrine-patch-v01",
+  "packages": [
+    {
+      "skill": "acquisition-underwriting",
+      "file": "acquisition-underwriting.skill",
+      "bytes": 87610
+    },
+    {
+      "skill": "acquisition-proposal-generation",
+      "file": "acquisition-proposal-generation.skill",
+      "bytes": 439363
+    },
+    {
+      "skill": "market-monitor",
+      "file": "market-monitor.skill",
+      "bytes": 25003
+    },
+    {
+      "skill": "loi-generation",
+      "file": "loi-generation.skill",
+      "bytes": 2789386
+    }
+  ],
+  "last_batch": [
+    "acquisition-underwriting"
+  ]
+}
