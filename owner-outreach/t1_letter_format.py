@@ -35,6 +35,22 @@ PRINTABLE_WIDTH_IN = (PAGE["width"] - PAGE["left"] - PAGE["right"]) / 1440.0  # 
 # "plain"      = plain paper, firm name + tagline typeset at the top of each letter.
 LETTERHEAD_MODE = "letterhead"
 
+# Plain-paper top margin (Format Spec v1.1): no pre-printed letterhead band to
+# clear, so plain mode uses 1.00" instead of PAGE's letterhead-mode 1.50".
+# Every other margin (bottom/left/right/header/footer) is identical in both
+# modes -- only top changes.
+PLAIN_TOP = 1440
+
+
+def page_for_mode(mode=LETTERHEAD_MODE):
+    """Return the page-margins dict for `mode` -- PAGE, with 'top' swapped to
+    PLAIN_TOP when mode == "plain". PAGE itself always describes letterhead
+    mode; this is the one place a caller should read plain mode's margins
+    from, rather than re-deriving the swap inline."""
+    if mode == "plain":
+        return {**PAGE, "top": PLAIN_TOP}
+    return PAGE
+
 FONT = "EB Garamond"
 SZ_BODY = 22        # half-points -> 11 pt
 SZ_FIRM = 30        # 15 pt  (plain mode only)
