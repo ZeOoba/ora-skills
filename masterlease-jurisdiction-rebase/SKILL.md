@@ -1,6 +1,6 @@
 ---
 name: masterlease-jurisdiction-rebase
-description: "Rebase Oxford Realty Advisors jurisdiction-conformed Master Lease property templates onto a new master revision in one command, and generate state-conformed (MD/MO) property templates from the OH-anchored master. Use whenever the user mentions: new master lease version, rebase the lease templates, regenerate the MD/MO templates, jurisdiction overlay, conform the lease to a state, state-conformed lease template, update property lease forms, lease template for Easton / Salisbury / Northwood / Raytown / Columbia, or uploads a new ORA_MasterLease_ShallowBayIndustrial_v*.docx. Also use when adding a NEW property or state overlay, or converting a property to NNN. Edits the master DOCX in place with asserted-count substitutions (2026-08-03 anti-contamination discipline). Companion to lease-form-qc (which QCs drafted leases); this skill produces the templates leases are drafted FROM. v1.6 (2026-08-04: single-tenant variant via config (OH-ST-NNN); fixture v2.6; --out required; ora_docx_redline.py)"
+description: "Rebase Oxford Realty Advisors jurisdiction-conformed Master Lease property templates onto a new master revision in one command, and generate state-conformed (MD/MO) property templates from the OH-anchored master. Use whenever the user mentions: new master lease version, rebase the lease templates, regenerate the MD/MO templates, jurisdiction overlay, conform the lease to a state, state-conformed lease template, update property lease forms, lease template for Easton / Salisbury / Northwood / Raytown / Columbia, or uploads a new ORA_MasterLease_ShallowBayIndustrial_v*.docx. Also use when adding a NEW property or state overlay, or converting a property to NNN. Edits the master DOCX in place with asserted-count substitutions. Companion to lease-form-qc (which QCs drafted leases); this skill produces the templates leases are drafted FROM. v1.7"
 ---
 
 # Master Lease Jurisdiction Rebase — Oxford Realty Advisors
@@ -206,6 +206,12 @@ v2.5 and v2.6 builds before extraction). Anchors must sit inside one `<w:t>` (ru
 `rebase.py`.
 
 ## Changelog
+
+- v1.7 (2026-08-24): Description trimmed to restore headroom (was 1003/1024,
+  headroom 21 -- close-out work-order item 4). Dropped the dated
+  anti-contamination and single-tenant-variant version-history parentheticals;
+  no trigger vocabulary or rule clause removed. `description_budget.py` now
+  reports headroom 174.
 
 - v1.6 (2026-08-04): Single-tenant variant support. `single_tenant_rules()` /
   `convert_to_single_tenant()` + `variant` config field + OH-ST-NNN entry;

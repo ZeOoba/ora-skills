@@ -1,10 +1,10 @@
 ---
 
 name: disposition-analysis
-description: Oxford Realty Advisors hold / refinance / 1031 / sell decision engine. Use when the user mentions: should we sell, hold or sell, disposition, dispose of, exit an asset, recycle or prune the portfolio, 1031, like-kind exchange, replace an asset, refinance vs sell, harvest gains, cash out, when to sell, or keeping vs selling a property. Defaults to HOLD + cash-out refinance for liquidity (ORA generational-hold doctrine); when capital is recycled the default exit is a 1031 exchange; a taxable sale is the rare exception that must clear a high bar. Charges the forfeited estate step-up and deferred depreciation recapture (Sec 1245 ordinary + unrecaptured Sec 1250 + LTCG + NIIT + state) against any taxable sale; models the 1031 deferral (carryover basis, 45/180-day, QI, boot) and the estate step-up overlay. Produces a hold/refi/1031/sell recommendation with tax-charged net proceeds; logs every ruling to memory/disposition-ledger.md. Conforms to the ORA Tax-Inclusive Underwriting Standard. v1.1
+description: Oxford Realty Advisors hold / refinance / 1031 / sell decision engine. Use when the user mentions: should we sell, hold or sell, disposition, dispose of, exit an asset, recycle or prune the portfolio, 1031, like-kind exchange, replace an asset, refinance vs sell, harvest gains, cash out, when to sell, or keeping vs selling a property. Defaults to HOLD + cash-out refinance for liquidity (ORA generational-hold doctrine); when capital is recycled the default exit is a 1031 exchange; a taxable sale is the rare exception that must clear a high bar. Charges the forfeited estate step-up and deferred depreciation recapture (Sec 1245 ordinary + unrecaptured Sec 1250 + LTCG + NIIT + state) against any taxable sale; models the 1031 deferral (carryover basis, 45/180-day, QI, boot) and the estate step-up overlay. Produces a hold/refi/1031/sell recommendation with tax-charged net proceeds. Conforms to the ORA Tax-Inclusive Underwriting Standard. v1.2
 ---
 
-# Disposition Analysis — Oxford Realty Advisors (v1.1)
+# Disposition Analysis — Oxford Realty Advisors (v1.2)
 
 You are evaluating whether ORA should HOLD, REFINANCE, 1031-EXCHANGE, or make a TAXABLE SALE of an asset. ORA is a generational-hold family office; the burden of proof is on selling, and recycling is almost always done via 1031. Every analysis carries the tax overlay — a sale's "true" cost is the headline price minus the tax a hold would have avoided.
 
@@ -55,4 +55,12 @@ Append one row to `memory/disposition-ledger.md` — the post-acquisition lifecy
 
 ## Cross-skill
 acquisition-underwriting (replacement-asset underwrite for 1031 targets) · deal-comparison (replacement vs hold) · the IRR model's Tax Analysis tab (recapture block) · portfolio-reporting (concentration/rebalance triggers) · disposition-ledger.md (Step 7 log, new 2026-07-29).
+
+## Changelog
+
+- v1.2 (2026-08-24): Description trimmed to restore headroom (was 1001/1024,
+  headroom 23 -- close-out work-order item 4). Dropped the implementation-detail
+  clause naming the ledger file path (the ledger itself, and every tax/exchange
+  rule clause, is unchanged); no trigger vocabulary removed.
+  `description_budget.py` now reports headroom 73.
 

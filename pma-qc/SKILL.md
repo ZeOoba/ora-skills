@@ -1,6 +1,6 @@
 ---
 name: pma-qc
-description: "Pre-execution and pre-renewal QC gate for PROPERTY MANAGEMENT AGREEMENTS on third-party manager paper (Kohr Royer Griffith, Colliers, Cushman, local PM firms) where Oxford Realty Advisors or an ORA entity is the Owner. Use when the user says: QC this management agreement, review the PM agreement, property management agreement, management agreement review, PM fee review, can I give leasing to another party, who controls leasing at this building, terminate the property manager, or uploads a DOCX/PDF that is a property management agreement. Run before signing, before every auto-renewal, and before engaging a third-party leasing broker at a managed property. Scans 32 defects (exclusive leasing grant with no per-property carve-out, manager authority to execute leases in Owner's name, indemnity reaching the manager's own negligence, undefined fee bases, fee stacking, retained trust-account interest, no turnover obligations) at BLOCK/HIGH/MED/LOW. Carries 18 PROPOSED positions, unratified. v1.0"
+description: "Pre-execution and pre-renewal QC gate for PROPERTY MANAGEMENT AGREEMENTS on third-party manager paper where Oxford Realty Advisors or an ORA entity is the Owner. Use when the user says: QC this management agreement, review the PM agreement, property management agreement, management agreement review, PM fee review, can I give leasing to another party, who controls leasing at this building, terminate the property manager, or uploads a DOCX/PDF that is a property management agreement. Run before signing, before every auto-renewal, and before engaging a third-party leasing broker at a managed property. Scans 32 defects (exclusive leasing grant with no per-property carve-out, manager authority to execute leases in Owner's name, indemnity reaching the manager's own negligence, undefined fee bases, fee stacking, retained trust-account interest, no turnover obligations) at BLOCK/HIGH/MED/LOW. Carries 18 PROPOSED positions, unratified. v1.1"
 ---
 
 # Property Management Agreement QC — third-party manager paper
@@ -229,6 +229,11 @@ Compute and state:
   them.
 
 ## Changelog
+
+- **v1.1 (2026-08-24)** — Description trimmed to restore headroom (was
+  1002/1024, headroom 22 -- close-out work-order item 4). Dropped the named
+  third-party manager-firm examples parenthetical; no trigger vocabulary or
+  named-defect clause removed. `description_budget.py` now reports headroom 79.
 
 - **v1.0 (2026-08-17)** — Initial. 32 checks, 18 proposed standing positions,
   fee-stack model, agreement-folder checklist, KRG form defect register.
