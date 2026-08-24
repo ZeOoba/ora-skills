@@ -1,6 +1,6 @@
 ---
 name: tax-appeal
-description: "Property tax assessment analysis and appeal decision engine for Oxford Realty Advisors. Use this skill whenever the user mentions: property tax, tax assessment, tax appeal, assessed value, tax reduction, county assessor, millage rate, tax bill, reassessment, tax protest, tax grievance, income approach valuation, or any request to evaluate whether a property tax assessment should be appealed. Also trigger when the user uploads a property tax bill or assessment notice. v1.2 (2026-08-15: comp-grid pointers repointed from market-monitor to acquisition-underwriting's COMP GRID DISCIPLINE; file-naming citation updated to Cowork Global Operating Prompt v3.0). v1.1 (2026-07-08: file-naming citations repointed from the superseded single 2026-05-14 standard to the ratified three-schema doctrine)"
+description: "Property tax assessment analysis and appeal decision engine for Oxford Realty Advisors. Use this skill whenever the user mentions: property tax, tax assessment, tax appeal, assessed value, tax reduction, county assessor, millage rate, tax bill, reassessment, tax protest, tax grievance, income approach valuation, or any request to evaluate whether a property tax assessment should be appealed. Also trigger when the user uploads a property tax bill or assessment notice. v1.3 (2026-08-24: confirm-the-mechanism rule added to Section 5). v1.2 (2026-08-15: comp-grid pointers repointed from market-monitor to acquisition-underwriting's COMP GRID DISCIPLINE; file-naming citation updated to Cowork Global Operating Prompt v3.0). v1.1 (2026-07-08: file-naming citations repointed from the superseded single 2026-05-14 standard to the ratified three-schema doctrine)"
 ---
 
 # Property Tax Appeal Decision Engine
@@ -147,6 +147,21 @@ Reference the Gibbs Firm (Oxford's property tax counsel) for jurisdictions requi
 
 ## 5. JURISDICTION-SPECIFIC PROCEDURES
 
+> **Confirm the MECHANISM with the board, not just the answer (added v1.3, 2026-08-24).** The deadlines and
+> processes below are a starting point that goes stale; the per-jurisdiction notes already say to verify them.
+> Verifying means more than re-confirming a date. When a board clerk, assessor or county office tells you
+> something favorable — "you can still file for that year," "no formal hearing is needed," "we can adjust it
+> administratively," "just send it in" — that answers the question you asked and stops there. Before it is
+> recorded as resolved, get, in writing where possible, from a **named** person: **which form or complaint
+> instrument gets filed · who must sign it (owner, officer, attorney — several states restrict who may file
+> on an entity's behalf) · where it is filed and by what date · whether it is decided administratively or at
+> a hearing · and what the decision instrument is** (a letter, a board order, a stipulation). An
+> administrative adjustment and a BOR complaint carry entirely different calendars, evidence burdens, and
+> appeal rights, and "we can just fix that" is said about both. A filing path that has not been named is not
+> a filing path, and an appeal whose mechanism is unconfirmed should not be carried in the ROI calc as though
+> only the deadline stood between ORA and the reduction. Same discipline as `ora-flood-zoning-dd` Step 6A
+> (entitlements) and `ora-millage-lookup` (rate pulls).
+
 ### Ohio — Franklin County (Columbus properties)
 - **Board:** Franklin County Board of Revision
 - **Cycle:** Annual assessment, triennial reappraisal
@@ -194,6 +209,7 @@ Output as XLSX per ORA's three standing naming schemas (ratified 2026-06-10; ORA
 
 ## Changelog
 
+- v1.3 (2026-08-24): Added the **confirm-the-mechanism** rule at the head of §5. The jurisdiction table already told the reader to re-verify deadlines; it said nothing about the far more common failure, which is taking a favorable answer from a board clerk or assessor as a resolved filing path. "You can still file for that year," "no hearing needed," and "we can adjust that administratively" each answer the question asked and stop there — and an administrative adjustment and a formal BOR complaint carry different calendars, evidence burdens and appeal rights. The rule now requires the instrument, the permitted signatory (several states restrict who may file for an entity), the venue and date, whether it is decided administratively or at a hearing, and what the decision instrument is; an appeal whose mechanism is unconfirmed must not be carried in the §3 ROI calc as if only the deadline stood in the way. Sibling rules landed the same day in `ora-flood-zoning-dd` Step 6A (entitlements, the origin case at 754 Old State Route 74) and `ora-millage-lookup` (rate pulls). No scoring, threshold, or valuation math changed.
 - v1.2 (2026-08-15): HIGH fix (Skill Text Audit findings F1/coverage-gap-3). §2.A/§2.B comp-grid pointers repointed from market-monitor (which never had comp-grid mechanics — its "absorbed" claim didn't survive inspection) to acquisition-underwriting's COMP GRID DISCIPLINE section, absorbed there 2026-08-12 per Gabriel's scoped-restore ruling; §7 cross-skill integration line repointed to match. File-naming citations in §4/§6 updated from the archived "ORA Cowork Global Settings v2.0" (2026-06-11) to the current "ORA Cowork Global Operating Prompt v3.0" (2026-07-16) — the underlying three-schema rule is unchanged, only the version/document-name citation. No scoring, threshold, or valuation math changed.
 - v1.1 (2026-07-08): HIGH fix (beyond formal Skill Text Audit scope, same doctrine class as finding 5) — both file-naming citations (Appeal package, §4; Portfolio-wide XLSX, §6) repointed from the superseded single "ORA File-Naming Standard 2026-05-14.md" to the ratified three-schema doctrine (ORA Cowork Global Settings v2.0, 2026-06-10/11).
 
