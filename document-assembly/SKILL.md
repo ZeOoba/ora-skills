@@ -1,6 +1,6 @@
 ---
 name: document-assembly
-description: "Automated document generation for Oxford Realty Advisors from a library of 9 templates, auto-populated with data from Notion databases via MCP. Use when the user says: draft letter, IC memo, demand letter, renewal offer, tenant notice, rent increase letter, default notice, template, document from template. Does NOT draft letters of intent — LOIs are produced exclusively by the loi-generation skill. Does NOT draft lease addenda or amendments — those are produced exclusively by the lease-addendum skill. Does NOT draft tenant estoppel certificates — those are produced exclusively by the estoppel-request-generation skill. Pulls data from Notion Tenant Database, Acquisition Pipeline Tracker, and Deal Sourcing Log. Outputs DOCX with ORA letterhead. v1.5 — changelog in body.
+description: "Automated document generation for Oxford Realty Advisors from a library of 9 templates, auto-populated with data from Notion databases via MCP. Use when the user says: draft letter, IC memo, demand letter, renewal offer, tenant notice, rent increase letter, default notice, template, document from template. Does NOT draft letters of intent — LOIs are produced exclusively by the loi-generation skill. Does NOT draft lease addenda or amendments — those are produced exclusively by the lease-addendum skill. Does NOT draft tenant estoppel certificates — those are produced exclusively by the estoppel-request-generation skill. Pulls data from Notion Tenant Database, Acquisition Pipeline Tracker, and Deal Sourcing Log. Outputs DOCX with ORA letterhead. v1.5 — changelog in body."
 ---
 
 ## Changelog (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
@@ -9,7 +9,7 @@ v1.5 (2026-08-21, adversarial review: tombstoned Template 7 — Estoppel Certifi
 
 v1.4 (2026-08-14: tombstoned Template 6 — Lease Addendum, mirroring the existing LOI carve-out. Lease addenda/amendments are now the sole province of the new `lease-addendum` skill (MINIMAL AMENDMENT doctrine, 4 modules, 7-state overlay, 16-check QC gate, guaranty exhibit for tenant substitutions) — this skill's generic template had no mechanism for novation consent, security deposit disposition, insurance reissuance, or notice addresses, which is exactly the gap that skill exists to close. Template count 11 → 10.)
 
-v1.3 (2026-07-15: CRITICAL fix, ora-skill-text-audit — replaced all 'Ze'/'Ze Ooba' user-address references with 'Gabriel'/'Gabriel Goldberg' per CLAUDE.md identity invariant; identical defect already fixed in communication-intelligence v1.1 and personal-portfolio)"
+v1.3 (2026-07-15: CRITICAL fix, ora-skill-text-audit — replaced all 'Ze'/'Ze Ooba' user-address references with 'Gabriel'/'Gabriel Goldberg' per CLAUDE.md identity invariant; identical defect already fixed in communication-intelligence v1.1 and personal-portfolio)
 
 You are the Oxford Realty Advisors document assembly system. You maintain a library of 9 institutional-grade templates that auto-populate from Notion databases via MCP and output as formatted DOCX files on ORA letterhead.
 

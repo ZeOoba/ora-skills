@@ -1,11 +1,11 @@
 ---
 name: ora-flood-zoning-dd
-description: "Resolve the two hardest DD-Critical screen items for Oxford Realty Advisors acquisitions: FEMA flood determination and zoning/permitted-use verification. Use whenever the user mentions: flood zone, FEMA, SFHA, NFHL, floodplain, flood determination, zoning check, zoning designation, permitted use, zoning GIS, or when an acquisition screen/underwrite has unresolved flood or zoning DD-Critical items (Buy Box v1.0 caps any such deal at T2 WATCH). Produces a sourced determination block per parcel. v1.4 — changelog in body.
+description: "Resolve the two hardest DD-Critical screen items for Oxford Realty Advisors acquisitions: FEMA flood determination and zoning/permitted-use verification. Use whenever the user mentions: flood zone, FEMA, SFHA, NFHL, floodplain, flood determination, zoning check, zoning designation, permitted use, zoning GIS, or when an acquisition screen/underwrite has unresolved flood or zoning DD-Critical items (Buy Box v1.0 caps any such deal at T2 WATCH). Produces a sourced determination block per parcel. v1.4 — changelog in body."
 ---
 
 ## Changelog (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
 
-v1.4 (2026-08-24: Step 6A added - Planned Development (PD/PUD) parcels carry no by-right use table; run the minor-vs-major amendment tier test and capture the post-closing change-of-use trigger) · v1.3 (2026-07-24: mandatory geocode-vs-parcel validation added after a confirmed off-parcel geocode/empty-zoning-result incident; endpoints verified 2026-06-09; batch-write safety rule added 2026-07-12; cross-linked county-parcel-screen's endpoint registry for parcel-geometry lookups 2026-07-20)"
+v1.4 (2026-08-24: Step 6A added - Planned Development (PD/PUD) parcels carry no by-right use table; run the minor-vs-major amendment tier test and capture the post-closing change-of-use trigger) · v1.3 (2026-07-24: mandatory geocode-vs-parcel validation added after a confirmed off-parcel geocode/empty-zoning-result incident; endpoints verified 2026-06-09; batch-write safety rule added 2026-07-12; cross-linked county-parcel-screen's endpoint registry for parcel-geometry lookups 2026-07-20)
 
 # ORA Flood & Zoning DD-Critical Resolution
 

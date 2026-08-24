@@ -284,10 +284,18 @@ class FrontmatterYamlValidityGate(unittest.TestCase):
             self.assertEqual(errors, [])
 
     def test_unterminated_double_quoted_description_is_not_flagged(self):
-        """Class B (benign): matches the 4 live skills like document-assembly whose
-        double-quoted description is missing its closing quote entirely -- strict
-        yaml.safe_load rejects this ('unexpected end of stream') but the platform
-        installs it fine, and there is no trailing garbage corrupting the mapping."""
+        """Class B (benign): a double-quoted description missing its closing quote
+        ENTIRELY -- strict yaml.safe_load rejects this ('unexpected end of stream') but
+        the platform installs it fine, and there is no trailing garbage corrupting the
+        mapping. Still benign, still not flagged.
+
+        NARROWED 2026-08-24: this case is benign only while no closing quote exists
+        anywhere. The live skills this test was written for (ora-flood-zoning-dd,
+        document-assembly, exception-detection) were NOT this shape -- their closing
+        quote sat 4-8 lines into the body, and all three listed their body changelog
+        heading as their description, so none of their trigger vocabulary was routing.
+        "The platform installs it fine" was true and was never the question. See
+        test_unterminated_description_with_orphan_body_quote_is_flagged below."""
         with tempfile.TemporaryDirectory() as tmp:
             skill_dir = Path(tmp) / 'fixture-skill'
             skill_dir.mkdir()
@@ -295,6 +303,49 @@ class FrontmatterYamlValidityGate(unittest.TestCase):
                 '---\nname: fixture-skill\n'
                 'description: "Automated document generation. v1.3 — changelog in body.\n'
                 '---\n\n# x\n',
+                encoding='utf-8',
+            )
+            errors = validate_skill_frontmatter(skill_dir)
+            self.assertEqual(errors, [])
+
+    def test_unterminated_description_with_orphan_body_quote_is_flagged(self):
+        """Class A (harmful, found 2026-08-24): the description opens a quoted scalar,
+        never closes it on its own line, and the closing quote sits in the BODY. A
+        reader that does not stop at the '---' fence swallows the fence and the body
+        text into the description value. This repo's regex reader DOES stop at the
+        fence, so description_budget.py and the packager both reported OK while the
+        platform listed the body's changelog heading as the description -- the exact
+        live shape of ora-flood-zoning-dd, document-assembly and exception-detection,
+        all three damaged by the 2026-07-29 Phase-4 description lint."""
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / 'fixture-skill'
+            skill_dir.mkdir()
+            (skill_dir / 'SKILL.md').write_text(
+                '---\nname: fixture-skill\n'
+                'description: "Trigger on: flood zone, FEMA, zoning check. v1.4 — changelog in body.\n'
+                '---\n\n'
+                '## Changelog (moved from description 2026-07-29)\n\n'
+                'v1.4 (2026-08-24: something happened)"\n\n'
+                '# x\n',
+                encoding='utf-8',
+            )
+            errors = validate_skill_frontmatter(skill_dir)
+            self.assertEqual(len(errors), 1, errors)
+            self.assertIn('orphaned closing', errors[0])
+            self.assertIn('into the BODY', errors[0])
+
+    def test_properly_quoted_description_is_not_flagged(self):
+        """Guard against the orphan-quote check firing on a well-formed file whose body
+        happens to contain quoted prose."""
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / 'fixture-skill'
+            skill_dir.mkdir()
+            (skill_dir / 'SKILL.md').write_text(
+                '---\nname: fixture-skill\n'
+                'description: "Trigger on: flood zone, FEMA. v1.4 — changelog in body."\n'
+                '---\n\n'
+                'The clerk said "no approval needed"\n\n'
+                '# x\n',
                 encoding='utf-8',
             )
             errors = validate_skill_frontmatter(skill_dir)
