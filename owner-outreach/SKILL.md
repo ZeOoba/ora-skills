@@ -1,6 +1,6 @@
 ---
 name: owner-outreach
-description: Oxford Realty Advisors weekly off-market owner cold-outreach pipeline. Use whenever the user mentions owner outreach, off-market letters, T1 letter pack, cold outreach queue, owner mailing, motivated seller outreach, off-market owner letters, or asks to refresh/run/check the weekly owner-outreach cycle -- even if they just say "run outreach" or "what's in the owner outreach queue this week." Promotes qualifying parcels from the off-market master (built by parcel-data-recovery / acquisition-underwriting off-market screens) into a dated queue, dedups against the Notion Owner Outreach ledger, drafts T1 cold-outreach letters on ORA letterhead, and reports promoted/net-new counts. DRAFT ONLY -- this is outbound counterparty communication (Hard Invariant 1); nothing is ever sent without Gabriel's explicit confirmation. v1.2 (2026-08-15: see Changelog).
+description: Oxford Realty Advisors weekly off-market owner cold-outreach pipeline. Use whenever the user mentions owner outreach, off-market letters, T1 letter pack, cold outreach queue, owner mailing, motivated seller outreach, off-market owner letters, or asks to refresh/run/check the weekly owner-outreach cycle -- even if they just say "run outreach" or "what's in the owner outreach queue this week." Promotes qualifying parcels from the off-market master (built by parcel-data-recovery / acquisition-underwriting off-market screens) into a dated queue, dedups against the Notion Owner Outreach ledger, drafts T1 cold-outreach letters on ORA letterhead, and reports promoted/net-new counts. DRAFT ONLY -- this is outbound counterparty communication (Hard Invariant 1); nothing is ever sent without Gabriel's explicit confirmation. v1.3 (2026-08-24: see Changelog).
 metadata:
   type: ora-operations
 ---
@@ -56,6 +56,35 @@ on a stale description here.
    master age, integrity-check result) to `ggoldberg@oxfordra.net` ONLY, per routing canon. **Do not**
    release or send the letter pack itself — that is a separate, explicit action Gabriel takes.
 
+## Letter format contract (read before touching letter layout)
+
+The letter's geometry -- margins, spacing, the signature gap, the letterhead block, what appears in
+the signature footer -- is defined by **`ORA_OwnerOutreach-T1Letter_FormatSpec_v1.1.md`** and its
+executable form **`t1_letter_format.py`**, both of which live beside the scripts in the project
+folder. `build_t1_letterpack.py` is expected to import the module rather than carry layout literals.
+
+**The generator is the template.** A saved letter pack DOCX does not govern anything. If Gabriel
+asks to "save this pack as the master template for future letters," the deliverable is a patch to
+`build_t1_letterpack.py` (plus a spec bump), not a filed DOCX -- say so rather than filing the file
+and reporting done. This is a real failure mode: on 2026-08-24 a hand-corrected pack was nearly
+saved as "the template" while the generator would have reverted every change on the next run.
+
+Current contract in brief (full values in the spec):
+
+- Page 8.5x11; margins top 1.50" / bottom 1.00" / sides 1.10". The 1.50" top clears the pre-printed
+  letterhead band -- verify against physical stock before a run.
+- EB Garamond 11 pt throughout. No typeset firm block in letterhead mode.
+- Signature gap after "Sincerely," is 46 pt (920 twips), sized for a wet signature.
+- Signature footer is name / firm / cell / email / web. **No street address.**
+- One letter per page via `pageBreakBefore`, never a manual page break.
+- `MAX_LINE_CHARS = 76`. Two overflow modes are guarded in code: `fit_re_line()` (Re: line wrap --
+  property count is NOT the lever, rendered length is) and `split_address_block()` (Tier-0 mailing
+  parse gluing a capacity phrase onto the street line). Per-letter spacing tightening is the last
+  resort; never shrink the font, never tighten pack-wide.
+- **`verify_pack()` is a mandatory post-generation gate**: renders the pack and asserts one
+  salutation per letter page, not merely the right page count. Hard-fail on a problem, same severity
+  as the letter-count integrity check.
+
 ## What changed 2026-07-11 (read before assuming old behavior)
 
 The scripts were audited and patched against real defects found in the two manual runs (2026-06-15,
@@ -70,6 +99,8 @@ The scripts were audited and patched against real defects found in the two manua
 - The letter-pack signature block was signing "Oxford Capital" with no email — stale relative to the
   `communication-intelligence` standard (Gabriel Goldberg / Oxford Realty Advisors /
   ggoldberg@oxfordra.net, ratified 2026-07-08). Corrected; phone and street-address footer unchanged.
+  (Street-address footer superseded 2026-08-24 -- the DC address is struck from the signature block;
+  the pre-printed letterhead carries it. Kept as history, not current behavior.)
 - The 2026-06-22 run silently re-processed a 12-day-stale master and reported an uninformative
   zero-net-new result instead of halting. `--strict-age` is now always passed by the orchestrator.
   (Superseded 2026-07-12 -- see below; this bullet is kept as history, not current behavior.)
@@ -111,8 +142,34 @@ rendering (`build_t1_letterpack.py --touch N`, body text sourced from a not-yet-
 templates doc). Both are blocked on source files Gabriel has not yet provided in-session -- verify they
 still say "pending" before assuming either shipped.
 
+## What changed 2026-08-24
+
+Letter format was corrected by hand against a live pack (156 letters, run date restamped to
+August 26) and the result was ratified as a spec. No pipeline logic changed; this is layout plus a
+new integrity gate.
+
+- **Format spec + module (new).** `ORA_OwnerOutreach-T1Letter_FormatSpec_v1.1.md` and
+  `t1_letter_format.py` now hold the letter's geometry. The generator is expected to import the
+  module; until it does, every run reverts to the 2026-08-14 layout.
+- **Signature footer.** DC street address struck. Letterhead carries it.
+- **Margins.** Top 0.95" -> 1.50" (clears pre-printed letterhead art); bottom 0.95" -> 1.00".
+- **Letterhead block.** The typeset firm name + tagline are dropped in `LETTERHEAD_MODE =
+  "letterhead"`, the production default, because they collide with pre-printed stock. A "plain"
+  mode retains them for plain-paper runs.
+- **Signature gap.** 24 pt -> 46 pt for a wet signature.
+- **Two overflow modes found and guarded.** Five letters spilled to a second page. Four were Re:-line
+  wraps; the existing "(+N more) past three properties" cap did not prevent them, because three long
+  addresses still render past the 76-character budget. One was an address-block wrap caused by the
+  Tier-0 mailing parse emitting `<name> CO Trustees Et Al <street>` as a single 82-character field --
+  a mailing-quality defect that would have printed badly in a window envelope regardless.
+- **`verify_pack()` (new gate).** Page count alone passes when one letter spills and another is
+  short; the new gate checks one salutation per letter page and named all five broken letters.
+
 ## Guardrails
 
+- Letter layout is spec-governed, not file-governed -- see "Letter format contract" above.
+  Never treat a saved pack as the template, and never hand-edit a pack's layout as a substitute
+  for patching the generator; the next run will silently undo it.
 - This is the T1 (first-touch) stage only. Second-stage conversation structures (extended-1031-study
   leaseback, installment sale/seller carry, objection handling) are documented in
   `2026-06-15_Owner-Outreach_Creative-Structures-and-Objections_v01.md` in the project folder and are
@@ -140,6 +197,7 @@ around it.
 
 ## Changelog
 
+- v1.3 (2026-08-24): Added the "Letter format contract" section and a matching guardrail -- letter geometry now points at `ORA_OwnerOutreach-T1Letter_FormatSpec_v1.1.md` / `t1_letter_format.py`, and the generator (not a saved DOCX) is named as the template of record. Added "What changed 2026-08-24": signature-footer address struck, top margin 1.50", letterhead block dropped for pre-printed stock, 46 pt signature gap, two overflow modes guarded in code, and `verify_pack()` added as a mandatory post-generation gate. Marked the 2026-07-11 "street-address footer unchanged" bullet superseded. No pipeline logic, cadence-gate behavior, or trigger vocabulary changed.
 - v1.2 (2026-08-15): LOW fix (Skill Text Audit finding F9). Moved the v1.1/v1.0 changelog prose that had accumulated in the frontmatter `description` field down here — this is the first `## Changelog` heading in this file (the existing "What changed 2026-07-11" / "What changed 2026-08-14" sections above remain as the detailed operational history; this section is the short version-tag log matching other skills' convention). Description now carries a single trailing version tag. No pipeline logic, cadence-gate behavior, or trigger vocabulary changed.
 - v1.1 (2026-08-14): Cadence gate (`mail-log.csv` / `MIN_TOUCH_GAP_DAYS`), named salutations (`principal-overrides.csv`), and `--wave-cap N` landed; `Scripts` path and `--strict-age` doc description corrected. v2.0 rewrite and T2-T4 multi-touch rendering still pending. Full detail: "What changed 2026-08-14" above.
 - v1.0 (2026-07-11): Built from the three project scripts; audited and patched against defects found in the 2026-06-15/2026-06-22 manual runs. Full detail: "What changed 2026-07-11" above.
