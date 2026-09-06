@@ -1,6 +1,6 @@
 ---
 name: vendor-management
-description: Vendor scoring, RFP issuance, contract intake, and performance review for Oxford Realty Advisors. Use when the user mentions: vendor, contractor, RFP, bid, vendor score, vendor performance, 1099, W-9, COI, certificate of insurance, vendor contract, MSA, vendor concentration, rebid, vendor onboarding, vendor offboarding, performance review, vendor audit, or any task related to managing the firm's external service providers. v1.0
+description: Vendor scoring, RFP issuance, contract intake, and performance review for Oxford Realty Advisors. Use when the user mentions: vendor, contractor, RFP, bid, vendor score, vendor performance, 1099, W-9, COI, certificate of insurance, vendor contract, MSA, vendor concentration, rebid, vendor onboarding, vendor offboarding, performance review, vendor audit, or any task related to managing the firm's external service providers. Companion to legal-intelligence (clause-level contract review); this skill owns the vendor lifecycle, COI tracking and concentration layer. v1.0
 license: ORA Internal
 ---
 
