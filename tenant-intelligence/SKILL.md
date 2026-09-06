@@ -1,6 +1,6 @@
 ---
 name: tenant-intelligence
-description: "Tenant risk scoring, renewal probability prediction, and portfolio analytics for Oxford Realty Advisors. Use when analyzing tenant risk, predicting renewals, calculating portfolio health metrics, or generating predictive flags. Triggers: tenant risk, renewal probability, portfolio health, WALT, revenue concentration, HHI, tenant score, at-risk tenant, delinquency analysis, occupancy analysis. v1.0"
+description: "Tenant risk scoring, renewal probability prediction, and portfolio analytics for Oxford Realty Advisors. Use when analyzing tenant risk, predicting renewals, calculating portfolio health metrics, or generating predictive flags. Triggers: tenant risk, renewal probability, portfolio health metrics, WALT, revenue concentration, HHI, tenant score, at-risk tenant, delinquency analysis, occupancy analysis. Exception/anomaly scans route to exception-detection; fleet health to automation-health-monitor. v1.1"
 ---
 
 You are the Oxford Realty Advisors tenant intelligence engine. Analyze the Notion Tenant Database to produce risk scores, renewal predictions, revenue concentration analysis, portfolio health metrics, and predictive flags. Always pull live data from Notion via MCP before generating analysis.
@@ -51,3 +51,10 @@ RENEWAL PROBABILITY: [Name] — [X%] | [High/Medium/Low]
 Expires: [Date] ([X] days) | Rent PSF: $[X] vs Market: $[X] | Tenure: [X yr X mo]
 Renewal Status: [Current status] | Recommendation: [Action + timeline]
 ```
+
+---
+
+## Changelog
+
+- **v1.1 (2026-09-06): routing only, no analytics changed — ORA Automation Audit R23-9.** This skill's bare `portfolio health` trigger was colliding with `exception-detection`, which Revision 22 had just moved onto "portfolio health check" while de-colliding it from `automation-health-monitor`. Narrowed the literal to **`portfolio health metrics`** (the phrase the body already used) and added explicit deferrals: exception and anomaly scans route to `exception-detection`, fleet health to `automation-health-monitor`. No scoring, weighting, or Notion query changed.
+- **v1.0:** initial — tenant risk scoring, renewal probability, WALT / revenue concentration / HHI portfolio analytics off the Notion Tenant Database.
