@@ -1,5 +1,17 @@
 # Verified County Endpoints — ORA Parcel Data Recovery (v3)
 
+> **Companion registry — read this before assuming either file is the whole picture (added 2026-09-06, ORA Automation Audit R23-8).**
+> `county-parcel-screen/references/county-endpoints.v1.json` is the machine-readable registry of **parcel-geometry / CAMA layer**
+> endpoints across 22 ORA target counties. **THIS file is different in kind:** it holds the **building-footprint, CAMA-detail and
+> bulk-export** endpoints (FEMA USA Structures, county building outlines, Beacon/Schneider, auditor data exports) plus per-county
+> match rates, statutory assessment ratios and value-basis calibration — the things a *recovery* pass needs and a *screen* does not.
+>
+> **They are complementary, not duplicates, and neither supersedes the other.** Measured 2026-09-06 against the FULL human-readable
+> source of truth (`county-parcel-screen/references/county-endpoints.md`, 46 URLs): of the 17 URLs in this file, exactly **3 are
+> shared** and **14 are unique to recovery work**. An audit pass read the overlapping county names as a dual-write pair and came
+> within one step of merging them, which would have deleted those 14. If you are tempted to consolidate these, diff the URLs first —
+> the counties overlap, the endpoints do not.
+
 Replaces `references/endpoints.md` (v2). v3 additions (2026-07-12): Cincinnati/Hamilton OH CAGIS
 outage re-confirmed live + OGRIP/FEMA bypass added; Chesterfield VA `ASSESSED` field-deprecation
 root-caused (renamed, not removed) + endpoint added; Des Moines/Dallas IA metro researched for the
