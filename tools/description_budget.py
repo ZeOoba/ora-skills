@@ -27,6 +27,41 @@ LIMIT = 1024
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FM = re.compile(r"^---\n(.*?)\n---\n", re.S)
 
+# `description: >` / `description: |` plus the indented block that follows it.
+BLOCK = re.compile(r"^description:[ \t]*([>|])[-+0-9]*[ \t]*\n((?:[ \t]+.*\n?|\n)*)", re.M)
+INLINE = re.compile(r'^description:\s*"?(.*?)"?\s*$', re.M | re.S)
+
+
+def extract_description(body):
+    """Return the description exactly as YAML would materialize it, or None.
+
+    Handles the inline form AND both block-scalar forms. This used to be a single
+    inline regex, which matched `description: >` with an effectively empty capture
+    and reported **1 character** -- a silent false PASS for every block-scalar skill.
+    Found 2026-09-06 (Automation Audit R23-6): 3 skills use block style, one of them
+    (`county-parcel-screen`) was 1,306 chars, i.e. 282 over the importer's hard cap,
+    and this gate had been reporting it as `ok` with 1,023 chars of headroom.
+
+    Folded (`>`) joins lines with spaces; literal (`|`) preserves newlines -- the
+    distinction matters because the importer measures the materialized string.
+    """
+    m = BLOCK.search(body)
+    if m:
+        style = m.group(1)
+        kept = []
+        for line in m.group(2).splitlines():
+            if not line.strip():
+                kept.append("")
+            elif line[:1] in " \t":
+                kept.append(line.strip())
+            else:
+                break  # dedented out of the block; a sibling key started
+        if style == "|":
+            return "\n".join(kept).strip()
+        return " ".join(x for x in kept if x)
+    m = INLINE.search(body)
+    return m.group(1) if m else None
+
 
 def read(skill):
     """Return (name, description_len, error)."""
@@ -41,14 +76,14 @@ def read(skill):
         return None, 0, "no frontmatter block"
     body = m.group(1)
     nm = re.search(r"^name:\s*(\S+)\s*$", body, re.M)
-    d = re.search(r'^description:\s*"?(.*?)"?\s*$', body, re.M | re.S)
-    if not d:
+    desc = extract_description(body)
+    if desc is None:
         return (nm.group(1) if nm else None), 0, "no description key"
     # strip surrounding quotes exactly as package_skills.validate_skill_frontmatter does
     # (line 179: nm.group(1).strip("'\"") != skill). A quoted `name: "debt-management"` is
     # valid YAML and installs fine; a checker that does not strip reports a false FAIL --
     # which is precisely the bug in package-and-stage-skill v1.26's step-2a snippet.
-    return (nm.group(1).strip("'\"") if nm else None), len(d.group(1)), None
+    return (nm.group(1).strip("'\"") if nm else None), len(desc), None
 
 
 def skills():
