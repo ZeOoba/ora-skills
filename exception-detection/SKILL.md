@@ -1,6 +1,6 @@
 ---
 name: exception-detection
-description: "Automated anomaly and exception detection across Oxford Realty Advisors operations. Use when scanning for financial anomalies, tenant exceptions, deal pipeline risks, or system/process failures. Triggers: exception scan, anomaly detection, what's wrong, flag issues, health check, scan for problems, audit exceptions, find anomalies, red flags. v1.4 — changelog in body."
+description: "Automated anomaly and exception detection across Oxford Realty Advisors operations. Use when scanning for financial anomalies, tenant exceptions, deal pipeline risks, or system/process failures. Triggers: exception scan, anomaly detection, what's wrong, flag issues, portfolio health check, scan for problems, audit exceptions, find anomalies, red flags. v1.4 — changelog in body."
 ---
 
 ## Changelog (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
