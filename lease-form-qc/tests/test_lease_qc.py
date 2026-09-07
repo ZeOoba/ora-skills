@@ -51,6 +51,7 @@ ora_doc_qc.scan() from ora_doc_qc.extract(), same as ctx["t"], and
 unfilled_token_check() in the shared module reads it the same way.
 """
 
+import json
 import os
 import re
 import shutil
@@ -208,7 +209,7 @@ def _new_verdicts(path):
            "is_template": "_TEMPLATE" in os.path.basename(path).upper()}
     out = {}
     for cid, _sev, _title, _pos, fn in lease_qc.CHECKS:
-        if cid == "T1":
+        if cid in ("T1", "T2"):
             continue
         out[cid] = fn(ctx) not in (None, False)
     return out
@@ -669,7 +670,7 @@ class TestTokenGate(TempDirCase):
     def test_master_template_is_clean_including_t1(self):
         rc, out = run_cli(str(MASTER_V26))
         self.assertEqual(rc, 0, out)
-        self.assertIn("0 of 52 checks FAILED", out)
+        self.assertIn("0 of 53 checks FAILED", out)
 
     # ---- T1 must scan the FOOTER, not only the body -----------------------
     #
@@ -786,11 +787,11 @@ class TestTokenGate(TempDirCase):
 
 class TestRegistryAndCli(TempDirCase):
 
-    def test_registry_holds_the_51_original_checks_plus_t1(self):
+    def test_registry_holds_the_51_original_checks_plus_t1_and_t2(self):
         ids = [c[0] for c in lease_qc.CHECKS]
-        self.assertEqual(len(ids), 52)
-        self.assertEqual(len(set(ids)), 52, "duplicate check IDs")
-        self.assertEqual(set(ids), set(_ORIGINAL_IDS) | {"T1"})
+        self.assertEqual(len(ids), 53)
+        self.assertEqual(len(set(ids)), 53, "duplicate check IDs")
+        self.assertEqual(set(ids), set(_ORIGINAL_IDS) | {"T1", "T2"})
 
     def test_every_entry_is_a_valid_five_tuple(self):
         for entry in lease_qc.CHECKS:
@@ -842,7 +843,7 @@ class TestRegistryAndCli(TempDirCase):
         rc, out = run_cli(str(MASTER_V26), "--json")
         payload = json.loads(out)
         self.assertEqual(len(payload), 1)
-        self.assertEqual(payload[0]["checks_run"], 52)
+        self.assertEqual(payload[0]["checks_run"], 53)
         self.assertFalse(payload[0]["unreadable"])
         self.assertEqual(payload[0]["failures"], [])
 
@@ -896,6 +897,524 @@ class TestRegistryAndCli(TempDirCase):
             Path(ora_doc_qc.__file__).resolve(),
             (REPO / "tools" / "ora_doc_qc.py").resolve(),
             "ora_doc_qc import did not resolve to the repo-root canonical copy")
+
+
+# --------------------------------------------------------------------------
+# 6b. T2 -- footer FILENAME/DOCPROPERTY tenant-mismatch (lease-generation handoff)
+# --------------------------------------------------------------------------
+
+def _field_footer_xml(paragraphs_xml):
+    """Raw word/footerN.xml body -- same shape make_docx()'s own footer_text
+    path writes, but with caller-supplied paragraph XML instead of a single
+    plain-text run. Written via make_docx()'s extra_parts= (with
+    footer_text=None, so make_docx does not also write its own
+    word/footer1.xml and collide)."""
+    return ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            + paragraphs_xml + '</w:ftr>')
+
+
+def _complex_field_para(instr, result_text):
+    """One footer <w:p> holding a COMPLEX Word field
+    (fldChar begin/instrText/separate/result/end) -- the kind T2 can see.
+    `instr` is the raw field instruction text, e.g. ' FILENAME  \\* MERGEFORMAT '
+    or ' DOCPROPERTY "TenantName" \\* MERGEFORMAT '."""
+    return (
+        '<w:p>'
+        '<w:r><w:fldChar w:fldCharType="begin"/></w:r>'
+        f'<w:r><w:instrText xml:space="preserve">{_esc(instr)}</w:instrText></w:r>'
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r>'
+        f'<w:r><w:t>{_esc(result_text)}</w:t></w:r>'
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r>'
+        '</w:p>'
+    )
+
+
+class TestT2FooterTenantMismatch(TempDirCase):
+    """T2's three required behaviors per the lease-generation handoff:
+    a footer FILENAME/DOCPROPERTY field naming a DIFFERENT tenant BLOCKs;
+    no such field at all (lease-generation's own output, which replaces the
+    field with static text) passes cleanly; and a field matching ANY one
+    name in a co-tenant list does not false-fire (ratified position 2 --
+    co-tenants, never a guaranty)."""
+
+    _ACME_BODY = [
+        'THIS LEASE AGREEMENT is made and entered into by and between '
+        '2203 Northwood, LLC ("Landlord") and Acme Holdings LLC ("Tenant").',
+        'Tenant shall use the Premises for general office and warehouse purposes.',
+    ]
+
+    def test_filename_field_naming_a_different_tenant_blocks(self):
+        p = self.tmp / "Lease_AcmeHoldings_09072026.docx"
+        make_docx(p, self._ACME_BODY, footer_text=None, extra_parts={
+            "word/footer1.xml": _field_footer_xml(_complex_field_para(
+                ' FILENAME  \\* MERGEFORMAT ', 'Lease_BetaTools_09072026.docx')),
+        })
+        rc, out = run_cli(str(p))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("] T2 ", out, out)
+        self.assertIn("BLOCK", out)
+        self.assertIn("BetaTools", out, out)
+        self.assertIn("Acme Holdings LLC", out, out)
+
+    def test_docproperty_field_naming_a_different_tenant_blocks(self):
+        p = self.tmp / "some_lease.docx"
+        make_docx(p, self._ACME_BODY, footer_text=None, extra_parts={
+            "word/footer1.xml": _field_footer_xml(_complex_field_para(
+                ' DOCPROPERTY "TenantName" \\* MERGEFORMAT ', 'Beta Tools LLC')),
+        })
+        rc, out = run_cli(str(p))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("] T2 ", out, out)
+        self.assertIn('DOCPROPERTY "TenantName"', out, out)
+
+    def test_unquoted_docproperty_name_naming_a_different_tenant_blocks(self):
+        """Word writes a custom property name unquoted just as often as
+        quoted (' DOCPROPERTY  TenantName  \\* MERGEFORMAT ...'). The
+        quoted-only parse silently never matched this form -- caught in
+        independent re-review -- leaving the tenant-labeled-property gate
+        unreachable for the likely MORE common real-world encoding."""
+        p = self.tmp / "some_lease.docx"
+        make_docx(p, self._ACME_BODY, footer_text=None, extra_parts={
+            "word/footer1.xml": _field_footer_xml(_complex_field_para(
+                ' DOCPROPERTY  TenantName  \\* MERGEFORMAT ', 'Beta Tools LLC')),
+        })
+        rc, out = run_cli(str(p))
+        self.assertEqual(rc, 1, out)
+        self.assertIn("] T2 ", out, out)
+
+    def test_no_field_in_footer_passes_cleanly(self):
+        """lease-generation's own end-state: the field is replaced with
+        static text. Must not fire, must not error."""
+        p = self.tmp / "no_field_lease.docx"
+        make_docx(p, self._ACME_BODY,
+                  footer_text="2203 Northwood, LLC - Acme Holdings LLC - Page 1 of 12")
+        rc, out = run_cli(str(p))
+        self.assertNotIn("] T2 ", out, out)
+        self.assertNotIn("does not match this lease's defined Tenant", out, out)
+
+    def test_no_footer_part_at_all_passes_cleanly(self):
+        p = self.tmp / "totally_footerless_lease.docx"
+        make_docx(p, self._ACME_BODY, footer_text=None)
+        rc, out = run_cli(str(p))
+        self.assertNotIn("] T2 ", out, out)
+
+    def test_field_matching_one_of_several_cotenants_does_not_false_fire(self):
+        """Ratified position 2: individuals are joined as joint-and-several
+        co-tenants, so "the Tenant" can legitimately be a list. A field that
+        resolves to any ONE of the listed names is not stale boilerplate."""
+        body = [
+            'THIS LEASE AGREEMENT is made and entered into by and between '
+            '2203 Northwood, LLC ("Landlord") and REDACTED-T01 '
+            'and REDACTED-T02, individually (individually and collectively, "Tenant").',
+            'Tenant, any person or entity comprising Tenant, or any guarantor '
+            'of this Lease shall be jointly and severally liable.',
+        ]
+        p = self.tmp / "cotenant_lease.docx"
+        make_docx(p, body, footer_text=None, extra_parts={
+            "word/footer1.xml": _field_footer_xml(_complex_field_para(
+                ' DOCPROPERTY "TenantName" \\* MERGEFORMAT ', 'REDACTED-T02')),
+        })
+        rc, out = run_cli(str(p))
+        self.assertNotIn("] T2 ", out, out)
+
+    def test_field_matching_the_tenant_exactly_does_not_fire(self):
+        p = self.tmp / "matching_lease.docx"
+        make_docx(p, self._ACME_BODY, footer_text=None, extra_parts={
+            "word/footer1.xml": _field_footer_xml(_complex_field_para(
+                ' FILENAME  \\* MERGEFORMAT ', 'Lease_AcmeHoldings_09072026.docx')),
+        })
+        rc, out = run_cli(str(p))
+        self.assertNotIn("] T2 ", out, out)
+
+    # ---- false-positive surface: only a genuine tenant-slotted field may
+    # fire T2. Reproduced in independent review; each of these is a
+    # signature-ready lease that must NOT block. -----------------------
+
+    def test_filename_with_no_tenant_token_after_lease_marker_does_not_fire(self):
+        """'<Address> Suite <X> Lease <MM-YYYY> v0N.docx' -- an address-based
+        filename with nothing in the tenant slot at all (the field was
+        never filled with a tenant token to begin with)."""
+        for fname in ("2203 Northwood Suite 15A Lease 09-2026 v01.docx",
+                      "Northwood 15A Lease v01.docx"):
+            with self.subTest(fname=fname):
+                p = self.tmp / f"lease_{abs(hash(fname))}.docx"
+                make_docx(p, self._ACME_BODY, footer_text=None, extra_parts={
+                    "word/footer1.xml": _field_footer_xml(_complex_field_para(
+                        ' FILENAME  \\* MERGEFORMAT ', fname)),
+                })
+                rc, out = run_cli(str(p))
+                self.assertNotIn("] T2 ", out, out)
+
+    def test_docproperty_field_not_labeled_tenant_never_fires(self):
+        """An arbitrary custom DOCPROPERTY (doc ID, ORA's own company name,
+        a manager, a title) is not a tenant claim just because it has some
+        text value -- only a tenant/lessee-labeled property is."""
+        for prop, value in (("Company", "Oxford Realty Advisors"),
+                            ("DocID", "ORA-2026-0417"),
+                            ("Title", "Lease Agreement"),
+                            ("Manager", "Gabriel Goldberg")):
+            with self.subTest(prop=prop):
+                p = self.tmp / f"lease_{prop}.docx"
+                make_docx(p, self._ACME_BODY, footer_text=None, extra_parts={
+                    "word/footer1.xml": _field_footer_xml(_complex_field_para(
+                        f' DOCPROPERTY "{prop}" \\* MERGEFORMAT ', value)),
+                })
+                rc, out = run_cli(str(p))
+                self.assertNotIn("] T2 ", out, out)
+
+    def test_empty_field_followed_by_page_numbering_on_the_same_line_does_not_fire(self):
+        """No <w:fldChar 'end'/> delimiter survives text-stripping, so an
+        EMPTY field immediately followed by page-numbering text on the same
+        footer line must not have that trailing text mistaken for its
+        cached result."""
+        footer_xml = _field_footer_xml(
+            '<w:p>'
+            '<w:r><w:fldChar w:fldCharType="begin"/></w:r>'
+            '<w:r><w:instrText xml:space="preserve"> FILENAME  \\* MERGEFORMAT </w:instrText></w:r>'
+            '<w:r><w:fldChar w:fldCharType="separate"/></w:r>'
+            '<w:r><w:fldChar w:fldCharType="end"/></w:r>'
+            '<w:r><w:t xml:space="preserve"> Page 1 of 12</w:t></w:r>'
+            '</w:p>')
+        p = self.tmp / "empty_field_lease.docx"
+        make_docx(p, self._ACME_BODY, footer_text=None,
+                  extra_parts={"word/footer1.xml": footer_xml})
+        rc, out = run_cli(str(p))
+        self.assertNotIn("] T2 ", out, out)
+
+    def test_master_template_footers_carry_only_page_numpage_fields_not_t2_relevant(self):
+        """Premise check: the real v2.6 master's footer complex fields are
+        PAGE/NUMPAGES (page numbering), never FILENAME/DOCPROPERTY -- so T2
+        has nothing to catch there, and test_master_template_is_clean_
+        including_t1 (0 of 53) is not accidentally vacuous for T2."""
+        self.assertTrue(MASTER_V26.exists())
+        _body, meta = extract(str(MASTER_V26), want_footer=True)
+        self.assertEqual(lease_qc._footer_field_candidates(meta["footer"]), [])
+
+    def test_t2_registered_once_as_block(self):
+        entries = [c for c in lease_qc.CHECKS if c[0] == "T2"]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0][1], "BLOCK")
+
+    def test_extract_tenant_names_handles_cotenant_list(self):
+        text = ('between 2203 Northwood, LLC ("Landlord") and REDACTED-T01 '
+                'and REDACTED-T02, individually (individually and collectively, "Tenant").')
+        names = lease_qc._extract_tenant_names(text)
+        self.assertEqual(names, ["REDACTED-T01", "REDACTED-T02"])
+
+    def test_extract_tenant_names_returns_empty_when_unconfident(self):
+        self.assertEqual(lease_qc._extract_tenant_names("LEASE AGREEMENT with no parties clause."), [])
+
+    def test_extract_tenant_names_no_anchor_fallback_rejects_verb_phrase_fragments(self):
+        """No ('Landlord') parenthetical precedes the Tenant quote here, so
+        extraction falls back to a bounded lookback window -- which must
+        reject a captured fragment ('This Lease is made by') containing a
+        sentence stopword, not just accept anything starting with a
+        capital letter. Caught in independent review; regression-tested
+        here since the original bug report exercised only the anchored
+        path."""
+        text = 'This Lease is made by and between Landco X, LLC and Acme Holdings LLC ("Tenant").'
+        names = lease_qc._extract_tenant_names(text)
+        self.assertNotIn("This Lease is made by", names)
+        for n in names:
+            self.assertFalse(any(w.lower() in lease_qc._TENANT_NAME_STOPWORDS for w in n.split()),
+                             f"stopword survived in extracted name: {n!r}")
+
+    def test_normalize_entity_name_strips_suffix_and_whitespace(self):
+        self.assertEqual(lease_qc._normalize_entity_name("Acme Holdings LLC"),
+                         lease_qc._normalize_entity_name("AcmeHoldings"))
+        self.assertNotEqual(lease_qc._normalize_entity_name("Acme Holdings LLC"),
+                            lease_qc._normalize_entity_name("Beta Tools LLC"))
+
+
+# --------------------------------------------------------------------------
+# 6c. --loi-conformance mode (lease-generation handoff)
+# --------------------------------------------------------------------------
+
+class TestLoiConformanceMode(TempDirCase):
+    """Builds a register with at least one field deliberately PARTIAL, one
+    MISSING, one CONFLICT, and the rest CONFORMS/CONFORMS+, and asserts
+    build_conformance_matrix()/the CLI mode reports exactly that."""
+
+    REGISTER = {
+        "deal_id": "TESTPROP-5B-TEST-2026-09",
+        "source_documents": [{"name": "Test LOI.pdf", "type": "LOI", "date": "2026-09-01"}],
+        "landlord": {"entity": "2203 Northwood, LLC", "state_of_formation": "Maryland",
+                     "notice_address": "c/o Test"},
+        "tenant": {"entity": "Acme Holdings LLC", "co_tenants": []},
+        "premises": {"address": "100 Test Drive", "suite": "5B", "rsf": 2400},
+        "use": {"permitted_use": "office and warehouse"},
+        "term": {"months": 36, "target_commencement": "2026-10-01"},
+        "options": [],
+        "rent": {"schedule": [{"lease_year": 1, "monthly": 2000.00}],
+                 "escalation": {"type": "fixed_pct", "value": 3.0}},
+        "expense_structure": {"type": "gross"},
+        "utilities": {"electric": "separately_metered_tenant_direct",
+                      "water_sewer": "pro_rata_building_meter"},
+        "security_deposit": {"amount": 1800.00, "months": 1.0},
+        "parking": {"overnight_vehicles": 4},
+        "landlord_work": {"items": []},
+        "maintenance": {"allocation": "ORA_form_default_tenant_hvac"},
+        "insurance": {"cgl_aggregate": 2000000},
+        "broker": {"dual_agency": False},
+    }
+
+    LEASE_BODY = [
+        'THIS LEASE AGREEMENT is made and entered into by and between '
+        '2203 Northwood, LLC ("Landlord") and Acme Holdings LLC ("Tenant").',
+        'The Premises are located at 100 Test Drive, Suite 5B, containing '
+        'approximately 2,400 rentable square feet.',
+        'The Premises shall be used solely for office and warehouse purposes '
+        'and for no other purpose without Landlord\'s prior written consent.',
+        'The Term of this Lease shall be thirty-six (36) months commencing on '
+        'the Commencement Date, with early access granted to Tenant for '
+        'fixturing purposes prior to the Commencement Date.',
+        'Base Rent for Lease Year 1 shall be $2,000.00 per month, payable in advance.',
+        'Base Rent hereunder is calculated on a full-service gross basis, with '
+        'no separate reconciliation of Operating Costs.',
+        'Electric service to the Premises is separately metered and billed '
+        'directly to Tenant. Water and sewer service is charged to Tenant as '
+        'its pro rata share of the Building\'s master water meter, with sewer '
+        'charges billed on the same basis.',
+        'Tenant shall deposit with Landlord a Security Deposit in the amount '
+        'of $2,500.00 upon execution of this Lease.',
+        'Tenant shall be responsible for maintenance of the HVAC system '
+        'serving the Premises.',
+        'Tenant shall carry commercial general liability insurance with a '
+        'general aggregate limit of $2,000,000.',
+    ]
+
+    def setUp(self):
+        super().setUp()
+        self.register_path = self.tmp / "register.json"
+        self.register_path.write_text(json.dumps(self.REGISTER), encoding="utf-8")
+        self.lease_path = make_docx(self.tmp / "test_lease.docx", self.LEASE_BODY,
+                                    footer_text="Page 1 of 4")
+
+    def test_matrix_has_the_required_status_mix(self):
+        body, _meta = extract(self.lease_path)
+        rows = lease_qc.build_conformance_matrix(self.REGISTER, norm(body))
+        by_cat = {r["category"]: r["status"] for r in rows}
+        self.assertEqual(by_cat["rent"], "PARTIAL", by_cat)
+        self.assertEqual(by_cat["parking"], "MISSING", by_cat)
+        self.assertEqual(by_cat["security_deposit"], "CONFLICT", by_cat)
+        self.assertEqual(by_cat["term"], "CONFORMS+", by_cat)
+        for cat in ("landlord", "tenant", "co_tenants", "premises", "use",
+                    "options", "expense_structure", "utilities", "maintenance",
+                    "insurance", "broker", "signage"):
+            self.assertIn(by_cat[cat], ("CONFORMS", "CONFORMS+"),
+                          f"{cat}: expected CONFORMS/CONFORMS+, got {by_cat[cat]}")
+        self.assertEqual(len(rows), 17, rows)
+
+    def test_cli_mode_reports_the_matrix_and_exits_1_on_blocking_rows(self):
+        rc, out = run_cli("--loi-conformance", str(self.register_path), self.lease_path)
+        self.assertEqual(rc, 1, out)
+        self.assertIn("PARTIAL", out)
+        self.assertIn("MISSING", out)
+        self.assertIn("CONFLICT", out)
+        self.assertIn("rent", out)
+        self.assertIn("parking", out)
+        self.assertIn("security_deposit", out)
+
+    def test_cli_mode_json_output(self):
+        rc, out = run_cli("--loi-conformance", str(self.register_path), self.lease_path, "--json")
+        payload = json.loads(out)
+        self.assertEqual(payload["lease_file"], "test_lease.docx")
+        statuses = {r["category"]: r["status"] for r in payload["rows"]}
+        self.assertEqual(statuses["rent"], "PARTIAL")
+        self.assertEqual(statuses["parking"], "MISSING")
+        self.assertEqual(statuses["security_deposit"], "CONFLICT")
+
+    def test_cli_mode_exits_0_when_nothing_blocks(self):
+        """A register/lease pair with no PARTIAL/MISSING/CONFLICT rows."""
+        clean_register = dict(self.REGISTER)
+        clean_register["parking"] = {"overnight_vehicles": None}
+        clean_register["rent"] = {"schedule": [{"lease_year": 1, "monthly": 2000.00}],
+                                  "escalation": {"type": "none"}}
+        clean_register["security_deposit"] = {"amount": 2500.00, "months": 1.0}
+        reg_path = self.tmp / "clean_register.json"
+        reg_path.write_text(json.dumps(clean_register), encoding="utf-8")
+        rc, out = run_cli("--loi-conformance", str(reg_path), self.lease_path)
+        self.assertEqual(rc, 0, out)
+
+    def test_unreadable_lease_exits_2(self):
+        rc, out = run_cli("--loi-conformance", str(self.register_path), str(PDF_FIXTURE))
+        self.assertEqual(rc, 2, out)
+
+    def test_bad_register_path_exits_2(self):
+        rc, out = run_cli("--loi-conformance", str(self.tmp / "does_not_exist.json"), self.lease_path)
+        self.assertEqual(rc, 2, out)
+
+    def test_missing_lease_file_exits_2_not_1(self):
+        """Was a raw FileNotFoundError -> exit 1 (indistinguishable from a
+        real 'the matrix has blocking rows' verdict) before the extraction
+        guard was added; caught in independent review."""
+        rc, out = run_cli("--loi-conformance", str(self.register_path),
+                          str(self.tmp / "does_not_exist.docx"))
+        self.assertEqual(rc, 2, out)
+
+    def test_malformed_register_field_degrades_that_row_instead_of_crashing(self):
+        """A register field of the wrong shape (a bare string instead of an
+        object) must not crash the whole run -- it degrades to a MISSING
+        row for that category only, and every other category still
+        computes normally. Caught in independent review (was an uncaught
+        AttributeError, exit 1, no report at all)."""
+        bad_register = dict(self.REGISTER)
+        bad_register["landlord"] = "2203 Northwood, LLC"  # should be an object
+        reg_path = self.tmp / "malformed_register.json"
+        reg_path.write_text(json.dumps(bad_register), encoding="utf-8")
+        rc, out = run_cli("--loi-conformance", str(reg_path), self.lease_path)
+        self.assertEqual(rc, 1, out)          # still a real matrix, just one bad row
+        self.assertIn("could not evaluate", out, out)
+        self.assertIn("rent", out)            # other categories still ran
+
+    def test_non_object_register_exits_2(self):
+        reg_path = self.tmp / "list_register.json"
+        reg_path.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
+        rc, out = run_cli("--loi-conformance", str(reg_path), self.lease_path)
+        self.assertEqual(rc, 2, out)
+
+
+class TestLoiConformanceRegressionFixes(TempDirCase):
+    """Targeted coverage for defects found in independent review, isolated
+    from TestLoiConformanceMode's larger fixture so each is legible on its
+    own."""
+
+    def test_rent_with_matching_cents_conforms(self):
+        register = {"rent": {"schedule": [{"lease_year": 1, "monthly": 3458.99}],
+                             "escalation": {"type": "none"}}}
+        row = lease_qc._check_rent(register, "Base Rent for Lease Year 1 shall be $3,458.99 per month.")
+        self.assertEqual(row["status"], "CONFORMS", row)
+
+    def test_rent_with_different_cents_does_not_false_conform(self):
+        """int()-truncating the register figure before matching let a lease
+        stating different CENTS (the common case -- register rents are
+        routinely rsf * rate / 12) silently read as a match. Caught in
+        independent review."""
+        register = {"rent": {"schedule": [{"lease_year": 1, "monthly": 3458.33}],
+                             "escalation": {"type": "none"}}}
+        row = lease_qc._check_rent(register, "Base Rent for Lease Year 1 shall be $3,458.99 per month.")
+        self.assertNotEqual(row["status"], "CONFORMS", row)
+
+    def test_security_deposit_with_different_cents_is_not_masked(self):
+        register = {"security_deposit": {"amount": 4587.50}}
+        row = lease_qc._check_security_deposit(
+            register, "Tenant shall deposit with Landlord a Security Deposit in the "
+                       "amount of $4,587.00 upon execution of this Lease.")
+        self.assertEqual(row["status"], "CONFLICT", row)
+
+    def test_gross_negligence_does_not_satisfy_gross_expense_structure(self):
+        """A bare \\bgross\\b match fired on every ORA lease's exculpation
+        clause ('gross negligence'), regardless of the lease's actual
+        expense structure. Caught in independent review."""
+        register = {"expense_structure": {"type": "gross"}}
+        text = ("Landlord shall not be liable except for its own gross negligence or "
+                "willful misconduct. Tenant shall pay its proportionate share of "
+                "Operating Costs in excess of the Base Year as Additional Rent.")
+        row = lease_qc._check_expense_structure(register, text)
+        self.assertNotEqual(row["status"], "CONFORMS", row)
+
+    def test_nnn_lease_with_no_gross_language_does_not_false_conflict(self):
+        register = {"expense_structure": {"type": "nnn"}}
+        text = "Tenant shall pay Base Rent on a triple net basis, plus its share of Taxes, Insurance and CAM."
+        row = lease_qc._check_expense_structure(register, text)
+        self.assertEqual(row["status"], "CONFORMS", row)
+
+    def test_term_conforms_plus_only_when_register_does_not_require_early_access(self):
+        register = {"term": {"months": 36, "target_commencement": "2026-10-01"}}
+        text = "The Term of this Lease shall be thirty-six (36) months, with early access granted to Tenant."
+        row = lease_qc._check_term(register, text)
+        self.assertEqual(row["status"], "CONFORMS+", row)
+
+    def test_term_required_early_access_present_is_plain_conforms_not_plus(self):
+        """When the register ITSELF requires early access and the lease has
+        it, that is ordinary conformance, not 'beyond the register's
+        baseline' -- the prior text-only search could not tell the two
+        apart. Caught in independent review."""
+        register = {"term": {"months": 36, "target_commencement": "2026-10-01",
+                             "early_access": "30 days prior to Commencement"}}
+        text = "The Term of this Lease shall be thirty-six (36) months, with early access granted to Tenant."
+        row = lease_qc._check_term(register, text)
+        self.assertEqual(row["status"], "CONFORMS", row)
+
+    def test_term_required_early_access_missing_is_partial(self):
+        register = {"term": {"months": 36, "target_commencement": "2026-10-01",
+                             "early_access": "30 days prior to Commencement"}}
+        text = "The Term of this Lease shall be thirty-six (36) months."
+        row = lease_qc._check_term(register, text)
+        self.assertEqual(row["status"], "PARTIAL", row)
+
+    def test_premises_suite_one_does_not_match_inside_a_longer_suite_number(self):
+        """suite='1' matched anywhere in the lease text (no word boundary),
+        so a suite of '1' was un-failable regardless of the real suite
+        mentioned. Caught in independent review."""
+        register = {"premises": {"address": "100 Test Drive", "suite": "1", "rsf": 2400}}
+        text = "The Premises are located at 100 Test Drive, Suite 15A, containing 2,400 rentable square feet."
+        row = lease_qc._check_premises(register, text)
+        self.assertNotEqual(row["status"], "CONFORMS", row)
+
+    def test_utilities_bare_key_name_no_longer_satisfies_the_row(self):
+        register = {"utilities": {"electric": "landlord_provided_included_in_rent"}}
+        text = "Tenant shall pay for electric service directly to the utility provider."
+        row = lease_qc._check_utilities(register, text)
+        self.assertNotEqual(row["status"], "CONFORMS", row)
+
+    def test_rent_cpi_escalation_is_partial_not_silently_conforms(self):
+        """A CPI-indexed escalation cannot be confirmed by a text search
+        the way a flat percentage can -- it must never silently CONFORMS
+        for verification this checker cannot actually perform. Caught in
+        independent re-review."""
+        register = {"rent": {"schedule": [{"lease_year": 1, "monthly": 2000.00}],
+                             "escalation": {"type": "cpi"}}}
+        row = lease_qc._check_rent(register, "Base Rent for Lease Year 1 shall be $2,000.00 per month.")
+        self.assertEqual(row["status"], "PARTIAL", row)
+
+    def test_rent_fixed_amount_escalation_is_partial_not_silently_conforms(self):
+        register = {"rent": {"schedule": [{"lease_year": 1, "monthly": 2000.00}],
+                             "escalation": {"type": "fixed_amount", "value": 50}}}
+        row = lease_qc._check_rent(register, "Base Rent for Lease Year 1 shall be $2,000.00 per month.")
+        self.assertEqual(row["status"], "PARTIAL", row)
+
+    def test_signage_freetext_description_conforms_when_realistically_implemented(self):
+        """The register's signage value is human-written prose, not an
+        enum -- requiring every word verbatim (including a stray '+' and
+        a hyphenated 'Landlord-approved') made this row essentially
+        unfailable to CONFORM against ORA's own canonical example
+        register. Caught in independent review."""
+        register = {"signage": "one exterior sign over entrance + entry door signage, Landlord-approved"}
+        text = ("Tenant may install one exterior sign at the Building entrance and entry "
+                "door signage, subject to Landlord's prior written approval.")
+        row = lease_qc._check_signage(register, text)
+        self.assertEqual(row["status"], "CONFORMS", row)
+
+    def test_signage_absent_from_lease_still_reads_missing(self):
+        """The loosened threshold must not turn into an unconditional
+        pass -- a lease with no signage language at all is still MISSING."""
+        register = {"signage": "one exterior sign over entrance + entry door signage, Landlord-approved"}
+        row = lease_qc._check_signage(
+            register, "This Lease Agreement is made and entered into by and between the parties.")
+        self.assertEqual(row["status"], "MISSING", row)
+
+    def test_landlord_work_freetext_items_conform_when_realistically_implemented(self):
+        register = {"landlord_work": {"items": [
+            "clean warehouse floor and interior; major mechanical systems "
+            "(electrical, plumbing, HVAC) in working condition",
+            "service front entrance door locks",
+        ]}}
+        text = ("Landlord shall, prior to the Commencement Date, clean the warehouse "
+                "floor and interior, place all major mechanical systems including "
+                "electrical, plumbing and HVAC in good working condition, and service "
+                "the front entrance door locks.")
+        row = lease_qc._check_landlord_work(register, text)
+        self.assertEqual(row["status"], "CONFORMS", row)
+
+    def test_landlord_work_absent_from_lease_still_reads_missing(self):
+        register = {"landlord_work": {"items": [
+            "clean warehouse floor and interior; major mechanical systems "
+            "(electrical, plumbing, HVAC) in working condition"]}}
+        row = lease_qc._check_landlord_work(
+            register, "This Lease Agreement is made and entered into by and between the parties.")
+        self.assertEqual(row["status"], "MISSING", row)
 
 
 # --------------------------------------------------------------------------
