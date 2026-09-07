@@ -105,7 +105,32 @@ def _git(*args: str) -> str:
 
 
 def changed_files(commit: str) -> list[str]:
-    out = _git('diff-tree', '--no-commit-id', '--name-only', '-r', commit)
+    """Files a commit changed, MERGES INCLUDED.
+
+    `-m --first-parent` is load-bearing (2026-09-07, Automation Audit R23
+    close-out): without it `git diff-tree -r <merge>` prints NOTHING at all for a
+    merge commit, so cmd_record() saw no hits and the post-commit hook wrote no
+    PENDING-REIMPORT line for anything a branch brought in. That is how
+    package-and-stage-skill (577397f, merged as db7ea76) and tenant-intelligence
+    (00c553b, merged as 3a2f352) both landed changed packaged SKILL.md content
+    with no ledger entry -- the store kept serving pre-merge bytes under a version
+    token that already read current, which the token can never reveal.
+
+    `--first-parent` (not `-c`/`--cc`) is the right diff for this consumer: the
+    question is "what did this commit change on the branch it landed on", i.e.
+    everything the merge brought in, not just conflict-resolved hunks. On a
+    non-merge commit the pair is a no-op -- output is byte-identical to the plain
+    form (covered by test_non_merge_commit_file_list_is_unchanged), and a root
+    commit still yields [] rather than raising.
+
+    NOTE this closes only the merge half of the R23 gap. The other half is not
+    fixable here: those four branch commits were authored in a DIFFERENT working
+    tree (this checkout's reflog never held them), and the ledger is gitignored
+    local state, so whatever the hook recorded over there never travelled with the
+    merge. Re-verify with `candidates` (ledger UNION sweep), never `list` alone.
+    """
+    out = _git('diff-tree', '--no-commit-id', '--name-only', '-r',
+               '-m', '--first-parent', commit)
     return [ln.strip() for ln in out.splitlines() if ln.strip()]
 
 
