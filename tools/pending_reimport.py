@@ -43,9 +43,25 @@ Usage:
   python tools/pending_reimport.py backfill                # sweep + persist any drift missing from the ledger
   python tools/pending_reimport.py shared-deps             # reconcile shared repo-root deps, direction-aware (reimport vs commit)
   python tools/pending_reimport.py clear <skill> [...]    # after confirmed reimport
+  python tools/pending_reimport.py clear --force <skill> [...]   # override the log-before-clear guard (see cmd_clear)
+
+LOG-BEFORE-CLEAR GUARD (2026-09-07, Automation Audit systematization candidate):
+`clear` refuses each named skill unless it is named in the NEWEST dated ('## '
+YYYY-MM-DD) entry in memory/event_log.md -- mechanizing, rather than trusting to
+discipline alone, package-and-stage-skill step 7's "log the confirmed install,
+THEN clear -- never the reverse" ordering. Exists because a 2026-08-14 close-out
+cleared the ledger while its own event_log append had failed on the header rule,
+inverting that ordering silently. Fail-CLOSED by design (refuses on an unreadable
+or headerless log) -- this is the opposite of append-event-log.py's fail-OPEN
+philosophy, deliberately: a missing log entry is exactly the failure this guard
+exists to catch, so silently proceeding would defeat its own purpose. `--force`
+overrides it for a genuine edge case (skips the check for every skill named in
+this invocation) and is never silent -- it prints why the guard would have
+refused before proceeding.
 """
 import hashlib
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -62,6 +78,17 @@ from package_skills import (  # noqa: E402
 from skill_md_normalize import normalize_skill_md_text  # noqa: E402
 
 LEDGER = REPO / '_staging' / 'PENDING_REIMPORT.md'
+
+# Same canonical event_log.md the append-event-log.py maintenance script writes
+# (~/.claude/maintenance/append-event-log.py's own LOG constant) -- duplicated
+# here rather than imported because that script lives in a sibling repo
+# (~/.claude), not under ora-skills/tools. Not configurable by env var, same
+# reasoning as CACHE_ROOT above: one machine, one canonical log, and a stray
+# override would let the clear-guard below silently check the wrong file.
+EVENT_LOG = Path(os.path.expanduser('~')) / '.claude' / 'projects' / \
+    'C--Users-Owner-OneDrive---Oxford-Capital-Partners' / 'memory' / 'event_log.md'
+
+_ENTRY_HEADER_RE = re.compile(r'^## \d{4}-\d{2}-\d{2}\b')
 
 # Same physical store package-and-stage-skill and ora-skill-store-drift-check
 # already treat as canonical (README "Dual-write discipline"; both SKILL.mds
@@ -655,7 +682,75 @@ def cmd_backfill() -> None:
         print(f'   {skill}')
 
 
-def cmd_clear(skills: list[str]) -> None:
+def newest_event_log_block(log_path: Path = EVENT_LOG) -> tuple[str, str] | tuple[None, None]:
+    """(header_line, full_block_text) of the newest dated '## YYYY-MM-DD' entry in
+    event_log.md, or (None, None) if the log is missing, empty, or has no dated
+    entry. Newest-first is append-event-log.py's own insertion convention
+    (insert_newest()), so the FIRST dated header in the body is the newest entry --
+    this does not need to parse dates, only find that first header.
+
+    Skips YAML frontmatter the same way append-event-log.py's entry_blocks() does,
+    so a '## ' inside the frontmatter block is never mistaken for an entry."""
+    try:
+        content = log_path.read_text(encoding='utf-8')
+    except OSError:
+        return None, None
+    body_start = 0
+    if content.startswith('---\n'):
+        end = content.find('\n---\n', 4)
+        if end != -1:
+            body_start = end + len('\n---\n')
+    lines = content[body_start:].split('\n')
+    idxs = [i for i, ln in enumerate(lines) if _ENTRY_HEADER_RE.match(ln)]
+    if not idxs:
+        return None, None
+    i = idxs[0]
+    j = idxs[1] if len(idxs) > 1 else len(lines)
+    return lines[i], '\n'.join(lines[i:j])
+
+
+def _named_in_block(skill: str, block: str) -> bool:
+    """Word-boundary (hyphen-aware) match -- a substring hit on 'county-parcel-screen'
+    must not be satisfied by an unrelated mention of 'county-parcel-screen-eval-harness'
+    or similar, and a plain regex \\b treats '-' as a boundary already, so hyphenated
+    skill names need the lookaround spelled out explicitly."""
+    return re.search(rf'(?<![\w-]){re.escape(skill)}(?![\w-])', block) is not None
+
+
+def cmd_clear(skills: list[str], force: bool = False) -> None:
+    """Clear pending-reimport ledger entries -- gated on the LOG-BEFORE-CLEAR guard
+    (module docstring) unless `force` is set. Fail-CLOSED on an unreadable/headerless
+    log: this guard exists specifically to catch a clear that outran its own log
+    entry (2026-08-14), so silently waving it through on a read failure would defeat
+    the point. A skill that clears fine but simply isn't named in the newest entry
+    is refused with the same message REGARDLESS of whether it's actually pending --
+    the guard runs before the pending/not-pending question is even asked, since a
+    session should not learn "nothing to clear" as an excuse to skip the log step
+    it was supposed to do first."""
+    if not force:
+        header, block = newest_event_log_block()
+        if block is None:
+            print(
+                f'pending_reimport: REFUSED to clear {", ".join(skills)} -- '
+                f'{EVENT_LOG} is unreadable or has no dated entry. Log the confirmed '
+                f'Save-skill install FIRST (package-and-stage-skill step 7), THEN '
+                f'clear -- never the reverse. Pass --force to override (states the '
+                f'exact 2026-08-14 failure mode this guard exists to catch).',
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        unlogged = [s for s in skills if not _named_in_block(s, block)]
+        if unlogged:
+            print(
+                f'pending_reimport: REFUSED to clear {", ".join(unlogged)} -- not named '
+                f'in the newest event_log.md entry ("{header.strip()}"). Log the confirmed '
+                f'Save-skill install first (package-and-stage-skill step 7), THEN clear -- '
+                f'never the reverse. Pass --force to override.',
+                file=sys.stderr,
+            )
+            skills = [s for s in skills if s not in unlogged]
+            if not skills:
+                sys.exit(1)
     entries = read_entries()
     cleared = [s for s in skills if entries.pop(s, None) is not None]
     write_entries(entries)
@@ -711,9 +806,12 @@ def main() -> None:
     elif cmd == 'shared-deps':
         cmd_shared_deps()
     elif cmd == 'clear':
-        if len(argv) < 2:
-            raise SystemExit('usage: pending_reimport.py clear <skill> [...]')
-        cmd_clear(argv[1:])
+        rest = argv[1:]
+        force = '--force' in rest
+        skills = [a for a in rest if a != '--force']
+        if not skills:
+            raise SystemExit('usage: pending_reimport.py clear [--force] <skill> [...]')
+        cmd_clear(skills, force=force)
     else:
         raise SystemExit(__doc__.strip())
 
