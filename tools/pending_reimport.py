@@ -397,11 +397,28 @@ def backfill(
     for skill in sweep_drift(repo_root, cache_root):
         if skill in entries:
             continue
+        # OI-157, extended to backfill 2026-09-07 (adversarial review of the
+        # ora-doctrine-integrity-guard 9th-engine PR): candidates() already pops
+        # DELIBERATELY_UNPUBLISHED, but backfill WRITES the ledger and cmd_list()
+        # prints it unfiltered -- so seeding one of these puts a skill Gabriel
+        # deliberately never published in front of a batch Save-skill click. That
+        # is not hypothetical: capex-budgeting was revived exactly that way on
+        # 2026-08-13. Their drift is real and stays visible via `candidates`'
+        # separate suppressed-list line; it must never become ledger WORK.
+        if skill in DELIBERATELY_UNPUBLISHED:
+            continue
         entries[skill] = (
             f'- {skill} | pending since {now} | backfill sweep (predates hook or hook was bypassed) '
             f'| trigger: full repo-vs-cache SHA256 sweep'
         )
         seeded.append(skill)
+    # Do NOT rewrite when nothing was seeded. write_entries() reconstructs the file
+    # from parsed "- <skill> |" lines only, so an unconditional write silently drops
+    # any hand-added annotation. That was tolerable when this ran only on commit;
+    # as of 2026-09-07 it also runs DAILY and unattended from the doctrine guard,
+    # which would make the loss a recurring, invisible one.
+    if not seeded:
+        return []
     write_entries(entries, ledger_path)
     return seeded
 
