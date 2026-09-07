@@ -382,6 +382,50 @@ class Backfill(FixtureTestCase):
         self.assertEqual(text.count('already-tracked'), 1)
         self.assertIn('e5903c2', text, 'a real commit-hash entry must not be clobbered by a backfill stub')
 
+    def test_backfill_never_seeds_a_deliberately_unpublished_skill(self):
+        """OI-157 extended to backfill (2026-09-07 adversarial review).
+
+        candidates() already pops DELIBERATELY_UNPUBLISHED, but backfill WRITES the
+        ledger and cmd_list() prints it unfiltered -- so seeding one of these puts a
+        never-published skill in front of a batch Save-skill click. capex-budgeting
+        was revived exactly that way on 2026-08-13.
+        """
+        victim = sorted(pr.DELIBERATELY_UNPUBLISHED)[0]
+        _write(self.repo / victim / 'SKILL.md', 'v2\n')
+        _write(self.cache / victim / 'SKILL.md', 'v1\n')
+        _write(self.repo / 'ordinary-skill' / 'SKILL.md', 'v2\n')
+        _write(self.cache / 'ordinary-skill' / 'SKILL.md', 'v1\n')
+        ledger_path = self.tmp / 'PENDING_REIMPORT.md'
+
+        seeded = pr.backfill(repo_root=self.repo, cache_root=self.cache,
+                             ledger_path=ledger_path)
+
+        self.assertIn('ordinary-skill', seeded,
+                      'the ordinary drifted skill must still seed')
+        self.assertNotIn(victim, seeded)
+        self.assertNotIn(victim, ledger_path.read_text(encoding='utf-8'))
+
+    def test_backfill_does_not_rewrite_the_ledger_when_nothing_is_seeded(self):
+        """write_entries() rebuilds the file from parsed "- <skill> |" lines only,
+        so an unconditional write drops hand-added annotations. Tolerable when this
+        ran only on commit; as of 2026-09-07 it also runs DAILY and unattended from
+        ora-doctrine-integrity-guard, making the loss recurring and silent.
+        """
+        ledger_path = self.tmp / 'PENDING_REIMPORT.md'
+        original = ('# header' + chr(10) + chr(10)
+                    + '- alpha | pending since 2026-07-16T14:50Z | commit e5903c2 "real"' + chr(10)
+                    + 'NOTE hand-added by Gabriel: alpha is blocked on Eric' + chr(10))
+        _write(ledger_path, original)
+        _write(self.repo / 'alpha' / 'SKILL.md', 'v2\n')
+        _write(self.cache / 'alpha' / 'SKILL.md', 'v1\n')
+
+        seeded = pr.backfill(repo_root=self.repo, cache_root=self.cache,
+                             ledger_path=ledger_path)
+
+        self.assertEqual(seeded, [])
+        self.assertEqual(ledger_path.read_text(encoding='utf-8'), original,
+                         'a no-op backfill must leave the ledger byte-identical')
+
     def test_backfill_leaves_synced_skills_out_of_the_ledger(self):
         ledger_path = self.tmp / 'PENDING_REIMPORT.md'
         _write(self.repo / 'clean' / 'SKILL.md', 'same\n')
