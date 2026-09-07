@@ -24,8 +24,15 @@ packageable skill, not just ones the hook happened to see. `candidates()` is the
 new consumption contract: the UNION of ledger entries and a fresh sweep, never
 "ledger OR derive". `backfill()` persists sweep-detected drift into the ledger so
 it's durably visible via `list`, not just a one-off in-memory union. Downstream
-consumers (ora-skills-reimport-watch, package-and-stage-skill Entry Point A)
-should call `candidates`, not `list`, when building their work queue.
+consumers (package-and-stage-skill Entry Point A) should call `candidates`,
+not `list`, when building their work queue. NOTE 2026-09-07: this docstring and
+cmd_candidates() both named `ora-skills-reimport-watch` as a consumer; that task
+exists on NEITHER fleet (checked against both live registries) and is a dead
+pointer -- do not go looking for it, and do not re-create it on the strength of
+this reference alone. The live consumers are package-and-stage-skill Entry Point A
+and, since 2026-09-07, the `ora-doctrine-integrity-guard` CC/MCP task, which runs
+`backfill` daily as its ninth engine to catch drift from commits made in another
+checkout (the post-commit hook only ever fires in the checkout that committed).
 
 Ledger: _staging/PENDING_REIMPORT.md (UNTRACKED local state; see .gitignore).
 
@@ -592,8 +599,9 @@ def cmd_list() -> None:
 
 def cmd_candidates() -> None:
     """Read-only: ledger UNION full sweep. This is what a downstream consumer
-    (ora-skills-reimport-watch STEP 1a, package-and-stage-skill Entry Point A)
-    should call to build its work queue instead of `list` alone."""
+    (package-and-stage-skill Entry Point A) should call to build its work queue
+    instead of `list` alone. The former `ora-skills-reimport-watch` reference here
+    was a dead pointer -- see the module docstring."""
     result = candidates()
     if not result:
         print('pending_reimport: no candidates (ledger empty and full sweep found no drift)')
