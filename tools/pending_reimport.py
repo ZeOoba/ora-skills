@@ -717,6 +717,105 @@ def _named_in_block(skill: str, block: str) -> bool:
     return re.search(rf'(?<![\w-]){re.escape(skill)}(?![\w-])', block) is not None
 
 
+# A confirmed-install log says so in words. Case-insensitive because entries write
+# both "CONFIRMED" (per-skill, doctrinal) and "4 re-imports confirmed" (headers).
+# The \b keeps "unconfirmed" from matching.
+_CONFIRM_RE = re.compile(r'\bconfirmed\b', re.I)
+
+# Phrases meaning "this skill was NOT installed", when they appear in the skill's
+# OWN scope. Deliberately narrow: an over-broad list makes the guard cry wolf and
+# trains sessions to reach for --force, which is worse than the hole it closes.
+# Bare "stale" is excluded for exactly that reason -- these logs say "main.log
+# stale" and "repo-ahead-of-cache" constantly; only a copular "is/now/remains/
+# still stale" reads as a verdict on the install itself.
+_NON_INSTALL_RES = tuple(re.compile(p, re.I) for p in (
+    r'\bnot packaged\b', r'\bnot installed\b', r'\bnot presented\b',
+    r'\bnever packaged\b', r'\bno action taken\b', r'\bpublish stopped\b',
+    r'\bstopped rather than\b', r'\bdeliberately skipped\b',
+    r'\bnot re-?imported\b', r'\bnot confirmed\b', r'\brefused\b',
+    # Bare "X is stale" is NOT enough. The 2026-08-24 entry says a refi *workbook*
+    # "is still stale" inside an acquisition-underwriting bullet, which the loose
+    # form read as a verdict on that skill's install -- the one false positive the
+    # refute pass over all 76 real entries turned up. Require install context.
+    r'\b(?:install(?:ed|ation)?|cached?|store|runtime)\b[^.\n]{0,80}?'
+    r'\b(?:is|now|remains|still)\s+stale\b',
+))
+
+
+def _scopes(block: str) -> list[str]:
+    """Split an entry into the smallest units that can carry a per-skill verdict:
+    blank-line-separated paragraphs, further split at each markdown bullet.
+
+    The scoping matters more than the token test. Every real entry states its
+    confirmation ONCE -- in the header or a preamble -- then gives each skill its
+    own bullet, so an entry-WIDE token test cannot tell a confirmed skill from a
+    deliberately-skipped one sitting three lines below it. Requiring a token in
+    every bullet fails the other way: it would refuse the legitimate 2026-09-07
+    batch entry, whose bullets carry timestamps and no repeated 'CONFIRMED'."""
+    units: list[str] = []
+    for para in re.split(r'\n\s*\n', block):
+        cur: list[str] = []
+        for line in para.split('\n'):
+            if re.match(r'\s*[-*]\s', line) and cur:
+                units.append('\n'.join(cur))
+                cur = [line]
+            else:
+                cur.append(line)
+        if cur:
+            units.append('\n'.join(cur))
+    return [u for u in units if u.strip()]
+
+
+def _sole_subject(skill: str, unit: str, all_skills) -> bool:
+    """True when `unit` is a verdict ABOUT this skill rather than prose that merely
+    mentions it. A unit naming two or more skills is discussion -- a corrections
+    paragraph, a lessons note, a dispatch list -- and a non-install phrase inside it
+    belongs to whichever skill the sentence is about, which this cannot know.
+
+    Learned from the 2026-09-07 refute pass over all 76 real entries: without this,
+    one "still stale" in a closing analysis paragraph refused three unrelated
+    skills, and a meta-note about the guard itself ("REFUSED register-scheduled-task
+    ... county-parcel-screen") refused both. An over-firing guard trains --force,
+    which is worse than the hole it closes."""
+    named = [s for s in all_skills if _named_in_block(s, unit)]
+    return named == [skill]
+
+
+def clear_authorized(skill: str, block: str, all_skills=None) -> tuple[bool, str]:
+    """(ok, reason) for the LOG-BEFORE-CLEAR guard.
+
+    Three conditions, in the order of what each catches:
+      1. the skill is named in the newest entry at all -- the original 2026-08-14
+         check, for a clear that outran its own log entry;
+      2. the entry records a confirmed install SOMEWHERE (an entry holding only
+         packaging notes, or only a decision NOT to install, authorizes nothing);
+      3. no scope mentioning this skill carries a non-install verdict.
+
+    (2) and (3) are the 2026-09-07 fix. The old check was (1) alone, so an entry
+    reading "county-parcel-screen: NOT packaged, staged, or presented this session
+    ... no action taken on this skill" authorized clearing county-parcel-screen
+    exactly as well as a confirmed install would -- it tested for the NAME, never
+    for a claim about it, and a real session cleared three lines on that basis.
+
+    EVERY mention is checked, not just the first: a skill listed in a dispatch
+    preamble and then negated in its own bullet must still refuse, or the preamble
+    silently launders the verdict."""
+    if not _named_in_block(skill, block):
+        return False, 'not named in'
+    if not _CONFIRM_RE.search(block):
+        return False, 'records no confirmed install in'
+    if all_skills is None:
+        all_skills = sorted(all_skill_dirs(REPO))
+    for unit in _scopes(block):
+        if not _sole_subject(skill, unit, all_skills):
+            continue
+        for rx in _NON_INSTALL_RES:
+            m = rx.search(unit)
+            if m:
+                return False, f'named as NOT installed ("{m.group(0)}") in'
+    return True, ''
+
+
 def cmd_clear(skills: list[str], force: bool = False) -> None:
     """Clear pending-reimport ledger entries -- gated on the LOG-BEFORE-CLEAR guard
     (module docstring) unless `force` is set. Fail-CLOSED on an unreadable/headerless
@@ -739,15 +838,18 @@ def cmd_clear(skills: list[str], force: bool = False) -> None:
                 file=sys.stderr,
             )
             sys.exit(1)
-        unlogged = [s for s in skills if not _named_in_block(s, block)]
+        verdicts = {s: clear_authorized(s, block) for s in skills}
+        unlogged = [s for s, (ok, _) in verdicts.items() if not ok]
         if unlogged:
-            print(
-                f'pending_reimport: REFUSED to clear {", ".join(unlogged)} -- not named '
-                f'in the newest event_log.md entry ("{header.strip()}"). Log the confirmed '
-                f'Save-skill install first (package-and-stage-skill step 7), THEN clear -- '
-                f'never the reverse. Pass --force to override.',
-                file=sys.stderr,
-            )
+            for s in unlogged:
+                print(
+                    f'pending_reimport: REFUSED to clear {s} -- {verdicts[s][1]} '
+                    f'the newest event_log.md entry ("{header.strip()}"). Log the '
+                    f'confirmed Save-skill install first (package-and-stage-skill '
+                    f'step 7), THEN clear -- never the reverse. Pass --force to '
+                    f'override.',
+                    file=sys.stderr,
+                )
             skills = [s for s in skills if s not in unlogged]
             if not skills:
                 sys.exit(1)
