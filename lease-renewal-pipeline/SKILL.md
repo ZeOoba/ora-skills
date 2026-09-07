@@ -1,6 +1,6 @@
 ---
 name: lease-renewal-pipeline
-description: Flag upcoming lease expirations across the portfolio and route renewal-letter drafting through document-assembly. v1.1
+description: Flag upcoming lease expirations across the portfolio and route renewal-letter drafting through document-assembly. Use when the user mentions upcoming lease expirations, renewal pipeline, which leases are expiring, renewal tracking, expiring leases this quarter, or asks to check/run the lease renewal cycle. Does not itself draft a letter or score tenant risk — see document-assembly and tenant-intelligence. v1.2
 user-invocable: true
 allowed-tools: Read Glob Grep Write WebSearch WebFetch mcp__c5f4869f-7d3a-4472-a66a-8e61315feb51__notion-search mcp__c5f4869f-7d3a-4472-a66a-8e61315feb51__notion-fetch mcp__a3e380ce-2ea9-4b42-92d9-37c588a4b760__search_crm_objects mcp__c0ea3c01-b8f1-4371-aa06-08a1449f59fc__outlook_email_search
 ---
@@ -52,4 +52,5 @@ Markdown table for the pipeline, followed by draft renewal letters for any criti
 
 ## Changelog
 
+- **v1.2 (2026-09-07):** ORA Automation Audit R23 follow-up — this skill had ZERO trigger phrases in its description, so it could never win a manual, name-based routing decision against tenant-intelligence or document-assembly; only its scheduled-task cron ever ran it. Added trigger vocabulary ("upcoming lease expirations", "renewal pipeline", "expiring leases this quarter", etc.) plus explicit deferrals for drafting (document-assembly) and risk scoring (tenant-intelligence), so it can. No detection logic, cadence, or handoff behavior changed.
 - **v1.1 (2026-08-14):** Fixed a live skill-routing collision (ORA Automation Audit Revision 8, `ora-setup-audit`) — Step 4 previously drafted renewal-letter prose directly with no format specified and no reference to CLAUDE.md's ratified comms-drafting tie-break, a silent third path around `document-assembly`/`tenant-email`. Now determines terms only and hands drafting to `document-assembly`, consistent with the tie-break's "tenant-directed formal letters (renewal offers, notices) route to document-assembly" rule. No change to lease-data sourcing or urgency logic.
