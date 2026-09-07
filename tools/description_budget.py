@@ -44,6 +44,9 @@ def extract_description(body):
 
     Folded (`>`) joins lines with spaces; literal (`|`) preserves newlines -- the
     distinction matters because the importer measures the materialized string.
+
+    NOTE: this is NOT the number that gates packaging -- see packager_description()
+    below and read() for why the larger of the two is what's reported.
     """
     m = BLOCK.search(body)
     if m:
@@ -63,6 +66,29 @@ def extract_description(body):
     return m.group(1) if m else None
 
 
+def packager_description(body):
+    """Return the description exactly as `package_skills.py` measures it.
+
+    The packager (package_skills.py:181, :275) uses a DIFFERENT regex from this module:
+    `^description:\\s*(.*?)(?=\\n[a-zA-Z_-]+:|\\Z)` captures the raw block INCLUDING the
+    `>` marker, the newlines and every line's leading indentation. For a block-scalar
+    description that runs ~28 chars higher than the YAML-folded string the importer
+    actually receives (measured 2026-09-07: county-parcel-screen 974 folded vs 1002 raw;
+    county-sales-monitor 936 vs 964 -- +28 on both, ~14 lines x 2 chars of overhead).
+
+    Both numbers are kept and the LARGER one gates, because the two answer different
+    questions and only one of them can block you today:
+      - folded  = what the platform importer materializes; semantically correct.
+      - raw     = what package_skills.py enforces; it refuses to build over 1024.
+    Reporting only the folded count would let this tool clear a skill the packager then
+    rejects -- and this skill's own doctrine is that "a fallback checker that disagrees
+    with the real packager is worse than no fallback checker" (v1.27, on the inverse bug).
+    So: gate conservatively, show both when they differ, never under-report.
+    """
+    m = re.search(r"^description:\s*(.*?)(?=\n[a-zA-Z_-]+:|\Z)", body, re.S | re.M)
+    return m.group(1) if m else None
+
+
 def read(skill):
     """Return (name, description_len, error)."""
     p = os.path.join(ROOT, skill, "SKILL.md")
@@ -79,6 +105,14 @@ def read(skill):
     desc = extract_description(body)
     if desc is None:
         return (nm.group(1) if nm else None), 0, "no description key"
+    # Gate on the LARGER of the two measurements -- see packager_description().
+    # The folded count is semantically right; the packager's raw count is what
+    # actually refuses to build. Reporting only the folded one would clear a skill
+    # the packager then rejects, which is the exact failure mode v1.27 recorded in
+    # the opposite direction. Never under-report against the tool that can block you.
+    raw = packager_description(body)
+    if raw is not None and len(raw) > len(desc):
+        return (nm.group(1).strip("'\"") if nm else None), len(raw), None
     # strip surrounding quotes exactly as package_skills.validate_skill_frontmatter does
     # (line 179: nm.group(1).strip("'\"") != skill). A quoted `name: "debt-management"` is
     # valid YAML and installs fine; a checker that does not strip reports a false FAIL --
