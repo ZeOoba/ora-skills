@@ -813,5 +813,63 @@ class DeliberatelyUnpublished(FixtureTestCase):
         self.assertIn('suppressed', out.getvalue())
 
 
+class ChangedFilesMergeCommit(unittest.TestCase):
+    """`changed_files()` feeds cmd_record(), which the post-commit hook calls on
+    every commit. Proven blind spot (2026-09-07, Automation Audit R23 close-out):
+    plain `git diff-tree -r <merge>` prints NOTHING for a merge commit, so a
+    branch merged into main recorded ZERO ledger lines -- package-and-stage-skill
+    (577397f, merged as db7ea76) and tenant-intelligence (00c553b, merged as
+    3a2f352) both changed packaged SKILL.md content and produced no PENDING
+    REIMPORT entry, leaving the store serving stale bytes under a current version
+    token. Non-merge commits must keep their exact prior file list."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='pending_reimport_merge_'))
+        self.repo = self.tmp / 'repo'
+        self.repo.mkdir()
+        self._git('init', '-q', '-b', 'main')
+        self._git('config', 'user.email', 'test@example.invalid')
+        self._git('config', 'user.name', 'Test')
+        # Never let the real repo's core.hooksPath fire inside the fixture.
+        self._git('config', 'core.hooksPath', str(self.tmp / 'no-hooks'))
+
+    def tearDown(self):
+        shutil.rmtree(pr._win_long(self.tmp), ignore_errors=True)
+
+    def _git(self, *args):
+        return subprocess.run(['git', '-C', str(self.repo), *args],
+                              capture_output=True, text=True, check=True).stdout
+
+    def _commit(self, relpath, text, msg):
+        _write(self.repo / relpath, text)
+        self._git('add', '-A')
+        self._git('commit', '-q', '-m', msg)
+        return self._git('rev-parse', 'HEAD').strip()
+
+    def _changed(self, commit):
+        with unittest.mock.patch.object(pr, 'REPO', self.repo):
+            return pr.changed_files(commit)
+
+    def test_merge_commit_reports_the_files_the_branch_brought_in(self):
+        self._commit('seed.md', 'seed\n', 'seed')
+        self._git('checkout', '-q', '-b', 'topic')
+        self._commit('a-skill/SKILL.md', 'branch content\n', 'branch edit')
+        self._git('checkout', '-q', 'main')
+        self._commit('other.md', 'main-side\n', 'main edit')
+        self._git('merge', '-q', '--no-ff', '-m', 'merge topic', 'topic')
+        merge_sha = self._git('rev-parse', 'HEAD').strip()
+
+        self.assertIn('a-skill/SKILL.md', self._changed(merge_sha))
+
+    def test_non_merge_commit_file_list_is_unchanged(self):
+        self._commit('seed.md', 'seed\n', 'seed')
+        sha = self._commit('b-skill/SKILL.md', 'x\n', 'normal commit')
+        self.assertEqual(['b-skill/SKILL.md'], self._changed(sha))
+
+    def test_root_commit_does_not_raise(self):
+        sha = self._commit('seed.md', 'seed\n', 'seed')
+        self.assertEqual([], self._changed(sha))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
