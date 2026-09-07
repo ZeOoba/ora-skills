@@ -87,6 +87,37 @@ _real = "name: county-parcel-screen\ndescription: >\n" + "".join(
 _got = extract_description(_real)
 check("multi-line folded length is summed, not 1", len(_got) > 700, True)
 
+# --- the two counters must never disagree in the dangerous direction (2026-09-07) ---
+# packager_description() captures the raw block (marker + newlines + indentation);
+# extract_description() returns the folded string. The raw count is >= the folded one
+# for a block scalar, and read() must gate on the larger, or this tool clears a skill
+# that package_skills.py then refuses to build.
+from description_budget import packager_description, read  # noqa: E402
+
+_blk = "name: x\ndescription: >\n  alpha beta\n  gamma delta\n"
+check(
+    "packager count >= folded count on a block scalar",
+    len(packager_description(_blk)) >= len(extract_description(_blk)),
+    True,
+)
+check(
+    "packager sees the raw block, not 1 char",
+    len(packager_description(_blk)) > 1,
+    True,
+)
+# On the INLINE form the packager still over-counts, by exactly 1: its lookahead runs
+# to \Z and swallows the trailing newline, where the folded extractor's `$` does not.
+# Harmless -- over-counting is the safe direction -- but assert the direction, never
+# equality, so a future edit that made the packager count LOWER would fail here.
+_inl = "name: x\ndescription: plain text here\n"
+check("inline: packager never under-counts",
+      len(packager_description(_inl)) >= len(extract_description(_inl)), True)
+check("inline: the over-count is the trailing newline only",
+      len(packager_description(_inl)) - len(extract_description(_inl)), 1)
+# read() gates on the larger: county-parcel-screen is 974 folded / 1002 raw.
+_nm, _n, _err = read("county-parcel-screen")
+check("read() reports the conservative (packager) count", (_err, _n), (None, 1002))
+
 print()
 if FAILURES:
     print("FAILED: %d of the checks above" % len(FAILURES))
