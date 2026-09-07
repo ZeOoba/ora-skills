@@ -1,6 +1,6 @@
 ---
 name: lease-form-qc
-description: "Pre-execution QC gate for leases drafted on Oxford Realty Advisors own landlord form (Fairground Village Center / 1100 Rarig Ave / Sepich portfolio paper). Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, is this lease ready to send, review our lease draft, new tenant lease, lease from the template, or uploads a DOCX that is an ORA-form lease. Also run before ANY outbound lease goes to a tenant or broker. Scans 51 systemic defects in the ORA base form (dead cross-references, undefined terms, OpEx billing machinery, obsolete statutory cites, Ohio mitigation exposure, F10-F13) with PASS/FAIL severity. Carries ORA's six ratified standing lease positions (2026-08-03). Distinct from legal-intelligence (counterparty paper): this audits ORA's OWN paper. v2.5.1 (2026-08-17: shared ora_doc_qc extraction — real PDF/OCR handling + UNREADABLE gate; T1 registered, scans body + footer; 52 checks)"
+description: "Pre-execution QC gate for leases drafted on Oxford Realty Advisors own landlord form (Fairground Village Center / 1100 Rarig Ave / Sepich portfolio paper). Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, review our lease draft, new tenant lease, lease from the template, or uploads a DOCX that is an ORA-form lease. Also run before ANY outbound lease goes to a tenant or broker. Scans 51 systemic defects in the ORA base form (dead cross-references, undefined terms, OpEx billing, statutory cites, Ohio mitigation exposure) plus a token gate and footer tenant-mismatch check (53 checks) with PASS/FAIL severity. Also runs --loi-conformance: register vs. drafted lease, CONFORMS/CONFORMS+/PARTIAL/MISSING/CONFLICT matrix, for lease-generation's LOI gate. Carries ORA's six ratified standing lease positions (2026-08-03). Distinct from legal-intelligence: audits ORA's OWN paper. v2.6 (T2 tenant-mismatch check + --loi-conformance mode; 53 checks)"
 ---
 
 # Lease Form QC — Oxford Realty Advisors own paper
@@ -126,10 +126,14 @@ prose and reported ~16 mojibake "failures" including BLOCKs. Never report a QC r
 for a file that exited 2 — supply a text-layer copy, or install poppler-utils +
 tesseract.
 
-Benchmarks (scanner v2.5.1, 52 checks = 51 defect checks + T1): untouched ORA-form lease
+Benchmarks (scanner v2.6, 53 checks = 51 defect checks + T1 + T2): untouched ORA-form lease
 ≈ **39–48 failures**; a v2.4.1-derived lease fails exactly F10–F13 (+F14–F18); a
-v2.5-derived lease fails exactly **F14–F18**; a v2.6-derived lease = **0 of 52**
-(re-verified 2026-08-17 on the OH master and all five rebased property templates).
+v2.5-derived lease fails exactly **F14–F18**; a v2.6-derived lease = **0 of 53** (the OH
+master fixture in this repo re-verified directly: T2 does not fire — its footer complex
+fields are PAGE/NUMPAGES page numbering, not FILENAME/DOCPROPERTY. The five rebased
+state-conformed property templates this repo does not carry a local copy of were not
+independently re-run for this change; confirm the same 0-of-53 on them before relying
+on this benchmark for those files).
 The scanner also enforces a **T1 token gate**: any
 unfilled `[TOKEN]` **in the body or the footer** of a file whose name lacks
 `_TEMPLATE` is a BLOCK failure (drafted leases must be fully filled; pass
@@ -228,6 +232,23 @@ CERCLA: 42 U.S.C. § 9061 → **§ 9601**. HMTA: 49 U.S.C. § 1802 → **§ 5101
 - **F18** — footer carries the ORA Master Lease form-version tag (vintage forensics).
 - **T1** — unfilled-token gate on non-template files (BLOCK; `--allow-tokens` to override).
 
+### Class 5c — CROSS-DOCUMENT PROVENANCE (added for the lease-generation handoff)
+
+- **T2** — footer FILENAME/DOCPROPERTY field resolves to a tenant name other than this
+  lease's own defined Tenant (BLOCK). Catches a lease cloned from a **different**
+  tenant's executed lease as a drafting shortcut (instead of the property template),
+  where a stale Word field in the footer still displays the old tenant's name even
+  after every `[TOKEN]` has been filled — T1 cannot see this, because a field's cached
+  result is not a token, it is ordinary-looking text that happens to be wrong. Handles
+  a co-tenant list (ratified position 2) by checking a footer field against every
+  listed name, not just the first. No FILENAME/DOCPROPERTY field in the footer at all —
+  lease-generation's own output, which replaces the field with static text — passes
+  cleanly by design. Can only see a Word **complex** field (`<w:fldChar>` +
+  `<w:instrText>`); a **simple** field (`<w:fldSimple w:instr="...">`) stores its
+  instruction in a tag attribute the shared extraction module discards along with every
+  other tag, and is invisible to this check — a documented limit, not a gap to route
+  around inside this file (see `_footer_field_candidates()`'s comment).
+
 ### Class 6 — MISSING PROVISIONS
 
 No-recording · Landlord default standard · Force majeure · OFAC · Counterparts/
@@ -261,6 +282,35 @@ Cure stranded; Financial Statements after Miscellaneous). Reordering is optional
 if done, re-verify every numeric cross-reference (see F7).
 
 ---
+
+## `--loi-conformance` mode (added for the lease-generation handoff)
+
+```bash
+python3 scripts/lease_qc.py --loi-conformance <deal-terms-register.json> <lease.docx> [--json]
+```
+
+Replays lease-generation's own "LOI conformance matrix" gate (that skill's SKILL.md
+"3. Gates", item 4) as a scanner-owned, testable output instead of a manual judgment
+call: loads a `deal-terms-register.json` (schema at
+`lease-generation/references/deal-terms-register.schema.json`), reads the drafted
+lease's text, and emits one row per field category — landlord, tenant, co_tenants,
+premises, use, term, options, rent, expense_structure, utilities, security_deposit,
+parking, landlord_work, maintenance, insurance, broker, signage (17 total) — each a
+**CONFORMS / CONFORMS+ / PARTIAL / MISSING / CONFLICT** verdict. Not every schema leaf
+has its own row: `special_provisions` (a heterogeneous array of ad-hoc clauses with no
+fixed shape to match against) and a handful of already-covered categories' own
+sub-fields (`utilities.gas`/`.trash`, `parking.allocation`/`.vehicle_class_cap`) are not
+independently verified — treat a CONFORMS row as "the fields this mode checks conform,"
+not "every negotiated term in this category was verified," and cross-check those
+specific sub-fields by hand. Text and `--json` report shapes both follow the standard
+scan mode's conventions. Exit codes: **0** = every row CONFORMS/CONFORMS+, **1** = at
+least one PARTIAL/MISSING/CONFLICT row (matches the matrix gate: "nothing ships with
+PARTIAL/MISSING/CONFLICT unless Gabriel resolved it"), **2** = usage / register-load /
+lease-UNREADABLE error, including a malformed register (not a JSON object) or a missing
+lease file — a single malformed FIELD inside an otherwise-valid register degrades just
+that row to MISSING (with a `could not evaluate` detail) rather than crashing the whole
+matrix. This is a separate code path from the standard 53-check scan (different question, different
+source of truth, different output shape) and does not add to `checks_run`.
 
 ## Decision gates — never fix unilaterally
 
@@ -297,6 +347,29 @@ section, re-verify every numeric cross-reference** — that is exactly how the v
 Section 24 defect was born.
 
 ## Changelog
+
+### v2.6 — T2 + `--loi-conformance` mode (lease-generation handoff)
+
+Two additions handed off from `lease-generation`'s SKILL.md, both additive (no
+existing check ID, severity, or logic changed):
+
+| Change | Why |
+|---|---|
+| **T2** registered (BLOCK) | Footer FILENAME/DOCPROPERTY field naming a different tenant than this lease's own defined Tenant — the cross-contamination failure mode this skill exists to catch generally, specific to a stale field surviving a token fill. Ctx-aware (like A2/F9/F18), not `bool_check()`-wrapped: reads `ctx["meta"]["footer"]` and `ctx["raw"]`. Detects Word **complex** fields (`fldChar`+`instrText`) only — a **simple** field's `w:instr` attribute is discarded by the shared extraction module's tag-stripping and is invisible here; widening that is an `ora_doc_qc.py` change, out of this file's reach (see Class 5c). A candidate is only ever treated as a tenant claim when it occupies the documented tenant slot — a FILENAME token after a literal `Lease` marker, or a DOCPROPERTY whose property NAME itself reads tenant/lessee-labeled — after independent review reproduced false BLOCKs on address-only filenames and on ordinary metadata properties (`Company`, `DocID`, `Title`, `Manager`). Checks_run is now **53**. |
+| `--loi-conformance <register.json>` mode added | A second CLI mode (dispatched before CHECKS/`run_cli()`) replaying lease-generation's "LOI conformance matrix" gate as a scanner-owned, testable CONFORMS/CONFORMS+/PARTIAL/MISSING/CONFLICT matrix across 17 field categories. Separate code path, separate source of truth (the deal's own register, not the fixed defect registry) — does not touch `checks_run` or the standard scan's severity model. Two independent review passes found and fixed: dollar-amount matching was truncating cents (a register rent stated to the cent could silently CONFORMS against a lease stating different cents); the `gross` expense-structure phrase matched "gross negligence" in any lease's exculpation clause regardless of actual structure; `term`'s CONFORMS+ was inferred from bare "early access" text rather than the register's own `term.early_access` field; a `suite` value with no word-boundary anchoring could never fail; `utilities`' key-name fallback made that row unfailable; the mode had no error containment (a missing lease file or a malformed register field raised an uncaught exception at **exit 1**, indistinguishable from a real "the matrix has blocking rows" verdict, now **exit 2**, or a contained MISSING row for one malformed field); a CPI/fixed-dollar-step escalation (not text-matchable) silently CONFORMS'd instead of reporting PARTIAL; and `landlord_work`/`signage`'s exact-phrase matching against free-text register descriptions made those two rows essentially unfailable to CONFORM even against ORA's own canonical example register (`_phrase_present()` gained a `threshold` mode: a majority of a description's significant (5+ char) words, matched anywhere in the lease text, rather than every word verbatim in one window). |
+
+Regression evidence: 89 unit tests in `tests/` (41 new — 16 on T2 including 4 dedicated
+false-positive-surface cases, 25 on `--loi-conformance` including its own dedicated
+regression-fix test class — the pre-existing 48 unchanged in substance; two hardcoded
+`checks_run`/"N of 52" literals bumped to 53 to reflect T2's registration). Two
+independent code review passes (pr-review-toolkit code-reviewer, re-run after the first
+pass's fixes since a review verdict is keyed to exact content) found 3 critical + 6
+important defects on the first pass and 2 further important defects on the second,
+all fixed and covered above and in `tests/`. The
+OH master v2.6 fixture in this repo re-verified directly: **0 of 53**, T2 silent (its
+footer complex fields are PAGE/NUMPAGES, not FILENAME/DOCPROPERTY) — the five rebased
+state-conformed property templates live outside this repo and were not independently
+re-run for this change.
 
 ### v2.5.1 (2026-08-17) — review fixes, before v2.5 ever shipped
 
