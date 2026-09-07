@@ -915,5 +915,134 @@ class ChangedFilesMergeCommit(unittest.TestCase):
         self.assertEqual([], self._changed(sha))
 
 
+REAL_ENTRY_MIXED = """## 2026-09-07 -- Entry Point A: 2 reimports confirmed, county-parcel-screen publish stopped
+
+**package-and-stage-skill** (v1.30): Save-skill click CONFIRMED. Cache-dir CreationTime moved, exact-second match to main.log.
+
+**county-parcel-screen** (v1.1, 16 files): NOT packaged, staged, or presented this session. Per brief instruction, stopped rather than risk a duplicate store entry; no action taken on this skill.
+"""
+
+REAL_ENTRY_ALL_CONFIRMED = """## 2026-09-07 -- Second Save-skill batch: all 4 reimports CONFIRMED
+
+`tools/reimport_correlate.py verify` returned CONFIRMED for all four:
+
+- **county-parcel-screen** (v1.1, 16 files): CreationTime 11:58:24 -> 13:14:09; main.log Sync complete @ 13:14:09. Post-install file count 16/16.
+- **ora-setup-audit** (v1.12): CreationTime 13:04:26 -> 13:14:09, paired with the same Sync-complete line.
+"""
+
+
+class LogBeforeClearGuard(unittest.TestCase):
+    """The guard shipped in 9e0fca7 gates `clear` on the newest event_log entry.
+    It matched on the skill NAME alone, so an entry that named a skill as
+    deliberately NOT installed authorized clearing it just as well as one
+    recording a confirmed install -- which is exactly what happened on
+    2026-09-07: county-parcel-screen was cleared against an entry whose own text
+    said "publish stopped ... no action taken on this skill"."""
+
+    def _clear(self, skills, block, header='## 2026-09-07 -- x', known=None):
+        """`known` overrides the repo's real skill roster, which _sole_subject()
+        consults to decide whether a scope is a verdict about ONE skill or prose
+        mentioning several. Tests using placeholder names must supply it."""
+        err = __import__('io').StringIO()
+        entries = {s: f'- {s} | ...' for s in skills}
+        with unittest.mock.patch.object(pr, 'newest_event_log_block',
+                                        return_value=(header, block)),              unittest.mock.patch.object(pr, 'all_skill_dirs',
+                                        return_value=(known or pr.all_skill_dirs(pr.REPO))), \
+             unittest.mock.patch.object(pr, 'read_entries', return_value=dict(entries)), \
+             unittest.mock.patch.object(pr, 'write_entries') as wrote, \
+             unittest.mock.patch('sys.stderr', err), \
+             unittest.mock.patch('sys.stdout', __import__('io').StringIO()) as out:
+            try:
+                pr.cmd_clear(skills)
+            except SystemExit:
+                pass
+        return err.getvalue(), out.getvalue(), wrote
+
+    def test_skill_named_as_NOT_installed_is_refused(self):
+        err, out, _ = self._clear(['county-parcel-screen'], REAL_ENTRY_MIXED)
+        self.assertIn('REFUSED', err)
+        self.assertNotIn('cleared county-parcel-screen', out)
+
+    def test_sibling_confirmed_skill_in_the_same_entry_still_clears(self):
+        err, out, _ = self._clear(['package-and-stage-skill'], REAL_ENTRY_MIXED)
+        self.assertNotIn('REFUSED', err)
+        self.assertIn('cleared package-and-stage-skill', out)
+
+    def test_entry_confirming_all_of_them_clears_without_per_bullet_token(self):
+        """Real 2026-09-07 entry: the confirmation is stated once up front and in
+        the header, NOT repeated in every bullet. Requiring a per-bullet CONFIRMED
+        would refuse a legitimate log and push sessions to --force."""
+        err, out, _ = self._clear(['county-parcel-screen', 'ora-setup-audit'],
+                                  REAL_ENTRY_ALL_CONFIRMED)
+        self.assertNotIn('REFUSED', err)
+        self.assertIn('cleared', out)
+
+    def test_entry_with_no_confirmation_token_at_all_is_refused(self):
+        block = ('## 2026-09-07 -- packaging notes\n\n'
+                 '- **some-skill**: repackaged, awaiting Gabriel.\n')
+        err, out, _ = self._clear(['some-skill'], block, known=['some-skill'])
+        self.assertIn('REFUSED', err)
+
+    def test_negation_in_a_sibling_bullet_does_not_block_a_clean_skill(self):
+        block = ('## 2026-09-07 -- batch\n\nAll CONFIRMED except one:\n\n'
+                 '- **skill-a**: install CONFIRMED at 13:14:09.\n'
+                 '- **skill-b**: NOT packaged this session.\n')
+        err, out, _ = self._clear(['skill-a'], block, known=['skill-a', 'skill-b'])
+        self.assertNotIn('REFUSED', err)
+        self.assertIn('cleared skill-a', out)
+
+    def test_preamble_mention_does_not_rescue_a_negated_bullet(self):
+        """The skill is listed in a dispatch preamble AND negated in its own
+        bullet. Scoping to the first mention would wrongly authorize the clear."""
+        block = ('## 2026-09-07 -- batch\n\n'
+                 'Dispatch: skill-a, skill-b. Verify returned CONFIRMED:\n\n'
+                 '- **skill-a**: CreationTime moved, exact-second match.\n'
+                 '- **skill-b**: publish stopped; no action taken on this skill.\n')
+        err, out, _ = self._clear(['skill-b'], block, known=['skill-a', 'skill-b'])
+        self.assertIn('REFUSED', err)
+
+    def test_unnamed_skill_still_refused(self):
+        err, out, _ = self._clear(['never-mentioned'], REAL_ENTRY_ALL_CONFIRMED)
+        self.assertIn('REFUSED', err)
+
+    def test_force_overrides_a_negated_bullet(self):
+        entries = {'county-parcel-screen': '- county-parcel-screen | ...'}
+        out = __import__('io').StringIO()
+        with unittest.mock.patch.object(pr, 'read_entries', return_value=dict(entries)), \
+             unittest.mock.patch.object(pr, 'write_entries'), \
+             unittest.mock.patch('sys.stdout', out):
+            pr.cmd_clear(['county-parcel-screen'], force=True)
+        self.assertIn('cleared county-parcel-screen', out.getvalue())
+
+    def test_stale_install_claim_refuses(self):
+        """Real 2026-09-07 Cowork bullet: the log itself says the installed content
+        is stale, so it must not authorize a clear."""
+        block = (
+            '## 2026-09-07 -- batch\n'
+            '\n'
+            'verify returned CONFIRMED:\n'
+            '\n'
+            '- **skill-a**: Net effect: the currently-installed skill-a content is\n'
+            '  stale/inconsistent versus origin/main.\n'
+        )
+        err, out, _ = self._clear(['skill-a'], block, known=['skill-a'])
+        self.assertIn('REFUSED', err)
+
+    def test_stale_workbook_inside_a_skill_bullet_does_not_refuse(self):
+        """Real 2026-08-24 bullet: the stale thing is a WORKBOOK, not the install.
+        The loose copular-stale pattern refused this skill across the whole corpus;
+        requiring install/cache/store context first is what fixed it."""
+        block = (
+            '## 2026-08-24 -- close-out\n'
+            '\n'
+            'Install CONFIRMED.\n'
+            '\n'
+            '- **skill-a** consumer-sweep: only 754 Old State has a refi model, and\n'
+            '  it is still stale -- but on a v04 workbook.\n'
+        )
+        err, out, _ = self._clear(['skill-a'], block, known=['skill-a'])
+        self.assertNotIn('REFUSED', err)
+        self.assertIn('cleared skill-a', out)
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
