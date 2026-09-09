@@ -1,6 +1,6 @@
 ---
 name: investor-relations
-description: Oxford Realty Advisors investor relations and LP communications. Use when the user mentions: LP, limited partner, capital call, distribution notice, K-1, investor letter, LP query, LP report, fund accounting, capital account, commitment, called capital, distributed capital, NAV, IRR, MOIC, TVPI, DPI, RVPI, LP onboarding, side letter, subscription agreement, LP meeting, investor update, or any task related to communicating with or managing limited partners. Also trigger when the user receives an LP email or uploads an LP-facing document. v1.0
+description: Oxford Realty Advisors investor relations fund-level reporting and LP accounting. Use when the user mentions: capital call, distribution notice, K-1, LP report, fund accounting, capital account, commitment, called capital, distributed capital, NAV, IRR, MOIC, TVPI, DPI, RVPI, LP onboarding, side letter, subscription agreement, or LP meeting prep/materials. Owns the numbers and records, not correspondence: drafting an LP-facing letter, email, or query response routes to `communication-intelligence` (or `legal-intelligence` for redline/negotiation work, e.g. a side letter or subscription agreement markup) per CLAUDE.md's Comms drafting canon. v1.1 (2026-09-09: narrowed scope, added correspondence deferral — collided with CLAUDE.md's LP-mail canon via an old open-ended clause; ora-setup-audit R23-9)
 license: ORA Internal
 ---
 
