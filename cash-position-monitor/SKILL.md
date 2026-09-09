@@ -71,4 +71,4 @@ Daily/weekly cash snapshot, reserve adequacy check, distribution decision, refi 
 - portfolio-reporting skill (NOI inputs)
 - xlsx skill (cash schedules)
 - docx skill (decision memos)
-- investor-relations skill (distribution waterfall)
+- ~~investor-relations skill (distribution waterfall)~~ — retired 2026-09-09, no replacement assigned

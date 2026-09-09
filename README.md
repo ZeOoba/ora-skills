@@ -132,7 +132,6 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 **Finance, capital & investor relations**
 - `debt-management` — refinancing, lender selection, term-sheet negotiation, covenants
 - `cash-position-monitor` — multi-entity consolidated cash position across QuickBooks accounts
-- `investor-relations` — LP communications, capital calls, distributions, K-1s
 - `portfolio-growth` — long-term AUM growth modeling and strategic capital planning
 - `portfolio-reporting` — portfolio-level and investor-ready reporting output
 - `monthly-close` — the full monthly accounting/operations close checklist

@@ -10,7 +10,7 @@ Coordinate the firm's annual rhythm: budget kickoff, year-end review, tax planni
 
 ## Scope
 
-Calendar-year and fiscal-year activities that occur on an annual basis. Excludes monthly close (see monthly-close skill) and quarterly LP letter (see investor-relations skill).
+Calendar-year and fiscal-year activities that occur on an annual basis. Excludes monthly close (see monthly-close skill). Quarterly LP letter previously routed to investor-relations, retired 2026-09-09 (Gabriel, in-turn) — no replacement owner assigned yet; treat as manual until re-routed.
 
 ## Triggers
 
@@ -28,9 +28,9 @@ Annual budget assembly, year-in-review, year-end tax planning, K-1 distribution 
 | December 15 | Year-in-review draft | ora-year-end-review |
 | December 31 | Fiscal year close | monthly-close + manual |
 | January 15 | 1099 prep deadline (mailing Jan 31) | accounting + vendor-management |
-| February | LP K-1 prep with CPA | investor-relations |
-| March 15 | K-1 issuance to LPs (extended via 7004 if needed) | investor-relations |
-| April | LP communications post-K-1; tax-related Q&A | investor-relations |
+| February | LP K-1 prep with CPA | manual (investor-relations retired 2026-09-09) |
+| March 15 | K-1 issuance to LPs (extended via 7004 if needed) | manual (investor-relations retired 2026-09-09) |
+| April | LP communications post-K-1; tax-related Q&A | manual (investor-relations retired 2026-09-09) |
 
 ## Standard Workflows
 
@@ -59,7 +59,7 @@ Annual budget assembly, year-in-review, year-end tax planning, K-1 distribution 
 
 ### K-1 Cycle (Feb–March)
 1. Coordinate with CPA on entity-level returns.
-2. K-1 cover letter per LP using investor-relations skill template.
+2. K-1 cover letter per LP — investor-relations (retired 2026-09-09) previously owned this template; use document-assembly or draft manually until re-routed.
 3. K-1 distribution via secure channel; track receipt.
 
 ## Outputs
@@ -79,6 +79,6 @@ Annual budget assembly, year-in-review, year-end tax planning, K-1 distribution 
 - monthly-close skill (rolls up monthly into annual)
 - portfolio-reporting skill (year-end metrics)
 - capex-budgeting skill (capital plan)
-- investor-relations skill (LP communications)
+- ~~investor-relations skill (LP communications)~~ — retired 2026-09-09, no replacement assigned
 - tax-appeal skill (tax assumptions)
 - docx, xlsx, document-assembly skills
