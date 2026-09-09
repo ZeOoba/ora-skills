@@ -455,3 +455,51 @@ Two observations, neither ratified:
   confirming: whether it applies **per property** or **per agreement** changes
   annual minimum compensation by roughly **$40,800**. The KRG text does not say,
   and the answer sits in the billing history, not the document.
+
+---
+
+## PM-19 — The manager contracts trade work in Owner's name, as disclosed agent
+*Checks: P32, P33*
+
+The management agreement is the instrument that authorizes the manager to go out
+and buy paving, roofing, HVAC and snow services on ORA's assets. The KRG form
+grants that authority — repairs, alterations, hiring contractors, purchasing
+supplies — and says nothing about **whose name** the resulting contract is signed
+in.
+
+The consequence is not theoretical. A Q3 2026 paving proposal for an ORA-owned
+Maryland asset, solicited by the property manager, named **the manager** as
+Purchaser on a form providing that no provision confers any remedy upon a
+non-party. On that paper the one-year workmanship warranty, the indemnity and
+every payment remedy ran to the manager — a counterparty terminable on sixty
+days' notice — and not to the entity that owns the asphalt and paid the invoice.
+A management agreement that is silent on contracting capacity produces that
+result by default, at every property, on every trade.
+
+The second half of the position is the threshold. The KRG form requires Owner's
+prior written approval above **$2,000** — a figure set in 2020, never indexed, on
+an agreement that has auto-renewed six times. Approval is also not the same as
+signature: an approved job still gets contracted on the manager's signature
+unless the agreement says otherwise.
+
+**Position.** Three changes.
+
+> "Agent shall contract for all repairs, capital improvements and vendor services
+> in the name of Owner, as Owner's disclosed agent, and shall name Owner as the
+> contracting party on every such agreement. Agent shall not contract for work at
+> the Property as principal."
+
+> "Agent shall obtain Owner's prior written approval for any single expenditure in
+> excess of $[X], which threshold shall be adjusted annually by CPI. Owner shall
+> countersign any trade contract for an expenditure exceeding that threshold."
+
+> "In an emergency threatening imminent harm to persons or property, Agent may act
+> without prior approval and shall notify Owner within twenty-four (24) hours,
+> provided that emergency expenditures shall not exceed $[Y] per occurrence
+> without Owner's approval."
+
+**Companion.** PM-19 governs the *authority*. `vendor-contract-qc` VC-1 governs
+the *instrument that authority produces* — and catches the same defect from the
+other end, at the moment a specific trade contract is about to be signed. Run
+both: fixing the management agreement does not cure trade paper already executed
+in the manager's name, and fixing one contract does not stop the next one.

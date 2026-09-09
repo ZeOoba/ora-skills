@@ -1,6 +1,6 @@
 ---
 name: pma-qc
-description: "Pre-execution and pre-renewal QC gate for PROPERTY MANAGEMENT AGREEMENTS on third-party manager paper where Oxford Realty Advisors or an ORA entity is the Owner. Use when the user says: QC this management agreement, review the PM agreement, property management agreement, management agreement review, PM fee review, can I give leasing to another party, who controls leasing at this building, terminate the property manager, or uploads a DOCX/PDF that is a property management agreement. Run before signing, before every auto-renewal, and before engaging a third-party leasing broker at a managed property. Scans 32 defects (exclusive leasing grant with no per-property carve-out, manager authority to execute leases in Owner's name, indemnity reaching the manager's own negligence, undefined fee bases, fee stacking, no turnover obligations) at BLOCK/HIGH/MED/LOW. Distinct from lease-form-qc, listing-agreement-qc and legal-intelligence. 18 PROPOSED positions, unratified. v1.1"
+description: "Pre-execution and pre-renewal QC gate for PROPERTY MANAGEMENT AGREEMENTS on third-party manager paper where Oxford Realty Advisors or an ORA entity is the Owner. Use when the user says: QC this management agreement, review the PM agreement, property management agreement, management agreement review, PM fee review, can I give leasing to another party, can the manager sign contracts for us, terminate the property manager, or uploads a DOCX/PDF that is a property management agreement. Run before signing, before every auto-renewal, and before engaging a third-party leasing broker. Scans 34 defects (exclusive leasing grant with no per-property carve-out, manager authority to execute leases or trade contracts in its own name, indemnity reaching the manager's own negligence, undefined fee bases, no turnover obligations) at BLOCK/HIGH/MED/LOW. Distinct from lease-form-qc, listing-agreement-qc and legal-intelligence. 19 PROPOSED positions, unratified. v1.2"
 ---
 
 # Property Management Agreement QC — third-party manager paper
@@ -44,23 +44,29 @@ Three findings drove the design:
    six renewals unexamined; its $2,000 approval threshold and $45/hour rates are
    2020 dollars.
 
-Scanner benchmarks (v1.0, 32 checks):
+Scanner benchmarks:
 
 | Document | Failures | Notes |
 |---|---|---|
-| KRG 12.23.2020 (5 properties, executed) | **31 of 32** | 5 BLOCK · 15 HIGH · 10 MED · 1 LOW |
-| A fully remediated ORA management agreement | **0 of 32** | target state · `tests/remediated_fixture.txt` |
+| KRG 12.23.2020 (5 properties, executed) | **31 of 32** | v1.0 scan · 5 BLOCK · 15 HIGH · 10 MED · 1 LOW |
+| A fully remediated ORA management agreement | **0 of 32** | v1.0 scan · target state · `tests/remediated_fixture.txt` |
+| Both, against the v1.2 34-check registry | **not yet re-run** | see Changelog · P32/P33 are new and unscored against KRG |
 
-## The eighteen standing positions — PROPOSED, NOT RATIFIED
+**v1.2 open item.** P32 and P33 were added without re-running the KRG scan — the
+executed agreement was not to hand. Do not quote a 34-check KRG figure until the
+scan is re-run against the executed PDF and this table is updated. P32/P33 were
+verified against purpose-built defective and remediated fixtures only.
 
-`references/standing-positions.md` carries PM-1 … PM-18. **These are drafted
+## The nineteen standing positions — PROPOSED, NOT RATIFIED
+
+`references/standing-positions.md` carries PM-1 … PM-19. **These are drafted
 from the KRG review and have not been ratified by Gabriel.** Unlike
 `listing-agreement-qc`'s SP-1 … SP-16 (ratified 2026-08-17), they are a proposed
 canon: apply them as the review standard, present them as recommendations, and
 do not describe any of them as settled ORA policy until ratification is recorded
 here and in `event_log.md`.
 
-The four that cost real money, in priority order when a markup must be shortened:
+The five that cost real money, in priority order when a markup must be shortened:
 
 1. **PM-9 — The manager never executes a lease in Owner's name.** The KRG form
    grants authority to "sign, renew and/or cancel leases." This is the direct
@@ -74,6 +80,15 @@ The four that cost real money, in priority order when a markup must be shortened
    off Exhibit A on Owner's notice without terminating the whole agreement.
 4. **PM-3 / PM-11 — Every fee base is defined and capped.** "Gross monies
    collected" and "gross lease value" are undefined in the KRG form.
+5. **PM-19 — The manager contracts trade work in Owner's name, not its own.**
+   The agreement is what authorizes the manager to go buy paving, roofing and
+   HVAC work. If it does not require the manager to contract as Owner's
+   disclosed agent, the manager signs the trade paper as principal — and the
+   warranty, indemnity and payment remedies on a five- or six-figure capital job
+   run to a counterparty ORA can terminate on sixty days' notice. Observed live
+   in Q3 2026. This is the position that connects `pma-qc` to
+   `vendor-contract-qc`: PM-19 governs the authority, VC-1 governs the
+   instrument that authority produces.
 
 ## How to run
 
@@ -112,10 +127,10 @@ below (`listing-agreement-qc` v1.1, `lease-form-qc` v2.5.1).
   does not print a failure count. An unreadable document has no QC result.
 
 OCR text is lossy. When the header reads `EXTRACTION ocr`, treat every *absence*
-finding (P16, P19, P24, P27–P30 — checks that fire because language is missing)
-as **provisional** and confirm against the page images before reporting a
-missing clause to a counterparty. Presence findings are reliable; absence
-findings on OCR are not.
+finding (P16, P19, P24, P27–P30, P33 — checks that fire because language is
+missing) as **provisional** and confirm against the page images before
+reporting a missing clause to a counterparty. Presence findings are reliable;
+absence findings on OCR are not.
 
 ### Step 3 — Answer the exclusivity question before anything else
 
@@ -130,6 +145,14 @@ Report, in this order, at the top of every review:
    single express reservation argues against implying any other.
 4. **The exit** — termination mechanics, notice period, notice address, and
    whether any post-termination commission tail exists.
+5. **Contracting authority** — what the manager may sign, in whose name, and
+   above what dollar figure Owner must approve *and countersign*. State the
+   threshold in current dollars and note when it was set: a fixed 2020 figure on
+   an auto-renewing agreement has been widening the manager's discretion every
+   year since. Then check whether the agreement requires the manager to contract
+   as Owner's **disclosed agent** — if not, assume trade paper in the portfolio
+   is currently executed in the manager's own name, and pull a recent vendor
+   contract to confirm (route it to `vendor-contract-qc`).
 
 That block answers the operational question. Everything after it is economics.
 
@@ -210,6 +233,7 @@ Compute and state:
 | Broker listing agreement (sale or lease), ORA as Owner | `listing-agreement-qc` |
 | ORA's own lease form going to a tenant | `lease-form-qc` |
 | Counterparty lease, PSA, loan doc | `legal-intelligence` |
+| A trade contract the manager procured (paving, roofing, snow, HVAC) | `vendor-contract-qc` |
 | Amending a lease already in effect | `lease-addendum` |
 | Whether to self-manage vs. third-party manage | `re-operations` / `portfolio-growth` |
 | Drafting the manager engagement or termination email | `communication-intelligence` |
@@ -225,10 +249,23 @@ Compute and state:
   the transition before recommending it.
 - Never state a governing fee, threshold, or termination date from memory or from
   a prior review. Re-read the executed agreement each time.
-- PM-1 … PM-18 are **proposed**, not ratified. Say so in every report that cites
+- PM-1 … PM-19 are **proposed**, not ratified. Say so in every report that cites
   them.
 
 ## Changelog
+
+- **v1.2 (2026-09-09)** — Adds **PM-19** (manager contracting authority) and the
+  two checks that enforce it: **P32** (BLOCK — manager may contract capital or
+  vendor work in its own name, with no disclosed-agency requirement) and **P33**
+  (HIGH — approval threshold present but no Owner countersignature, unindexed, or
+  with an unbounded emergency exception). Registry 32 -> 34 checks; positions 18
+  -> 19. Step 3 gains a fifth reporting item, contracting authority. Routing row
+  added for `vendor-contract-qc`, the companion skill that QCs the trade paper
+  this authority produces. Prompted by a Q3 2026 paving proposal on an ORA-owned
+  asset that named the property manager as Purchaser under a form barring any
+  non-party from claiming a remedy — the warranty ran to the manager, not to the
+  owning entity. Description trimmed to headroom 63 to absorb the new trigger
+  vocabulary. **KRG benchmark not re-run — see the open item above.**
 
 - **v1.1 (2026-08-24)** — Description trimmed to restore headroom (was
   1002/1024, headroom 22 -- close-out work-order item 4). Dropped the named
