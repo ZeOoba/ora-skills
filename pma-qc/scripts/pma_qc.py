@@ -3,7 +3,7 @@
 pma_qc.py — Oxford Realty Advisors property management agreement QC gate.
 
 Scans a third-party property management agreement (ORA or an ORA entity as
-Owner) for the 32 systemic defects catalogued in the KRG form register.
+Owner) for the 34 systemic defects catalogued in the KRG form register.
 
 Usage:
     python3 pma_qc.py <agreement.docx|pdf|txt> [more ...] [--allow-tokens]
@@ -16,12 +16,12 @@ Severity: BLOCK (do not execute) / HIGH / MED / LOW.
 
 Checks FAIL on the DEFECT. A check that does not fire means the protective
 language was found. Every check reports the ORA standing position it enforces
-(see references/standing-positions.md — PM-1 .. PM-18, PROPOSED not ratified).
+(see references/standing-positions.md — PM-1 .. PM-19, PROPOSED not ratified).
 
 Extraction, the OCR fallback, the UNREADABLE gate, and the report/CLI harness
 now live in ora_doc_qc.py, shared with listing-agreement-qc and lease-form-qc
 (both retrofitted onto it on this same branch). This file was the reference
-port: everything below the imports is pma-qc's own 32 checks.
+port: everything below the imports is pma-qc's own 34 checks.
 
 ora_doc_qc.py itself is NOT vendored inside this skill's scripts/ directory —
 it fans out from the repo-root tools/ora_doc_qc.py via package_skills.py's
@@ -496,6 +496,75 @@ def _p30(ctx):
     return None
 
 
+@check("P32", "BLOCK", "Manager may contract capital or vendor work in its own name",
+       "PM-19")
+def _p32(ctx):
+    auth = has(ctx, r"(make|cause to be made|contract for|order)[^.]{0,80}"
+                    r"(repairs|alterations|improvements|capital)"
+                    r"|hire[^.]{0,40}(contractors?|vendors?)"
+                    r"|enter into (service|vendor|maintenance) (contracts?|agreements?)"
+                    r"|purchase (supplies|materials)")
+    agency = has(ctx, r"in (the name of|owner'?s name)[^.]{0,60}(owner|as agent)"
+                      r"|as (a )?disclosed agent|for and on behalf of owner"
+                      r"|shall name owner as the contracting part"
+                      r"|owner shall be the contracting party")
+    if auth and not agency:
+        return ("The manager may procure repairs, capital work and vendor services "
+                "with no requirement that it contract as Owner's disclosed agent or "
+                "name the Owner entity as the contracting party. It will therefore "
+                "sign trade paper in its own name, and every warranty, indemnity and "
+                "payment remedy in that paper will run to the manager rather than to "
+                "the ORA entity that owns the asset and funds the work - a defect that "
+                "survives the manager's own turnover. Observed live: a Q3 2026 paving "
+                "proposal for an ORA-owned asset named the manager as Purchaser under "
+                "a form barring any non-party from claiming a remedy. Require that "
+                "every trade contract name the Owner entity as the contracting party, "
+                "with the manager signing as disclosed agent. Route the trade paper "
+                "itself to `vendor-contract-qc` (VC-1). " + quote(ctx, r"repairs"))
+    return None
+
+
+@check("P33", "HIGH", "No dollar threshold requiring Owner countersignature on capital work",
+       "PM-19")
+def _p33(ctx):
+    auth = has(ctx, r"(make|cause to be made|contract for)[^.]{0,80}"
+                    r"(repairs|alterations|improvements|capital)"
+                    r"|expenditure|purchase (supplies|materials)")
+    if not auth:
+        return None
+    thresholds = re.findall(r"\$\s?([\d,]{3,9})(?:\.00)?", ctx["t"])
+    approval = has(ctx, r"(prior )?(written )?(approval|consent) of owner"
+                        r"|owner'?s (prior )?(written )?(approval|consent)")
+    countersign = has(ctx, r"countersign|signed by owner|executed by owner"
+                           r"|owner shall execute")
+    indexed = has(ctx, r"adjusted annually|CPI|consumer price index|escalat")
+    emergency = has(ctx, r"emergenc")
+    emergency_bounded = has(ctx, r"emergenc[^.]{0,120}(notify|notice to owner within|"
+                                 r"promptly (notify|advise))")
+    if not approval:
+        return ("Capital and repair authority is granted with no approval threshold at "
+                "all. State a dollar figure above which Owner's prior written approval "
+                "is required, and above which Owner - not the manager - countersigns "
+                "the trade contract.")
+    problems = []
+    if not countersign:
+        problems.append("Approval is required but Owner's countersignature on the "
+                        "trade contract is not, so an approved job is still contracted "
+                        "on the manager's signature (see P32)")
+    if thresholds and not indexed:
+        problems.append("The threshold is a fixed figure with no index or periodic "
+                        "reset; on an auto-renewing agreement it erodes every year "
+                        "against construction cost inflation and silently widens the "
+                        "manager's discretionary authority")
+    if emergency and not emergency_bounded:
+        problems.append("The emergency exception is unbounded - no notice obligation "
+                        "to Owner and no dollar ceiling, which swallows the threshold "
+                        "whenever the manager characterizes work as urgent")
+    if problems:
+        return ". ".join(problems) + "."
+    return None
+
+
 # ---- LOW -------------------------------------------------------------------
 
 @check("P31", "LOW", "Signature block omits entity, title, and capacity", "PM-18")
@@ -509,7 +578,7 @@ def _p31(ctx):
 
 if __name__ == "__main__":
     run_cli(CHECKS, "ORA property management agreement QC gate",
-            ocr_absence_note=("Absence findings (P16, P19, P24, P27-P30) are "
+            ocr_absence_note=("Absence findings (P16, P19, P24, P27-P30, P33) are "
                               "PROVISIONAL - confirm against the page images "
                               "before reporting a missing clause to a "
                               "counterparty."))
