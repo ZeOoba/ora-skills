@@ -1,0 +1,121 @@
+TRADE CONTRACT — REMEDIATED TARGET STATE
+(Synthetic fixture. Every VC position applied. Expected result: 0 of 27.)
+
+PARTIES
+
+Purchaser: Technology Commons Owner, LLC, a Maryland limited liability company
+("Owner"). Thomas Park Management, LLC executes this instrument solely as
+managing agent for and on behalf of Owner, as a disclosed agent, and assumes no
+personal liability hereunder. All warranties, indemnities and remedies granted
+to Purchaser run to Owner directly.
+
+Contractor: [Trade contractor], a Maryland limited liability company.
+
+BENEFICIARIES. No provision of this Agreement shall be deemed to confer upon any
+other person or entity any remedy, claim or right, except that Owner and any
+successor owner of the Property are express third-party beneficiaries of the
+warranty and indemnity articles, and Owner may assign its rights hereunder to any
+successor owner or successor managing agent without Contractor's consent.
+
+SCOPE, SCHEDULE AND PRICE
+
+Contract sum: $[amount]. Prices are firm through the scheduled work window and
+are not subject to renegotiation on account of elapsed time.
+
+Contractor shall mobilize on [date]; substantial completion shall occur not later
+than [date]. Contractor shall phase the work around occupied-site access in
+accordance with the phased access plan attached as Exhibit B, and shall sequence
+operations so that no more than one drive aisle is out of service at a time.
+
+Material escalation. Any adjustment for liquid asphalt cement is measured from a
+baseline index price of $807.50 per short ton (Maryland State Asphalt
+Association, published 08/09/2026), adjusts in both directions, and in the
+aggregate shall not exceed three percent (3%) of the contract sum. Any fuel
+surcharge is likewise capped and shall not exceed one percent (1%) of the
+contract sum. No rate adjustment or extra work binds Owner absent a change order
+signed by Owner in advance.
+
+If Contractor reschedules a confirmed work date for any reason other than
+weather, Contractor shall credit Owner the documented out-of-pocket cost of the
+resulting tenant notice and site clearing.
+
+OWNER SITE OBLIGATIONS
+
+Owner shall use commercially reasonable efforts to clear the affected areas by
+the agreed hour, and shall give tenants not less than five business days written
+notice of the work. Towing, where required, is Contractor's line item priced in
+the contract sum. Owner does not guarantee a vehicle-free site and bears no
+liability for vehicles remaining after reasonable notice.
+
+WARRANTY
+
+Contractor warrants that the work will be performed in a workmanlike manner per
+standard industry practice and that materials will be free of defects. Should any
+failure to conform appear within two (2) years after substantial completion,
+Contractor shall correct the defect by suitable repair or replacement at its own
+cost, unless the failure was caused by the act of Owner, its agents or employees.
+
+Owner shall give Contractor written notice of any defect within thirty (30) days
+after discovery. Electronic mail notice is sufficient. Contractor's warranty
+obligations are suspended, and not forfeited, during any uncured payment default
+by Owner, and reinstate in full upon cure.
+
+Contractor has proof rolled the subgrade and priced the undercut allowance set
+out in the scope; Contractor accepts responsibility for subgrade conditions
+disclosed by that investigation.
+
+Acceptance. Substantial completion occurs upon Contractor's written notice
+thereof, after which Owner has ten business days to inspect and deliver a punch
+list. Owner's rights as to latent defects survive acceptance and final payment.
+
+INSURANCE AND LIENS
+
+Contractor shall maintain commercial general liability insurance of not less than
+$2,000,000 per occurrence, auto liability, umbrella coverage, and statutory
+workers' compensation insurance, and shall name Owner and its managing agent as
+additional insured on a primary and non-contributory basis, with a waiver of
+subrogation in Owner's favor. A certificate of insurance evidencing the foregoing
+is a condition precedent to mobilization.
+
+Contractor shall deliver a conditional waiver of lien with each progress
+application and an unconditional waiver of lien from Contractor and from each
+subcontractor and supplier at final payment. Final payment is conditioned on
+receipt of those waivers.
+
+INDEMNITY AND LIABILITY
+
+Each party shall indemnify, defend and hold the other harmless from third-party
+claims arising out of its own negligence or willful misconduct; provided that
+Contractor shall indemnify Owner for all claims except to the extent caused by
+Owner's own negligence, and Owner's indemnity of Contractor applies except to the
+extent caused by Contractor's own negligence.
+
+Contractor disclaims the implied warranties of merchantability and fitness for a
+particular purpose, which disclaimer does not limit the express warranty above.
+Neither party shall be liable for any indirect, incidental, special, punitive or
+consequential damages.
+
+COMMERCIAL TERMS
+
+Invoices are due net thirty (30) days. In any action arising under this
+Agreement, the prevailing party is entitled to its reasonable attorneys' fees and
+costs.
+
+Confidentiality. Each party shall keep the other's pricing confidential, except
+that Owner may disclose this Agreement and its pricing to its counsel, lender,
+insurance advisors, property manager, affiliates, and to other contractors for
+purposes of competitive bid comparison.
+
+This Agreement shall be governed by and construed and enforced in accordance with
+the substantive laws of the State of Maryland, with exclusive venue in the courts
+of Talbot County, Maryland.
+
+ACCEPTED:
+
+TECHNOLOGY COMMONS OWNER, LLC,
+a Maryland limited liability company
+
+By: ______________________________
+Name: ____________________________
+Its: Authorized Signatory
+Date: ____________________________
