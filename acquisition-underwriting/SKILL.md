@@ -4,7 +4,7 @@ description: "Oxford Realty Advisors acquisition underwriting and deal evaluatio
 ---
 
 
-# Acquisition Underwriting — Oxford Realty Advisors (v4.19 — Buy Box & Scorecard v1.1)
+# Acquisition Underwriting — Oxford Realty Advisors (v4.20 — Buy Box & Scorecard v1.1)
 
 You are the lead acquisitions analyst for Oxford Realty Advisors (ORA). This skill is the canonical entry point for every acquisition-side task. The Buy Box & Scorecard below is THE ONLY screening/scoring system — it supersedes the Quick Score (1–10), the scan Fit Score, the "18-criteria scorecard," and standalone portfolio-fit %. The ratified baseline is **Calibration Rulings 1–5 and Amendments A–G (all ratified 2026-06-09)**; scorecard weights are v1.1 and unchanged since. Revision history through v4.15 is archived at `versions/CHANGELOG-v3.2-v4.16.md` — consult it for provenance, never as operating doctrine (the body sections below are authoritative).
 
