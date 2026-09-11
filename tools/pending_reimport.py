@@ -342,13 +342,15 @@ def skill_drifted(repo_root: Path, cache_root: Path, skill: str) -> bool:
 
     A skill with NO cache dir at all was never installed -- that's
     ora-skill-store-drift-check's separate REPO-ONLY category (step 3), not
-    "drifted, needs reimport". Confirmed against the live repo: 7 skills
+    "drifted, needs reimport". Confirmed against the live repo: 6 skills
     migrated from the ora-operations-extensions plugin (annual-cycle,
     capex-budgeting, cash-position-monitor, deal-retirement,
-    investor-relations, submarket-spatial-analysis, vendor-management) plus
-    cowork-settings and 2 in-progress skills have no cache dir today and are
-    not reimport candidates -- flagging them would flood the ledger with
-    "never installed" noise indistinguishable from real "went stale" drift.
+    investor-relations, submarket-spatial-analysis) plus cowork-settings and
+    2 in-progress skills have no cache dir today and are not reimport
+    candidates -- flagging them would flood the ledger with "never installed"
+    noise indistinguishable from real "went stale" drift. (vendor-management
+    left this list 2026-09-11 on Gabriel's explicit re-publish decision --
+    it now has a cache dir like any other installed skill.)
 
     Existence and read checks against the cache are long-path-safe (see
     _win_long()) -- a deep bundled path past MAX_PATH must never read as
@@ -629,6 +631,29 @@ def cmd_record(commit: str) -> None:
     print(f'pending_reimport: recorded {len(hits)} skill(s) -> {LEDGER}')
     for skill in sorted(hits):
         print(f'   {skill}')
+    # Commit-time flag for OI-157 skills (added 2026-09-11, ORA Setup Audit R25
+    # remediation). Before this, a commit touching a DELIBERATELY_UNPUBLISHED
+    # skill's packaged files (e.g. today's vendor-contract-qc-into-vendor-
+    # management merge) recorded the ledger line the same as any ordinary
+    # skill, with no signal at commit time that it needed manual review before
+    # ever reaching a Save-skill click -- the fact only surfaced later, and
+    # only to whoever happened to run `candidates` (not `list`, and not the
+    # commit's own console output) and read its suppressed-skill line. Since
+    # post-commit's stdout IS the commit's own console output (only stderr is
+    # redirected to /dev/null -- see tools/hooks/post-commit), printing here
+    # puts the warning in front of whoever just ran `git commit`, at the
+    # moment the risk was introduced, without requiring them to know to run
+    # `candidates` afterward.
+    suppressed_hits = sorted(s for s in hits if s in DELIBERATELY_UNPUBLISHED)
+    if suppressed_hits:
+        print(
+            f'pending_reimport: WARNING -- this commit touched packaged files for '
+            f'{len(suppressed_hits)} skill(s) in DELIBERATELY_UNPUBLISHED '
+            f'(package_skills.py, OI-157): {", ".join(suppressed_hits)}. These will NOT '
+            f'appear as `candidates` and must never be swept into an ordinary Save-skill '
+            f'batch click -- review manually before touching them, and see '
+            f'package_skills.py for the re-publish decision that would remove one.'
+        )
 
 
 def cmd_list() -> None:
