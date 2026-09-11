@@ -1,0 +1,20 @@
+{
+  "staged_at": "2026-09-07T15:36:00Z",
+  "outdir": "C:\\Users\\Owner\\AppData\\Local\\Temp\\claude\\C--Users-Owner-OneDrive---Oxford-Capital-Partners\\7fdec8cb-7c6a-4b28-9b23-78ca1ec6c457\\scratchpad\\skill-packages",
+  "packages": [
+    {
+      "skill": "county-parcel-screen",
+      "file": "county-parcel-screen.skill",
+      "bytes": 67421
+    },
+    {
+      "skill": "county-sales-monitor",
+      "file": "county-sales-monitor.skill",
+      "bytes": 12353
+    }
+  ],
+  "last_batch": [
+    "county-parcel-screen",
+    "county-sales-monitor"
+  ]
+}

@@ -1,0 +1,12 @@
+## 2026-09-07 -- First install of county-parcel-screen v1.1 + county-sales-monitor v0.5 on Cowork (Save-skill click; closes Automation Audit R23)
+
+- Event: Gabriel's Cowork **Save-skill click** (not a repo commit) installed two skills that had never been in the account skill library. FIRST install, not a re-import: ListSkills on all trigger phrases returned nothing and neither skill had a runtime cache directory at the 11:57:55 pre-click baseline (baseline = "no directory").
+- Packages: `_staging\2026-09-07\county-parcel-screen.skill` (67,421 B, sha256 efa32dd8c6adc2f6a09aef92c0826665ccc96d2dde0b057a8437103eb5d4e89d) and `county-sales-monitor.skill` (12,353 B, sha256 2c48de7c2fd82af81ba9e2e270a4d6bca0230a1815412dc15b110042d92641b7). Built from ora-skills @ 3a2f352 by tools/package_skills.py; re-verified this session against HEAD dd0f26f: 16/16 + 1/1 entries byte-identical to the repo, forward-slash only, 0 directory records, no EOL normalization needed. plugin_of=None for both; validate_skill_frontmatter 0 findings; description 1002/1024 and 964/1024.
+- Install path: Cowork Save-skill button for both (Settings path prohibited for multi-file skills — silent subfolder drop, 2026-07-11).
+- Confirmation (first-hand, skill-specific):
+  - county-parcel-screen: cache dir created 2026-09-07 11:58:24, 16/16 files (SKILL.md + 3 references/ + 9 scripts/ + 2 workflows/), all sha256 = repo; Local main.log `Delta: 1 to download` 11:58:23 -> `Sync complete: 1 downloaded, 0 failed` 11:58:25.
+  - county-sales-monitor: cache dir created 2026-09-07 11:58:40, 1/1 file, sha256 = repo; Local main.log `Delta: 1` 11:58:39 -> `Sync complete: 1 downloaded, 0 failed` 11:58:40.
+  - Cache path: %APPDATA%\Claude\local-agent-mode-sessions\skills-plugin\583f08bc-...\a6ad2c61-...\skills\<skill>\. Roaming main.log stale since 2026-08-20 (as documented); Local Logs\main.log used.
+- Closes: Automation Audit R23 finding that two CLAUDE.md-named sourcing skills (county-parcel-screen is one of the five ratified sourcing entry points) were unreachable on Cowork.
+- Ledger: county-parcel-screen cleared from PENDING_REIMPORT after this append exited 0. county-sales-monitor was never in the ledger (predates coverage) — nothing to clear. ora-setup-audit and package-and-stage-skill remain pending from other sessions today; untouched.
+- Surface: Cowork with Desktop Commander bridge; host PowerShell via .ps1 files; no writes to the runtime cache; no external sends.
