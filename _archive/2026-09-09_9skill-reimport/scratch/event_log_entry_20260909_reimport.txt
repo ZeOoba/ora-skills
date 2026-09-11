@@ -1,0 +1,21 @@
+## 2026-09-09 -- 9-skill PENDING_REIMPORT batch: all confirmed installed via Gabriel's Save-skill click (Cowork)
+
+Ran package-and-stage-skill Entry Point A on all 9 lines in _staging/PENDING_REIMPORT.md: annual-cycle (v1.0), cash-position-monitor (v1.0), debt-management (v1.4), disposition-analysis (v1.3), lease-form-qc (v2.6), lease-generation (v1.0), lease-renewal-pipeline (v1.2), parcel-data-recovery (v1.9), security-and-hardening (no version tag in description). plugin_of() returned None for all 9 -- no plugin-bundle routing needed. All 9 repo dirs were git-clean at the pending commits (2b24e9e for annual-cycle/cash-position-monitor, ab850fd for debt-management/disposition-analysis/lease-renewal-pipeline/parcel-data-recovery/security-and-hardening, 4ff4cff for lease-form-qc, 0fd7ad7 for lease-generation).
+
+Packaged via tools\package_skills.py into _staging\2026-09-09_reimport\ (all frontmatter gates passed, forward-slash entries only). Transferred to the Cowork session by SHA256-verified byte-identical copy (hashes matched on both sides for all 9). Presented via SendUserFile; Gabriel confirmed all 9 Save-skill clicks ("all saved").
+
+Post-install verification (tools\reimport_correlate.py verify, Local main.log C:\Users\Owner\AppData\Local\Claude\Logs\main.log, cache root ...\skills-plugin\583f08bc-0123-4111-8158-8fe3d927e350\a6ad2c61-c3c8-4a48-98a5-e40c1db22ad3\skills):
+
+- debt-management: CONFIRMED -- CreationTime 2026-08-21T18:15:57 -> 2026-09-09T19:48:32; Sync complete: 1 downloaded @ 19:48:32 (exact-second match).
+- disposition-analysis: CONFIRMED -- CreationTime 2026-08-24T15:21:47 -> 2026-09-09T19:48:36; Sync complete: 2 downloaded @ 19:48:36 (exact-second match, shared batch with lease-form-qc).
+- lease-form-qc: CONFIRMED -- CreationTime 2026-08-04T15:34:29 -> 2026-09-09T19:48:36; same 19:48:36 batch as disposition-analysis.
+- lease-generation: CONFIRMED -- CreationTime 2026-09-07T13:45:29 (stale prior partial import, predates the 0fd7ad7 commit at 15:17) -> 2026-09-09T19:48:39; Sync complete: 1 downloaded @ 19:48:39 (exact-second match). Was NOT actually absent from the store as originally believed -- corrected by this install.
+- lease-renewal-pipeline: CONFIRMED -- CreationTime 2026-07-21T12:19:33 -> 2026-09-09T19:48:41; Sync complete: 3 downloaded @ 19:48:41 (shared batch with parcel-data-recovery + security-and-hardening).
+- parcel-data-recovery: CONFIRMED -- CreationTime 2026-09-06T18:05:32 -> 2026-09-09T19:48:41; same 19:48:41 batch.
+- annual-cycle: no prior cache dir existed (first-ever install, tool reports NO-BASELINE by design) -- manually confirmed: cache dir created 2026-09-09T19:48:29.629097 (SKILL.md only, matches 1-entry package), matching Sync complete: 2 downloaded @ 19:48:29 (shared batch with cash-position-monitor; "Found 72 enabled skills" that cycle).
+- cash-position-monitor: same first-install case -- cache dir created 2026-09-09T19:48:29.629097 (SKILL.md only), same 19:48:29/2-downloaded batch as annual-cycle.
+- security-and-hardening: same first-install case -- cache dir created 2026-09-09T19:48:41.460128 (SKILL.md + references/security-checklist.md, matches 2-entry package), same 19:48:41/3-downloaded batch as lease-renewal-pipeline/parcel-data-recovery; log also shows "Found 73 enabled skills" for the first time in this window (72->73), consistent with a brand-new skill entering the store.
+
+All 9 cache directories' file sets verified to match their packaged .skill contents exactly (no dropped subfolder files). All 9 cleared from _staging/PENDING_REIMPORT.md in this same pass via tools\pending_reimport.py clear.
+
+Separately flagged to Gabriel (not corrected in this pass): lease-form-qc/.pytest_cache/* (4 files) is committed to the repo and rides along in every package/install -- a .gitignore + cleanup commit is warranted but out of scope for this reimport.
