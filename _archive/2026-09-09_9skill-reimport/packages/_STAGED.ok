@@ -1,0 +1,62 @@
+{
+  "staged_at": "2026-09-09T23:44:21Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-09-09_reimport",
+  "packages": [
+    {
+      "skill": "annual-cycle",
+      "file": "annual-cycle.skill",
+      "bytes": 2149
+    },
+    {
+      "skill": "cash-position-monitor",
+      "file": "cash-position-monitor.skill",
+      "bytes": 1736
+    },
+    {
+      "skill": "debt-management",
+      "file": "debt-management.skill",
+      "bytes": 6581
+    },
+    {
+      "skill": "disposition-analysis",
+      "file": "disposition-analysis.skill",
+      "bytes": 3712
+    },
+    {
+      "skill": "lease-form-qc",
+      "file": "lease-form-qc.skill",
+      "bytes": 45841
+    },
+    {
+      "skill": "lease-generation",
+      "file": "lease-generation.skill",
+      "bytes": 35032
+    },
+    {
+      "skill": "lease-renewal-pipeline",
+      "file": "lease-renewal-pipeline.skill",
+      "bytes": 2805
+    },
+    {
+      "skill": "parcel-data-recovery",
+      "file": "parcel-data-recovery.skill",
+      "bytes": 15587
+    },
+    {
+      "skill": "security-and-hardening",
+      "file": "security-and-hardening.skill",
+      "bytes": 14195
+    }
+  ],
+  "last_batch": [
+    "annual-cycle",
+    "cash-position-monitor",
+    "debt-management",
+    "disposition-analysis",
+    "lease-form-qc",
+    "lease-generation",
+    "lease-renewal-pipeline",
+    "parcel-data-recovery",
+    "security-and-hardening"
+  ]
+}
