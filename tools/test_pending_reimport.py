@@ -12,6 +12,8 @@ tests build synthetic repo/cache fixture trees (never the real ora-skills repo
 or the real AppData runtime cache) so they're deterministic regardless of live
 drift state.
 """
+import contextlib
+import io
 import os
 import shutil
 import subprocess
@@ -829,11 +831,16 @@ class DeliberatelyUnpublished(FixtureTestCase):
         # already-happened incident, not a hypothetical. If this set legitimately
         # changes (e.g. Gabriel republishes one of the six), update this test
         # deliberately rather than letting it silently drift.
+        #
+        # 2026-09-11 (ORA Setup Audit R25 remediation): vendor-management left
+        # this set on Gabriel's explicit in-turn re-publish decision (commit
+        # 97ff6a4) -- exactly the deliberate-update case this comment already
+        # anticipated. Five remain.
         self.assertEqual(
             pr.DELIBERATELY_UNPUBLISHED,
             frozenset({
                 'annual-cycle', 'capex-budgeting', 'cash-position-monitor',
-                'deal-retirement', 'investor-relations', 'vendor-management',
+                'deal-retirement', 'investor-relations',
             }),
         )
 
@@ -1043,6 +1050,102 @@ class LogBeforeClearGuard(unittest.TestCase):
         err, out, _ = self._clear(['skill-a'], block, known=['skill-a'])
         self.assertNotIn('REFUSED', err)
         self.assertIn('cleared skill-a', out)
+
+
+class CmdRecordDeliberatelyUnpublishedWarning(unittest.TestCase):
+    """Commit-time flag added 2026-09-11 (ORA Setup Audit R25 remediation): a
+    commit touching a DELIBERATELY_UNPUBLISHED skill's packaged files must warn
+    in the commit's own console output (post-commit only redirects stderr, not
+    stdout -- see tools/hooks/post-commit), not just in a later `candidates`
+    run someone has to think to make. Real trigger: today's 735a376 merged
+    vendor-contract-qc into vendor-management while vendor-management still
+    sat in the exclusion set, with nothing at commit time distinguishing it
+    from the two ordinary skills (daily-brief, pma-qc) in the same commit.
+
+    Uses the same git-fixture pattern as ChangedFilesMergeCommit. read_entries/
+    write_entries are replaced (not just their default `ledger_path` patched --
+    see the Candidates test class's own note: defaults bind at function-
+    DEFINITION time) so this test can never touch the real, gitignored
+    _staging/PENDING_REIMPORT.md ledger."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='pending_reimport_record_'))
+        self.repo = self.tmp / 'repo'
+        self.repo.mkdir()
+        self._git('init', '-q', '-b', 'main')
+        self._git('config', 'user.email', 'test@example.invalid')
+        self._git('config', 'user.name', 'Test')
+        self._git('config', 'core.hooksPath', str(self.tmp / 'no-hooks'))
+        # A repo's ROOT commit yields [] from changed_files() by design (see
+        # ChangedFilesMergeCommit.test_root_commit_does_not_raise) -- seed one
+        # harmless commit first so the commit under test is never the root.
+        _write(self.repo / 'seed.md', 'seed\n')
+        self._git('add', '-A')
+        self._git('commit', '-q', '-m', 'seed')
+        self.fake_ledger: dict = {}
+        self.patches = [
+            unittest.mock.patch.object(pr, 'REPO', self.repo),
+            unittest.mock.patch.object(pr, 'read_entries', lambda *a, **k: dict(self.fake_ledger)),
+            unittest.mock.patch.object(pr, 'write_entries',
+                                        lambda entries, *a, **k: self.fake_ledger.clear() or self.fake_ledger.update(entries)),
+            unittest.mock.patch.object(pr, 'plugin_of', lambda skill: None),
+        ]
+        for p in self.patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def tearDown(self):
+        shutil.rmtree(pr._win_long(self.tmp), ignore_errors=True)
+
+    def _git(self, *args):
+        return subprocess.run(['git', '-C', str(self.repo), *args],
+                              capture_output=True, text=True, check=True).stdout
+
+    def _commit_skill(self, skill, text, msg):
+        _write(self.repo / skill / 'SKILL.md', text)
+        self._git('add', '-A')
+        self._git('commit', '-q', '-m', msg)
+        return self._git('rev-parse', 'HEAD').strip()
+
+    def _record(self, commit):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            pr.cmd_record(commit)
+        return buf.getvalue()
+
+    def test_warns_when_commit_touches_a_suppressed_skill(self):
+        with unittest.mock.patch.object(pr, 'DELIBERATELY_UNPUBLISHED', frozenset({'held-back-skill'})):
+            sha = self._commit_skill('held-back-skill', 'name: held-back-skill\nv2\n', 'edit')
+            out = self._record(sha)
+
+        self.assertIn('held-back-skill', self.fake_ledger,
+                       'must still record the ledger line -- the warning is additive, not a skip')
+        self.assertIn('WARNING', out)
+        self.assertIn('held-back-skill', out)
+        self.assertIn('OI-157', out)
+
+    def test_no_warning_for_an_ordinary_skill(self):
+        with unittest.mock.patch.object(pr, 'DELIBERATELY_UNPUBLISHED', frozenset({'held-back-skill'})):
+            sha = self._commit_skill('ordinary-skill', 'name: ordinary-skill\nv2\n', 'edit')
+            out = self._record(sha)
+
+        self.assertNotIn('WARNING', out)
+
+    def test_mixed_commit_names_only_the_suppressed_skill(self):
+        with unittest.mock.patch.object(pr, 'DELIBERATELY_UNPUBLISHED', frozenset({'held-back-skill'})):
+            _write(self.repo / 'held-back-skill' / 'SKILL.md', 'name: held-back-skill\nv2\n')
+            _write(self.repo / 'ordinary-skill' / 'SKILL.md', 'name: ordinary-skill\nv2\n')
+            self._git('add', '-A')
+            self._git('commit', '-q', '-m', 'mixed edit')
+            sha = self._git('rev-parse', 'HEAD').strip()
+            out = self._record(sha)
+
+        self.assertIn('WARNING', out)
+        self.assertIn('held-back-skill', out.split('WARNING', 1)[1])
+        # ordinary-skill must be recorded normally but not named in the warning line
+        warning_line = [ln for ln in out.splitlines() if 'WARNING' in ln][0]
+        self.assertNotIn('ordinary-skill', warning_line)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
