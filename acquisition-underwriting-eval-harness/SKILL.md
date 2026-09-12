@@ -95,6 +95,16 @@ original screen could not have caught: per-building SF (previously totally unkno
 Main Building breaches the 50,000 SF/building gate under every plausible reading — all 3 repeatability
 runs independently flagged this as GATE-FLAGGED.
 
+**5. One replay agent can emit two conflicting completions (2026-09-12 scheduled-poll).** The
+Hamilton r3 subagent sent two completion notifications under the same task-id with different final
+json blocks (Combined 15.0, then 11.0). A runner that records the first notification per slot and
+moves on would have silently kept 15.0 — nothing in the first result looked wrong. Per Step 2's
+never-guess rule both were excluded and Hamilton aggregated at n=2. Guarded by Step 1.5 (wait for
+all completions; differing blocks from one task-id = failed replay). A first draft of that step
+instead rejected identical answers across DIFFERENT agents; that version was withdrawn the same day
+because it misses this failure mode entirely and would have discarded 4 genuine replays from the
+same run (see Step 1.5 item 4).
+
 ## Golden set
 
 `golden_set/*.json` — 6 frozen deals, schema documented in `golden_set/SCHEMA.md`. `golden` =
@@ -107,21 +117,24 @@ irreducible rather than a research gap (finding 4 — E Fulton's Tenancy & Lease
 | 2196 Port Sheldon St, Jenison MI | HIGH (0 nulls) | Yes | 26.81 (mean of 8, leaked run excluded) | 3.5 pts (n=8 clean) |
 | Liberty Office Park, West Chester OH | HIGH (0 nulls) | Yes | 28.11 (mean of 9) | 2.0 pts (n=9) |
 | E Fulton St Portfolio, Columbus OH | MEDIUM (1 null, irreducible — see finding 4) | Yes | 56.79 (mean of 7) | 4.0 pts (n=7) |
-| 11850 Hamilton Ave, Cincinnati OH | LOW (2 nulls, no ask/NOI) | No — informational only | 22.27 (mean of 3, leaked run excluded) | 2.4 pts (n=3 clean) |
+| 11850 Hamilton Ave, Cincinnati OH | LOW (Basis null by v4.21 rule; 1-3 Quality nulls) | No — informational only | 17.0 (mean of 3 under v4.21, rebaselined 2026-09-12; all pre-v4.21 runs excluded) | **7.0 pts (n=3) — exceeds tolerance** |
 | 1333 Research Rd, Gahanna OH | LOW (3 nulls) | No — informational only | 11.75 (mean of 4) | **6.0 pts (n=4) — exceeds tolerance** |
-| 470 McCormick Blvd, Columbus OH | LOW (3 nulls, Quality mostly null) | No — informational only | 12.38 (mean of 4) | **20.0 pts (n=4) — see caveat below** |
+| 470 McCormick Blvd, Columbus OH | LOW (2-3 nulls, Quality mostly null) | No — informational only | 16.5 (mean of 3, lower-bound run excluded — see caveat below) | **6.0 pts (n=3 clean) — exceeds tolerance** |
 
 `golden.combined` for every deal is now a repeatability-checked mean, not a single unreplicated
 run — the 2026-08-15 rebaseline (Gabriel-directed forced run, see the "Fourth pass" Limitations
 entry) extended this to all 6 deals, including the 3 that previously had no repeatability data at
-all. Two deals (Port Sheldon, Hamilton) exclude one contaminated sample each — see the leakage
-findings above and each file's `known_gaps` for why. 470 McCormick's 20.0-pt range is NOT ordinary
-replay noise: it is largely an artifact of its original 2026-08-14 single run being an explicitly
-documented lower bound (most categories null) rather than a comparable full replay to the 3 newer
-ones — see that file's `known_gaps` before reading its dispersion as representative. 1333 Research
-Rd's 6.0-pt range appears to be genuine judgment variance, consistent with its null-heavy input
-packet. Both LOW-confidence deals are informational_only regardless, so neither dispersion
-finding gates anything, but both are recorded rather than smoothed over.
+all. Port Sheldon and McCormick each exclude one non-comparable sample; Hamilton excludes all four
+pre-v4.21 runs (rebaselined under v4.21 on 2026-09-12) — see the leakage findings above and each
+file's `known_gaps` for why. 470 McCormick's original 20.0-pt
+4-run range was NOT ordinary replay noise: it was an artifact of pooling its 2026-08-14 single run
+(an explicitly documented lower bound, most categories null) into the mean alongside 3 comparable
+full replays — that run is now excluded from the golden per the 2026-09-12 rebaseline (same
+treatment as Port Sheldon's and Hamilton's excluded runs), leaving a 3-run 6.0-pt range and golden
+Combined of 16.5 — see that file's `known_gaps` for the full rationale. 1333 Research Rd's 6.0-pt
+range appears to be genuine judgment variance, consistent with its null-heavy input packet. Both
+LOW-confidence deals are informational_only regardless, so neither dispersion finding gates
+anything, but both are recorded rather than smoothed over.
 
 **Every run gates on the MEAN of 3 replays per deal, never a single draw** (Steps 1–3 below).
 This is the direct consequence of the n=6 finding: at the time, Port Sheldon's single-draw range
@@ -227,6 +240,27 @@ response, matching this shape:
  genuinely unresolvable>"}
 ```
 ```
+
+**Step 1.5 — completion attribution + multi-completion check (2026-09-12 — see Data-quality
+finding 5).** With up to 18 agents dispatched concurrently, completions arrive out of order, and a
+single agent can emit MORE THAN ONE completion notification (same task-id, later notification).
+1. **Attribute by task-id, never by arrival order.** Match every completion to its own spawn
+   (task-id / agentId + description) from Step 1; never assign a completion to "the next open slot."
+2. **Do not finalize any slot until every agent in the run has completed.** Record each completion
+   as provisional, keyed by task-id. A slot is final only once all dispatched agents have reported
+   and no further notification for that task-id arrived after its first one.
+3. **Two or more completions from ONE task-id:** extract the fenced json block from each. If the
+   parsed blocks are identical (a re-notification of the same answer), accept it once. If they
+   DIFFER in any field, that replay FAILED — treat it under Step 2's failure rule; never pick the
+   first, the last, or the more plausible one.
+4. **Identical answers from DIFFERENT task-ids are NOT a failure.** SCREEN scores are coarse integer
+   judgments and independent replays legitimately agree: the 2026-09-12 run produced
+   byte-identical `combined` + `category_breakdown` pairs for Port Sheldon r2/r3 (29.0) and E Fulton
+   r2/r3 (55.0) from separate agents. Rejecting agreement would have cut both scored deals to n=1.
+   Only a task-id mismatch (a completion whose description names a different deal/slot than its
+   spawn) indicates mis-attribution.
+State in the Step 5 report every task-id that emitted more than one completion, and whether the
+blocks matched.
 
 **Step 2 — parse.** Extract the single fenced `json` block from each subagent's final response.
 If a response contains zero or more than one fenced json block, that replay FAILED — report it
