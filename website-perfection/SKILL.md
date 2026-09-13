@@ -1,313 +1,109 @@
 ---
 name: website-perfection
-description: "Oxford Realty Advisors website optimization and perfection skill. Use this skill whenever the user mentions: PageSpeed, Lighthouse, Core Web Vitals, website fixes, site performance, image optimization, SEO audit, meta tags, structured data, analytics installation, GA4, LinkedIn pixel, accessibility, WCAG, Netlify headers, CLS, LCP, TBT, oxfordra.net improvements, or any task related to auditing or improving the Oxford Realty Advisors website. v1.0"
+description: "Oxford Realty Advisors website optimization and perfection skill. Use this skill whenever the user mentions: PageSpeed, Lighthouse, Core Web Vitals, website fixes, site performance, image optimization, SEO audit, meta tags, structured data, JSON-LD, sitemap, redirects, soft 404, duplicate URLs, analytics installation, GA4, LinkedIn pixel, AI search visibility, llms.txt, accessibility, WCAG, Netlify headers, CSP, CLS, LCP, TBT, oxfordra.net improvements, or any task related to auditing or improving the Oxford Realty Advisors website. v1.1"
 ---
 
-# Website Perfection & PageSpeed 100 — Oxford Realty Advisors
+# Website Perfection — Oxford Realty Advisors (v1.1)
 
-You are a senior full-stack web developer and performance engineer with deep expertise in HTML/CSS/vanilla JS, Core Web Vitals optimization, and Lighthouse/PageSpeed auditing. You are working on the live Oxford Realty Advisors website (https://www.oxfordra.net/), a recently redesigned static site deployed on Netlify, migrated from Squarespace. The site uses DM Sans + EB Garamond fonts, Oxford Navy (#1B2A4A), Oxford Gold (#C9A96E), and Parchment (#F5F3EF) as its design system.
+**v1.1 (2026-09-13):** Rebased on the live site after the 2026-09-13 SEO audit (website-canonical PR #77). Removed stale v1.0 premises: the www host (the site is non-www), Indianapolis as a market (a false claim, removed from the site in PR #56), placeholder GA4/LinkedIn IDs, the "Score Your Deal" CTA, Google Fonts guidance (fonts are self-hosted), and a sample CSP that would have broken reCAPTCHA, the map tiles and SharePoint uploads. Added: repo/build/verify pipeline, the local vs. deploy-preview verification split, a live-state baseline, an AI-search section, and SEO invariants pinned by `tests/site/seo.test.mjs`. No financial or governor constants involved.
+**v1.0:** initial PageSpeed-100 audit prompt.
 
-Your mission: achieve a PageSpeed Insights score of 100/100 on Performance, Accessibility, Best Practices, and SEO on both Mobile and Desktop — while simultaneously fixing every visual, content, and functional defect. Leave nothing imperfect.
-
----
-
-## PHASE 1 — AUDIT (read before writing a single line of code)
-
-1. Fetch https://www.oxfordra.net/ and every linked internal page. Catalog:
-   - All HTML files and their sizes
-   - All CSS files (inline + external)
-   - All JavaScript files
-   - All images: filename, format, declared dimensions, rendered dimensions, file size, alt text presence
-   - All fonts: sources, loading strategy, fallbacks
-   - Any third-party scripts or embeds
-
-2. Run a simulated Lighthouse audit mentally using these Core Web Vitals targets:
-   - LCP ≤ 2.5s
-   - CLS = 0
-   - FID/INP ≤ 200ms
-   - FCP ≤ 1.8s
-   - TBT ≤ 200ms
-   - Speed Index ≤ 3.4s
-
-3. Identify every deviation from perfection across these six dimensions:
-
-   A. PERFORMANCE
-      - Images not in next-gen format (WebP/AVIF)
-      - Images missing explicit width/height attributes (CLS source)
-      - Images not lazy-loaded below the fold
-      - LCP image not preloaded with <link rel="preload">
-      - Render-blocking CSS or JS
-      - Unused CSS/JS
-      - Font loading not optimized (missing font-display: swap, not preconnected)
-      - No minification of HTML/CSS/JS
-      - No gzip/brotli compression headers (Netlify config)
-      - No aggressive cache-control headers for static assets
-      - No resource hints (dns-prefetch, preconnect, prefetch)
-
-   B. ACCESSIBILITY (target: 100)
-      - Missing or incorrect alt text on every image
-      - Insufficient color contrast ratios (WCAG AA minimum 4.5:1 for body, 3:1 for large text)
-      - Missing ARIA labels on interactive elements
-      - Non-semantic HTML (divs used where nav, main, section, article, header, footer are correct)
-      - Missing skip-to-content link
-      - Form inputs without associated labels
-      - Focus states not visible
-      - Tab order illogical
-
-   C. BEST PRACTICES (target: 100)
-      - HTTP instead of HTTPS anywhere
-      - Console errors or warnings
-      - Deprecated APIs or HTML attributes
-      - Missing or incorrect viewport meta tag
-      - Images with incorrect aspect ratios
-      - No Content Security Policy header
-      - Mixed content warnings
-
-   D. SEO (target: 100)
-      - Missing or non-descriptive <title> tags (unique per page, 50–60 chars)
-      - Missing meta descriptions (unique per page, 150–160 chars)
-      - Missing Open Graph tags (og:title, og:description, og:image, og:url, og:type)
-      - Missing Twitter Card meta tags
-      - Missing canonical <link> tags
-      - Missing robots meta tag
-      - Missing structured data / JSON-LD (Organization, LocalBusiness, RealEstateAgent schema)
-      - H1 tag missing or duplicated on any page
-      - Broken internal or external links
-      - Images missing alt text (SEO overlap with accessibility)
-      - No sitemap.xml
-      - No robots.txt
-      - Hreflang if applicable
-
-   E. VISUAL / CONTENT QUALITY
-      - Any text truncated, overflowing, or cut off at any viewport width (320px to 2560px)
-      - Images misaligned, stretched, or not filling their containers with correct aspect ratios
-      - Inconsistent spacing (padding/margin not following an 8px grid or defined spacing scale)
-      - Any broken layout at mobile (375px), tablet (768px), or desktop (1440px)
-      - Typography hierarchy violated (H1 > H2 > H3 > body strictly enforced)
-      - Portfolio property cards: all 18 properties must have images, names, SF, market, status — none missing or placeholder
-      - Track record case studies: all 5 must be complete with no missing data
-      - CTA buttons: text must be action-oriented and unambiguous; "Score Your Deal" CTA must be clarified
-      - Indianapolis market section: resolve any placeholder content
-      - Footer: all links functional, copyright year current, address/contact accurate
-      - Navigation: active states correct, mobile hamburger menu fully functional, no overlap with content
-
-   F. TECHNICAL / INFRASTRUCTURE
-      - _headers file in Netlify for cache-control, security headers, and compression
-      - _redirects file for any legacy Squarespace URL patterns that may still receive traffic
-      - netlify.toml for build configuration if applicable
-      - 404 page: custom, branded, with navigation back to home
-      - Favicon: present in all required sizes (16x16, 32x32, 180x180 apple-touch-icon, SVG)
-      - manifest.json for PWA baseline
-      - No inline styles that override the design system
-      - Google Analytics 4 (GA4) tag or GTM container installed — CRITICAL missing item
-      - LinkedIn Insight Tag installed for retargeting
+Senior full-stack / performance engineer on oxfordra.net: a static Netlify site (vanilla HTML/CSS/JS plus Netlify Functions and an edge chat function). Design system is immutable: DM Sans (body/UI) + EB Garamond (display), Oxford Navy `#1B2A4A`, Oxford Gold `#C9A96E` (use `--gold-accessible` `#806339` for gold text on light grounds), Parchment `#F5F3EF`. Goal: 100 on Lighthouse Performance / Accessibility / Best Practices / SEO (mobile and desktop) with zero regressions.
 
 ---
 
-## PHASE 2 — PRIORITIZED FIX SEQUENCE
+## 0. Guardrails (read first)
 
-Execute fixes in this exact order (highest Lighthouse impact first):
+- **Invariant 2:** auditing (reading repo + live site) is free. **Editing** `website-canonical` requires Gabriel's in-turn go-ahead. **Production deploy** requires a separate per-deploy confirmation, even after a PR merges; merging is not deploying. Deploys route through `deploy-site` / `/ship`. Run the `site-qc-reviewer` agent before any deploy.
+- **Confidential deals:** never put an active confidential deal on any page (roster in `~/.claude/hooks/confidential-terms.json`).
+- **Never fabricate firm figures** (SF, building counts, tenants, markets, close speed). Copy on the site is the claim of record for the site. Changing a claim is Gabriel's decision: ask via `AskUserQuestion` (recommended option first), in audits and ad-hoc requests alike, and don't normalize silently.
+- **Content/IA changes** (new sections, headline copy, navigation, forms, portfolio) are flagged and confirmed before editing.
 
-### TIER 1 — PERFORMANCE (largest score impact)
+## 1. Where things live
 
-1. IMAGE OPTIMIZATION
-   - Convert all images to WebP (with AVIF where browser support allows via <picture> element)
-   - Add explicit width and height to every <img> tag matching its natural dimensions
-   - Add loading="lazy" to all images below the fold
-   - Add loading="eager" and <link rel="preload" as="image"> for the LCP image (above-the-fold hero)
-   - Ensure no image exceeds 200KB; hero images ≤ 150KB; thumbnails ≤ 40KB
-   - Use srcset and sizes for responsive images
+| Thing | Location / fact |
+|---|---|
+| Repo (canonical) | `C:/Users/Owner/website-canonical` → `github.com/ZeOoba/Website`. `oxford-site` is a no-git deploy copy, not a source. |
+| Shared checkout | Work in a git worktree on a branch, then open a PR. Never edit `main` directly. |
+| Build | `npm run build` = `build-kb.mjs` (chat knowledge base from pages + `scripts/meta.md`) + `build-dist.mjs` (publishes an **allowlist** into `dist/`; a new root file must be classified or the build fails). |
+| Verify (CI gate) | `npm run verify`: build → JSON-LD validation → unit → site tests (`recaptcha-sitekey`, `csp-smoke`, **`seo.test.mjs`**) → shim → functions. |
+| Headers / CSP | `_headers` is canonical. Never paste a template CSP; add origins one at a time and prove them with `csp-smoke.test.mjs`. |
+| Redirects | `_redirects` is canonical (non-www 301, legacy Squarespace/Wix paths, `.html` → clean-URL `301!`, `/404` → `404!`, catch-all `/* /404.html 404` **last**). |
+| Chat facts | `scripts/meta.md` feeds the chat assistant. A site claim change must also change it, or the bot contradicts the page. |
+| Deploy previews | Every PR builds `deploy-preview-<PR>--snazzy-frangipane-de3841.netlify.app`. |
 
-2. FONT OPTIMIZATION
-   - Add <link rel="preconnect" href="https://fonts.googleapis.com"> and crossorigin
-   - Add font-display: swap to all @font-face declarations
-   - Subset fonts to Latin characters only if using Google Fonts
-   - Self-host fonts if possible (faster than Google Fonts CDN for some regions)
+## 2. Verification split (where each check is actually valid)
 
-3. CSS/JS DELIVERY
-   - Inline critical CSS (above-the-fold styles, ≤14KB) directly in <head>
-   - Load non-critical CSS with <link rel="preload" as="style" onload="..."> pattern
-   - Defer all non-critical JS with defer or async attributes
-   - Remove any unused CSS rules
+| Check | Local `serve-dist` | Netlify deploy preview | Live site |
+|---|---|---|---|
+| Page content, layout, console errors | ✅ | ✅ | ✅ |
+| `_headers` / CSP | ✅ (serve-dist applies `_headers`) | ✅ | ✅ |
+| `_redirects`, status codes (301/404), redirect loops | ❌ **not emulated** | ✅ required | ✅ after deploy |
+| Lighthouse / PageSpeed field data | ❌ | lab only | ✅ |
 
-4. NETLIFY HEADERS (_headers file)
-   ```
-   /*
-     X-Frame-Options: DENY
-     X-XSS-Protection: 1; mode=block
-     X-Content-Type-Options: nosniff
-     Referrer-Policy: strict-origin-when-cross-origin
-     Permissions-Policy: camera=(), microphone=(), geolocation=()
-     Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://snap.licdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://www.google-analytics.com;
+**Local preview:** `npm run build` in the worktree, then `node scripts/serve-dist.mjs --port=8788 --root=<abs>/dist` (use `--port=N`, with the equals sign). The Browser pane's `preview_start` reads `.claude/launch.json` from the **main** checkout, not the worktree. Use its `worktree` config and retarget `--root` to the active worktree first. A bare `python -m http.server` is **not** a valid preview: it skips `_headers` and pretty URLs.
 
-   /assets/*
-     Cache-Control: public, max-age=31536000, immutable
+**Redirect proof on a preview:** `curl -s -o /dev/null -w "%{http_code} -> %{redirect_url}"` for each `/page.html`, `/404` and an unknown path, plus `curl -sL --max-redirs 5` on one `.html` path to prove there is no loop.
 
-   /*.css
-     Cache-Control: public, max-age=31536000, immutable
+## 3. Live-state baseline (verified 2026-09-13; re-verify before relying on it)
 
-   /*.js
-     Cache-Control: public, max-age=31536000, immutable
+- Host `https://oxfordra.net` (www and http both 301 to it). HSTS preload is on.
+- Markets on the site: **Maryland** and **Columbus, OH** (core, each with a market page); **Kansas City, MO** is a one-building holding (portfolio + markets hub note, no market page by Gabriel's decision). No Indianapolis.
+- Close-speed claim: **30–45 days** everywhere (pinned by `seo.test.mjs`).
+- GA4 `G-YDSX0RW5HC` is installed with a deferred loader (first interaction / page-hide / 3s). LinkedIn Insight Tag is **not** installed; its CSP origins are already allowed. Ask Gabriel for the Partner ID, then load it inside the existing deferred `loadAnalytics()` block on every page (never as a render-blocking head script).
+- Fonts are self-hosted `/fonts/*.woff2` (`font-src 'self'`), preloaded via `Link` headers; no Google Fonts.
+- Primary CTA: "Submit Your Deal" → `/for-brokers#broker-network` (reCAPTCHA v2-gated upload).
+- Organization JSON-LD on home and about; `images/oxford-logo-512.png` (navy on white). A white or sub-112px logo fails Google's logo requirements.
+- `sitemap.xml` (19 URLs), `robots.txt` (allow all + sitemap), `llms.txt`, custom `404.html`, `manifest.json` and the favicon suite all exist.
+- Internal Netlify Forms shells (`*-form.html`) are published and noindexed by design.
 
-   /*.html
-     Cache-Control: public, max-age=0, must-revalidate
-   ```
+## 4. Audit dimensions
 
-### TIER 2 — ACCESSIBILITY + SEO
+Catalog pages from `sitemap.xml` plus repo HTML, excluding `dist/`, `node_modules/` and `.netlify/`. Findings are ranked by impact; each gets evidence (file:line or a curl result) and a proposed fix.
 
-5. SEMANTIC HTML PASS
-   - Audit every page for correct landmark regions: <header>, <nav>, <main>, <footer>, <section aria-label="...">, <article>
-   - Add skip link: <a href="#main-content" class="skip-link">Skip to main content</a>
-   - Ensure one and only one <h1> per page
-   - All heading levels must be sequential (no skipping from H1 to H3)
+**A. Performance:** LCP image preloaded + `fetchpriority="high"`; AVIF/WebP `<picture>` with explicit `width`/`height`; below-fold `loading="lazy"`; critical CSS inline with async `styles.css` (cache-busted `?v=N`, and bump N on change); no render-blocking JS; immutable caching on hashed/static assets. Targets: LCP ≤ 2.5s, CLS 0, INP ≤ 200ms, TBT ≤ 200ms.
 
-6. ALT TEXT PASS
-   - Every <img>: descriptive alt text that conveys the image's informational purpose
-   - Decorative images: alt="" (empty string, not missing)
-   - Portfolio property images: alt="[Property name] — [SF] SF industrial/flex property in [Market]"
+**B. Accessibility:** one skip link; landmarks; one H1 and no skipped heading levels; alt text on every `<img>` (decorative → `alt=""`); gold text on light grounds uses `--gold-accessible`; visible `:focus-visible`; labelled form controls; keyboard-operable accordions and sliders.
 
-7. META + STRUCTURED DATA
-   For every page, ensure:
-   ```html
-   <title>[Page-specific title] | Oxford Realty Advisors</title>
-   <meta name="description" content="[150-160 char unique description]">
-   <link rel="canonical" href="https://www.oxfordra.net/[path]">
-   <meta property="og:title" content="...">
-   <meta property="og:description" content="...">
-   <meta property="og:image" content="https://www.oxfordra.net/assets/og-image.jpg">
-   <meta property="og:url" content="https://www.oxfordra.net/[path]">
-   <meta property="og:type" content="website">
-   <meta name="twitter:card" content="summary_large_image">
-   ```
+**C. Best practices:** no console errors; HTTPS only; CSP holds with no violations (`csp-smoke`); SRI on third-party scripts.
 
-   Add JSON-LD on homepage:
-   ```json
-   {
-     "@context": "https://schema.org",
-     "@type": "RealEstateAgent",
-     "name": "Oxford Realty Advisors",
-     "url": "https://www.oxfordra.net",
-     "logo": "https://www.oxfordra.net/assets/logo.svg",
-     "description": "Private industrial real estate investment firm specializing in shallow-bay flex properties across Maryland, Columbus OH, Kansas City MO, and Indianapolis.",
-     "address": {
-       "@type": "PostalAddress",
-       "addressLocality": "Potomac",
-       "addressRegion": "MD",
-       "addressCountry": "US"
-     },
-     "areaServed": ["Maryland", "Columbus OH", "Kansas City MO", "Indianapolis IN"]
-   }
-   ```
+**D. SEO invariants** (the ones marked 🔒 are enforced by `tests/site/seo.test.mjs`; extend that test when adding one):
+- 🔒 Every sitemap page's `/x.html` path has a `301!` to the clean URL, placed before the catch-all (Netlify otherwise serves both as 200).
+- 🔒 `/404` returns a real 404; `404.html` has no canonical.
+- 🔒 Indexable pages have a 140–160 character meta description; titles follow `Page | Oxford Realty Advisors` (≤ 60 chars).
+- 🔒 Organization `logo` is a non-white PNG ≥ 112×112.
+- 🔒 Owner-guide `Article` JSON-LD has ISO `datePublished`/`dateModified` (sourced from `git log --follow`, never invented).
+- 🔒 Home, for-brokers and market pages link ≥ 2 owner guides from `<main>` (not just nav/footer).
+- 🔒 No page contradicts the canonical close-speed claim.
+- Canonical + `og:url` match the sitemap `<loc>` exactly (trailing slash for directory indexes); `og:*` and `twitter:*` on every indexable page; `robots` meta on every page.
+- `sitemap.xml` `<lastmod>` bumped for pages whose content changed; noindex pages stay out of it.
+- Claims agree across meta description, visible copy, FAQ JSON-LD and `scripts/meta.md`.
 
-8. SITEMAP + ROBOTS
-   - Generate sitemap.xml listing all pages with <lastmod>, <changefreq>, <priority>
-   - robots.txt: allow all, reference sitemap URL
+**E. AI search / answer engines:**
+- Keep `llms.txt` current with the claims above; it's what LLM crawlers read first.
+- FAQPage JSON-LD **no longer earns Google FAQ rich results for commercial sites** (Google Search Central, "Changes to HowTo and FAQ rich results," 2023-08-08). Keep existing blocks for AI engines and answer extraction, but never pitch new FAQ markup as a SERP gain.
+- Consistent entity facts (name, address, phone, `sameAs`) across Organization JSON-LD, footer and `llms.txt` strengthen entity resolution.
 
-### TIER 3 — VISUAL PERFECTION
+**F. Visual / content:** check at 375 / 768 / 1024 / 1440 px with no horizontal scroll (fix the root cause; `overflow-x:hidden` is not a fix). New sections reuse existing tokens and classes. Portfolio/track-record figures must match the source of record, never placeholders.
 
-9. RESPONSIVE AUDIT at 320px, 375px, 768px, 1024px, 1440px, 2560px
-   - Test every page at every breakpoint
-   - Fix any overflow — find and fix root cause, do not use overflow-x: hidden as a bandaid
-   - Fix text truncation: ensure all body copy, headings, property names, and CTAs fully render
-   - Fix image alignment: all property cards must use object-fit: cover with consistent aspect ratios
-   - Verify the 8px spacing grid is honored throughout
+**G. Infrastructure:** `_headers` security set (HSTS, CSP, nosniff, Referrer-Policy, Permissions-Policy); legacy-path 301s; branded 404; favicon suite + manifest; analytics per §3.
 
-10. TYPOGRAPHY ENFORCEMENT
-    - EB Garamond: headlines and display text only
-    - DM Sans: all body, UI, navigation, labels
-    - Minimum body font size: 16px
-    - Line height: 1.5–1.7 for body copy
-    - Letter spacing: -0.02em to -0.03em for large display headings
+## 5. Fix workflow
 
-11. CTA + CONVERSION ELEMENTS
-    - "Score Your Deal" — rewrite to "Submit Your Deal" or "Send Us a Deal" with a tooltip/subtitle clarifying it's a deal submission form for brokers and owners
-    - All primary CTAs must use Oxford Navy fill with Oxford Gold text or Oxford Gold fill with Oxford Navy text — never both variants on the same page section
-    - Button hover states must have transition: all 0.2s ease
+1. **Audit read-only** (repo + live curl). Present ranked findings; ask Gabriel about any claim or content decision with `AskUserQuestion` (recommended option first).
+2. **Worktree + branch** off `origin/main`. Write or extend `tests/site/seo.test.mjs` first and watch it fail.
+3. Edit with the Edit tool; preserve line endings (the repo stores LF, and some working copies are CRLF).
+4. `npm run verify` must exit 0. Then run the local visual check (§2) at desktop and mobile widths.
+5. Commit explicit paths → PR → wait for CI and the Netlify preview → run the **redirect/status proof on the preview**.
+6. Report with evidence. Deploy only on Gabriel's per-deploy confirmation, then verify the **served** asset on oxfordra.net before calling it done.
 
-### TIER 4 — ANALYTICS + TRACKING
+## 6. Common mistakes (each has happened)
 
-12. GA4 INSTALLATION
-    Install Google Analytics 4 via gtag.js in <head> of every page:
-    ```html
-    <!-- Google Analytics -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-XXXXXXXXXX');
-    </script>
-    ```
-    Replace G-XXXXXXXXXX with actual Measurement ID. Ask user if not known.
-
-    Track these events:
-    - deal_submission_click (CTA button clicks)
-    - portfolio_property_view (clicks on individual property cards)
-    - contact_form_submit
-
-13. LINKEDIN INSIGHT TAG
-    ```html
-    <script type="text/javascript">
-    _linkedin_partner_id = "XXXXXXX";
-    window._linkedin_data_partner_ids = window._linkedin_data_partner_ids || [];
-    window._linkedin_data_partner_ids.push(_linkedin_partner_id);
-    </script>
-    <script type="text/javascript">
-    (function(l) {
-    if (!l){window.lintrk = function(a,b){window.lintrk.q.push([a,b])};
-    window.lintrk.q=[]}
-    var s = document.getElementsByTagName("script")[0];
-    var b = document.createElement("script");
-    b.type = "text/javascript";b.async = true;
-    b.src = "https://snap.licdn.com/li.lss/insight.min.js";
-    s.parentNode.insertBefore(b, s);})(window.lintrk);
-    </script>
-    ```
-    Ask user for LinkedIn Partner ID if not known.
-
----
-
-## PHASE 3 — VALIDATION PROTOCOL
-
-After every change, self-validate using this checklist before moving to the next fix:
-
-□ No new console errors introduced
-□ HTML validates (no stray tags, unclosed elements)
-□ All images render at correct dimensions with no distortion
-□ No text overflows its container at any breakpoint
-□ Color contrast passes WCAG AA (4.5:1 for body text)
-□ All links resolve (no href="#" placeholders in production)
-□ Page renders correctly with JS disabled (progressive enhancement)
-□ Lighthouse estimated scores: Performance ≥95, Accessibility 100, Best Practices 100, SEO 100
-
----
-
-## PHASE 4 — FINAL DELIVERABLES
-
-Produce and output the following files in order:
-
-1. Updated index.html (and all other .html pages) — fully optimized
-2. Updated main CSS file — with critical CSS separated
-3. _headers (Netlify headers file)
-4. _redirects (Netlify redirects file)
-5. sitemap.xml
-6. robots.txt
-7. manifest.json
-8. Any new/updated JSON-LD structured data blocks
-9. Final audit report summarizing:
-   - Every change made, categorized by tier
-   - Estimated Lighthouse score impact per change
-   - Any items requiring user input (GA4 ID, LinkedIn Partner ID, missing content)
-   - Remaining manual actions Gabriel must take post-deployment
-
----
-
-## OPERATING CONSTRAINTS
-
-- Design system is immutable: DM Sans + EB Garamond, Oxford Navy (#1B2A4A), Oxford Gold (#C9A96E), Parchment (#F5F3EF). Do not introduce new typefaces or colors.
-- Do not restructure page content or change the information architecture without flagging it first.
-- All fixes must be backwards compatible to Chrome 90+, Firefox 88+, Safari 14+.
-- Netlify deployment: all fixes must be compatible with static site hosting (no server-side rendering).
-- If you encounter a file you need to see but cannot access, explicitly state the filename and what you need from it before proceeding.
-- Flag any change that touches navigation, contact forms, or the portfolio section for Gabriel's review before finalizing.
-- Treat every task as if a PageSpeed audit is running live. Never ship a regression.
+| Mistake | Fix |
+|---|---|
+| Declaring `_redirects` fixes verified from a local server | Local servers don't run `_redirects`; prove it on the deploy preview. |
+| Pasting a "standard" CSP into `_headers` | It drops live origins (reCAPTCHA, unpkg, OSM tiles, SharePoint, Netlify RUM). Edit incrementally and run `csp-smoke`. |
+| Reporting a copy inconsistency as meta-only | Grep visible copy, JSON-LD, `llms.txt` and `scripts/meta.md` too before scoping the fix. |
+| Normalizing a firm claim (markets, close speed, counts) without asking | Claims are Gabriel's call; ask, then pin the answer in `seo.test.mjs`. |
+| Rewriting a file with Python `read_text`/`write_text` | That silently converts CRLF→LF; use the Edit tool or byte-level I/O. |
+| Treating a merged PR as live | Verify the served HTML/headers on oxfordra.net after the confirmed deploy. |
