@@ -34,9 +34,20 @@ Usage
                        (main.log stale/rotated, or the match tolerance missed
                        it) -- treat as first-hand but uncorroborated.
           NO-CHANGE    CreationTime is unchanged from baseline -- no reimport
-                       has happened since the baseline was taken.
+                       has happened since the baseline was taken. Also covers
+                       a first-install skill whose cache dir is STILL absent
+                       (baseline was recorded ABSENT and nothing has changed).
           NO-BASELINE  nothing to compare against; pass --baseline or run
                        `baseline` first.
+          NO-CACHE     cache dir not found and no baseline exists either.
+
+    A skill with no cache dir at baseline time (never installed) gets an
+    explicit ABSENT baseline rather than being skipped (fixed 2026-09-11, ORA
+    Setup Audit R25 remediation -- vendor-management's first-ever publish hit
+    this exact gap and needed a manual `--baseline` override to verify). A
+    later `verify` treats ABSENT -> a cache dir now existing as first-hand
+    evidence of install, same as an ordinary CreationTime move, and labels the
+    verdict CONFIRMED/MOVED-ONLY "(first install)".
 
 Deliberately narrow: this is a correlation aid, not a new source of truth. It
 reuses CACHE_ROOT from pending_reimport.py and reads the SAME two main.log
@@ -82,14 +93,28 @@ def _creation_time(skill: str) -> datetime | None:
 
 
 def cmd_baseline(skills: list[str]) -> int:
+    """Record each skill's current cache-directory CreationTime -- or, when no
+    cache dir exists yet (the skill has never been installed), an explicit
+    ABSENT baseline (creation_time: null) rather than skipping the skill
+    entirely.
+
+    Before this fix (found 2026-09-11, ORA Setup Audit R25 remediation:
+    vendor-management's first-ever publish), a first-install skill had no cache
+    dir at pre-check time, so this command wrote nothing for it and printed
+    only a stderr note -- silently leaving `verify` with NO-BASELINE later and
+    forcing a manual `--baseline "YYYY-MM-DD HH:MM:SS"` override for exactly the
+    case (a brand-new publish) this correlation tool exists to make routine.
+    Recording ABSENT explicitly lets `verify` treat "no dir -> a dir exists" as
+    first-hand evidence of install, the same way it treats a CreationTime move
+    for a skill that already existed."""
     BASELINE_DIR.mkdir(parents=True, exist_ok=True)
     for skill in skills:
         ct = _creation_time(skill)
-        if ct is None:
-            print(f'{skill}: cache dir not found under {CACHE_ROOT} -- not baselined',
-                  file=sys.stderr)
-            continue
         path = BASELINE_DIR / f'{skill}.json'
+        if ct is None:
+            path.write_text(json.dumps({'skill': skill, 'creation_time': None}, indent=2))
+            print(f'{skill}: baseline ABSENT (no cache dir yet -- first install) -> {path}')
+            continue
         path.write_text(json.dumps({'skill': skill, 'creation_time': ct.isoformat()}, indent=2))
         print(f'{skill}: baseline {ct.isoformat()} -> {path}')
     return 0
@@ -139,38 +164,69 @@ def cmd_verify(skills: list[str], baseline_override: str | None) -> int:
     any_confirmed_missing = False
     for skill in skills:
         current = _creation_time(skill)
-        if current is None:
-            print(f'{skill}: NO-CACHE -- cache dir not found under {CACHE_ROOT}')
-            any_confirmed_missing = True
-            continue
 
+        # Resolve the baseline first (before deciding NO-CACHE) -- a skill whose
+        # cache dir is STILL absent needs to tell "never installed, no baseline
+        # was ever taken" (NO-BASELINE) apart from "never installed, and we
+        # already know that from an explicit ABSENT baseline" (NO-CHANGE). The
+        # old ordering treated `current is None` as an unconditional NO-CACHE
+        # before a baseline was even consulted, which is right for the former
+        # but wrong for the latter.
+        baseline_is_absent = False
         if baseline_override:
             baseline = datetime.strptime(baseline_override, '%Y-%m-%d %H:%M:%S')
         else:
             path = BASELINE_DIR / f'{skill}.json'
             if not path.is_file():
-                print(f'{skill}: NO-BASELINE -- run `baseline {skill}` first, or pass '
-                      f'--baseline "YYYY-MM-DD HH:MM:SS"')
+                if current is None:
+                    print(f'{skill}: NO-CACHE -- cache dir not found under {CACHE_ROOT}')
+                else:
+                    print(f'{skill}: NO-BASELINE -- run `baseline {skill}` first, or pass '
+                          f'--baseline "YYYY-MM-DD HH:MM:SS"')
                 any_confirmed_missing = True
                 continue
-            baseline = datetime.fromisoformat(json.loads(path.read_text())['creation_time'])
+            stored = json.loads(path.read_text())['creation_time']
+            if stored is None:
+                baseline_is_absent = True
+                baseline = None
+            else:
+                baseline = datetime.fromisoformat(stored)
 
-        if abs((current - baseline).total_seconds()) < 1:
+        if baseline_is_absent and current is None:
+            print(f'{skill}: NO-CHANGE -- cache dir still absent (never installed; '
+                  f'baseline recorded ABSENT)')
+            continue
+
+        if not baseline_is_absent and current is None:
+            print(f'{skill}: NO-CACHE -- cache dir not found under {CACHE_ROOT} '
+                  f'(was present at baseline {baseline.isoformat()} -- may have been '
+                  f'uninstalled or the cache root moved)')
+            any_confirmed_missing = True
+            continue
+
+        if not baseline_is_absent and abs((current - baseline).total_seconds()) < 1:
             print(f'{skill}: NO-CHANGE -- CreationTime still {current.isoformat()} '
                   f'(baseline {baseline.isoformat()})')
             continue
 
+        # Either an ordinary CreationTime move, or the ABSENT -> present
+        # transition of a first-ever install -- both are first-hand evidence a
+        # cache dir was freshly created, so the log-correlation check and its
+        # verdict wording are identical; only the printed baseline differs.
+        baseline_label = 'ABSENT (never installed)' if baseline_is_absent else baseline.isoformat()
+        first_install_note = ' (first install)' if baseline_is_absent else ''
         match = _find_log_match(current)
         if match:
             log_path, ts, n = match
-            print(f'{skill}: CONFIRMED -- CreationTime moved {baseline.isoformat()} -> '
-                  f'{current.isoformat()}; {log_path.name} Sync complete: {n} downloaded '
-                  f'@ {ts.isoformat()} (exact-second match)')
+            print(f'{skill}: CONFIRMED{first_install_note} -- CreationTime moved '
+                  f'{baseline_label} -> {current.isoformat()}; {log_path.name} Sync complete: '
+                  f'{n} downloaded @ {ts.isoformat()} (exact-second match)')
         else:
-            print(f'{skill}: MOVED-ONLY -- CreationTime moved {baseline.isoformat()} -> '
-                  f'{current.isoformat()}, but no corroborating main.log Sync-complete line '
-                  f'found within {TOLERANCE.total_seconds():.0f}s (main.log may be stale -- '
-                  f'check its own mtime before treating this as a negative finding)')
+            print(f'{skill}: MOVED-ONLY{first_install_note} -- CreationTime moved '
+                  f'{baseline_label} -> {current.isoformat()}, but no corroborating main.log '
+                  f'Sync-complete line found within {TOLERANCE.total_seconds():.0f}s (main.log '
+                  f'may be stale -- check its own mtime before treating this as a negative '
+                  f'finding)')
     return 1 if any_confirmed_missing else 0
 
 

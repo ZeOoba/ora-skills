@@ -87,7 +87,7 @@ The five that cost real money, in priority order when a markup must be shortened
    warranty, indemnity and payment remedies on a five- or six-figure capital job
    run to a counterparty ORA can terminate on sixty days' notice. Observed live
    in Q3 2026. This is the position that connects `pma-qc` to
-   `vendor-contract-qc`: PM-19 governs the authority, VC-1 governs the
+   `vendor-management`: PM-19 governs the authority, VC-1 governs the
    instrument that authority produces.
 
 ## How to run
@@ -152,7 +152,7 @@ Report, in this order, at the top of every review:
    year since. Then check whether the agreement requires the manager to contract
    as Owner's **disclosed agent** — if not, assume trade paper in the portfolio
    is currently executed in the manager's own name, and pull a recent vendor
-   contract to confirm (route it to `vendor-contract-qc`).
+   contract to confirm (route it to `vendor-management`).
 
 That block answers the operational question. Everything after it is economics.
 
@@ -233,7 +233,7 @@ Compute and state:
 | Broker listing agreement (sale or lease), ORA as Owner | `listing-agreement-qc` |
 | ORA's own lease form going to a tenant | `lease-form-qc` |
 | Counterparty lease, PSA, loan doc | `legal-intelligence` |
-| A trade contract the manager procured (paving, roofing, snow, HVAC) | `vendor-contract-qc` |
+| A trade contract the manager procured (paving, roofing, snow, HVAC) | `vendor-management` |
 | Amending a lease already in effect | `lease-addendum` |
 | Whether to self-manage vs. third-party manage | `re-operations` / `portfolio-growth` |
 | Drafting the manager engagement or termination email | `communication-intelligence` |
@@ -260,7 +260,7 @@ Compute and state:
   (HIGH — approval threshold present but no Owner countersignature, unindexed, or
   with an unbounded emergency exception). Registry 32 -> 34 checks; positions 18
   -> 19. Step 3 gains a fifth reporting item, contracting authority. Routing row
-  added for `vendor-contract-qc`, the companion skill that QCs the trade paper
+  added for `vendor-management`, the companion skill that QCs the trade paper
   this authority produces. Prompted by a Q3 2026 paving proposal on an ORA-owned
   asset that named the property manager as Purchaser under a form barring any
   non-party from claiming a remedy — the warranty ran to the manager, not to the
