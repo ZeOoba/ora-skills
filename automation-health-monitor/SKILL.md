@@ -1,6 +1,6 @@
 ---
 name: automation-health-monitor
-description: 'Scheduled health check for all Oxford Realty Advisors Cowork automations. Runs every weekday at 11:00 AM. Enumerates the live dual-fleet scheduled-task registries (CC/MCP + LAMS/Cowork) via list_scheduled_tasks, checks each enabled task for evidence of recent execution, ALSO enumerates 2 off-fleet substrates read-only (all live Windows Task Scheduler ORA* tasks — enumerated and diffed against a roster baseline, never filtered by it; 4 GitHub Actions cron workflows — 2 watchdogs in ora-cowork-watchdog + 2 money-moving backups in ora-pm), posts status report to Notion Operations Hub, and drafts failure notification email to [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (routing canon 2026-06-10 — no cc) if any task missed. Trigger phrases: automation health, task health, fleet health check, scheduled task status, automation monitor, did my tasks run. v1.10 (2026-09-12: see Changelog)'
+description: 'Scheduled health check for all Oxford Realty Advisors Cowork automations. Runs every weekday at 11:00 AM. Enumerates the live dual-fleet scheduled-task registries (CC/MCP + LAMS/Cowork) via list_scheduled_tasks, checks each enabled task for evidence of recent execution, ALSO enumerates 2 off-fleet substrates read-only (all live Windows Task Scheduler ORA* tasks — enumerated and diffed against a roster baseline, never filtered by it; 4 GitHub Actions cron workflows — 2 watchdogs in ora-cowork-watchdog + 2 money-moving backups in ora-pm), posts status report to Notion Operations Hub, and drafts failure notification email to [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (routing canon 2026-06-10 — no cc) if any task missed. Trigger phrases: automation health, task health, fleet health check, scheduled task status, automation monitor, did my tasks run. v1.11 (2026-09-13: see Changelog)'
 ---
 
 You are the automation health monitor for Oxford Realty Advisors. Your job is to verify that all scheduled Cowork tasks ran as expected and alert Gabriel immediately if any failed silently.
@@ -103,9 +103,28 @@ For each task that was scheduled to run in the check window:
 - Use the Notion MCP to search for the expected output page
 - Search by: task name as keyword, date created = today or yesterday
 - Check that the page exists AND has a timestamp within the expected window
-- Flag any task that should have produced output but has no matching page
+- Flag any task that should have produced output but has no matching page — **unless Step 2a turns the missing page into an EMAIL-ONLY advisory**
+
+### Step 2a — Notion publishing degraded → email-only (added v1.11, 2026-09-13)
+
+Apply this before flagging any missing output page in Step 2. Motivating state: since 2026-09-08 every `notion-create-pages` call has failed on the workspace free-block quota (OI-281/OI-288). Producers such as `ora-am-brief`, `ora-pm-ledger`, `ora-doctrine-integrity-guard` and this skill itself fall back to email. Without this step, Step 2 flags every one of them as missed every day, and the flags drown out a producer that really did fail.
+
+> **NOTION-PUBLISH-DEGRADED → EMAIL-ONLY RULE (shared text, identical in every consuming health check; OI-281 / OI-288).**
+> State file, the single source of truth: `C:\Users\Owner\.claude\maintenance\_state\notion-publish-degraded.json`.
+> 1. **Read the state file before judging any missing Notion output page.** Fail safe: if the file is missing or unreadable, is not valid JSON, or `active` is anything other than JSON `true`, this rule does not apply. Judge the missing page exactly as the rest of this file already says.
+> 2. **When `active` is `true` and the producer is listed.** The producer must be in `producers[]` (match `task_id`, and `notion_output` when a task has several entries). Its missing Notion output page is then NOT a FAIL or STALE by itself. Look for that producer's fallback email for the expected date in Outlook Sent Items (ggoldberg@oxfordra.net) or in `C:\Users\Owner\.claude\scheduled-tasks\_shared\send-log.txt` (`[OK] Sent` lines only). Match `fallback_email_subject_pattern` using the file's `matching` rules (subject normalization, placeholders, undated subjects).
+>    - **Email present** → report `EMAIL-ONLY (Notion degraded, OI-288) — <task_id>: <notion_output> for <date> delivered by email "<matched subject>"` as an Advisory row. It does NOT count toward FAIL/N, does NOT flip any subject to [ACTION], and does NOT enter any FAIL-aging ladder.
+>    - **Email absent, or the pattern is `null`** → the producer genuinely did not deliver. Escalate exactly as before.
+>    - **Could not look** (Sent Items and send-log both unreadable) → escalate exactly as before. Never assume the email exists.
+> 3. **Never cite "search-index lag"** as the cause of a missing page while `active` is `true`. The cause is the block quota. Say so.
+> 4. **Self-create check.** If this health check itself creates a Notion page successfully while `active` is `true` (`notion-create-pages` returns a page id that verifies), report `Notion create succeeded — notion-publish-degraded.json may be clearable` as an Advisory row. Do NOT edit or clear the file. Clearing it is a human or interactive-session action, per its `clear_when`.
+> 5. **Scope.** This rule turns a missing page into an advisory only when an email proves delivery. It never softens any other finding: a producer that did not run, a stale page written by `notion-update-page` (e.g. Rate Snapshot — Current), or a probe FAIL.
+
+Reporting: list EMAIL-ONLY rows in their own `## Notion degraded — email-only deliveries` subsection of the Step 3 report, with the matched subject and the evidence source (Sent Items or send-log). They are ✅-equivalent for the Summary count and never ⚠️/❌. Step 4 never alerts on them. A producer on the roster with a `null` pattern, or with no matching email, is flagged ⚠️ exactly as before.
 
 ### Step 3 — Post status report to Notion Operations Hub
+
+**While `notion-publish-degraded.json` has `active: true`:** try the create anyway, once, with the usual retry. If it succeeds and verifies, add `Notion create succeeded — notion-publish-degraded.json may be clearable` to the report as an Advisory row (Step 2a rule 4). Never edit the flag. If it fails, deliver the same report through the scheduled task's own publication-failed email path.
 
 Create or update a "Automation Health — \[Today's Date\]" page in the Notion Operations Hub with this format:
 
@@ -152,7 +171,7 @@ task runs independently and can't see that state file — so apply the same judg
 
 ### Step 4 — Alert Gabriel on any failures
 
-If any task shows ⚠️ or ❌ (and Step 3.5 didn't already fold it into a single offline-window note):
+If any task shows ⚠️ or ❌ (and Step 3.5 didn't already fold it into a single offline-window note, and Step 2a didn't make it an EMAIL-ONLY advisory):
 
 1. Draft a notification email to [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (no cc — routing canon 2026-06-10; the cc-Eric exception applies solely to the ora-am-brief Daily Brief). Send path when running unattended: Outlook COM via `C:\Users\Owner\.claude\scheduled-tasks\_shared\send-via-outlook.ps1` — the SOLE send path. Include:
    - Subject: "⚠️ Cowork Automation Alert — \[Task Name\] missed \[date\]"
@@ -187,6 +206,11 @@ If any task shows ⚠️ or ❌ (and Step 3.5 didn't already fold it into a sing
 
 ## Changelog
 
+- **v1.11 (2026-09-13, OI-281/OI-288):** New Step 2a, the Notion-publishing-degraded → email-only rule. It reads `~/.claude/maintenance/_state/notion-publish-degraded.json`, the single source of truth, which holds the active flag, subject-normalization rules and a producers roster with fallback email subject patterns.
+  - **Behaviour:** while `active: true`, a rostered producer's missing Notion page is an `EMAIL-ONLY (Notion degraded, OI-288)` advisory when its fallback email is in Sent Items or `_shared/send-log.txt`. Otherwise it is flagged exactly as before. Flag missing, unreadable or `active:false` → unchanged behaviour. The rule never cites search-index lag while active.
+  - **Self-create check:** Step 3 reports `Notion create succeeded — notion-publish-degraded.json may be clearable` if its own create works. It never clears the flag.
+  - **Why:** every Notion-publishing task has been re-flagged as missed daily since the block quota ran out on 2026-09-08, which hides real producer failures.
+  - **Rule text:** identical to `ora-health-guard` v1.14 B.2(C.0c).
 - **v1.10 (2026-09-12, `open-items-tracker.md#OI-229`):** Step 1.75's GitHub Actions leg now also covers the two money-moving off-host backups in `ZeOoba/ora-pm` (`monthly-billing-backup.yml`, `delinquency-backup.yml`): presence on `main`, `ORA_PM_CRON_SECRET` name present, per-workflow cadence-aware staleness, last-run conclusion, and a cross-check of each task's `offhost-backup:` frontmatter claim. Root incident: `monthly-billing-backup.yml` merged 2026-09-03 and was declared `live` in `ora-pm-monthly-billing`'s frontmatter, but the repo secret it needs was never created — it had zero runs and would have failed its first fire on 2026-10-01, and nothing in this monitor could see it (it enumerated `ora-cowork-watchdog` only). Report-only, unchanged.
 - **v1.9 (2026-09-03):** Step 1.75's Windows Task Scheduler roster moved out of this file into a machine-readable block in `memory/tech.md` §3h (`<!--BEGIN/END-WINDOWS-TASK-ROSTER-->`) with an explicit `state=retired | since= | superseded-by=` grammar for deliberately-retired tasks. Root incident: Automation Audit Rev 21 (2026-09-02) read `ORA PM Crons` `Disabled` + `0x8007042B` as "a second ora-pm scheduling path silently dead for 17 days" — a wrong-target read, since v1.7 of this skill already said that state was by design; but the audit runs `setup-self-audit.py`, not this skill, and that script's hardcoded `WINDOWS_TASKS` dict still listed `ORA PM Crons` as a CRIT backbone task with no notion of retirement. Both readers now consume the one roster. Same pass, same script: by-design `exit 1` from `fleet-deadman.ps1` / `mirror-classify-offfleet.ps1` (roster `exit1-ok=yes`) no longer WARNs, and a live `ORA*` task with no roster line WARNs as untracked instead of being invisible.
 - **v1.8 (2026-08-28):** Added Step 1.25 — one-time tickler lifecycle check. Root incident: `ora-754-flaute-escalation-check` fired ~1h41m late (AM catch-up burst throttle delay) and auto-disabled normally, but a fleet-status/setup-self-audit advisory snapshotted pre-fire read it as "expired, not yet fired, still enabled" and was acted on after it had already completed — a disabled one-time task is indistinguishable from a genuinely stuck one unless `lastRunAt` is checked against `fireAt`. Now explicit: `disabled + lastRunAt set` = normal completion, never flag; `disabled + no lastRunAt` = genuinely anomalous, flag; `enabled + past fireAt, not yet fired` = re-verify live before flagging, don't trust an old snapshot. Companion fix, same incident, different file: `fleet-status.py` now stamps every report with `generated_at` and a staleness warning in both text and JSON output, so the caveat travels with a forwarded/pasted copy instead of depending on the reading skill's own discipline.
