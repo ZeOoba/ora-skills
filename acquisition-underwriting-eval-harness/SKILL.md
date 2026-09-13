@@ -262,6 +262,34 @@ single agent can emit MORE THAN ONE completion notification (same task-id, later
 State in the Step 5 report every task-id that emitted more than one completion, and whether the
 blocks matched.
 
+**Steps 2–4 in one command (2026-09-13 — use this; never hand-copy scores into a driver script).**
+Once every agent in Step 1 has completed, run from the harness root:
+```
+python lib/parse_replays.py --subagents-dir <~/.claude/projects/<project>/<session-id>/subagents> \
+    --agent-ids <the 18 task-ids from Step 1> [--failed-agent-ids <ids flagged in Step 1.5>] \
+    --record --skill-sha <Step 0 hash> --run-label <label>
+```
+It reads each agent's on-disk transcript (`agent-<id>.jsonl`), applies the Step 2 one-block rule
+below, fails any agent whose transcript shows more than one completion with differing blocks, and
+attributes each replay to its golden deal by the FROZEN FACTS block in its own prompt (never by
+description or arrival order), then aggregates, diffs and snapshots.
+- **Always pass `--agent-ids`.** Without it every replay transcript in the session is pooled — a
+  session that also ran rebaseline replays silently inflates `n` (09-12 session: Hamilton n=5).
+- **The transcript cannot see every Step 1.5 failure.** A differing earlier completion notification
+  can leave no trace on disk (09-12 Hamilton r3: the 15.0 block exists only in the notification).
+  Keep watching notifications per Step 1.5 and pass any such task-id via `--failed-agent-ids`.
+- **Completion is inferred from transcript structure, not `stop_reason`** — ~5% of real completed
+  replays carry no `end_turn` stamp (09-12 E Fulton r2).
+- **Exit codes:** **0** = every deal has ≥1 parsed replay, none failed. **4** = every deal has ≥1
+  parsed replay but ≥1 replay failed (degraded `n`, listed per deal; snapshot still recorded; the
+  scheduled task's deal-level Step 4 rule may still advance). **3** = a deal has no result or could
+  not be aggregated, a requested agent-id has no transcript, or a requested agent could not be
+  attributed — nothing recorded, do not advance state.
+
+Verified 2026-09-13 against that day's 18 real transcripts: identical `combined_observed`,
+`category_deltas` and status to the hand-copied run (exit 0); and against the 09-12 session, where
+it recovers the no-`end_turn` E Fulton replay (n=3, 54.67, matching the recorded run).
+
 **Step 2 — parse.** Extract the single fenced `json` block from each subagent's final response.
 If a response contains zero or more than one fenced json block, that replay FAILED — report it
 as an error, do not guess which block was intended. A failed replay is **never** silently
