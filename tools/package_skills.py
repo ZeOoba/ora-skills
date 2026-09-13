@@ -40,13 +40,17 @@ MAX_DESC = 1024  # platform limit: importer rejects 'description' > 1024 chars (
 # staged, and Gabriel accidentally re-registered it in an unrelated 2026-08-13
 # Save-skill batch click. A skill leaves this set only on Gabriel's explicit
 # re-publish decision -- do not add/remove entries speculatively.
+# vendor-management removed 2026-09-11: Gabriel's explicit re-publish decision,
+# given in-turn during ORA Setup Audit Revision 25 remediation, made after being
+# shown that it was NOT-INSTALLED/DELIBERATELY_UNPUBLISHED and that today's
+# commit 735a376 (vendor-contract-qc merged in as a QC mode) would otherwise be
+# suppressed from pending_reimport candidates by this same set.
 DELIBERATELY_UNPUBLISHED: frozenset[str] = frozenset({
     'annual-cycle',
     'capex-budgeting',
     'cash-position-monitor',
     'deal-retirement',
     'investor-relations',
-    'vendor-management',
 })
 
 
@@ -457,7 +461,7 @@ SHARED_ROOT_DEPS = {
     'listing-agreement-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
     'lease-form-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
     'lease-addendum': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
-    'vendor-contract-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
+    'vendor-management': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
 }
 
 
