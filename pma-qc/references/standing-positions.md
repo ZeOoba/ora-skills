@@ -498,7 +498,7 @@ unless the agreement says otherwise.
 > provided that emergency expenditures shall not exceed $[Y] per occurrence
 > without Owner's approval."
 
-**Companion.** PM-19 governs the *authority*. `vendor-contract-qc` VC-1 governs
+**Companion.** PM-19 governs the *authority*. `vendor-management` VC-1 governs
 the *instrument that authority produces* — and catches the same defect from the
 other end, at the moment a specific trade contract is about to be signed. Run
 both: fixing the management agreement does not cure trade paper already executed

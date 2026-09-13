@@ -14,6 +14,7 @@ One command for landing a change you just finished writing in a shared ORA check
 
 - You've written and tested a change in `~/.claude`, `ora-skills`, `website-canonical`, or `oxford-command-center` and need to land it.
 - NOT for cleaning up a pile of pre-existing uncommitted files you didn't write — use `dirty-tree-triage` instead.
+- **Mixed ownership: you are about to edit, or already edited, a file another session wrote and never committed.** It is untracked on every branch, and another session's `touched-files.txt` lists it. This is not purely your own work, so apply "Foreign untracked files" below BEFORE your first edit. If you already edited without a snapshot, say so to the user and review the whole file as if it were all new, since your delta can no longer be separated.
 - NOT a substitute for the mandatory Fable/Opus independent review gate on `hooks/**`/financial/governor code (`eos-review-gate.py`) — this skill's own review step (4) is the SAME requirement generalized to repos/files that gate doesn't cover.
 
 ## Workflow
@@ -32,6 +33,15 @@ One command for landing a change you just finished writing in a shared ORA check
 
 7. **PR.** Open with a summary + test plan that cites the review verdict from step 4.
 
+## Foreign untracked files
+
+An untracked file that another session wrote is that session's work, even after you add to it. Committing it brings their whole file into git under your commit. This section runs before your first edit and overrides Workflow step 2's "`git status --short -- <paths>` must be empty" precondition: a foreign untracked file always shows `??`, so that precondition can never pass, and these steps take its place.
+
+1. **Attribute with evidence, not a guess.** `git log --all --oneline -- <path>` returning empty means it was never committed anywhere. Find every session listing the path in `hooks/sessions/<id>/touched-files.txt`. Each line is `<path>\t<epoch-seconds>` (fractional), the last time that session touched it. Paths are stored lowercased with backslashes, so match case-insensitively with normalized slashes, or a grep silently misses. Those lines record touches, not authorship, and several sessions (yours included, once you edit) can list the same file. Treat the session with the EARLIEST touch as the author, and every other non-you session that lists the path as a co-owner to name alongside it. A live claim (`hooks/active-work/*.json`) on the path, or any non-you touch within the last 2h, means STOP: contact that session, or leave the file alone.
+2. **Snapshot before you edit.** Copy the pristine files to your scratchpad (`cp -p`) before the first edit, so your delta can be diffed out, reviewed, or reverted on its own.
+3. **Get the user's explicit in-turn authorization to commit it.** Surface the file, its author session, how long ago that session last touched it, and the size of your delta (lines against the snapshot). Use `dirty-tree-triage`'s evidence standard for the attribution. On a yes, the commit happens HERE through Workflow steps 1 and 3-7 (claim, then stage, review, commit, push, PR); there is no hand-off. Without a yes, leave the file uncommitted.
+4. **Commit it honestly.** Untracked paths need `git add -- <paths>` before `git commit -F <msg> -- <paths>`, since a pathspec commit rejects a path git has never seen. The message credits the author session for the base file and describes your delta separately. The Workflow step 4 review covers the WHOLE file, not only your delta, because all of it is entering git.
+
 ## Quick Reference
 
 | Step | Never do | Do instead |
@@ -41,6 +51,7 @@ One command for landing a change you just finished writing in a shared ORA check
 | Gate failure | Retry blindly or override immediately | Run the failing test directly first; distinguish flake/pre-existing from real regression |
 | Override token | Mint it yourself on a hunch | Only after the user's explicit in-turn authorization, one confirmed reason |
 | Commit message | Inline `-m`/heredoc for anything nontrivial | A message file via `-F` |
+| Another session's untracked file | Fold it into your commit silently | Attribute it, snapshot first, get the user's yes, credit the author, review the whole file |
 
 ## Common Mistakes
 
