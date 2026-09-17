@@ -279,8 +279,12 @@ class WindowsMaxPath(FixtureTestCase):
         self.assertGreater(len(str(self.cache / skill / rel)), 260)
         # Sanity: plain pathlib really does false-negative here on this machine --
         # otherwise this test would pass for the wrong reason (no LongPathsEnabled
-        # policy, matching the live incident).
-        self.assertFalse((self.cache / skill / rel).is_file())
+        # policy, matching the live incident). WINDOWS-ONLY PRECONDITION: MAX_PATH
+        # is a Windows limitation, so on POSIX (the CI runner) pathlib sees the
+        # file and this would fail on a correct _win_long() no-op. The assertion
+        # below is what the test is actually for and is checked on both platforms.
+        if os.name == 'nt':
+            self.assertFalse((self.cache / skill / rel).is_file())
 
         drifted = pr.sweep_drift(repo_root=self.repo, cache_root=self.cache)
 

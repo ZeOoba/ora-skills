@@ -1,0 +1,76 @@
+name: tools tests
+
+# Runs every tools/test_*.py on every push, to any branch.
+#
+# Why (2026-09-17): two skill retirements broke the tools/ suite and nothing
+# noticed -- rent-comp (2026-08-05) left a realdata fixture silently SKIPPING for
+# over a week, and investor-relations (2026-09-09) left main red until #60. The
+# retirement check in README step 7 documents running this suite; this workflow
+# enforces it.
+#
+# The job fails on any failing test file AND on any skipped test: the suite's
+# skip baseline is zero, and a skip is exactly how the rent-comp breakage hid.
+# If a skip is ever legitimately needed, add it to ALLOWED_SKIPS below with a
+# reason rather than loosening the gate.
+#
+# The tests are stdlib-only and build synthetic fixtures, so no install step and
+# no secrets. Note: claude-ci-fix.yml does NOT fire on this workflow's failures --
+# GitHub never triggers workflows from check suites created by Actions itself.
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tools-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tools-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Run tools/test_*.py
+        env:
+          # Space-separated test file paths allowed to report skipped=N.
+          ALLOWED_SKIPS: ''
+        run: |
+          failed=()
+          skipped=()
+          {
+            echo '| Test file | Result |'
+            echo '|---|---|'
+          } >> "$GITHUB_STEP_SUMMARY"
+          for f in tools/test_*.py; do
+            echo "::group::$f"
+            set +e
+            out=$(python "$f" 2>&1)
+            rc=$?
+            set -e
+            printf '%s\n' "$out"
+            echo "::endgroup::"
+            summary=$(printf '%s\n' "$out" | grep -E '^(Ran [0-9]+ tests? in|OK|FAILED|all checks passed)' | tr '\n' ' ' || true)
+            skip=$(printf '%s\n' "$out" | grep -o 'skipped=[0-9]*' | head -1 || true)
+            if [ "$rc" -ne 0 ]; then
+              failed+=("$f")
+              echo "::error file=$f::exit $rc -- $summary"
+              echo "| \`$f\` | FAIL (exit $rc) $summary |" >> "$GITHUB_STEP_SUMMARY"
+            elif [ -n "$skip" ] && [[ " $ALLOWED_SKIPS " != *" $f "* ]]; then
+              skipped+=("$f")
+              echo "::error file=$f::$skip -- the skip baseline is zero; a skip hid the rent-comp retirement breakage"
+              echo "| \`$f\` | SKIP ($skip) $summary |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| \`$f\` | ok $summary |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          echo "failed: ${#failed[@]}  unallowed skips: ${#skipped[@]}"
+          [ "${#failed[@]}" -eq 0 ] && [ "${#skipped[@]}" -eq 0 ]
