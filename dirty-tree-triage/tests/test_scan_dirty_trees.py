@@ -111,6 +111,24 @@ class LinkedWorktreesAreNotStray(GitFixture):
 
         self.assertIs(self._roles()["canon-wt-feature"]["merged"], True)
 
+    def test_fresh_worktree_with_uncommitted_work_reports_dirty(self):
+        # A just-created worktree sits AT the default branch tip, so merged=True
+        # alone would read "finished" while a live session has WIP in it.
+        canon = self._clone("canon")
+        wt = self._worktree(canon, "canon-wt-feature", "feat/new")
+        (wt / "wip.txt").write_text("wip\n", encoding="utf-8")
+
+        entry = self._roles()["canon-wt-feature"]
+
+        self.assertIs(entry["merged"], True)
+        self.assertIs(entry["dirty"], True)
+
+    def test_clean_worktree_reports_not_dirty(self):
+        canon = self._clone("canon")
+        self._worktree(canon, "canon-wt-feature", "feat/x")
+
+        self.assertIs(self._roles()["canon-wt-feature"]["dirty"], False)
+
     def test_worktree_with_unmerged_commit_is_not_merged(self):
         canon = self._clone("canon")
         wt = self._worktree(canon, "canon-wt-feature", "feat/y")
@@ -154,6 +172,19 @@ class PrimaryIsNotFirstFound(GitFixture):
 
         self.assertEqual(roles["website"]["role"], "primary")
         self.assertEqual(roles["aaa-seo-fixes"]["role"], "worktree")
+
+    def test_main_worktree_beats_earlier_sorting_reclone_without_roster(self):
+        # Two full clones, no roster: only the main-worktree rule can pick the
+        # later-sorting one -- first-found would pick aaa-reclone.
+        self._clone("aaa-reclone")
+        canon = self._clone("zzz-canon")
+        self._worktree(canon, "zzz-canon-wt", "feat/a")
+
+        roles = self._roles()
+
+        self.assertEqual(roles["zzz-canon"]["role"], "primary")
+        self.assertEqual(roles["aaa-reclone"]["role"], "stray")
+        self.assertEqual(roles["zzz-canon-wt"]["role"], "worktree")
 
     def test_roster_repo_is_primary_over_an_earlier_sorting_independent_clone(self):
         self._clone("aaa-reclone")
