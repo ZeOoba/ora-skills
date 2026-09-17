@@ -18,6 +18,7 @@ from parse_replays import (
 )
 
 FENCE = "`" * 3
+NL = chr(10)
 
 GOLDEN_INPUTS = {"address": "1 Test Rd, Columbus, OH", "asking_price": 1000000}
 OTHER_INPUTS = {"address": "2 Other St, Cincinnati, OH", "asking_price": 2000000}
@@ -294,6 +295,107 @@ class TestCollectReplays(unittest.TestCase):
         _write_golden(self.gold, "deal-c", GOLDEN_INPUTS)
         with self.assertRaises(ValueError):
             collect_replays(self.sub, self.gold)
+
+
+
+class TestReviewFindings(unittest.TestCase):
+    """Regression tests for the 7 findings of the 2026-09-17 PR #65 review.
+
+    Every one of the first three corrupts `n` or the deal set with NO signal, which is
+    the one thing this gate exists to get right (see aggregate_replays' own docstring:
+    the whole point is a mean over independent samples).
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.sub, self.gold = root / "subagents", root / "golden_set"
+        self.sub.mkdir()
+        self.gold.mkdir()
+        _write_golden(self.gold, "deal-a", GOLDEN_INPUTS)
+        _write_golden(self.gold, "deal-b", OTHER_INPUTS)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    # F1 -- a Step 1.5 flag that matches nothing must not silently no-op.
+    def test_unknown_failed_agent_id_is_reported(self):
+        _write_agent(self.sub, "a1", _prompt(GOLDEN_INPUTS),
+                     [_assistant(_block(_result(10.0)), "r", "end_turn")])
+        out = collect_replays(self.sub, self.gold, agent_ids=["a1"],
+                              failed_agent_ids=["a1", "typo-id"])
+        self.assertEqual(out["unknown_failed_agent_ids"], ["typo-id"])
+
+    def test_unknown_failed_agent_id_makes_the_run_unusable(self):
+        _write_agent(self.sub, "a1", _prompt(GOLDEN_INPUTS),
+                     [_assistant(_block(_result(10.0)), "r", "end_turn")])
+        _write_agent(self.sub, "b1", _prompt(OTHER_INPUTS),
+                     [_assistant(_block(_result(10.0)), "r", "end_turn")])
+        import contextlib
+        import io as _io
+        from parse_replays import main
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = main(["--subagents-dir", str(self.sub), "--golden-dir", str(self.gold),
+                         "--agent-ids", "a1", "b1", "--failed-agent-ids", "typo-id"])
+        self.assertEqual(code, 3)
+        self.assertEqual(json.loads(buf.getvalue())["unknown_failed_agent_ids"], ["typo-id"])
+
+    # F2 -- a repeated id must not become a second independent sample.
+    def test_duplicate_agent_ids_are_counted_once(self):
+        _write_agent(self.sub, "dup1", _prompt(GOLDEN_INPUTS),
+                     [_assistant(_block(_result(10.0)), "r", "end_turn")])
+        out = collect_replays(self.sub, self.gold, agent_ids=["dup1", "dup1"])
+        self.assertEqual(len(out["deals"]["deal-a"]["replays"]), 1)
+        self.assertEqual(out["deals"]["deal-a"]["agent_ids"], ["dup1"])
+        self.assertEqual(out["duplicate_agent_ids"], ["dup1"])
+
+    # F3 -- two goldens sharing a deal_id silently dropped one deal from the gate.
+    def test_duplicate_golden_deal_id_raises(self):
+        (self.gold / "deal-a-copy.json").write_text(
+            json.dumps({"deal_id": "deal-a", "inputs": {"address": "3 Third Ave"},
+                        "confidence": "HIGH", "diff_policy": {"tolerance_combined_pts": 5.0},
+                        "golden": {"combined": 10.0}}), encoding="utf-8")
+        with self.assertRaises(ValueError) as ctx:
+            collect_replays(self.sub, self.gold)
+        self.assertIn("deal-a", str(ctx.exception))
+
+    # F4 -- one malformed transcript must degrade ONE replay, not kill the run.
+    def test_malformed_entry_shape_fails_only_that_replay(self):
+        good = _prompt(GOLDEN_INPUTS)
+        _write_agent(self.sub, "good1", good,
+                     [_assistant(_block(_result(10.0)), "r", "end_turn")])
+        # content list holding a bare string instead of a block dict
+        bad = {"type": "assistant", "requestId": "r",
+               "message": {"role": "assistant", "content": ["oops"], "stop_reason": "end_turn"}}
+        _write_agent(self.sub, "bad1", good, [bad])
+        out = collect_replays(self.sub, self.gold)
+        deal = out["deals"]["deal-a"]
+        self.assertEqual([r["combined"] for r in deal["replays"]], [10.0])
+        self.assertEqual([f["agent_id"] for f in deal["failures"]], ["bad1"])
+
+    # F5 -- entries without requestId belong to ONE response, not one each.
+    def test_response_split_across_entries_without_request_id_still_parses(self):
+        split = [
+            {"type": "assistant", "message": {"role": "assistant", "stop_reason": None,
+             "content": [{"type": "text", "text": "Scores:" + NL + _block(_result(12.0))}]}},
+            {"type": "assistant", "message": {"role": "assistant", "stop_reason": None,
+             "content": [{"type": "text", "text": NL + "Done."}]}},
+        ]
+        path = _write_agent(self.sub, "nosplit", _prompt(GOLDEN_INPUTS), split)
+        t = parse_transcript(path)
+        self.assertEqual(t["status"], "ok", t["error"])
+        self.assertEqual(t["completion_count"], 1)
+        self.assertEqual(t["result"]["combined"], 12.0)
+
+    # F6 -- flagging must not erase the transcript's own diagnosis.
+    def test_orchestrator_flag_preserves_the_original_error(self):
+        _write_agent(self.sub, "halfdone", _prompt(GOLDEN_INPUTS),
+                     [_assistant("thinking", "r", "tool_use", kind="tool_use")])
+        deal = collect_replays(self.sub, self.gold, failed_agent_ids=["halfdone"])["deals"]["deal-a"]
+        err = deal["failures"][0]["error"]
+        self.assertIn("orchestrator-flagged", err)
+        self.assertIn("mid-tool-call", err)
 
 
 class TestMainExitCodes(unittest.TestCase):

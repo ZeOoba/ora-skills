@@ -3,7 +3,9 @@
 Replaces the manual step where the orchestrating session copied each replay's
 scores into a scratch driver script. Reads the Agent tool's on-disk transcripts
 (`<project>/<session-id>/subagents/agent-<id>.jsonl` + `.meta.json`), extracts
-each replay's final fenced json block under SKILL.md Step 2's rule, and
+the SINGLE fenced json block each replay is required to end with -- zero or two
+or more is a FAILED replay, never a guess at which was meant (SKILL.md Step 2,
+and the prompt contract at SKILL.md's "EXACTLY ONE fenced json block") -- and
 attributes every replay to its golden deal by the FROZEN FACTS block in its own
 prompt -- never by description or arrival order.
 
@@ -25,8 +27,12 @@ Exit codes:
     4 = every golden deal has >=1 parsed replay, but >=1 replay failed (degraded n;
         reported per deal). Snapshot is still recorded with --record.
     3 = a golden deal has no result or could not be aggregated, a requested
-        agent-id has no transcript, or a requested agent could not be attributed.
+        agent-id has no transcript, a requested agent could not be attributed, or a
+        --failed-agent-ids value matched no parsed transcript (the flag did not land).
         Nothing is recorded; scheduled-task state must not advance.
+
+Repeated --agent-ids values are de-duplicated and reported as `duplicate_agent_ids`:
+parsing one transcript twice would count it as two independent samples and inflate n.
 """
 
 import argparse
@@ -82,18 +88,26 @@ def _content(entry):
     return (entry.get("message") or {}).get("content")
 
 
+def _blocks_of(entry):
+    """Content blocks of `entry` that are dicts. A non-dict item (a bare string in a
+    content list -- seen in older/variant transcript shapes) is skipped rather than
+    dereferenced: `c.get` on a str raised AttributeError out of parse_transcript and
+    killed the whole run instead of failing one replay (PR #65 review, F4)."""
+    content = _content(entry)
+    if not isinstance(content, list):
+        return []
+    return [c for c in content if isinstance(c, dict)]
+
+
 def _text_of(entry):
     content = _content(entry)
     if isinstance(content, str):
         return content
-    if isinstance(content, list):
-        return "".join(c.get("text", "") for c in content if c.get("type") == "text")
-    return ""
+    return "".join(c.get("text") or "" for c in _blocks_of(entry) if c.get("type") == "text")
 
 
 def _is_tool_result(entry):
-    content = _content(entry)
-    return isinstance(content, list) and any(c.get("type") == "tool_result" for c in content)
+    return any(c.get("type") == "tool_result" for c in _blocks_of(entry))
 
 
 def _requests(entries):
@@ -104,10 +118,17 @@ def _requests(entries):
     replay ends in a text entry with stop_reason null), so completion is inferred
     from structure rather than the stop_reason field.
     """
-    reqs, by_id = [], {}
+    reqs, by_id, run = [], {}, 0
     for i, e in enumerate(entries):
+        if e.get("type") != "assistant":
+            # A non-assistant entry ends the current un-keyed run of assistant entries.
+            run += 1
         if e.get("type") == "assistant":
-            rid = e.get("requestId") or f"_entry{i}"
+            # No requestId: group CONSECUTIVE assistant entries as one response. Keying each
+            # entry separately split one response's text, so a final answer whose json block
+            # sat in an earlier entry parsed as 0 blocks and the replay was scored failed
+            # (PR #65 review, F5).
+            rid = e.get("requestId") or f"_run{run}"
             if rid not in by_id:
                 by_id[rid] = {"text": "", "tool_use": False, "stops": set(), "last": i}
                 reqs.append(by_id[rid])
@@ -150,6 +171,17 @@ def parse_transcript(path):
         out["error"] = f"unreadable transcript: {exc}"
         return out
 
+    try:
+        return _parse_entries(entries, out)
+    except Exception as exc:  # noqa: BLE001 -- one odd transcript fails ONE replay
+        # Before this, any unexpected entry shape raised out of collect_replays and
+        # aborted an 18-replay run with a traceback -- neither of the documented exit
+        # codes, and the 17 good replays were lost too (PR #65 review, F4).
+        out["error"] = f"malformed transcript ({type(exc).__name__}: {exc})"
+        return out
+
+
+def _parse_entries(entries, out):
     out["inputs"] = _frozen_inputs(next((_text_of(e) for e in entries if e.get("type") == "user"), None))
 
     reqs = _requests(entries)
@@ -202,21 +234,40 @@ def collect_replays(subagents_dir, golden_dir, agent_ids=None, failed_agent_ids=
         ValueError: if two golden files carry identical inputs (attribution would be ambiguous).
     """
     subagents_dir, golden_dir = Path(subagents_dir), Path(golden_dir)
-    failed_agent_ids = set(failed_agent_ids or ())
+    flagged_order = list(dict.fromkeys(failed_agent_ids or ()))
+    failed_agent_ids = set(flagged_order)
     goldens = {}
     for g in sorted(golden_dir.glob("*.json")):
         data = json.loads(g.read_text(encoding="utf-8"))
         deal_id = data.get("deal_id") or g.stem
+        # deals is keyed by deal_id, so a second file carrying the same id silently
+        # overwrote the first and dropped a whole deal out of the gate (PR #65 review, F3).
+        if deal_id in goldens:
+            raise ValueError(
+                f"golden deal_id {deal_id!r} appears in two files "
+                f"({goldens[deal_id][1].name} and {g.name}) -- one would silently "
+                "replace the other and its deal would vanish from the run")
         for other, (inputs, _) in goldens.items():
             if inputs == data.get("inputs"):
                 raise ValueError(f"golden deals {other!r} and {deal_id!r} have identical inputs")
         goldens[deal_id] = (data.get("inputs"), g)
 
+    duplicate_agent_ids = []
     if agent_ids is None:
         paths, missing = sorted(subagents_dir.glob("agent-*.jsonl")), []
     else:
-        paths, missing = [], []
+        # De-duplicate: a hand-pasted id list that repeats an id parsed the same transcript
+        # twice and counted it as two independent samples, inflating n (PR #65 review, F2).
+        seen_ids, unique_ids = set(), []
         for aid in agent_ids:
+            if aid in seen_ids:
+                if aid not in duplicate_agent_ids:
+                    duplicate_agent_ids.append(aid)
+                continue
+            seen_ids.add(aid)
+            unique_ids.append(aid)
+        paths, missing = [], []
+        for aid in unique_ids:
             p = subagents_dir / f"agent-{aid}.jsonl"
             if p.exists():
                 paths.append(p)
@@ -225,9 +276,10 @@ def collect_replays(subagents_dir, golden_dir, agent_ids=None, failed_agent_ids=
 
     deals = {d: {"golden_path": str(g), "replays": [], "failures": [], "agent_ids": []}
              for d, (_, g) in goldens.items()}
-    unattributed = []
+    unattributed, seen_agent_ids = [], set()
     for p in paths:
         t = parse_transcript(p)
+        seen_agent_ids.add(t["agent_id"])
         deal = next((d for d, (inputs, _) in goldens.items()
                      if t["inputs"] is not None and inputs == t["inputs"]), None)
         if deal is None:
@@ -237,15 +289,27 @@ def collect_replays(subagents_dir, golden_dir, agent_ids=None, failed_agent_ids=
         bucket = deals[deal]
         bucket["agent_ids"].append(t["agent_id"])
         if t["agent_id"] in failed_agent_ids:
+            prior = t["error"]
             t["status"] = "failed"
             t["error"] = ("orchestrator-flagged: completion notifications differed "
                           "(SKILL.md Step 1.5)")
+            # Keep the transcript's own diagnosis: overwriting it hid a DIFFERENT defect
+            # (e.g. an agent that never finished its tool call) behind the flag, and the
+            # transcript may be gone before anyone notices (PR #65 review, F6).
+            if prior:
+                t["error"] += f"; transcript also failed: {prior}"
         if t["status"] == "ok":
             bucket["replays"].append(t["result"])
         else:
             bucket["failures"].append({"agent_id": t["agent_id"], "description": t["description"],
                                        "completion_count": t["completion_count"], "error": t["error"]})
-    return {"deals": deals, "unattributed": unattributed, "missing_agent_ids": missing}
+    # A flagged id that matched no parsed transcript is a SILENT no-op otherwise: the
+    # replay the orchestrator rejected stays in the sample and the run still exits CLEAN
+    # (PR #65 review, F1). Report it so main can refuse the run.
+    unknown_failed = [a for a in flagged_order if a not in seen_agent_ids]
+    return {"deals": deals, "unattributed": unattributed, "missing_agent_ids": missing,
+            "duplicate_agent_ids": duplicate_agent_ids,
+            "unknown_failed_agent_ids": unknown_failed}
 
 
 def main(argv=None):
@@ -268,8 +332,13 @@ def main(argv=None):
 
     collected = collect_replays(args.subagents_dir, args.golden_dir, args.agent_ids, args.failed_agent_ids)
     report = {"deals": {}, "unattributed": collected["unattributed"],
-              "missing_agent_ids": collected["missing_agent_ids"]}
+              "missing_agent_ids": collected["missing_agent_ids"],
+              "duplicate_agent_ids": collected["duplicate_agent_ids"],
+              "unknown_failed_agent_ids": collected["unknown_failed_agent_ids"]}
     unusable = bool(collected["missing_agent_ids"]) or not collected["deals"]
+    # A --failed-agent-ids value nothing matched means the orchestrator's Step 1.5 flag
+    # did not land. Refuse rather than record a mean that may include the rejected replay.
+    unusable = unusable or bool(collected["unknown_failed_agent_ids"])
     if args.agent_ids is not None and collected["unattributed"]:
         unusable = True
     degraded = False
