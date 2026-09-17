@@ -28,10 +28,18 @@ path already uses (`pending_reimport.classify_shared_copy`):
     REPO-AHEAD    cache is an older point on HEAD's history   -> normal; reimport fixes it
     CACHE-AHEAD   cache content was never committed anywhere  -> REPO-FIRST VIOLATION
     DIVERGENT     cache matches a commit off HEAD's ancestry  -> manual reconcile
+    MAIN-BEHIND-ORIGIN  cache matches origin/main history that local main has not merged
+                  yet (installed from a PR already merged on GitHub)  -> routine; run
+                  tools/catch_up_main.py. Not a violation, never ledgered or rescued.
     REPO-MISSING  cache holds a file the repo doesn't ship at -> REPO-FIRST VIOLATION
                   all (created platform-side, e.g. create-skill    (same remedy class
                   adding a new scripts/ file, never committed)      as CACHE-AHEAD)
     UNKNOWN       git unavailable / file untracked -- NEVER auto-actioned (see BAD_VERDICTS)
+
+A full sweep first runs a best-effort `git fetch origin main` so a PR merged on GitHub
+is recognized as MAIN-BEHIND-ORIGIN rather than DIVERGENT/CACHE-AHEAD. That updates
+remote-tracking refs only -- never the working tree or local main -- and any fetch
+failure is ignored (the sweep then classifies against whatever origin/main it has).
 
 On a BAD_VERDICTS finding it (a) prints a loud warning and (b) RESCUES the cache
 copy to `_staging/repo-first-rescue/<skill>/` so the about-to-be-clobbered content
@@ -48,6 +56,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import os
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -60,6 +69,8 @@ from pending_reimport import (  # noqa: E402
     CACHE_ROOT,
     REPO,
     _file_history_hashes,
+    _git_blob_bytes,
+    _git_text,
     _isdir_long,
     _isfile_long,
     _normalized_hash_bytes,
@@ -72,6 +83,12 @@ from pending_reimport import (  # noqa: E402
 )
 
 RESCUE_DIR = REPO / '_staging' / 'repo-first-rescue'
+
+ORIGIN_MAIN = 'origin/main'
+MAIN_BEHIND = 'MAIN-BEHIND-ORIGIN'
+# Unattended runs (daily guard, hooks) must fail fast on expired credentials rather
+# than stall on a Git Credential Manager prompt until the timeout.
+NONINTERACTIVE_GIT_ENV = {'GIT_TERMINAL_PROMPT': '0', 'GCM_INTERACTIVE': 'never'}
 
 # Verdicts this module treats as an actionable REPO-FIRST violation: rescued, printed
 # loudly, and (full sweep only) ledgered. UNKNOWN is deliberately excluded -- it means
@@ -132,6 +149,44 @@ def _hash_file(path: Path):
         return _normalized_hash_bytes(_read_bytes_long(path).rstrip(b'\x00'))
     except OSError:
         return None
+
+
+def _origin_main_hashes(repo_root: Path, relpath: str) -> set:
+    """EOL-normalized hashes of relpath at every commit on origin/main that local
+    main has NOT merged yet (HEAD..origin/main). Deliberately not origin/main's whole
+    ancestry: a blob local main already contains -- e.g. a file a merged PR later
+    deleted, still sitting stale in the cache -- must keep its real verdict
+    (REPO-MISSING), not be excused as lag that catch_up_main.py could never clear
+    (review finding 2026-09-17). Empty set when there is no origin/main ref or
+    nothing unmerged -- callers then keep their original verdict."""
+    revs = _git_text(repo_root, 'rev-list', f'HEAD..{ORIGIN_MAIN}', '--', relpath)
+    out = set()
+    for rev in (revs or '').split():
+        data = _git_blob_bytes(repo_root, rev, relpath)
+        if data is not None:
+            out.add(_normalized_hash_bytes(data))
+    return out
+
+
+def _behind_origin(verdict: str, cache_h, repo_root: Path, relpath: str) -> str:
+    """Relabel DIVERGENT / REPO-MISSING as MAIN-BEHIND-ORIGIN only when the cache
+    copy matches a commit in HEAD..origin/main -- content merged on GitHub that local
+    main has not merged yet, which catch_up_main.py clears. A cache copy from an
+    unmerged branch, or matching history local main already contains, keeps its
+    verdict."""
+    if verdict in ('DIVERGENT', 'REPO-MISSING') and cache_h is not None             and cache_h in _origin_main_hashes(repo_root, relpath):
+        return MAIN_BEHIND
+    return verdict
+
+
+def _fetch_origin_main(repo_root: Path) -> None:
+    """Best-effort, bounded; failures are deliberately ignored (see module docstring)."""
+    try:
+        subprocess.run(['git', '-C', str(repo_root), 'fetch', '--quiet', 'origin', 'main'],
+                       capture_output=True, timeout=60,
+                       env={**os.environ, **NONINTERACTIVE_GIT_ENV})
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
 
 def _staged_skills(repo_root: Path = REPO) -> list[str]:
@@ -224,7 +279,8 @@ def classify_skill(skill: str, repo_root: Path = REPO, cache_root: Path = CACHE_
     # unverified state to the skill's headline verdict here would drive an automatic
     # ledger write and a rescue-copy side effect from a state where direction could
     # not even be determined -- see BAD_VERDICTS.
-    order = {'IN-SYNC': 0, 'REPO-AHEAD': 1, 'UNKNOWN': 2, 'CACHE-AHEAD': 3, 'DIVERGENT': 4}
+    order = {'IN-SYNC': 0, 'REPO-AHEAD': 1, MAIN_BEHIND: 1, 'UNKNOWN': 2, 'CACHE-AHEAD': 3,
+             'DIVERGENT': 4}
     order['REPO-MISSING'] = order['CACHE-AHEAD']
     per_file, worst = [], 'IN-SYNC'
     repo_rels = _packaged_rel_paths(skill, repo_root)
@@ -249,7 +305,8 @@ def classify_skill(skill: str, repo_root: Path = REPO, cache_root: Path = CACHE_
             verdict = 'IN-SYNC'
         else:
             anc, allh = _file_history_hashes(repo_root, f'{skill}/{rel}')
-            verdict = classify_shared_copy(cache_h, repo_h, anc, allh)
+            verdict = _behind_origin(classify_shared_copy(cache_h, repo_h, anc, allh),
+                                     cache_h, repo_root, f'{skill}/{rel}')
         per_file.append((rel, verdict))
         if order.get(verdict, 2) > order.get(worst, 0):
             worst = verdict
@@ -265,7 +322,8 @@ def classify_skill(skill: str, repo_root: Path = REPO, cache_root: Path = CACHE_
             # correct label here regardless -- for this tool's purpose (hunting
             # repo-first violations) a file the repo doesn't ship AT ALL is the same
             # class of problem as CACHE-AHEAD, so it carries the same remedy.
-            verdict = classify_shared_copy(cache_h, None, anc, allh)
+            verdict = _behind_origin(classify_shared_copy(cache_h, None, anc, allh),
+                                     cache_h, repo_root, f'{skill}/{rel}')
         per_file.append((rel, verdict))
         if order.get(verdict, 2) > order.get(worst, 0):
             worst = verdict
@@ -387,6 +445,8 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
               f'clean result)', file=sys.stderr)
         return 0
 
+    if not check_staged:                  # pre-commit path stays offline and fast
+        _fetch_origin_main(repo_root)
     skills = _staged_skills(repo_root) if check_staged else all_skill_dirs(repo_root)
     all_results = _classify_all(skills, repo_root, cache_root)
     findings = [(s, v, pf) for s, v, pf in all_results if v in BAD_VERDICTS]
@@ -445,6 +505,12 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
                   f'-> {ledger_path.name}: {", ".join(cleared)}')
         elif findings:
             print(f'repo_first_check: {len(findings)} skill(s) recorded -> {ledger_path}')
+
+    behind = sorted(s for s, v, _ in all_results if v == MAIN_BEHIND)
+    if behind and not quiet:
+        print(f'repo_first_check: {len(behind)} skill(s) {MAIN_BEHIND} ({", ".join(behind)}) '
+              f'-- installed from PRs already merged to origin/main that local main has not '
+              f'merged yet. Routine, not a violation: run tools/catch_up_main.py.')
 
     if not findings and not quiet:
         print('repo_first_check: no cache-ahead skills (repo leads the platform)')
