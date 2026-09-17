@@ -107,11 +107,17 @@ def _default_branch_ref(repo_path):
 
 
 def _worktree_details(repo_path):
-    """Branch + merge state for a linked worktree. `merged` is an ancestor
-    check against origin's default branch, so a squash-merged PR branch reads
-    False -- `upstream_gone` (tracking branch deleted on the remote, as of the
-    last fetch --prune) is the signal for that case. None = could not tell."""
+    """Branch + merge state for a linked worktree. None = could not tell.
+
+    `merged` means only "HEAD has no commits beyond origin's default branch" --
+    a freshly created worktree is merged=True, so read it with `dirty`. A
+    squash-merged PR branch reads merged=False; `upstream_gone` (tracking
+    branch deleted on the remote, as of the last fetch --prune) is consistent
+    with that but also with a branch deleted unmerged -- confirm the PR state
+    before treating either as finished."""
     branch = _git_out(repo_path, "symbolic-ref", "-q", "--short", "HEAD")
+    status = _git_out(repo_path, "status", "--porcelain=v1")
+    dirty = None if status is None else bool(status)
     default_ref = _default_branch_ref(repo_path)
     merged = None
     if default_ref:
@@ -129,6 +135,7 @@ def _worktree_details(repo_path):
             upstream_gone = (state == "[gone]") if upstream else None
     return {
         "branch": branch,
+        "dirty": dirty,
         "merged": merged,
         "merged_against": default_ref,
         "upstream_gone": upstream_gone,
@@ -304,7 +311,8 @@ def main():
                     line = f"    [{c['role']}] {c['path']}"
                     if c["role"] == "worktree":
                         merged = {True: "yes", False: "no", None: "unknown"}[c["merged"]]
-                        line += (f"  branch={c['branch'] or '(detached)'}"
+                        dirty = {True: "yes", False: "no", None: "unknown"}[c["dirty"]]
+                        line += (f"  branch={c['branch'] or '(detached)'}  dirty={dirty}"
                                  f"  merged={merged} (vs {c['merged_against'] or '?'})")
                         if c["upstream_gone"]:
                             line += "  upstream=gone"
