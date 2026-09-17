@@ -14,6 +14,7 @@ or more times to scan a different/additional set instead.
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -50,6 +51,18 @@ def _git_remote_origin(repo_path):
     return proc.stdout.strip()
 
 
+def _is_linked_worktree(repo_path):
+    """True for a `git worktree add` checkout: its private git dir
+    (.git/worktrees/<name>) differs from the shared common dir. A submodule
+    also has a `.git` file, but its git dir IS its common dir."""
+    out = _git_out(repo_path, "rev-parse", "--path-format=absolute",
+                   "--git-dir", "--git-common-dir")
+    if not out:
+        return False
+    lines = out.splitlines()
+    return len(lines) == 2 and _path_key(lines[0]) != _path_key(lines[1])
+
+
 def _normalize_remote(url):
     if not url:
         return url
@@ -59,14 +72,95 @@ def _normalize_remote(url):
     return u
 
 
-def discover_clones_by_remote(root=CLONE_ROOT):
+def _path_key(path):
+    return os.path.normcase(os.path.normpath(os.path.abspath(path)))
+
+
+def _git_out(repo_path, *args):
+    proc = subprocess.run(
+        ["git", "-C", str(repo_path), *args],
+        capture_output=True, text=True, check=False,
+    )
+    return proc.stdout.strip() if proc.returncode == 0 else None
+
+
+def _main_worktree(repo_path):
+    """First entry of `git worktree list --porcelain` is always the main
+    worktree (the checkout that owns the shared .git directory)."""
+    out = _git_out(repo_path, "worktree", "list", "--porcelain")
+    if not out:
+        return None
+    for line in out.splitlines():
+        if line.startswith("worktree "):
+            return line[len("worktree "):]
+    return None
+
+
+def _default_branch_ref(repo_path):
+    ref = _git_out(repo_path, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD")
+    if ref:
+        return ref
+    for candidate in ("origin/main", "origin/master"):
+        if _git_out(repo_path, "rev-parse", "-q", "--verify", candidate) is not None:
+            return candidate
+    return None
+
+
+def _worktree_details(repo_path):
+    """Branch + merge state for a linked worktree. None = could not tell.
+
+    `merged` means only "HEAD has no commits beyond origin's default branch" --
+    a freshly created worktree is merged=True, so read it with `dirty`. A
+    squash-merged PR branch reads merged=False; `upstream_gone` (tracking
+    branch deleted on the remote, as of the last fetch --prune) is consistent
+    with that but also with a branch deleted unmerged -- confirm the PR state
+    before treating either as finished."""
+    branch = _git_out(repo_path, "symbolic-ref", "-q", "--short", "HEAD")
+    status = _git_out(repo_path, "status", "--porcelain=v1")
+    dirty = None if status is None else bool(status)
+    default_ref = _default_branch_ref(repo_path)
+    merged = None
+    if default_ref:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_path), "merge-base", "--is-ancestor", "HEAD", default_ref],
+            capture_output=True, text=True, check=False,
+        )
+        merged = {0: True, 1: False}.get(proc.returncode)
+    upstream_gone = None
+    if branch:
+        track = _git_out(repo_path, "for-each-ref", "--format=%(upstream)|%(upstream:track)",
+                         f"refs/heads/{branch}")
+        if track is not None:
+            upstream, _, state = track.partition("|")
+            upstream_gone = (state == "[gone]") if upstream else None
+    return {
+        "branch": branch,
+        "dirty": dirty,
+        "merged": merged,
+        "merged_against": default_ref,
+        "upstream_gone": upstream_gone,
+        "main_worktree": _main_worktree(repo_path),
+    }
+
+
+def discover_clones_by_remote(root=CLONE_ROOT, roster=None):
     """Enumerate every direct child of `root` holding a `.git`, group by
-    normalized `origin` remote. Two or more clones sharing one remote is the
-    signal -- everything past the first is a candidate stray. Does not
-    recurse past one level (repo internals are not walked)."""
+    normalized `origin` remote, and classify each member of a group sharing
+    one remote:
+
+    - `managed-build-root` -- path matches MANAGED_BUILD_ROOT_HINTS.
+    - `worktree` -- a registered linked worktree (`.git` FILE whose git dir
+      differs from the common dir); reported with branch + merge state.
+    - `primary` -- first match of: a full clone on `roster` (DEFAULT_REPOS),
+      the main worktree owning a linked worktree in the group, else the first
+      full clone found.
+    - `stray` -- any other full clone (an independent re-clone).
+
+    Does not recurse past one level (repo internals are not walked)."""
     root_path = Path(root)
     if not root_path.is_dir():
         return {"error": f"not a directory: {root}"}
+    roster_keys = {_path_key(p) for p in (DEFAULT_REPOS if roster is None else roster)}
 
     by_remote = {}
     unreachable = []
@@ -86,16 +180,27 @@ def discover_clones_by_remote(root=CLONE_ROOT):
     for remote, paths in sorted(by_remote.items()):
         if len(paths) < 2:
             continue
-        classified = []
-        for i, p in enumerate(paths):
-            path_lower = p.lower()
-            if any(hint in path_lower for hint in MANAGED_BUILD_ROOT_HINTS):
-                role = "managed-build-root"
-            elif i == 0:
-                role = "primary"
-            else:
-                role = "stray"
-            classified.append({"path": p, "role": role})
+        entries = []
+        for p in paths:
+            entry = {"path": p}
+            if any(hint in p.lower() for hint in MANAGED_BUILD_ROOT_HINTS):
+                entry["role"] = "managed-build-root"
+            elif (Path(p) / ".git").is_file() and _is_linked_worktree(p):
+                entry["role"] = "worktree"
+                entry.update(_worktree_details(p))
+            entries.append(entry)
+
+        full_clones = [e for e in entries if "role" not in e]
+        main_keys = {_path_key(e["main_worktree"]) for e in entries
+                     if e.get("role") == "worktree" and e.get("main_worktree")}
+        primary = (
+            next((e for e in full_clones if _path_key(e["path"]) in roster_keys), None)
+            or next((e for e in full_clones if _path_key(e["path"]) in main_keys), None)
+            or (full_clones[0] if full_clones else None)
+        )
+        for e in full_clones:
+            e["role"] = "primary" if e is primary else "stray"
+        classified = [{"path": e.pop("path"), "role": e.pop("role"), **e} for e in entries]
         groups.append({"remote": remote, "clones": classified})
 
     return {
@@ -203,7 +308,15 @@ def main():
             for g in groups:
                 print(f"  remote: {g['remote']}")
                 for c in g["clones"]:
-                    print(f"    [{c['role']}] {c['path']}")
+                    line = f"    [{c['role']}] {c['path']}"
+                    if c["role"] == "worktree":
+                        merged = {True: "yes", False: "no", None: "unknown"}[c["merged"]]
+                        dirty = {True: "yes", False: "no", None: "unknown"}[c["dirty"]]
+                        line += (f"  branch={c['branch'] or '(detached)'}  dirty={dirty}"
+                                 f"  merged={merged} (vs {c['merged_against'] or '?'})")
+                        if c["upstream_gone"]:
+                            line += "  upstream=gone"
+                    print(line)
             if clone_discovery["unreachable"]:
                 print(f"  unreachable (no readable origin remote): {clone_discovery['unreachable']}")
 
