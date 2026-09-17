@@ -388,6 +388,59 @@ class TestReviewFindings(unittest.TestCase):
         self.assertEqual(t["completion_count"], 1)
         self.assertEqual(t["result"]["combined"], 12.0)
 
+    # R1 -- id de-duplication must survive a case-differing repeat: Path.exists() is
+    # case-insensitive on Windows, so "A1B2C3" resolves to agent-a1b2c3.jsonl and the
+    # same transcript was counted twice with duplicate_agent_ids empty.
+    def test_case_differing_duplicate_agent_id_is_still_one_sample(self):
+        _write_agent(self.sub, "a1b2c3", _prompt(GOLDEN_INPUTS),
+                     [_assistant(_block(_result(14.0)), "r", "end_turn")])
+        out = collect_replays(self.sub, self.gold, agent_ids=["a1b2c3", "A1B2C3"])
+        self.assertEqual([r["combined"] for r in out["deals"]["deal-a"]["replays"]], [14.0])
+        self.assertEqual(out["duplicate_agent_ids"], ["A1B2C3"])
+
+    # R2 -- a duplicated id means one real replay is missing from the requested list, so
+    # the run is degraded, not clean.
+    def test_duplicate_agent_id_degrades_the_run(self):
+        _write_agent(self.sub, "a1", _prompt(GOLDEN_INPUTS),
+                     [_assistant(_block(_result(10.0)), "r", "end_turn")])
+        _write_agent(self.sub, "b1", _prompt(OTHER_INPUTS),
+                     [_assistant(_block(_result(10.0)), "r", "end_turn")])
+        import contextlib
+        import io as _io
+        from parse_replays import main
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = main(["--subagents-dir", str(self.sub), "--golden-dir", str(self.gold),
+                         "--agent-ids", "a1", "a1", "b1"])
+        self.assertEqual(code, 4)
+        self.assertEqual(json.loads(buf.getvalue())["duplicate_agent_ids"], ["a1"])
+
+    # R3 -- a stray non-dict content block must be SKIPPED (the F4 claim), not merely
+    # caught: the tool_use scan still dereferenced raw list items.
+    def test_stray_string_content_block_is_skipped_and_the_replay_parses(self):
+        entry = {"type": "assistant", "requestId": "r",
+                 "message": {"role": "assistant", "stop_reason": "end_turn",
+                             "content": ["oops", {"type": "text", "text": _block(_result(13.0))}]}}
+        path = _write_agent(self.sub, "stray", _prompt(GOLDEN_INPUTS), [entry])
+        t = parse_transcript(path)
+        self.assertEqual(t["status"], "ok", t["error"])
+        self.assertEqual(t["result"]["combined"], 13.0)
+
+    # R4 -- a golden-set error must exit on the documented contract, not a traceback.
+    def test_golden_set_error_exits_unusable_with_json(self):
+        (self.gold / "deal-a-copy.json").write_text(
+            json.dumps({"deal_id": "deal-a", "inputs": {"address": "3 Third Ave"},
+                        "confidence": "HIGH", "diff_policy": {"tolerance_combined_pts": 5.0},
+                        "golden": {"combined": 10.0}}), encoding="utf-8")
+        import contextlib
+        import io as _io
+        from parse_replays import main
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = main(["--subagents-dir", str(self.sub), "--golden-dir", str(self.gold)])
+        self.assertEqual(code, 3)
+        self.assertIn("deal-a", json.loads(buf.getvalue())["error"])
+
     # F6 -- flagging must not erase the transcript's own diagnosis.
     def test_orchestrator_flag_preserves_the_original_error(self):
         _write_agent(self.sub, "halfdone", _prompt(GOLDEN_INPUTS),

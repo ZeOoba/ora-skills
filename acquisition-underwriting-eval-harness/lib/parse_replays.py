@@ -31,12 +31,19 @@ Exit codes:
         --failed-agent-ids value matched no parsed transcript (the flag did not land).
         Nothing is recorded; scheduled-task state must not advance.
 
-Repeated --agent-ids values are de-duplicated and reported as `duplicate_agent_ids`:
-parsing one transcript twice would count it as two independent samples and inflate n.
+Repeated --agent-ids values are de-duplicated (by normcased path, so a case-differing
+repeat counts once on Windows) and reported as `duplicate_agent_ids`: parsing one
+transcript twice would count it as two independent samples and inflate n. A repeat also
+makes the run DEGRADED (exit 4) -- an 18-id list with a duplicate is one real replay
+short, so the deals' n is lower than intended even when every deal parsed.
+
+A golden-set defect (duplicate deal_id, identical inputs, unreadable dir) exits 3 with a
+JSON `error`, never a traceback: a caller reads the exit code and the JSON, not stderr.
 """
 
 import argparse
 import json
+import os
 import re
 import sys
 from numbers import Real
@@ -135,8 +142,7 @@ def _requests(entries):
             r = by_id[rid]
             r["text"] += _text_of(e)
             r["last"] = i
-            content = _content(e)
-            if isinstance(content, list) and any(c.get("type") == "tool_use" for c in content):
+            if any(c.get("type") == "tool_use" for c in _blocks_of(e)):
                 r["tool_use"] = True
             stop = (e.get("message") or {}).get("stop_reason")
             if stop:
@@ -258,17 +264,18 @@ def collect_replays(subagents_dir, golden_dir, agent_ids=None, failed_agent_ids=
     else:
         # De-duplicate: a hand-pasted id list that repeats an id parsed the same transcript
         # twice and counted it as two independent samples, inflating n (PR #65 review, F2).
-        seen_ids, unique_ids = set(), []
+        # Key on the NORMCASED PATH, not the id string: Path.exists() is case-insensitive
+        # on Windows, so "A1B2C3" resolves to agent-a1b2c3.jsonl and a case-differing repeat
+        # slipped through an id-keyed check and was counted twice (REFUTE pass, R1).
+        seen_keys, paths, missing = set(), [], []
         for aid in agent_ids:
-            if aid in seen_ids:
+            p = subagents_dir / f"agent-{aid}.jsonl"
+            key = os.path.normcase(str(p))
+            if key in seen_keys:
                 if aid not in duplicate_agent_ids:
                     duplicate_agent_ids.append(aid)
                 continue
-            seen_ids.add(aid)
-            unique_ids.append(aid)
-        paths, missing = [], []
-        for aid in unique_ids:
-            p = subagents_dir / f"agent-{aid}.jsonl"
+            seen_keys.add(key)
             if p.exists():
                 paths.append(p)
             else:
@@ -306,7 +313,10 @@ def collect_replays(subagents_dir, golden_dir, agent_ids=None, failed_agent_ids=
     # A flagged id that matched no parsed transcript is a SILENT no-op otherwise: the
     # replay the orchestrator rejected stays in the sample and the run still exits CLEAN
     # (PR #65 review, F1). Report it so main can refuse the run.
-    unknown_failed = [a for a in flagged_order if a not in seen_agent_ids]
+    # Compare case-insensitively for the same reason the de-dup key is normcased (R1):
+    # a flagged id differing only in case names the same transcript on this filesystem.
+    seen_folded = {os.path.normcase(a) for a in seen_agent_ids}
+    unknown_failed = [a for a in flagged_order if os.path.normcase(a) not in seen_folded]
     return {"deals": deals, "unattributed": unattributed, "missing_agent_ids": missing,
             "duplicate_agent_ids": duplicate_agent_ids,
             "unknown_failed_agent_ids": unknown_failed}
@@ -330,7 +340,16 @@ def main(argv=None):
     from diff_verdict import diff_verdict
     from record_run import record_run
 
-    collected = collect_replays(args.subagents_dir, args.golden_dir, args.agent_ids, args.failed_agent_ids)
+    try:
+        collected = collect_replays(args.subagents_dir, args.golden_dir, args.agent_ids,
+                                    args.failed_agent_ids)
+    except (ValueError, OSError) as exc:
+        # A golden-set defect (duplicate deal_id / identical inputs) or an unreadable
+        # golden dir used to escape as a traceback: rc=1 with no JSON, outside the
+        # documented 0/3/4 contract a caller reads (REFUTE pass, R5).
+        report = {"error": f"golden set unusable: {exc}", "exit_code": EXIT_UNUSABLE}
+        print(json.dumps(report, indent=2, default=str))
+        return EXIT_UNUSABLE
     report = {"deals": {}, "unattributed": collected["unattributed"],
               "missing_agent_ids": collected["missing_agent_ids"],
               "duplicate_agent_ids": collected["duplicate_agent_ids"],
@@ -341,7 +360,10 @@ def main(argv=None):
     unusable = unusable or bool(collected["unknown_failed_agent_ids"])
     if args.agent_ids is not None and collected["unattributed"]:
         unusable = True
-    degraded = False
+    # A repeated id means the requested list is one real replay short, so the run is
+    # degraded even when every deal parsed: n is lower than the operator intended
+    # (REFUTE pass, R2). Reported, snapshot still recorded -- that is what exit 4 means.
+    degraded = bool(collected["duplicate_agent_ids"])
     results = []
     for deal_id, bucket in collected["deals"].items():
         entry = {"n": len(bucket["replays"]), "failures": bucket["failures"], "agent_ids": bucket["agent_ids"]}
