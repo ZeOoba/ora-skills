@@ -164,11 +164,19 @@ class BuildRoundTrip(unittest.TestCase):
 
 class RetiredBundleArchived(unittest.TestCase):
     """2026-08-05 retirement: the live manifest is gone, the archived copy remains
-    as an audit trail, and every former member still exists at the repo root."""
+    as an audit trail, and every former member either still exists at the repo root
+    or was deliberately retired to _archive/<name>_retired-<date>/."""
 
     MEMBERS = ('annual-cycle', 'capex-budgeting', 'cash-position-monitor',
                'deal-retirement', 'investor-relations',
                'submarket-spatial-analysis', 'vendor-management')
+
+    # Former members later retired as standalone skills (Gabriel's call, per the
+    # retiring commit). Declaring the date here is what distinguishes a deliberate
+    # retirement from an accidental loss -- an undeclared missing member still fails.
+    RETIRED = {
+        'investor-relations': '2026-09-09',  # 2b24e9e
+    }
 
     def test_live_manifest_is_gone(self):
         self.assertFalse((ps.REPO / 'plugins' / PLUGIN / 'plugin-build.json').exists())
@@ -179,7 +187,17 @@ class RetiredBundleArchived(unittest.TestCase):
 
     def test_all_former_members_survive_at_repo_root(self):
         for s in self.MEMBERS:
+            if s in self.RETIRED:
+                continue
             self.assertTrue((ps.REPO / s / 'SKILL.md').is_file(), f'{s} lost its SKILL.md')
+
+    def test_retired_former_members_are_archived_not_live(self):
+        self.assertLessEqual(set(self.RETIRED), set(self.MEMBERS))
+        for s, date in self.RETIRED.items():
+            archived = ps.REPO / '_archive' / f'{s}_retired-{date}' / 'SKILL.md'
+            self.assertTrue(archived.is_file(), f'{s} retired but not archived at {archived}')
+            self.assertFalse((ps.REPO / s).exists(),
+                             f'{s} is declared retired but is live at the repo root')
 
 
 class OutdirCollision(unittest.TestCase):
