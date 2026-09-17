@@ -174,6 +174,7 @@ class RetiredBundleArchived(unittest.TestCase):
     # Former members later retired as standalone skills (Gabriel's call, per the
     # retiring commit). Declaring the date here is what distinguishes a deliberate
     # retirement from an accidental loss -- an undeclared missing member still fails.
+    # Adding an entry is step 7.3 of README.md's retirement check.
     RETIRED = {
         'investor-relations': '2026-09-09',  # 2b24e9e
     }
