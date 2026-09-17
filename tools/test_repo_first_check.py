@@ -385,5 +385,118 @@ class RunIntegration(FixtureTestCase):
         self.assertIn('Rescued the cache copy', stderr)
 
 
+class MainBehindOrigin(unittest.TestCase):
+    """A skill installed from a PR that already merged to origin/main, while the
+    long-lived local main has not caught up yet, is routine -- not DIVERGENT.
+
+    WHY (2026-09-17): #55/#56, #57 and #58/#59 each produced `!! REPO-FIRST DIVERGENT`
+    alarms that were nothing but local main lagging origin/main; tools/catch_up_main.py
+    is the fix, and this verdict keeps the daily sweep from alarming in the meantime.
+    A cache copy from a branch that is NOT on origin/main must stay DIVERGENT."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='repo_first_check_origin_'))
+        self.cache = self.tmp / 'cache'
+        self.cache.mkdir()
+        origin = self.tmp / 'origin.git'
+        subprocess.run(['git', 'init', '-q', '--bare', '-b', 'main', str(origin)],
+                       check=True, capture_output=True)
+        self.seed, self.repo = self.tmp / 'seed', self.tmp / 'repo'
+        for path in (self.seed, self.repo):
+            if path == self.repo:
+                _git(self.seed, 'push', '-q', 'origin', 'main')
+            subprocess.run(['git', 'clone', '-q', str(origin), str(path)],
+                           check=True, capture_output=True)
+            _git(path, 'config', 'user.email', 'test@example.com')
+            _git(path, 'config', 'user.name', 'Test')
+            if path == self.seed:
+                _commit(path, 'demo-skill/SKILL.md', 'name: demo-skill\nv1\n', 'init')
+        _commit(self.repo, 'local-only.md', 'unpushed\n', 'unpushed local commit')
+
+    def tearDown(self):
+        shutil.rmtree(rfc._win_long(self.tmp), ignore_errors=True)
+
+    def _merge_pr_on_origin(self, rel, text):
+        _commit(self.seed, rel, text, 'merged PR (#99)')
+        _git(self.seed, 'push', '-q', 'origin', 'main')
+        _git(self.repo, 'fetch', '-q', 'origin')
+
+    def test_cache_from_merged_pr_is_main_behind_origin(self):
+        self._merge_pr_on_origin('demo-skill/SKILL.md', 'name: demo-skill\nv2\n')
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'name: demo-skill\nv2\n')
+
+        verdict, per_file = rfc.classify_skill('demo-skill', self.repo, self.cache)
+
+        self.assertEqual(verdict, 'MAIN-BEHIND-ORIGIN')
+        self.assertEqual(per_file, [('SKILL.md', 'MAIN-BEHIND-ORIGIN')])
+        self.assertNotIn('MAIN-BEHIND-ORIGIN', rfc.BAD_VERDICTS)
+
+    def test_new_file_from_merged_pr_is_main_behind_origin_not_repo_missing(self):
+        self._merge_pr_on_origin('demo-skill/scripts/new.py', 'print(1)\n')
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'name: demo-skill\nv1\n')
+        _write(self.cache / 'demo-skill' / 'scripts' / 'new.py', 'print(1)\n')
+
+        verdict, per_file = rfc.classify_skill('demo-skill', self.repo, self.cache)
+
+        self.assertEqual(verdict, 'MAIN-BEHIND-ORIGIN')
+        self.assertIn(('scripts/new.py', 'MAIN-BEHIND-ORIGIN'), per_file)
+
+    def test_unmerged_feature_branch_stays_divergent(self):
+        _git(self.seed, 'checkout', '-q', '-b', 'feat/x')
+        _commit(self.seed, 'demo-skill/SKILL.md', 'name: demo-skill\nfeature\n', 'feature')
+        _git(self.seed, 'push', '-q', 'origin', 'feat/x')
+        _git(self.repo, 'fetch', '-q', 'origin')
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'name: demo-skill\nfeature\n')
+
+        verdict, _ = rfc.classify_skill('demo-skill', self.repo, self.cache)
+
+        self.assertEqual(verdict, 'DIVERGENT')
+
+    def test_file_deleted_by_already_merged_pr_stays_repo_missing(self):
+        # Review finding 2026-09-17: matching ALL of origin/main's history relabeled a
+        # stale cache-only file as MAIN-BEHIND-ORIGIN even with local main fully caught
+        # up -- masking a real REPO-MISSING forever (catch_up_main.py would be a NOOP).
+        _commit(self.seed, 'demo-skill/scripts/old.py', 'old\n', 'add old.py (#98)')
+        _git(self.seed, 'rm', '-q', 'demo-skill/scripts/old.py')
+        _git(self.seed, 'commit', '-q', '-m', 'remove old.py (#99)')
+        _git(self.seed, 'push', '-q', 'origin', 'main')
+        _git(self.repo, 'fetch', '-q', 'origin')
+        _git(self.repo, 'merge', '-q', '--no-edit', 'origin/main')
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'name: demo-skill\nv1\n')
+        _write(self.cache / 'demo-skill' / 'scripts' / 'old.py', 'old\n')
+
+        verdict, per_file = rfc.classify_skill('demo-skill', self.repo, self.cache)
+
+        self.assertEqual(verdict, 'REPO-MISSING')
+        self.assertIn(('scripts/old.py', 'REPO-MISSING'), per_file)
+
+    def test_sweep_fetch_never_prompts_for_credentials(self):
+        with mock.patch.object(rfc.subprocess, 'run') as run:
+            rfc._fetch_origin_main(self.repo)
+        env = run.call_args.kwargs['env']
+        self.assertEqual(env['GIT_TERMINAL_PROMPT'], '0')
+        self.assertEqual(env['GCM_INTERACTIVE'], 'never')
+
+    def test_full_sweep_fetches_first_and_does_not_alarm(self):
+        # Merged on GitHub, never fetched locally -- the daily sweep's real situation.
+        _commit(self.seed, 'demo-skill/SKILL.md', 'name: demo-skill\nv2\n', 'merged PR (#99)')
+        _git(self.seed, 'push', '-q', 'origin', 'main')
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'name: demo-skill\nv2\n')
+        ledger, rescue_dir = self.tmp / 'ledger.md', self.tmp / 'rescue'
+        import contextlib
+        import io
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = rfc.run(False, repo_root=self.repo, cache_root=self.cache,
+                           ledger_path=ledger, rescue_dir=rescue_dir)
+
+        self.assertEqual(code, 0)
+        self.assertNotIn('!! REPO-FIRST', err.getvalue())
+        self.assertIn('MAIN-BEHIND-ORIGIN', out.getvalue())
+        self.assertIn('catch_up_main.py', out.getvalue())
+        self.assertFalse(ledger.is_file())
+        self.assertFalse(rescue_dir.exists())
+
+
 if __name__ == '__main__':
     unittest.main()
