@@ -281,8 +281,33 @@ it — as of the last audit, no ORA-specific skill remained plugin-only-and-unve
 6. Follow the dual-write and single-writer discipline above: this repo is canon, the
    AppData cache is a rebuildable mirror, and commits must be fetched/checked/scoped
    before landing given concurrent sessions.
-7. If retiring a skill, move its folder into `_archive/` rather than deleting it, and
-   note the supersession reason and date.
+7. If retiring a skill, run the retirement check — every step below exists because a
+   past retirement skipped it:
+   1. **Before moving anything, find what still depends on it.** Every hit in another
+      skill's `SKILL.md`, a `tools/` script or test fixture, or a live scheduled task
+      must be repointed or explicitly tombstoned in the same commit (`versions/` and
+      changelog hits are history and can stay):
+      ```bash
+      git grep -n -w "<skill>" -- . ':(exclude)<skill>' ':(exclude)_archive'
+      grep -rnw --include=SKILL.md --exclude-dir='_archive*' "<skill>" ~/.claude/scheduled-tasks ~/OneDrive*/Documents/Claude/Scheduled
+      ```
+      (2026-08-05: `rent-comp` was retired as "zero use" while `acquisition-underwriting`
+      COMPS mode still called it, and a realdata test fixture pinned to it silently skipped
+      for over a week.)
+   2. **Archive under the dated name, never delete:**
+      `git mv <skill> _archive/<skill>_retired-YYYY-MM-DD`, with the supersession reason and
+      date in the commit message. `retired-skill-serving-guard.py` recognises only that
+      exact `<name>_retired-YYYY-MM-DD` pattern.
+   3. **If it was a former `ora-operations-extensions` bundle member** (listed in
+      `RetiredBundleArchived.MEMBERS`, `tools/test_build_plugin.py`), add it to that
+      class's `RETIRED` map with the same date.
+   4. **Run the full `tools/` suite before committing.** It must print no `FAIL` line and
+      no `SKIP` line that wasn't already there before the move:
+      ```bash
+      for f in tools/test_*.py; do out=$(python "$f" 2>&1) || echo "FAIL $f"; grep -o "skipped=[0-9]*" <<<"$out" | sed "s|^|SKIP $f |"; done
+      ```
+      (2026-09-09: `investor-relations` was retired without this, and `main` stayed red
+      until #60 added the `RETIRED` map that step 3 now maintains.)
 8. Update the inventory in this README — it has drifted stale before (once for a full
    month) when a skill was added or archived without a matching README update.
 
