@@ -308,6 +308,13 @@ it — as of the last audit, no ORA-specific skill remained plugin-only-and-unve
       ```
       (2026-09-09: `investor-relations` was retired without this, and `main` stayed red
       until #60 added the `RETIRED` map that step 3 now maintains.)
+
+      Since #63 this is also enforced: `.github/workflows/tools-tests.yml` runs the same
+      suite on every push to any branch and fails on any failing test **or** any skipped
+      one (baseline is zero skips; a genuinely-needed skip goes in that workflow's
+      `ALLOWED_SKIPS` with a reason). Run it locally anyway — CI tells you after the push,
+      and it runs on `ubuntu-latest` while this repo is developed on Windows, so a
+      platform-specific test can pass in one place and fail in the other.
 8. Update the inventory in this README — it has drifted stale before (once for a full
    month) when a skill was added or archived without a matching README update.
 
