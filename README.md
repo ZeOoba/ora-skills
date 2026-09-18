@@ -33,12 +33,12 @@ flowchart TD
         Root["Repo root"]
         S1["acquisition-underwriting/"]
         S2["loi-generation/"]
-        S3["...56 more skill folders\n(58 total)"]
+        S3["...68 more skill folders\n(70 total as of 2026-09-18;\ncount: ls */SKILL.md)"]
         Shared["target-markets.json\n(shared buy-box market data)"]
         Tools["tools/\npackage_skills.py, build_plugin.py,\npending_reimport.py, hooks/"]
-        Plugins["plugins/\nora-operations-extensions/\n(plugin-build.json bundles)"]
+        Plugins["plugins/\nEMPTY by design since 2026-08-05\n(ora-operations-extensions retired;\nmanifest kept in _archive/plugins/)"]
         Staging["_staging/\ndated import batches +\nPENDING_REIMPORT.md (repo-ahead)\n+ STORE_AHEAD_OF_REPO.md (cache-ahead)"]
-        Archive["_archive/\nretired/superseded skills\n(e.g. deal-screen, cap-rate-snapshot)"]
+        Archive["_archive/\nretired/superseded skills\n(e.g. deal-screen, cap-rate-snapshot)\nskipped by default searches (.rgignore);\ncollapsed on GitHub (linguist-generated)"]
     end
 
     Root --> S1
@@ -57,7 +57,7 @@ flowchart TD
     S2 --> T2["templates/"]
 
     Tools -- "package_skills.py <outdir>" --> Skillzip[".skill zip\n(forward-slash entries only)"]
-    Tools -- "build_plugin.py <plugin>" --> Pluginzip[".plugin zip"]
+    Tools -. "build_plugin.py <plugin>\n(dormant: no bundle exists today)" .-> Pluginzip[".plugin zip"]
     Skillzip --> Cowork["Cowork 'Save skill' import /\nSettings -> Capabilities"]
     Pluginzip --> Cowork
     Root -. "dual-write mirror" .-> AppData["AppData runtime cache\n(read-only mirror; repo wins on divergence)"]
@@ -67,9 +67,9 @@ flowchart TD
     Trigger -- "3. load SKILL.md body as instructions" --> Exec["Skill executes this turn"]
     Exec -- "4. optionally reads/runs" --> R2
 ```
-<!-- diagram-verified: 2026-08-21 -->
+<!-- diagram-verified: 2026-09-18 -->
 
-**Reading the diagram:** everything lives flat under the repo root — each of the 57
+**Reading the diagram:** everything lives flat under the repo root — each of the 70
 skill folders (`acquisition-underwriting/`, `loi-generation/`, etc.) sits directly under
 `Repo root`, alongside `target-markets.json` (shared buy-box data), `tools/`, `plugins/`,
 `_staging/`, and `_archive/`. Inside a skill folder, only `SKILL.md` is required; the rest
@@ -86,7 +86,7 @@ that turn, optionally pulling from `references/` as it goes).
 
 ## Directory / skill inventory
 
-**58 git-tracked skill directories** (each contains its own `SKILL.md`), plus four
+**70 git-tracked skill directories** (as of 2026-09-18; recount with `ls */SKILL.md | wc -l` rather than trusting this number) (each contains its own `SKILL.md`), plus four
 non-skill support directories: `tools/` (packaging/build/hook scripts), `plugins/`
 (version-controlled Cowork plugin bundles), `_staging/` (dated pending-reimport batches,
 plus the gitignored `PENDING_REIMPORT.md`/`STORE_AHEAD_OF_REPO.md` drift ledgers), and
@@ -201,7 +201,7 @@ consumed by `acquisition-underwriting`, `daily-brief`, `deal-comparison`, and
   zip spec and the Claude importer rejects with "Zip file contains path with invalid
   characters." Always package with `python tools/package_skills.py <outdir> [skill ...]`,
   which emits forward-slash entries and validates them. Skills bundled into a Cowork
-  plugin (currently the `ora-operations-extensions` plugin) are built instead via `python
+  plugin (none today: `ora-operations-extensions`, the only bundle, was retired 2026-08-05 and `plugins/` is empty by design, see `plugins/README.md`) would be built instead via `python
   tools/build_plugin.py <plugin-name> <outdir>` from `plugins/<plugin-name>/plugin-build.json`.
 - **Shared root data** (like `target-markets.json`) lives once at repo root and is
   injected at package time via `SHARED_ROOT_DEPS` in `package_skills.py` — it is never
