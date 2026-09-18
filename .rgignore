@@ -1,0 +1,8 @@
+# ripgrep-only ignore (git does not read this file). Keeps retired doctrine out of DEFAULT
+# local searches, including Claude Code's Grep/Glob tools, which are ripgrep-backed.
+# Measured 2026-09-18: 42-52% of hits for "DSCR" / "buy box" / "cap rate" landed in _archive/,
+# i.e. in skills CLAUDE.md has already subsumed (deal-screen, cap-rate-snapshot, rent-comp).
+#
+# To search the archive on purpose, point the search AT it (path=_archive) -- an explicitly
+# named path is always searched -- or pass --no-ignore.
+_archive/
