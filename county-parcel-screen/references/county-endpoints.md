@@ -29,6 +29,14 @@
 - **Validity signal (found via county-sales-monitor pilot, 2026-08-15):** the GIS parcel layer's `VALID` field
   exists in the live schema but was null on 100% of a 205-parcel industrial pull — not usable. The Transfer*.txt
   files carry an `IsValid` field ('T'/'F') that IS well-populated and is the usable non-arms-length signal.
+- **⚠ CORRECTION 2026-09-18 — `IsValid` is NOT usable; never filter arms-length sales on it.** The bullet above
+  is wrong and is superseded. On the 2026-09-18 ring-screen pull `IsValid` reads **'F' on 98 of 129 primary rows,
+  including plainly arm's-length recorded deeds** (e.g. a $1,160,000 warranty deed) — so it is well-populated but
+  NOT a valid arms-length gate. Use the skill's own **$25,000 nominal-transfer rule** instead (step 5: sub-$25K
+  transfer = UNKNOWN-HOLD, 16 pts). Same pull re-confirmed the GIS layer's own `VALID` field, and its in-layer
+  delinquency fields `TOTPRVTXTOD` / `TOTCNTTXOD`, are **100% null across all 600 ring parcels** — delinquency
+  must come from the bulk TaxDetail file. Source: `2026-09-18_RingScreen-FranklinOH_Summary_v01.md`,
+  §5 "Data gaps and honest limits" item 5.
 - **Bulk-file recording lag (same pilot):** the live GIS layer's SALEDATE can run ~1 month ahead of the newest
   Tax Accounting transfer-file drop (e.g. GIS showed sales through 08-14 while the newest Transfer* folder was
   still the 07-15 drop) — a windowed pull against Transfer*.txt alone will miss the most recent weeks' deeds
@@ -205,6 +213,13 @@ Columbus/Cincinnati estate lists for the same contamination on next pass.
   CRITICAL QUIRK: attribute queries on table 2 FAIL ('Unable to perform query operation') unless
   orderByFields=OBJECTID is supplied. returnIdsOnly also fails. Distinct/count queries work without it.
   maxRecordCount 2000 (pull 1000/page to be safe).
+- **⚠ PAGING QUIRK, layer 1 (geometry) — added 2026-09-18. PAGE ON THE FLAG, NOT THE ROW COUNT.**
+  `…/ParcelsAscendRelate/FeatureServer/1` can return **999 rows on a 1,000-row page while still setting
+  `exceededTransferLimit=true`**. A loop that stops when "rows returned < page size" — the obvious idiom —
+  therefore **silently truncates with no error: observed 2,999 of 4,666 parcels, a 36% undercount.** Continue
+  paging while `exceededTransferLimit` is true, and advance the offset by the ACTUAL row count returned, not by
+  the page size. Caught on the 2026-09-18 ring screen only because a `returnCountOnly` control query was run —
+  run that control query and reconcile against it. Source: `2026-09-18_RingScreen-JacksonMO_Summary_v01.md` §2.
 - Fields: parcel_number ('29-320-30-03-00-0-00-000' 23-char dashed), property_id, situs_address/_city/_zip,
   landuse_cd/_descr, total_sqft (= LAND SF, NOT building — verified), year_built (0% for commercial),
   Market_Value_Total + 4 past years (Ascend pastyr1-4), Comm_Impr/Comm_Land, Assessed_Val_*,
