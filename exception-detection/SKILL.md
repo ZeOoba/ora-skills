@@ -28,6 +28,8 @@ You are the Oxford Realty Advisors exception detection engine. You scan all conn
 
 ### Category 2 — Tenant Exceptions
 
+**TEST-ARTIFACT SENTINEL — applies to every HubSpot row in this category, and to the Acquisition-pipeline row in Category 3.** Before evaluating any rule below, DROP every HubSpot deal whose dealname, after stripping leading whitespace, begins with `RETIRED` or matches `^ZZ[\s._-]*TEST` (anchored case-insensitive PREFIX tests — `ZZ TEST`, `ZZTEST`, `ZZ-TEST`, `ZZ_TEST`, `ZZ.TEST` — never substring tests, and never a bare `TEST` prefix, which would match real tenants such as "TESTA Construction" and silently drop genuine work). A test deal trips several of these rules by construction: it has no Notion counterpart, and it carries no ISO date for the name/date-drift rule to parse. This skill is report-only, but its findings are consumed by `ora-pm-ledger`, `ora-weekly-hygiene` and `ora-tenant-hubspot-reconciliation` — and the last of those ALLOCATES `OI-NNN` ids — so an unfiltered test deal is laundered into a real work item in the canonical tracker. Name any dropped deals once in the output so the skip is auditable rather than silent. Same sentinel as the scheduled-task specs (`ora-hubspot-renewal-closeout-tasks`, `ora-renewal-hubspot-reconcile`, `ora-tenant-hubspot-reconciliation`) and as `isTestDeal()` in `oxford-command-center/server/warehouse/acq-hubspot-sync.ts`; keep all five in step.
+
 | Exception | Severity | Detection Method |
 |-----------|----------|-----------------|
 | Lease expired with no renewal signed | 🔴 Critical | Notion: Lease Expiration < today AND Lease Status != "Expired" AND Renewal Status != "Renewal Signed" |
@@ -77,7 +79,7 @@ Rule: when the resolved date belongs to a deal whose `Next Action` contains `PAR
 | Scheduled task missed execution | 🔴 Critical | Check automation-health-monitor last run log |
 | Dead-man heartbeat stale (>16h) | 🔴 Critical | Check ora-cowork-heartbeat Notion timestamp page (Composio recipes RETIRED 2026-06-11 — no Composio checks remain) |
 | QB export overdue (>45 days since last) | 🟠 Elevated | Notion: AR Data Date across all properties |
-| HubSpot-Notion deal stage mismatch (Acquisition Pipeline) | 🟠 Elevated | Cross-reference HubSpot deal stage vs. Notion Acquisition Pipeline Tracker's Stage field — acquisition deals only; tenant lease-renewal deals are Category 2 |
+| HubSpot-Notion deal stage mismatch (Acquisition Pipeline) | 🟠 Elevated | Cross-reference HubSpot deal stage vs. Notion Acquisition Pipeline Tracker's Stage field — acquisition deals only; tenant lease-renewal deals are Category 2. "Acquisition deals" means HubSpot pipeline `885606973` — the authoritative source for that id is `HUBSPOT_ACQ_PIPELINE_ID` in `oxford-command-center/server/warehouse/acq-hubspot-sync.ts`; filter on it explicitly rather than inferring from the deal name, since a free-text name match sweeps both pipelines. Apply the Category 2 test-artifact sentinel here too |
 | Notion database ghost entries | 🟡 Watch | Look for pages with only Title field populated |
 | Daily brief not generated in 5+ business days | 🟡 Watch | Operations Hub: check for recent Daily Brief pages |
 
