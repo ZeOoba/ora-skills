@@ -49,9 +49,10 @@ IC memo or return relies on a tag.
 - If the settlement shows a $0 or blank land line with the entire debit
   total flowing to one basis bucket, do NOT tag all of it capitalizable-to-
   improvements without a land/improvement split. Flag in EXCEPTIONS: "needs
-  assessor ratio or appraisal split" and leave BASIS_REGISTER's land column
-  blank rather than $0.
+  assessor ratio or appraisal split", leave BASIS_REGISTER's land column
+  blank rather than $0, and set its `basis = blank`.
 - Franklin County OH and Baltimore City/County MD both publish
   land/improvement assessment ratios that can back into a reasonable split
   when no appraisal exists -- cite the source (auditor site + as-of date) if
-  used, and mark the resulting basis split as **derived**, not transcribed.
+  used, and set `basis = derived` on the resulting split (see "Cell basis"
+  in SKILL.md).
