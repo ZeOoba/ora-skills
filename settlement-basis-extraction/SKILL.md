@@ -1,9 +1,9 @@
 ---
 name: settlement-basis-extraction
-description: Extract acquisition/disposition data from HUD-1/ALTA settlement statements and build a capitalizable-basis register for Oxford Realty Advisors property entities. Use when the user says: import settlement statements, build the basis register, extract closing costs, OCR the settlement PDFs, capitalize closing charges, reconcile a settlement to Schedule L, or points at a folder of HUD-1/ALTA settlement statements, deeds, or closing packages. Also trigger when a new acquisition or disposition closes and the settlement package needs to be worked into the entity's basis and the portfolio's EXCHANGE_1031 tracking. Produces a workbook (README, ENTITY_MASTER, PROPERTY_PL, BALANCE_SHEET, DEPR_COSTSEG, BASIS_REGISTER, CHARGE_DETAIL, EXCHANGE_1031, PAYMENTS, EXCEPTIONS, SOURCE_INDEX) with every figure transcribed verbatim and blank cells where a digit can't be read with confidence. v1.3
+description: Extract acquisition/disposition data from HUD-1/ALTA settlement statements and build a capitalizable-basis register for Oxford Realty Advisors property entities. Use when the user says: import settlement statements, build the basis register, extract closing costs, OCR the settlement PDFs, capitalize closing charges, reconcile a settlement to Schedule L, or points at a folder of HUD-1/ALTA settlement statements, deeds, or closing packages. Also trigger when a new acquisition or disposition closes and the settlement package needs to be worked into the entity's basis and the portfolio's EXCHANGE_1031 tracking. Produces a workbook (README, ENTITY_MASTER, PROPERTY_PL, BALANCE_SHEET, DEPR_COSTSEG, BASIS_REGISTER, CHARGE_DETAIL, EXCHANGE_1031, PAYMENTS, EXCEPTIONS, SOURCE_INDEX) with every figure transcribed verbatim and blank cells where a digit can't be read with confidence. v1.4
 ---
 
-# Settlement-Basis Extraction (ORA) — v1.3
+# Settlement-Basis Extraction (ORA) — v1.4
 
 ## When to use this
 
@@ -32,6 +32,15 @@ promissory notes, deeds of conversion and QI/1031 forms sit together in
 lender", "no operating agreement" or "chain-of-title gap" finding is
 unreliable until it has been checked against it -- the 2026-09 fact-base
 builds missed this folder and reported all four wrongly.
+
+Run the census first: `python scripts/package_census.py "<folder>"
+[--factbase <fact-base.json>]`. It lists every PDF with page count, text /
+partial / image-only status (sampled, so it is cheap), whether an `(OCR)`
+twin already exists, and any path long enough to break Python on Windows
+(copy those out with Git Bash `cp` before reading). With `--factbase` it
+lists every field still NOT FOUND / INFERRED / CONFLICT / illegible and says
+whether the fact base ever recorded a `recheck_*` against this folder; a
+flagged field with no recorded recheck is unverified, not a finding.
 
 ### 1. Triage every document for a text layer before doing anything else
 
@@ -262,6 +271,12 @@ builder's own recalc.
   100% to improvements -- that is the exception, not the default.
 
 ## Changelog
+
+- v1.4 (2026-09-21): Added `scripts/package_census.py` (step 0): package
+  inventory with text-layer triage, OCR-twin detection and long-path flags,
+  plus a `--factbase` mode that lists unverified NOT FOUND / INFERRED /
+  CONFLICT fields. Tests: `tools/test_package_census.py`. Description
+  unchanged except the version tag.
 
 - v1.3 (2026-09-21): Added persistent `basis` column (`transcribed` /
   `derived` / `lower-bound` / `blank`) and the pre-ship re-check of every
