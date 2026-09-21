@@ -51,8 +51,8 @@ IC memo or return relies on a tag.
   improvements without a land/improvement split. Flag in EXCEPTIONS: "needs
   assessor ratio or appraisal split", leave BASIS_REGISTER's land column
   blank rather than $0, and set its `basis = blank`.
-- Franklin County OH and Baltimore City/County MD both publish
-  land/improvement assessment ratios that can back into a reasonable split
-  when no appraisal exists -- cite the source (auditor site + as-of date) if
-  used, and set `basis = derived` on the resulting split (see "Cell basis"
-  in SKILL.md).
+- Franklin County OH, Baltimore City/County MD, Dorchester County MD and
+  Talbot County MD publish land/improvement assessment ratios that can back
+  into a reasonable split when no appraisal exists -- cite the source
+  (auditor site + as-of date) if used, and set `basis = derived` on the
+  resulting split (see "Cell basis" in SKILL.md).
