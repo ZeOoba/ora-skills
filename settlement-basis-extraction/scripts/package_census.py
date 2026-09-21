@@ -25,6 +25,14 @@ TEXT_MIN_CHARS = 100     # average characters per sampled page to call a page 't
 FLAG_STATUS = re.compile(r"NOT FOUND|INFERRED|CONFLICT|illegible|UNVERIFIED", re.I)
 
 
+def extended(path):
+    """Windows extended-length form (\\\\?\\C:\\...) so paths over 260 characters can be opened."""
+    path = os.path.abspath(path)
+    if os.name == "nt" and not path.startswith("\\\\?\\"):
+        return "\\\\?\\UNC" + path[1:] if path.startswith("\\\\") else "\\\\?\\" + path
+    return path
+
+
 def classify_pdf(path):
     """Return dict(status, pages, sample_chars). status: TEXT | PARTIAL | IMAGE-ONLY | UNREADABLE."""
     try:
@@ -32,7 +40,8 @@ def classify_pdf(path):
     except ImportError:
         raise SystemExit("package_census: PyMuPDF is required (pip install pymupdf)")
     try:
-        doc = fitz.open(path)
+        with open(extended(path), "rb") as fh:  # bytes, not a path: fitz cannot open long paths itself
+            doc = fitz.open(stream=fh.read(), filetype="pdf")
     except Exception as e:  # noqa: BLE001 - any open failure is reported, never raised
         return {"status": "UNREADABLE", "pages": 0, "sample_chars": 0, "error": type(e).__name__}
     try:
@@ -56,16 +65,19 @@ def is_twin(name):
 
 def census(folder):
     rows = []
-    for root, _dirs, files in os.walk(folder):
+    top = extended(folder)
+    for root, _dirs, files in os.walk(top):
         names = set(files)
         for f in sorted(files):
             if not f.lower().endswith(".pdf") or is_twin(f):
                 continue
             full = os.path.join(root, f)
             info = classify_pdf(full)
+            shown = os.path.relpath(full, top)
+            plain = os.path.abspath(folder) + os.sep + shown
             info.update({
-                "path": os.path.relpath(full, folder),
-                "long_path": len(full) >= LONG_PATH,
+                "path": shown,
+                "long_path": len(plain) >= LONG_PATH,
                 "has_twin": f"{f[:-4]} (OCR).pdf" in names,
             })
             rows.append(info)
@@ -108,7 +120,8 @@ def render(rows, fb=None):
                 f"{sum(r['status']=='IMAGE-ONLY' for r in rows)} image-only, {sum(r['status']=='UNREADABLE' for r in rows)} unreadable; "
                 f"{len(need)} scan(s) without an OCR twin; {sum(r['long_path'] for r in rows)} long path(s)."]
     if any(r["long_path"] for r in rows):
-        out.append("Long paths break Python/Windows tools ('no such file'): copy the file out with Git Bash `cp` before reading.")
+        out.append("LONG paths were read here via the extended-length prefix, but other Python/Windows tools fail on them "
+                   "('no such file'): open with the \\\\?\\ prefix or copy the file out with Git Bash `cp` first.")
     if fb is not None:
         out += ["", f"FACT BASE: {len(fb['flagged'])} field(s) flagged NOT FOUND / INFERRED / CONFLICT / illegible."]
         out += [f"  {p}: {s}" for p, s in fb["flagged"][:40]]
