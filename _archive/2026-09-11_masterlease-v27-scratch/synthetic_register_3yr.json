@@ -1,0 +1,10 @@
+{
+  "deal_id": "SYNTHETIC-TEST-3YR",
+  "rent": {
+    "schedule": [
+      {"lease_year": 1, "period": "2027-01-01 to 2027-12-31", "annual": 36000.00, "monthly": 3000.00},
+      {"lease_year": 2, "period": "2028-01-01 to 2028-12-31", "annual": 37080.00, "monthly": 3090.00},
+      {"lease_year": 3, "period": "2029-01-01 to 2029-12-31", "annual": 38192.40, "monthly": 3182.70}
+    ]
+  }
+}

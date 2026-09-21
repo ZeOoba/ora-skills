@@ -1,0 +1,14 @@
+{
+  "staged_at": "2026-09-21T18:38:58Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-09-21-sbe",
+  "packages": [
+    {
+      "skill": "settlement-basis-extraction",
+      "file": "settlement-basis-extraction.skill",
+      "bytes": 9001
+    }
+  ],
+  "last_batch": [
+    "settlement-basis-extraction"
+  ]
+}

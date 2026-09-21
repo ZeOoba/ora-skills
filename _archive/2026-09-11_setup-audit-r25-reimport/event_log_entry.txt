@@ -1,0 +1,15 @@
+## 2026-09-11 -- ORA Setup Audit Revision 25 remediation: 3 skills reimported, vendor-management republished
+daily-brief v2.12, pma-qc v1.2, vendor-management v2.0 -- all three packaged from commit
+735a376 (vendor-contract-qc merged into vendor-management as QC mode; daily-brief changelog
+retention fix) and confirmed installed via Gabriel's Save-skill click. Confirmed by
+tools/reimport_correlate.py verify: all three show CreationTime move + exact-second main.log
+"Sync complete: 3 downloaded" @ 2026-09-11T13:25:17 -- a real reimport, not the
+sync_appdata_mirror.py mirror-sync artifact.
+
+vendor-management was NOT-INSTALLED going in (first-ever publish) because it sat in
+package_skills.py's DELIBERATELY_UNPUBLISHED set (Gabriel's 2026-08-09 ruling, OI-157 guard).
+Flagged to Gabriel in-turn; he confirmed publishing it now, so it was removed from that
+frozenset at commit 97ff6a4 before packaging. Reasoning logged inline in package_skills.py.
+
+vendor-contract-qc remains CACHE-ONLY (live in the account store) as of this entry --
+still pending Gabriel's Skills-page retirement click; not yet resolved.
