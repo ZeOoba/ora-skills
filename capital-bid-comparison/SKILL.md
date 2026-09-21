@@ -82,6 +82,12 @@ Then publish a **normalized cost reconciliation** — as-bid, plus each side's p
 equals normalized. Show the arithmetic. Tag every gap estimate `[SPECULATIVE]` with a
 range; a made-up point estimate in this table is worse than a range.
 
+**Confidentiality legends.** Note against any bid whose legend purports to bar disclosure
+of its pricing or scope to other parties, including comparison against competing bids —
+the very purpose for which Owner solicited it. That is a VC-13 defect (check V20; text in
+`vendor-management` `references/standing-positions.md`); carry it into the report,
+saying VC-13 is a proposed, unratified position.
+
 ## Step 3 — Code-check each bid independently
 
 A bid is not cheaper for omitting what the code requires. Check the **adopted edition in
@@ -215,6 +221,9 @@ naming files `YYYY-MM-DD_[Property]_[Trade]-BidEval_v##.docx`.
 
 ## Changelog
 
+- **v1.1 (2026-09-21) — restored the VC-13 confidentiality-legend note** to Step 2. It sat in
+  `vendor-management` v2.0's bid-comparison stub and was lost when that stub was removed in
+  the v2.1 split-out. Additive only; no other section changed.
 - **v1.0 (2026-09-17) — initial.** Built from the 9050 Red Branch Rd Unit K rooftop pair
   (Hayden $27,600 / JEM $28,700, 2026-09-17). Carries the standing normalization table
   (11 trades), the code-check matrix (5 trades), the three gates — prequalification,
