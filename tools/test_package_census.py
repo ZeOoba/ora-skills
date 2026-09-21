@@ -62,6 +62,34 @@ class Census(unittest.TestCase):
         text = pc.render(pc.census(self.dir))
         self.assertIn("1 scan(s) without an OCR twin", text)
 
+    @unittest.skipUnless(os.name == "nt", "extended-length paths are a Windows concern")
+    def test_path_over_260_characters_is_read_and_flagged(self):
+        deep = self.dir
+        for _ in range(3):
+            deep = os.path.join(deep, "d" * 90)
+        os.makedirs(pc.extended(deep))
+        target = os.path.join(deep, "scan.pdf")
+        self.assertGreater(len(target), 260)
+        d = fitz.open()
+        d.new_page()
+        d.save(pc.extended(target))
+        d.close()
+        rows = pc.census(self.dir)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["status"], "IMAGE-ONLY")
+        self.assertTrue(rows[0]["long_path"])
+
+    def test_relative_folder_still_measures_full_path_length(self):
+        make_pdf(os.path.join(self.dir, "a.pdf"), [""])
+        old = os.getcwd()
+        try:
+            os.chdir(os.path.dirname(self.dir))
+            rows = pc.census(os.path.basename(self.dir))
+        finally:
+            os.chdir(old)
+        self.assertEqual(rows[0]["path"], "a.pdf")
+        self.assertFalse(rows[0]["long_path"])
+
     def test_sampling_reads_only_the_first_pages(self):
         make_pdf(os.path.join(self.dir, "long.pdf"), [""] * 30)
         row = pc.census(self.dir)[0]
