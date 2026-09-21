@@ -1,0 +1,24 @@
+{
+  "staged_at": "2026-09-11T17:21:55Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-09-11",
+  "packages": [
+    {
+      "skill": "daily-brief",
+      "file": "daily-brief.skill",
+      "bytes": 30754
+    },
+    {
+      "skill": "pma-qc",
+      "file": "pma-qc.skill",
+      "bytes": 41299
+    },
+    {
+      "skill": "vendor-management",
+      "file": "vendor-management.skill",
+      "bytes": 30232
+    }
+  ],
+  "last_batch": [
+    "vendor-management"
+  ]
+}
