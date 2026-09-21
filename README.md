@@ -33,7 +33,7 @@ flowchart TD
         Root["Repo root"]
         S1["acquisition-underwriting/"]
         S2["loi-generation/"]
-        S3["...68 more skill folders\n(70 total as of 2026-09-18;\ncount: ls */SKILL.md)"]
+        S3["...70 more skill folders\n(72 total as of 2026-09-21;\ncount: ls */SKILL.md)"]
         Shared["target-markets.json\n(shared buy-box market data)"]
         Tools["tools/\npackage_skills.py, build_plugin.py,\npending_reimport.py, hooks/"]
         Plugins["plugins/\nEMPTY by design since 2026-08-05\n(ora-operations-extensions retired;\nmanifest kept in _archive/plugins/)"]
@@ -67,9 +67,9 @@ flowchart TD
     Trigger -- "3. load SKILL.md body as instructions" --> Exec["Skill executes this turn"]
     Exec -- "4. optionally reads/runs" --> R2
 ```
-<!-- diagram-verified: 2026-09-18 -->
+<!-- diagram-verified: 2026-09-21 -->
 
-**Reading the diagram:** everything lives flat under the repo root — each of the 70
+**Reading the diagram:** everything lives flat under the repo root — each of the 72
 skill folders (`acquisition-underwriting/`, `loi-generation/`, etc.) sits directly under
 `Repo root`, alongside `target-markets.json` (shared buy-box data), `tools/`, `plugins/`,
 `_staging/`, and `_archive/`. Inside a skill folder, only `SKILL.md` is required; the rest
@@ -86,7 +86,7 @@ that turn, optionally pulling from `references/` as it goes).
 
 ## Directory / skill inventory
 
-**70 git-tracked skill directories** (as of 2026-09-18; recount with `ls */SKILL.md | wc -l` rather than trusting this number) (each contains its own `SKILL.md`), plus four
+**72 git-tracked skill directories** (as of 2026-09-21; recount with `ls */SKILL.md | wc -l` rather than trusting this number) (each contains its own `SKILL.md`), plus four
 non-skill support directories: `tools/` (packaging/build/hook scripts), `plugins/`
 (version-controlled Cowork plugin bundles), `_staging/` (dated pending-reimport batches,
 plus the gitignored `PENDING_REIMPORT.md`/`STORE_AHEAD_OF_REPO.md` drift ledgers), and
@@ -127,7 +127,9 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `tax-appeal` — property tax assessment analysis and appeal decision engine
 - `disposition-analysis` — hold / refinance / 1031 / sell decision engine
 - `capex-budgeting` — multi-year capital plan and reserve studies
-- `vendor-management` — vendor scoring, RFP issuance, contract intake, performance review
+- `vendor-management` — vendor prequalification, scoring, RFP issuance, contract intake, performance review; QC mode = pre-signature defect scan of a single vendor proposal or service agreement
+- `capital-bid-comparison` — levels two or more contractor proposals for the same building-system scope, code-checks each, and recommends an award; runs before `vendor-management` QC mode, which then gates the awarded bid
+- `capital-asset-register` — per-property building asset register: nameplate capture, remaining useful life, and the replacement pipeline feeding the annual capital plan
 
 **Finance, capital & investor relations**
 - `debt-management` — refinancing, lender selection, term-sheet negotiation, covenants
