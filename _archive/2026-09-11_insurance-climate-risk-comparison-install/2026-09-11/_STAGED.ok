@@ -1,0 +1,14 @@
+{
+  "staged_at": "2026-09-11T18:06:31Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\2026-09-11",
+  "packages": [
+    {
+      "skill": "insurance-climate-risk-comparison",
+      "file": "insurance-climate-risk-comparison.skill",
+      "bytes": 7675
+    }
+  ],
+  "last_batch": [
+    "insurance-climate-risk-comparison"
+  ]
+}
