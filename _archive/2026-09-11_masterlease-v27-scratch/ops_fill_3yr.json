@@ -1,0 +1,28 @@
+[
+ {
+  "op": "insert_after",
+  "at": {
+   "match": "[RENT SCHEDULE \u2014 ONE LINE PER LEASE YEAR"
+  },
+  "paras": [
+   {
+    "kind": "IND",
+    "text": "Lease Year 1 (2027-01-01 \u2013 2027-12-31):  Annual Base Rent $36,000.00; Monthly Rent $3,000.00"
+   },
+   {
+    "kind": "IND",
+    "text": "Lease Year 2 (2028-01-01 \u2013 2028-12-31):  Annual Base Rent $37,080.00; Monthly Rent $3,090.00"
+   },
+   {
+    "kind": "IND",
+    "text": "Lease Year 3 (2029-01-01 \u2013 2029-12-31):  Annual Base Rent $38,192.40; Monthly Rent $3,182.70"
+   }
+  ]
+ },
+ {
+  "op": "delete",
+  "at": {
+   "match": "[RENT SCHEDULE \u2014 ONE LINE PER LEASE YEAR"
+  }
+ }
+]

@@ -1,0 +1,33 @@
+[
+  {
+    "op": "sub",
+    "at": {"match": "for the first Lease Year (defined as the consecutive twelve-month period beginning on the Commencement Date) shall be"},
+    "old": "The annual base rent (the “Annual Base Rent”) for the first Lease Year (defined as the consecutive twelve-month period beginning on the Commencement Date) shall be [ANNUAL BASE RENT IN WORDS] ($[ANNUAL BASE RENT]) payable in equal monthly installments of [MONTHLY RENT IN WORDS] ($[MONTHLY RENT]) (the “Monthly Rent”).  Commencing on the first day of the second Lease Year of the Lease Term and on the first day of each Lease Year thereafter, the Annual Base Rent shall increase by [ESCALATION]% of the Annual Base Rent in effect for the immediately preceding Lease Year, compounded annually.  [OPTIONAL: ATTACH RENT SCHEDULE TABLE — IF ATTACHED, THE SCHEDULE CONTROLS IN THE EVENT OF ANY CONFLICT WITH THE PRECEDING SENTENCE]",
+    "new": "Tenant shall pay to Landlord annual base rent (the “Annual Base Rent”) in equal monthly installments (each such installment, the “Monthly Rent”) in accordance with the rent schedule set forth below."
+  },
+  {
+    "op": "insert_after",
+    "at": {"match": "Tenant shall pay to Landlord annual base rent (the “Annual Base Rent”) in equal monthly installments (each such installment, the “Monthly Rent”) in accordance with the rent schedule set forth below."},
+    "paras": [
+      {"kind": "IND", "text": "[RENT SCHEDULE — ONE LINE PER LEASE YEAR, INCLUDING ANY OPTION YEAR(S), IN THE FORM “Lease Year [N] ([START] – [END]):  Annual Base Rent $[ANNUAL]; Monthly Rent $[MONTHLY]” — FILLED AT DRAFTING TIME FROM THE DEAL-TERMS REGISTER rent.schedule ARRAY (see the lease-generation skill); THIS PARAGRAPH IS DELETED AND REPLACED WITH THE FILLED SCHEDULE LINES, ONE PER LEASE YEAR, BEFORE THE LEASE IS DRAFTED]"},
+      {"kind": "BODY", "text": "Annual Base Rent increases by [ESCALATION]% on the first day of each Lease Year after the first, throughout the Primary Term and any Option Term, as reflected in the schedule above.  The Lease Year dates set forth above assume a Commencement Date of the 1st day of [COMMENCEMENT MONTH/YEAR] and shall be adjusted to correspond to the actual Commencement Date.  Monthly Rent is a modified gross rent, and includes Tenant’s Proportionate Share of Taxes, Landlord’s insurance premiums and Operating Costs for the Project, subject to the section of this Lease governing Taxes, insurance and Operating Costs.  The first installment of Monthly Rent and the Security Deposit shall be paid by Tenant upon Tenant’s execution of this Lease."}
+    ]
+  },
+  {
+    "op": "sub",
+    "at": {"match": "PARKING.  Tenant shall be entitled to a non-exclusive right"},
+    "old": "Tenant shall not be entitled to use the Demised Premises, or any portion of the Building or the Project, or the parking area, for the storage, maintenance, service or repair of any motor vehicles, equipment or machinery.",
+    "new": "Except as expressly permitted below with respect to Company Vehicles, Tenant shall not be entitled to use the Demised Premises, or any portion of the Building or the Project, or the parking area, for the storage, maintenance, service or repair of any motor vehicles, equipment or machinery."
+  },
+  {
+    "op": "insert_after",
+    "at": {"match": "PARKING.  Tenant shall be entitled to a non-exclusive right"},
+    "paras": [
+      {"kind": "IND", "text": "**Overnight Parking of Company Vehicles.**  In addition to Tenant’s other parking rights under this Section, Tenant may park up to [OVERNIGHT VEHICLE COUNT] Company Vehicles overnight in the portion of the parking area adjacent to the Building designated by Landlord from time to time for that purpose (the “**Overnight Parking Area**”), as initially shown on Exhibit A, on the following conditions: (i) “**Company Vehicles**” means passenger automobiles, pickup trucks and cargo vans with a gross vehicle weight rating not exceeding [OVERNIGHT VEHICLE GVWR CAP] pounds, owned or leased by Tenant, currently registered and inspected, in operable condition, and used in the ordinary course of Tenant’s business at the Demised Premises; no trailers, box trucks, equipment, inoperable or unregistered vehicles, or vehicles bearing advertising other than Tenant’s own business identification are permitted; (ii) Company Vehicles shall be parked only in the Overnight Parking Area and only in marked spaces, and Landlord may relocate the Overnight Parking Area within the Project on not less than five (5) days’ notice; (iii) no washing, fueling, repair, maintenance or servicing of any vehicle, and no storage of parts, fluids or materials, shall occur anywhere in the Project, and Tenant shall promptly remediate, at its expense, any fluid leak, stain or damage to the parking area caused by a Company Vehicle; (iv) no person shall sleep in or occupy any vehicle overnight; (v) each Company Vehicle shall be covered by the automobile liability insurance required by the section of this Lease entitled “INSURANCE”; (vi) the Overnight Parking Area is not reserved or exclusive during Business Days, and Landlord may designate and sign the spaces at its discretion; (vii) Landlord may, after written notice and a failure to cure within forty-eight (48) hours (or immediately in the case of a vehicle blocking access, a fire lane or another tenant’s premises), cause any vehicle parked in violation of this Section to be towed at Tenant’s expense; (viii) Tenant, its employees and agents park at their own risk and Landlord shall have no liability for theft, vandalism or damage to any vehicle or its contents; and (ix) the rights granted in this paragraph are personal to the Tenant originally named in this Lease, are subject to the Rules and Regulations, and terminate with this Lease."}
+    ]
+  },
+  {"op": "strip_highlight"},
+  {"op": "strip_nbsp"},
+  {"op": "footer_field_replace", "field": "FILENAME", "text": "ORA Master Lease v2.7 — [PREMISES ADDRESS]"},
+  {"op": "footer_text_replace", "startswith": "ORA Master Lease v", "text": "ORA Master Lease v2.7 — September 2026"}
+]
