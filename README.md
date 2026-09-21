@@ -97,6 +97,9 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 
 **Acquisition & deal lifecycle** — sourcing through close
 - `acquisition-underwriting` — canonical entry point for deal evaluation (SCREEN / SNAPSHOT / UNDERWRITE / COMPS / FULL modes, Buy Box & Scorecard)
+- `acquisition-underwriting-eval-harness` — golden-set regression harness for `acquisition-underwriting`: replays 6 frozen SCREEN-mode deals against current doctrine and flags score deltas after a doctrine edit (never a live deal screen)
+- `county-parcel-screen` — off-market direct-to-owner county-parcel screen: pulls a county's industrial parcels, scores each 0-100 against the buy-box, mines delinquency/estate/seller-in-motion signals, delivers ranked call-list workbooks
+- `county-sales-monitor` — recurring digest of recently recorded industrial sales (under 150K SF, trailing 30 days) from `county-parcel-screen`'s endpoint registry, written to a Notion comps database; market intelligence, not sourcing
 - `owner-outreach` — weekly off-market owner cold-outreach letter pipeline (draft only)
 - `parcel-data-recovery` — county-level SF/value/year-built/delinquency recovery for off-market screens
 - `ora-flood-zoning-dd` — FEMA flood + zoning/permitted-use due-diligence determinations
@@ -107,8 +110,10 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `submarket-spatial-analysis` — drive-time, demographics, and locational scoring
 - `deal-comparison` — side-by-side deal and portfolio-fit comparison
 - `loi-generation` — the sole letter-of-intent drafting path
+- `acquisition-proposal-generation` — seller-facing two-page, non-legalistic business-terms Acquisition Proposal; the short principal-to-principal alternative to `loi-generation`'s formal LOI
 - `deal-execution` — PSA negotiation through closing (redlines, DD checklist, closing statement)
 - `psa-reconciliation` — PSA fact extraction/cascade reconciliation against the LOI
+- `title-exam-abstraction` — abstracts title exams, commitments, preliminary reports and recorded instruments, turning every encumbrance into a tracked deal-terms-register item
 - `settlement-basis-extraction` — extracts HUD-1/ALTA settlement statements into a capitalizable-basis register (CHARGE_DETAIL, BASIS_REGISTER, EXCHANGE_1031) at every acquisition/disposition closing
 - `deal-retirement` — retires deal artifacts/tasks on close or kill; appends the decision ledger
 
@@ -119,12 +124,20 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `rent-roll-qc` — final QC/polish pass on rent rolls before external delivery
 - `rent-roll-reconciliation` — reconciles the Notion Tenant DB against an authoritative rent-roll export
 - `lease-abstraction-pipeline` — single or batch lease abstraction / rent-roll extraction
+- `estoppel-request-generation` — builds tenant estoppel certificate requests from abstracted lease data, pre-filling every certified fact and putting each known defect to the tenant (draft only)
 - `lease-renewal-pipeline` — flags upcoming expirations and drafts renewal templates
-- `lease-form-qc` — pre-execution QC gate for leases on ORA's own landlord form (42-defect scan, PASS/FAIL)
+- `lease-generation` — new-lease production: from an LOI, term sheet or deal terms to an execution-ready lease on ORA landlord paper, with a redline and an LOI conformance memo (amendments go to `lease-addendum`)
+- `lease-addendum` — the sole path for amending, extending or modifying a lease already in effect (rent change, tenant substitution, premises change); draft only
+- `lease-form-qc` — pre-execution QC gate for leases on ORA's own landlord form (53-check scan, PASS/FAIL)
 - `masterlease-jurisdiction-rebase` — rebases jurisdiction-conformed Master Lease property templates onto a new master revision; companion to lease-form-qc
+- `masterlease-revision-cycle` — end-to-end master-lease revision: adjudicates external AI reviews into a new master revision with rebased property templates; chains `lease-form-qc` and `masterlease-jurisdiction-rebase`
 - `legal-intelligence` — lease/contract clause library and legal document analysis
+- `listing-agreement-qc` — pre-execution QC gate for broker listing agreements on counterparty paper where ORA is Owner (25 defects; run before any listing is signed)
+- `pma-qc` — pre-execution and pre-renewal QC gate for third-party property management agreements where ORA or an ORA entity is Owner
 - `solar-lease-underwriting` — rooftop/community-solar lease underwriting: counterparty economics and rent-benchmarking for third-party rooftop energy leases
 - `tax-appeal` — property tax assessment analysis and appeal decision engine
+- `insurance-renewal-review` — property insurance renewal review: extracts carrier declarations, builds per-property premium history, separates rate from exposure, diffs each renewal; ships an XLSX and an HTML dashboard
+- `insurance-climate-risk-comparison` — market-level comparison of insurance cost and natural-disaster/climate risk for a target market against the national average and ORA's other markets; informs underwriting, never gates a deal
 - `disposition-analysis` — hold / refinance / 1031 / sell decision engine
 - `capex-budgeting` — multi-year capital plan and reserve studies
 - `vendor-management` — vendor prequalification, scoring, RFP issuance, contract intake, performance review; QC mode = pre-signature defect scan of a single vendor proposal or service agreement
@@ -139,12 +152,14 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `monthly-close` — the full monthly accounting/operations close checklist
 - `annual-cycle` — year-end/annual planning cycle (budget, tax planning, audit prep)
 - `ratify-hurdle-rate` — formal ratification workflow for the firm's IRR hurdle rate
+- `model-bulk-edit` — safely changes one input across many financial models at once and audits workbooks whose formulas carry no cached values
 - `personal-portfolio` — Gabriel's personal investment portfolio analysis
 
 **Communications & documents**
 - `communication-intelligence` — context-enriched drafting for broker/lender/vendor/attorney mail
 - `tenant-email` — tenant-facing email drafting (renewals, notices, maintenance, rent)
 - `document-assembly` — template-driven document generation from Notion data (11 templates; not LOIs)
+- `evidence-dossier-drafting` — multi-agent drafting pipeline: a numbered facts dossier, an inline citation on every claim, and an adversarial refuter that kills uncited or mis-cited claims before anything publishes
 - `daily-brief` — daily CRE news/market/portfolio intelligence brief
 - ~~`conversation-archival`~~ — retired 2026-08-05 (its entire Notion footprint was evidence-checked, not merely absent)
 
@@ -159,8 +174,13 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - ~~`code-debugging-optimizations`~~ — retired 2026-08-05 (zero use; redundant with `website-perfection`)
 - ~~`oxford-cc-strategic-audit`~~ — retired 2026-08-05 (hygiene commits exist, but no evidence a full audit run/report was produced or consumed)
 - `package-and-stage-skill` — packaging/staging helper for this repo itself
+- `dirty-tree-triage` — triages uncommitted working trees across ORA's shared checkouts: attributes changes to sessions with evidence, settles them by mtime, isolates and commits only what is safe
+- `isolated-commit` — lands your own reviewed change in a shared ORA checkout that other sessions may be editing (claim, stage by pathspec, independent review, push)
 - `file-reconciliation` — hash-diff dedupe/reconciliation between file trees
 - `repo-architecture-review` — cross-repo architecture-diagram audit (unbounded loops, off-fleet automation, dual-write drift, disconnected build steps, dead links, missing financial-code gates); read-only, hands off fixes to normal lane triage
+- `external-artifact-intake` — evaluates an external AI artifact (prompt, repo, skill, plugin, process proposal) against the current setup and decides adoption
+- `ora-setup-audit` — formal audit of the Claude Code/Cowork setup (skills, plugins, MCP connectors, hooks, dual scheduled-task fleet) scored for accuracy, performance and token spend, with a keep/fix/combine/delete call per finding
+- `security-and-hardening` — dedicated security review or hardening pass (auth, data storage, integrations, untrusted input) once security is the explicit ask
 - ~~`build-with-gate-reviews`~~ — retired 2026-08-05 (zero use across three independent verification passes)
 - `cowork-settings` — version/diff/publish the Cowork Global Settings document
 
