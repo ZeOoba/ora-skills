@@ -1,9 +1,9 @@
 ---
 name: settlement-basis-extraction
-description: Extract acquisition/disposition data from HUD-1/ALTA settlement statements and build a capitalizable-basis register for Oxford Realty Advisors property entities. Use when the user says: import settlement statements, build the basis register, extract closing costs, OCR the settlement PDFs, capitalize closing charges, reconcile a settlement to Schedule L, or points at a folder of HUD-1/ALTA settlement statements, deeds, or closing packages. Also trigger when a new acquisition or disposition closes and the settlement package needs to be worked into the entity's basis and the portfolio's EXCHANGE_1031 tracking. Produces a workbook (README, ENTITY_MASTER, PROPERTY_PL, BALANCE_SHEET, DEPR_COSTSEG, BASIS_REGISTER, CHARGE_DETAIL, EXCHANGE_1031, PAYMENTS, EXCEPTIONS, SOURCE_INDEX) with every figure transcribed verbatim and blank cells where a digit can't be read with confidence. v1.1
+description: Extract acquisition/disposition data from HUD-1/ALTA settlement statements and build a capitalizable-basis register for Oxford Realty Advisors property entities. Use when the user says: import settlement statements, build the basis register, extract closing costs, OCR the settlement PDFs, capitalize closing charges, reconcile a settlement to Schedule L, or points at a folder of HUD-1/ALTA settlement statements, deeds, or closing packages. Also trigger when a new acquisition or disposition closes and the settlement package needs to be worked into the entity's basis and the portfolio's EXCHANGE_1031 tracking. Produces a workbook (README, ENTITY_MASTER, PROPERTY_PL, BALANCE_SHEET, DEPR_COSTSEG, BASIS_REGISTER, CHARGE_DETAIL, EXCHANGE_1031, PAYMENTS, EXCEPTIONS, SOURCE_INDEX) with every figure transcribed verbatim and blank cells where a digit can't be read with confidence. v1.2
 ---
 
-# Settlement-Basis Extraction (ORA) — v1.1
+# Settlement-Basis Extraction (ORA) — v1.2
 
 ## When to use this
 
@@ -20,6 +20,18 @@ scope is strictly: settlement statement in, capitalizable basis + charge
 detail + 1031 chain entry out.
 
 ## Method
+
+### 0. Find the whole closing package before declaring anything NOT FOUND
+
+The settlement statement is one document in a package. Deeds, PSAs and
+assignments, owner's title policies, operating agreements, intercompany
+promissory notes, deeds of conversion and QI/1031 forms sit together in
+`Business\Corporate and Settlement and Legal Documents\<property or LLC>\`
+(about 520 PDFs, one subfolder per property or entity; 1031 forms also in
+`...\1031 Forms`). Read that subfolder first. A "price NOT FOUND", "no
+lender", "no operating agreement" or "chain-of-title gap" finding is
+unreliable until it has been checked against it -- the 2026-09 fact-base
+builds missed this folder and reported all four wrongly.
 
 ### 1. Triage every document for a text layer before doing anything else
 
@@ -39,8 +51,9 @@ programmatically.
 
 ### 2. OCR every image-only document at 300 dpi, and keep the twin next to the original
 
-Run OCR (300 dpi minimum -- lower resolutions lose small print like transfer
-tax splits and per-diem prorations) and save the searchable output ALONGSIDE
+Run OCR (300 dpi minimum, greyscale, `--psm 6` per page -- lower resolutions
+lose small print like transfer tax splits and per-diem prorations) and save
+the searchable output ALONGSIDE
 the original in the same folder, not in a separate output tree. Suggested
 naming: `<original filename> (OCR).pdf`. This is a one-time cost per
 document -- once a settlement has a searchable twin, every future skill run
@@ -65,6 +78,10 @@ Two known illegible-field patterns worth watching for specifically:
   worse than no transcription.
 
 ### 3. Transcribe verbatim, then cross-foot before touching anything else
+
+Watermarks and skewed scans scramble column order (for example
+Commissions and Insurance swapped). Resolve any suspect label order from the
+PDF's word coordinates, not from the OCR reading order.
 
 Transcribe every settlement charge line as it appears -- do not net, round,
 or reclassify during transcription. Cross-foot each settlement against its
@@ -97,6 +114,15 @@ finding (1100 Rarig, and 401 Sunburst's Dorchester County SDAT record showing
 Land Value $0) -- treat a missing split as a standing exception category, not
 a one-off.
 
+A $0 or blank land line does not mean zero land basis: leave the register
+cell blank (never $0) and log "needs assessor ratio or appraisal split".
+Franklin County OH, Baltimore City and County MD, Dorchester County MD and
+Talbot County MD publish land/improvement ratios; cite the source and as-of
+date and mark the result **derived**. Seller credits reduce basis -- carry
+them in their own column (for example the 5600 Sunnyside 1992 credit of
+$1,137.30), never netted into a charge line. A 1031 replacement row's
+"indicated basis" is COST; tax basis is carryover, so label it as such.
+
 ### 6. Update the EXCHANGE_1031 tab and the 1031 chain register together, at every closing
 
 If the settlement is a leg of a like-kind exchange (QI named on the HUD-1 /
@@ -111,6 +137,24 @@ time, rather than retroactively, is that a parcel-count mismatch between the
 identification notice and the settlement is visible immediately, not two tax
 seasons later -- this is exactly how the McGregor/Northwood gap in the
 2026-08-17 register went undetected for two years.
+
+Run these six standing checks at every closing:
+
+1. Compare parcel counts on the settlement, the 45-day identification notice
+   and the Form 8824. Any mismatch is a defect.
+2. For every identified property that closes, record whether it closed
+   inside or outside the exchange.
+3. Same taxpayer: the vesting entity on the deed must be the exchanger or its
+   disregarded entity. Check the operating agreement -- a two-member LLC is
+   not disregarded (7658 Fishel, LLC: Eric Goldberg 90% / 3 Peaks Capital 10%
+   per the executed agreement, while FVC was the exchanger).
+4. Related party: run the seller AND the lender against the ORA affiliate
+   list before funding. Section 1031(f) has a two-year lookback.
+5. Boot: any dollar that leaves the QI to anyone other than the seller or
+   the settlement agent is presumptively boot (a holdback paid to the
+   settlement agent, as on 6300 Sheriff Road, is the pattern).
+6. Basis: replacement property takes carryover basis under Section 1031(d);
+   never book cost, and remember basis can carry over twice.
 
 ### 7. Build/refresh the workbook
 
@@ -136,8 +180,13 @@ that do -- do not create a parallel workbook per batch):
 
 Every check column in the workbook should be a live formula, not a
 hardcoded value -- the point is that the workbook re-verifies itself when a
-row is edited later. Build per the `xlsx` skill's conventions (recalc
-before shipping; no hardcoded results where a formula is possible).
+row is edited later. Wrap the checks in `ROUND(...,2)` so they evaluate to
+zero. Build per the `xlsx` skill's conventions and ship only when
+`recalc.py` returns `status: success` with `total_errors: 0`. A clean recalc
+shows the formulas evaluate, not that they are right; roll-up lines such as
+"See Statement" and "TOTAL OTHER EXPENSES" must be excluded from the Other
+column (they were double-counted on 6 of 12 property rows in the first
+build).
 
 ### 8. Close with a "six items that change a number" style summary, not a raw diff dump
 
@@ -148,6 +197,12 @@ IC memo currently relies on -- zero land basis, a parcel missing from an
 a title-chain gap, an error in a previously-issued memo. This is the
 highest-value output of the whole procedure; the workbook is the evidence,
 this list is the action item.
+
+### 9. Run an independent verification pass before delivery
+
+Have a reviewer who did not build the workbook re-check it, grepping the
+source text for every figure verified. In the first build this pass caught
+the roll-up double-count above. Do not ship on the builder's own recalc.
 
 ## Output
 
@@ -172,6 +227,14 @@ this list is the action item.
   100% to improvements -- that is the exception, not the default.
 
 ## Changelog
+
+- v1.2 (2026-09-21): Reconciled against the full method in the 2026-08-17
+  project transfer. Added step 0 (read the Corporate and Settlement folder
+  package before declaring NOT FOUND), watermark column-order rule,
+  greyscale/`--psm 6` OCR settings, land-ratio sources and seller-credit
+  column, the six standing 1031 checks, `ROUND(...,2)`/`recalc.py` ship gate
+  with the roll-up exclusion, and step 9 (independent verification).
+  Description unchanged.
 
 - v1.1 (2026-08-24): Description trimmed to restore headroom (was 1019/1024,
   headroom 5 -- close-out work-order item 4, the tightest of the six flagged
