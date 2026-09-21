@@ -37,7 +37,8 @@ Run the census first: `python scripts/package_census.py "<folder>"
 [--factbase <fact-base.json>]`. It lists every PDF with page count, text /
 partial / image-only status (sampled, so it is cheap), whether an `(OCR)`
 twin already exists, and any path long enough to break Python on Windows
-(copy those out with Git Bash `cp` before reading). With `--factbase` it
+(the census reads them itself; for other tools, copy them out with Git Bash
+`cp` or open them with the `\\?\` prefix). With `--factbase` it
 lists every field still NOT FOUND / INFERRED / CONFLICT / illegible and says
 whether the fact base ever recorded a `recheck_*` against this folder; a
 flagged field with no recorded recheck is unverified, not a finding.
