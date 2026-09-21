@@ -1,9 +1,9 @@
 ---
 name: settlement-basis-extraction
-description: Extract acquisition/disposition data from HUD-1/ALTA settlement statements and build a capitalizable-basis register for Oxford Realty Advisors property entities. Use when the user says: import settlement statements, build the basis register, extract closing costs, OCR the settlement PDFs, capitalize closing charges, reconcile a settlement to Schedule L, or points at a folder of HUD-1/ALTA settlement statements, deeds, or closing packages. Also trigger when a new acquisition or disposition closes and the settlement package needs to be worked into the entity's basis and the portfolio's EXCHANGE_1031 tracking. Produces a workbook (README, ENTITY_MASTER, PROPERTY_PL, BALANCE_SHEET, DEPR_COSTSEG, BASIS_REGISTER, CHARGE_DETAIL, EXCHANGE_1031, PAYMENTS, EXCEPTIONS, SOURCE_INDEX) with every figure transcribed verbatim and blank cells where a digit can't be read with confidence. v1.2
+description: Extract acquisition/disposition data from HUD-1/ALTA settlement statements and build a capitalizable-basis register for Oxford Realty Advisors property entities. Use when the user says: import settlement statements, build the basis register, extract closing costs, OCR the settlement PDFs, capitalize closing charges, reconcile a settlement to Schedule L, or points at a folder of HUD-1/ALTA settlement statements, deeds, or closing packages. Also trigger when a new acquisition or disposition closes and the settlement package needs to be worked into the entity's basis and the portfolio's EXCHANGE_1031 tracking. Produces a workbook (README, ENTITY_MASTER, PROPERTY_PL, BALANCE_SHEET, DEPR_COSTSEG, BASIS_REGISTER, CHARGE_DETAIL, EXCHANGE_1031, PAYMENTS, EXCEPTIONS, SOURCE_INDEX) with every figure transcribed verbatim and blank cells where a digit can't be read with confidence. v1.3
 ---
 
-# Settlement-Basis Extraction (ORA) — v1.2
+# Settlement-Basis Extraction (ORA) — v1.3
 
 ## When to use this
 
@@ -60,22 +60,52 @@ document -- once a settlement has a searchable twin, every future skill run
 (this one, tax-appeal, disposition-analysis) benefits without re-OCRing.
 
 Where a digit cannot be read with confidence after OCR, leave the cell
-**blank** in the register. Never guess a number to fill a cell. Log the
-illegible field in the EXCEPTIONS tab with the file name and the specific
-line item.
+**blank** in the register and set its `basis = blank` (see "Cell basis"
+below). Never guess a number to fill a cell. Log the illegible field in
+the EXCEPTIONS tab with the file name and the specific line item.
 
 Two known illegible-field patterns worth watching for specifically:
 - Contract sales price (HUD-1 line 101) sometimes fails OCR when the rest of
   the page is legible. If line 101 is unreadable, the contract price can
   often be corroborated from the transfer-tax and commission lines (both are
-  usually a fixed percentage of price) -- derive it that way and flag the
-  cell as **derived, not transcribed** rather than leaving it blank.
+  usually a fixed percentage of price) -- derive it that way rather than
+  leaving it blank. If the tax lines fix the price exactly (a fixed
+  ad-valorem rate), set `basis = derived`; if they only bound it (minimum
+  or rounded tax, a cap), enter the floor and set `basis = lower-bound`.
 - An entire settlement table (all of Section L, or the whole HUD-1 second
   page) can fail as a block, typically from a bad fax generation or a
   photocopy-of-a-photocopy. When that happens, don't partially transcribe
   around it -- flag the whole document as "OCR failed, request clean copy"
   in EXCEPTIONS and move on. Partial transcription of a garbled table is
   worse than no transcription.
+
+### Cell basis: every non-transcribed figure carries a persistent flag
+
+`BASIS_REGISTER` and `CHARGE_DETAIL` each carry a `basis` column. Values:
+`transcribed` (read directly off the document), `derived` (computed or
+corroborated from other lines or a public record -- record the method in
+the adjacent note; an exact back-solve), `lower-bound` (a floor the other
+figures bound but do not fix, e.g. "at least ~$4.78M implied" from a
+minimum transfer-tax line), or `blank` (the cell is left empty -- an
+unreadable digit per step 2 or a missing allocation per step 5 -- and has
+an EXCEPTIONS row). A cell with no digit read from a source document is
+never `transcribed`. Prose flags in a note are not enough: they do not
+survive a re-sort or a hand-off, and in the 2026-08-17 register a
+`lower-bound` price was later stated outright in the closing package that
+nobody re-opened.
+
+Re-check rule: after the step 7 recalc gate and before the step 9
+verification pass, the builder re-checks every cell whose `basis` is not
+`transcribed` (`blank` cells included) against the step 0 package. When
+the package states the figure, replace the cell with the stated value,
+set `basis = transcribed`, cite the document in SOURCE_INDEX, and note
+the old value in the cell note. When it still does not, leave the flag
+in place and list the cell under EXCEPTIONS as "unresolved after package
+sweep". Add a live count of unresolved cells to the README tab,
+`COUNTA(<basis range>)-COUNTIF(<basis range>,"transcribed")`, so the
+count is visible at hand-off. `COUNTA` skips empty cells, so every row
+must carry a `basis` value; a plain `<>transcribed` criterion would
+instead over-count empty cells as unresolved.
 
 ### 3. Transcribe verbatim, then cross-foot before touching anything else
 
@@ -115,12 +145,12 @@ Land Value $0) -- treat a missing split as a standing exception category, not
 a one-off.
 
 A $0 or blank land line does not mean zero land basis: leave the register
-cell blank (never $0) and log "needs assessor ratio or appraisal split".
-Franklin County OH, Baltimore City and County MD, Dorchester County MD and
-Talbot County MD publish land/improvement ratios; cite the source and as-of
-date and mark the result **derived**. Seller credits reduce basis -- carry
-them in their own column (for example the 5600 Sunnyside 1992 credit of
-$1,137.30), never netted into a charge line. A 1031 replacement row's
+cell blank (never $0), set `basis = blank`, and log "needs assessor ratio
+or appraisal split". Franklin County OH, Baltimore City and County MD,
+Dorchester County MD and Talbot County MD publish land/improvement
+ratios; cite the source and as-of date and set `basis = derived`. Seller
+credits reduce basis -- carry them in their own column (for example the
+5600 Sunnyside 1992 credit of $1,137.30), never netted into a charge line. A 1031 replacement row's
 "indicated basis" is COST; tax basis is carryover, so label it as such.
 
 ### 6. Update the EXCHANGE_1031 tab and the 1031 chain register together, at every closing
@@ -168,13 +198,16 @@ that do -- do not create a parallel workbook per batch):
 - `PROPERTY_PL` -- Form 8825 line-by-line by property.
 - `BALANCE_SHEET` -- Schedule L + M-2.
 - `DEPR_COSTSEG` -- depreciation and cost segregation position by property.
-- `BASIS_REGISTER` -- one row per property, rolling basis.
+- `BASIS_REGISTER` -- one row per property, rolling basis; carries the
+  `basis` column (see "Cell basis").
 - `CHARGE_DETAIL` -- one row per settlement closing-charge line, tagged
-  capitalizable/not (see step 4).
+  capitalizable/not (see step 4); carries the `basis` column (see "Cell
+  basis").
 - `EXCHANGE_1031` -- one row per exchange leg (see step 6).
 - `PAYMENTS` -- coupons/estimated payments if in scope for this batch.
-- `EXCEPTIONS` -- every illegible field, cross-foot failure, and land/basis
-  gap, with file name and specific line item.
+- `EXCEPTIONS` -- every illegible field, cross-foot failure, land/basis
+  gap, and non-`transcribed` cell unresolved after the package sweep, with
+  file name and specific line item.
 - `SOURCE_INDEX` -- file name -> tab/row(s) it feeds, so a reviewer can trace
   any number back to its settlement statement.
 
@@ -201,8 +234,10 @@ this list is the action item.
 ### 9. Run an independent verification pass before delivery
 
 Have a reviewer who did not build the workbook re-check it, grepping the
-source text for every figure verified. In the first build this pass caught
-the roll-up double-count above. Do not ship on the builder's own recalc.
+source text for every figure verified, and confirming the "Cell basis"
+re-check was done for every non-`transcribed` cell. In the first build
+this pass caught the roll-up double-count above. Do not ship on the
+builder's own recalc.
 
 ## Output
 
@@ -227,6 +262,13 @@ the roll-up double-count above. Do not ship on the builder's own recalc.
   100% to improvements -- that is the exception, not the default.
 
 ## Changelog
+
+- v1.3 (2026-09-21): Added persistent `basis` column (`transcribed` /
+  `derived` / `lower-bound` / `blank`) and the pre-ship re-check of every
+  non-`transcribed` cell against the step 0 package, after a `lower-bound`
+  price ("at least ~$4.78M implied") in the 2026-08-17 register turned out
+  to be stated outright in the closing package. Description unchanged
+  except the version tag.
 
 - v1.2 (2026-09-21): Reconciled against the full method in the 2026-08-17
   project transfer. Added step 0 (read the Corporate and Settlement folder
