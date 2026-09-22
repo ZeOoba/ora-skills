@@ -152,7 +152,36 @@ class SweepAll(FixtureTestCase):
         self.assertEqual(self._sweep(check=True), [])
 
 
+class SweepSafety(FixtureTestCase):
+    def test_mirror_dirs_without_repo_counterpart_are_untouched(self):
+        # ~/.claude/skills holds synced/ and _archive_* trees that are not skills.
+        _write(self.mirror / 'synced' / 'x' / 'SKILL.md', 'platform copy\n')
+        _write(self.mirror / '_archive_2026' / 'old' / 'SKILL.md', 'retired\n')
+        self.assertEqual(slm.sweep_all(repo_root=self.repo, mirror_root=self.mirror,
+                                       backup_root=self.tmp / 'b'), [])
+        self.assertEqual((self.mirror / 'synced' / 'x' / 'SKILL.md').read_text(encoding='utf-8'),
+                         'platform copy\n')
+
+    def test_skill_with_uncommitted_changes_is_skipped(self):
+        # A pull on a dirty main must not push unreviewed WIP into the live mirror.
+        _write(self.repo / 'a-skill' / 'SKILL.md', 'wip\n')
+        _write(self.mirror / 'a-skill' / 'SKILL.md', 'committed\n')
+        with unittest.mock.patch.object(slm, 'dirty_skills', return_value={'a-skill'}):
+            drifted = slm.sweep_all(repo_root=self.repo, mirror_root=self.mirror,
+                                    backup_root=self.tmp / 'b')
+        self.assertEqual(drifted, [])
+        self.assertEqual((self.mirror / 'a-skill' / 'SKILL.md').read_text(encoding='utf-8'),
+                         'committed\n')
+
+
 class MainBranchGuard(unittest.TestCase):
+    def test_sweep_refuses_detached_head(self):
+        # post-rewrite can fire mid-rebase, when HEAD is detached.
+        with unittest.mock.patch.object(slm, 'current_branch', return_value='HEAD'), \
+             unittest.mock.patch.object(slm, 'sweep_all') as sweep:
+            slm.main(['--all'])
+        sweep.assert_not_called()
+
     def test_sweep_refuses_off_main(self):
         # A stale feature worktree must never roll live mirrors back.
         with unittest.mock.patch.object(slm, 'current_branch', return_value='fix/old'), \
