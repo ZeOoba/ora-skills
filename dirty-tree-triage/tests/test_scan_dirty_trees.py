@@ -224,5 +224,44 @@ class PrimaryIsNotFirstFound(GitFixture):
         self.assertEqual(roles["occ-1"]["role"], "stray")
 
 
+class TrivialHintsMatchDirectoriesNotFilenames(unittest.TestCase):
+    """The 2026-09-22 run bucketed a spec doc and a memory file as
+    `untracked-trivial` because "scratch" appeared in their FILENAMES. The hints
+    describe scratch/archive DIRECTORIES; a file's own name is content."""
+
+    def cat(self, line):
+        return sdt.classify(line)[0]
+
+    def test_scratch_in_filename_is_not_trivial(self):
+        self.assertEqual(self.cat("?? docs/2026-09-18_eos-plan-gate-scratch-exclusion_spec.md"),
+                         "untracked-file")
+        self.assertEqual(self.cat(
+            "?? projects/x/memory/feedback_website_canonical_slug_blocks_scratchpad_and_memory.md"),
+            "untracked-file")
+
+    def test_preview_deploy_in_filename_is_not_trivial(self):
+        self.assertEqual(self.cat("?? docs/preview-deploy-runbook.md"), "untracked-file")
+
+    def test_scratch_directory_is_trivial(self):
+        self.assertEqual(self.cat("?? scratch/"), "untracked-trivial")
+        self.assertEqual(self.cat("?? tools/archive-scratch/"), "untracked-trivial")
+        self.assertEqual(self.cat("?? scratchpad/notes.md"), "untracked-trivial")
+
+    def test_archive_paths_stay_trivial(self):
+        self.assertEqual(self.cat("?? maintenance/_archive/session-audit-logs/"), "untracked-trivial")
+        self.assertEqual(self.cat(
+            "?? maintenance/_state/_archive/2026-09-12_fleet-pause-windows_v1.json"),
+            "untracked-trivial")
+
+    def test_temp_files_stay_trivial(self):
+        self.assertEqual(self.cat("?? memory/event_log.md.tmp-append.123.456"), "untracked-trivial")
+        self.assertEqual(self.cat("?? foo.tmp"), "untracked-trivial")
+        self.assertEqual(self.cat("?? tmpindex.8812"), "untracked-trivial")
+
+    def test_windows_separators(self):
+        self.assertEqual(self.cat("?? docs\\plan-scratch-notes.md"), "untracked-file")
+        self.assertEqual(self.cat("?? scratch\\x.md"), "untracked-trivial")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
