@@ -1,6 +1,6 @@
 ---
 name: portfolio-reporting
-description: "Use this skill whenever the user mentions: portfolio report, quarterly report, annual report, investor report, portfolio summary, portfolio overview, portfolio performance, KPI report, management report, board presentation, portfolio PowerPoint, or any request to produce a summary of portfolio performance across all properties and markets — Oxford Realty Advisors portfolio-level reporting and investor-ready output generation. Also trigger when the user asks for a consolidated view of the entire Oxford portfolio."
+description: "Use when the user mentions: portfolio report, quarterly report, annual report, investor report, portfolio summary, portfolio overview, portfolio performance, KPI report, management report, board presentation, portfolio PowerPoint, or any request to produce a summary of portfolio performance across all properties and markets — Oxford Realty Advisors portfolio-level reporting and investor-ready output generation. Also trigger when the user asks for a consolidated view of the entire Oxford portfolio."
 ---
 
 # Portfolio Reporting — Oxford Realty Advisors (v1.1)

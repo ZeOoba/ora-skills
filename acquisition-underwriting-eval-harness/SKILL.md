@@ -1,6 +1,6 @@
 ---
 name: acquisition-underwriting-eval-harness
-description: "Use when a doctrine edit to acquisition-underwriting (a scorecard-weight amendment, a new QC-gate rule, a ruling/amendment, an RCT table revision) needs a regression check — replays the frozen 6-deal SCREEN-mode golden set against CURRENT acquisition-underwriting SKILL.md doctrine and diffs the Combined score against the golden snapshot. Trigger on: eval harness, golden set, golden-set regression, replay the golden set, did the doctrine change move scores, rebaseline the goldens, harness run, scheduled-poll, doctrine skip gate. NOT a live deal-evaluation tool — never invoke this for an actual acquisition screen (that is acquisition-underwriting). PILOT — piloted on one skill only; runs as a daily-polling scheduled task."
+description: "Use when a doctrine edit to acquisition-underwriting (a scorecard-weight amendment, a new QC-gate rule, a ruling/amendment, an RCT table revision) needs a regression check against the frozen SCREEN-mode golden set. Trigger on: eval harness, golden set, golden-set regression, replay the golden set, did the doctrine change move scores, rebaseline the goldens, harness run, scheduled-poll, doctrine skip gate. NOT a live deal-evaluation tool — never invoke this for an actual acquisition screen (that is acquisition-underwriting). PILOT — piloted on one skill only; runs as a daily-polling scheduled task."
 ---
 
 # Acquisition-Underwriting Eval Harness (v1.1 — pilot)
