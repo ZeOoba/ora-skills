@@ -31,6 +31,12 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 SKIP = {'_archive', 'tools', '.git'}
 MAX_DESC = 1024  # platform limit: importer rejects 'description' > 1024 chars (hit 2026-06-11)
+# Skill-version/changelog history in a description: a 'vX.Y (' changelog lead, a
+# trailing bare 'vX.Y', an ISO date, or the word 'changelog'. A versioned artifact
+# named mid-trigger ('Style Guide v1.0 fonts', 'schema rev 1.1') is allowed.
+DESC_HISTORY_RE = re.compile(
+    r'\bv\d+\.\d+(?:\.\d+)?\s*\(|\bv\d+\.\d+(?:\.\d+)?[\s.)]*$|\b20\d\d-\d\d-\d\d\b|changelog',
+    re.I)
 
 # Skills deliberately unpublished from the Cowork/claude.ai skill store (Gabriel's
 # own ruling 2026-08-09) that must NEVER resurface as a pending_reimport candidate
@@ -231,6 +237,16 @@ def validate_skill_frontmatter(skill_dir: Path, *, read_text=None, md_files=None
             errors.append(
                 f"{skill}: description is {len(desc)} chars — exceeds the {MAX_DESC}-char "
                 f"platform limit; the importer will reject it. Trim it before packaging."
+            )
+        history = DESC_HISTORY_RE.search(desc)
+        if history:
+            errors.append(
+                f"{skill}: description carries version/changelog history ({history.group(0)!r}). "
+                f"The description is the routing surface -- when to use the skill, never its "
+                f"history or a workflow summary. Put the version in the body H1 as '(vX.Y)' "
+                f"(doctrine-integrity-probe Check 15 reads it there) and the history under "
+                f"'## Changelog' in the body. 142 of 171 SKILL.md files had drifted into this "
+                f"shape by 2026-09-22."
             )
         tag = re.search(r'</?[A-Za-z][^>]*>', desc)
         if tag:
