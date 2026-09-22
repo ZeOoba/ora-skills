@@ -1,9 +1,9 @@
 ---
 name: lease-form-qc
-description: "Pre-execution QC gate for leases drafted on Oxford Realty Advisors own landlord form (Fairground Village Center / 1100 Rarig Ave / Sepich portfolio paper). Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, review our lease draft, new tenant lease, lease from the template, or uploads a DOCX that is an ORA-form lease. Also run before ANY outbound lease goes to a tenant or broker. Scans 51 systemic defects in the ORA base form (dead cross-references, undefined terms, OpEx billing, statutory cites, Ohio mitigation exposure) plus a token gate and footer tenant-mismatch check (53 checks) with PASS/FAIL severity. Also runs --loi-conformance: register vs. drafted lease, CONFORMS/CONFORMS+/PARTIAL/MISSING/CONFLICT matrix, for lease-generation's LOI gate. Carries ORA's six ratified standing lease positions (2026-08-03). Distinct from legal-intelligence: audits ORA's OWN paper. v2.6 (T2 tenant-mismatch check + --loi-conformance mode; 53 checks)"
+description: "Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, review our lease draft, new tenant lease, lease from the template, or uploads a DOCX that is an ORA-form lease. Also run before ANY outbound lease goes to a tenant or broker. Pre-execution QC gate for leases drafted on Oxford Realty Advisors own landlord form (Fairground Village Center / 1100 Rarig Ave / Sepich portfolio paper). Also runs --loi-conformance (register vs. drafted lease) for lease-generation's LOI gate. Distinct from legal-intelligence: audits ORA's OWN paper."
 ---
 
-# Lease Form QC — Oxford Realty Advisors own paper
+# Lease Form QC — Oxford Realty Advisors own paper (v2.6)
 
 Pre-execution gate for leases drafted on the ORA landlord form. Run BEFORE a draft
 goes to a tenant, broker, or counsel. This is a defect scan of **our** paper — for

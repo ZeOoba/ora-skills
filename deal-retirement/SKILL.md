@@ -1,6 +1,6 @@
 ---
 name: deal-retirement
-description: Lifecycle skill triggered on deal closing or kill — retires deal-bound artifacts, scheduled tasks, and Notion staging records; archives DD package to SharePoint. Use when the user mentions: deal closed, deal killed, deal dead, post-closing cleanup, retire deal, archive deal, sunset deal artifacts, deal lifecycle, close-out, post-mortem, or any task related to retiring assets associated with a completed or terminated deal. v1.5 — changelog in body.
+description: Use when a deal closes or is killed and its deal-bound artifacts, scheduled tasks, and Notion staging records need retiring and the DD package archiving to SharePoint. Use when the user mentions: deal closed, deal killed, deal dead, post-closing cleanup, retire deal, archive deal, sunset deal artifacts, deal lifecycle, close-out, post-mortem, or any task related to retiring assets associated with a completed or terminated deal.
 license: ORA Internal
 ---
 
@@ -8,7 +8,7 @@ license: ORA Internal
 
 v1.5 (2026-09-19, Gabriel-directed — new Killed-workflow step 4a tags an ORA-side diligence exit after LOI/PSA as `LOI Outcome = TERMINATED-DILIGENCE` rather than `LOST`, so the row reaches `ora-passed-deal-tracker`'s new Step 4e diligence-exit classifier instead of Step 4b's clearing-price classifier, which has no operand where no competitor ever bid. Evidenced by `REDACTED-059` (Sourcing Log row `REDACTED-016`): PSA executed $4.0M 2026-04-21, ORA terminated 2026-07-09 on its own AEI Phase II environmental finding, no competing bidder — routed to `LOST` on 2026-09-19 and would have produced a permanent unfillable `UNCLASSIFIED` every month. Spec: `Claude_Workspace/02_Outputs/2026-09-19_TrackerSpec_DiligenceExitArm_Proposal_v01.md` §3.2); v1.4 (2026-09-19, Gabriel-directed — three process gaps surfaced by the 808 REDACTED-165 pass, evidenced in `Claude_Workspace/02_Outputs/2026-09-19_REDACTED-143_PassRecord_v01.md` §5: (1) the Killed workflow's old step 3 pointed at a Notion Knowledge Base "Deals Passed" log that does not exist and that nothing reads — repointed to the Deal Sourcing Log row, which is now the named canonical passed-deal record; (2) the workflow wrote only the Pipeline Tracker and the memory ledger while `ora-passed-deal-tracker` sweeps only the Sourcing Log, so a Pipeline-only deal passed without an LOI fell out of the monthly trade sweep entirely — new step 3 makes the Sourcing Log row mandatory, with an existence check, the exact field mapping, and a close-out checklist; (3) no watch-date convention existed for a passed deal — new step 3d fixes one); v1.3 (2026-07-29: Closed Deal Retirement step 9 now appends an ACQUIRED baseline row to memory/disposition-ledger.md, the new post-acquisition lifecycle ledger); v1.2 (2026-07-18: proposes an inline ora-calibration-snapshot trigger, a PROPOSED underwriting-defaults delta vs standards.md Part A, and two proposed +6mo/+12mo actuals-check tasks — all proposals, nothing self-registers); v1.1 (2026-07-16: closing/kill appends to memory/deal-decision-ledger.md)
 
-# Deal Retirement
+# Deal Retirement (v1.5)
 
 Lifecycle hygiene skill that retires deal-bound artifacts, scheduled tasks, Notion staging records, and DD packages once a deal closes or is killed.
 

@@ -1,9 +1,9 @@
 ---
 name: model-bulk-edit
-description: "Safely change the same input across many ORA financial models at once, and audit workbooks whose formulas carry no cached values. Use when the user says: rebase the models, update the refi rate everywhere, change an assumption across all deals, bulk edit workbooks, propagate a constant to the models, sweep the underwriting models, or after any UNDERWRITING CONVENTIONS constant moves in acquisition-underwriting. Also the SOLE path for the cached-value audit -- trigger on: nulls in the QC gate, model reads blank, dead workbook, formulas but no values, why is DSCR empty. Encodes: archive-then-verify before any write, Excel COM with CalculateFullRebuild (NEVER openpyxl for writes -- it silently destroys every cached value), constant-vs-formula pre-check, and a mandatory post-write diff of every model against its archived original. Historical models for closed or passed deals are rebased only on Gabriel's explicit instruction. v1.1"
+description: "Use when the user says: rebase the models, update the refi rate everywhere, change an assumption across all deals, bulk edit workbooks, propagate a constant to the models, sweep the underwriting models, or after any UNDERWRITING CONVENTIONS constant moves in acquisition-underwriting -- safely changes the same input across many ORA financial models at once. Also the SOLE path for the cached-value audit (workbooks whose formulas carry no cached values) -- trigger on: nulls in the QC gate, model reads blank, dead workbook, formulas but no values, why is DSCR empty. Historical models for closed or passed deals are rebased only on Gabriel's explicit instruction."
 ---
 
-# model-bulk-edit — Oxford Realty Advisors
+# model-bulk-edit — Oxford Realty Advisors (v1.1)
 
 One input, many workbooks. This skill exists because the dangerous part of a bulk model
 edit is never the edit — it is the write mechanism, the models you did not know existed,

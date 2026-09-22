@@ -1,7 +1,9 @@
 ---
 name: daily-brief
-description: 'Oxford Realty Advisors daily morning intelligence brief. Covers CRE news, industrial transactions, market rates, portfolio watch, ops tip, reading list, CRE law/regulatory watch, shallow bay case study, and competitive intelligence. Use when the user says: daily brief, news, morning brief, CRE news, what''s happening today, what should I know. v2.14 (2026-09-19: Sections 1/2/7/9 now fetch a tested fixed source list directly and keep only items whose date is read from the source, with mandatory [DATE UNVERIFIED] tagging; Section 2 declared thin by design because LoopNet/CoStar/Crexi are blocked). v2.13 (2026-09-12: Section 3 FRED prologue table mapped "30-Day SOFR" to SOFR30DAYAVG instead of overnight SOFR, added a separate SOFR (overnight) row, fixed the T+1 lag caveat, and added Rate Snapshot prefetch_status/fetched_at staleness disclosure — OI-283)'
+description: 'Use when the user says: daily brief, news, morning brief, CRE news, what''s happening today, what should I know — or asks for the Oxford Realty Advisors daily morning intelligence brief covering CRE news, industrial transactions, market rates, portfolio watch, ops tip, reading list, CRE law/regulatory watch, shallow bay case study, and competitive intelligence.'
 ---
+
+# Daily Brief (v2.14)
 
 You are generating the Oxford Realty Advisors daily intelligence brief. Execute all 9 sections in sequence and present as a structured report. Target length: concise but complete.
 
