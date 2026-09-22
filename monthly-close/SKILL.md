@@ -1,6 +1,6 @@
 ---
 name: monthly-close
-description: 'Use when the user mentions: monthly close, month-end, monthly checklist, payment dashboard, QB journal entries, bank reconciliation, lender payments, borrower payments, asset management fees, CAM reconciliation, month-end close, 1st of the month — the Oxford Realty Advisors monthly accounting and operations close process (the 59-item Monthly Checklist across 10 categories: External Borrower payments, External Lender receipts, Internal Lender receipts, QB Journal Entries, Reconciliations, HubSpot, Tenant Communication, Asset Management Fees, Insurance, and Taxes).'
+description: 'Use when the user mentions: monthly close, month-end, monthly checklist, payment dashboard, QB journal entries, bank reconciliation, lender payments, borrower payments, asset management fees, CAM reconciliation, month-end close, 1st of the month, internal lender receipts, HubSpot month-end updates, tenant communication, insurance or taxes for the month — the Oxford Realty Advisors monthly accounting and operations close.'
 ---
 
 # Monthly Close (v2.2)

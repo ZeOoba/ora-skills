@@ -1,6 +1,6 @@
 ---
 name: fleet-advisory-remediation
-description: Use when the user pastes or references a fleet-status/setup-self-audit/automation-health-monitor advisory report, says fix these advisories, dark tasks, fleet hygiene sweep, or clean up the scheduled-task fleet — auto-triage across the dual CC/MCP + LAMS/Cowork scheduled-task fleet (register complete-but-unregistered "dark" task folders, delete expired one-time registry entries, route stale-data-producer symptoms to orphaned-task-forensics for root-causing, hand off only the WRITES the current session's fleet can't reach — `fleet-status.py` reads both fleets regardless of surface). Cross-fleet handoffs are dispatched to a NATIVE on-device Cowork session by name, never a bare "Cowork session" (a cloud sandbox carries none of the scheduled-task MCP tools).
+description: Use when the user pastes or references a fleet-status/setup-self-audit/automation-health-monitor advisory report, says fix these advisories, dark tasks, fleet hygiene sweep, or clean up the scheduled-task fleet across the dual CC/MCP + LAMS/Cowork scheduled-task fleet. Stale-data-producer symptoms route to orphaned-task-forensics; `fleet-status.py` reads both fleets regardless of surface. Cross-fleet handoffs are dispatched to a NATIVE on-device Cowork session by name, never a bare "Cowork session" (a cloud sandbox carries none of the scheduled-task MCP tools).
 license: ORA Internal
 ---
 
