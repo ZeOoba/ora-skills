@@ -520,7 +520,7 @@ def _p32(ctx):
                 "a form barring any non-party from claiming a remedy. Require that "
                 "every trade contract name the Owner entity as the contracting party, "
                 "with the manager signing as disclosed agent. Route the trade paper "
-                "itself to `vendor-contract-qc` (VC-1). " + quote(ctx, r"repairs"))
+                "itself to `vendor-management` QC mode (VC-1). " + quote(ctx, r"repairs"))
     return None
 
 
