@@ -1,6 +1,6 @@
 ---
-name: pma-qc
-description: "Pre-execution and pre-renewal QC gate for PROPERTY MANAGEMENT AGREEMENTS on third-party manager paper where Oxford Realty Advisors or an ORA entity is the Owner. Use when the user says: QC this management agreement, review the PM agreement, property management agreement, management agreement review, PM fee review, can I give leasing to another party, can the manager sign contracts for us, terminate the property manager, or uploads a DOCX/PDF that is a property management agreement. Run before signing, before every auto-renewal, and before engaging a third-party leasing broker. Scans 34 defects (exclusive leasing grant with no per-property carve-out, manager authority to execute leases or trade contracts in its own name, indemnity reaching the manager's own negligence, undefined fee bases, no turnover obligations) at BLOCK/HIGH/MED/LOW. Distinct from lease-form-qc, listing-agreement-qc and legal-intelligence. 19 PROPOSED positions, unratified. v1.2"
+name: "pma-qc"
+description: "Pre-execution and pre-renewal QC gate for PROPERTY MANAGEMENT AGREEMENTS on third-party manager paper where Oxford Realty Advisors or an ORA entity is the Owner. Use when the user says: QC this management agreement, review the PM agreement, property management agreement, management agreement review, PM fee review, can I give leasing to another party, can the manager sign contracts for us, terminate the property manager, or uploads a DOCX/PDF that is a property management agreement. Run before signing, before every auto-renewal, and before engaging a third-party leasing broker. Scans 34 defects (exclusive leasing grant with no per-property carve-out, manager authority to execute leases or trade contracts in its own name, indemnity reaching the manager's own negligence, undefined fee bases, no turnover obligations) at BLOCK/HIGH/MED/LOW, plus a template-residue check. Distinct from lease-form-qc, listing-agreement-qc and legal-intelligence. 19 PROPOSED positions, unratified. v1.3"
 ---
 
 # Property Management Agreement QC — third-party manager paper
@@ -55,7 +55,10 @@ Scanner benchmarks:
 **v1.2 open item.** P32 and P33 were added without re-running the KRG scan — the
 executed agreement was not to hand. Do not quote a 34-check KRG figure until the
 scan is re-run against the executed PDF and this table is updated. P32/P33 were
-verified against purpose-built defective and remediated fixtures only.
+verified against purpose-built defective and remediated fixtures only. (As of
+2026-09-21 an OCR text copy of the executed KRG agreement is in the "Property
+Management Agreements" claude.ai Project under `claude/text/` — use it to close
+this item.)
 
 ## The nineteen standing positions — PROPOSED, NOT RATIFIED
 
@@ -91,6 +94,39 @@ The five that cost real money, in priority order when a markup must be shortened
    instrument that authority produces.
 
 ## How to run
+
+### Step 0 — Locate, archive, and provenance-check the document (v1.3)
+
+1. **Find the actual instrument.** A manager's "proposal" usually arrives as an
+   email attachment (search Outlook by manager name) and is often also saved
+   under OneDrive › `Business/<property>/`. Never evaluate from a filename alone.
+2. **Archive it to the "Property Management Agreements" claude.ai Project** as
+   extracted text under `claude/proposals/<Manager> -- <Property> (received
+   YYYY-MM-DD).txt`, with a header naming the source (email + date, or OneDrive
+   path) and the extraction method. A proposal that lives only in Outlook is
+   lost to the next review.
+3. **P0 — Template-residue check (counterparty forms).** Counterparty templates
+   are frequently re-used from another client without scrubbing. Before any
+   clause review, confirm every identifying field matches the deal:
+
+   ```bash
+   # expected tokens = subject address, owner entity, SF; anything else is residue
+   grep -n -i -E "property|commonly known|schedule a|square f|sq ?ft|dated|day of|commencement|expire|owner:|insert|_____" agreement.txt
+   ```
+
+   Report as a **BLOCK** labelled `P0 — template residue` if any of these are
+   true: the property name/address or Schedule A describes a different asset;
+   dates pre-date the request or belong to another engagement; Owner is blank or
+   a placeholder ("INSERT ENTITY NAME HERE"); SF in the schedule does not match
+   the source of record; number words and numerals disagree ("sixty thirty
+   (60)"); fee tiers are internally inconsistent; or clauses from another asset
+   class or industry survive (e.g. an Anti-Kickback / 42 U.S.C. §1320a-7b
+   healthcare clause in an industrial PMA). A residue-bearing document is not
+   an offer priced for our asset — flag fee comparisons as provisional until a
+   clean property-specific draft is received.
+   `scripts/pma_qc.py` does not implement P0 yet; run it manually until the
+   scanner is updated (repo work item: add P0 with deal-context arguments
+   `--expect-address --expect-sf --expect-owner`).
 
 ### Step 1 — Automated scan
 
@@ -130,7 +166,17 @@ OCR text is lossy. When the header reads `EXTRACTION ocr`, treat every *absence*
 finding (P16, P19, P24, P27–P30, P33 — checks that fire because language is
 missing) as **provisional** and confirm against the page images before
 reporting a missing clause to a counterparty. Presence findings are reliable;
-absence findings on OCR are not.
+absence findings on OCR are not. **Every dollar figure read from OCR must be
+confirmed against a crop of the page image before it enters a report or the fee
+register** — observed 2026-09-21: tesseract read Peak's "$1250/month" as
+"$7250/month" and "$1000" as "$7000".
+
+claude.ai Project uploads of scanned PDFs return empty text to `project_read`.
+When that happens, pull the original from OneDrive › `Business/<property>/`
+(request folder access on the linked computer, stage, OCR in the cloud
+workspace) rather than reporting the agreement as unreviewable, and write the
+OCR text back to the Project under `claude/text/` with a source/extraction
+header so the next review does not repeat the work.
 
 ### Step 3 — Answer the exclusivity question before anything else
 
@@ -156,7 +202,7 @@ Report, in this order, at the top of every review:
 
 That block answers the operational question. Everything after it is economics.
 
-### Step 4 — Model the fee stack
+### Step 4 — Model the fee stack and benchmark it against the register
 
 ```bash
 python3 scripts/fee_stack.py --collections 480000 --mgmt-pct 4 --mgmt-floor 850 \
@@ -170,6 +216,15 @@ the KRG form charges the management percentage on collections, again on capital
 projects, and 10% on insurance billings — and because "gross monies collected"
 is undefined, insurance proceeds landing in the operating account arguably carry
 both. Quantify the overlap before negotiating the headline rate.
+
+**Benchmark source.** Compare against the **ORA Property Management Fee
+Register** (`claude/ORA_PM-Fee-Register.md` in the "Property Management
+Agreements" Project), not against memory. Express every proposal three ways:
+% of gross collections, $/SF/yr, and 10-year cumulative cost including the
+escalator (a "greater of CPI or X%" clause is an X% compounding floor — model
+it as such). Flat per-SF fees do not fall with vacancy — flag this explicitly
+on any lease-up or transition-year asset. The register is a benchmark index,
+not a substitute for re-reading the instrument.
 
 ### Step 5 — Verify the Owner entity against county owner-of-record
 
@@ -204,12 +259,21 @@ countersigned copy are the ones routinely absent.
 
 ### Step 8 — Report
 
-Order findings BLOCK → HIGH → MED → LOW, after the Step 3 exclusivity block. For
-each: the defect, the failure scenario in dollars where quantifiable, and the
-exact replacement language from `references/standing-positions.md`. Close with an
-explicit **execute / do not execute** (new agreement) or **renew / renegotiate /
-terminate** (existing agreement) recommendation. Deliver as DOCX per the ORA
-Style Guide with the 16-point QC Gate applied.
+Order findings P0 (template residue, if any) → BLOCK → HIGH → MED → LOW, after
+the Step 3 exclusivity block. For each: the defect, the failure scenario in
+dollars where quantifiable, and the exact replacement language from
+`references/standing-positions.md`. Close with an explicit **execute / do not
+execute** (new agreement) or **renew / renegotiate / terminate** (existing
+agreement) recommendation. Deliver as DOCX per the ORA Style Guide with the
+16-point QC Gate applied.
+
+### Step 9 — Update the fee register (v1.3)
+
+Every review ends by updating `claude/ORA_PM-Fee-Register.md` in the Project:
+add or amend the property's row (proposals go in a PROPOSED row until
+executed), refresh "Portfolio norms" if the benchmark moved, and add any new
+data-quality item (wrong owner entity, blank fee amount, missing pages). Read
+the register first and write the full file back (no in-place patch).
 
 ## Renewal-cycle use
 
@@ -253,6 +317,19 @@ Compute and state:
   them.
 
 ## Changelog
+
+- **v1.3 (2026-09-21)** — Adds **Step 0** (locate the instrument, archive the
+  proposal text to the Project, and the **P0 template-residue check**, reported
+  as a BLOCK), **Step 9** (update the ORA PM Fee Register), register-based
+  benchmarking in Step 4 (% / $/SF / 10-yr cost; CPI-or-X% escalators modeled
+  as an X% floor; vacancy insensitivity of flat per-SF fees), and a mandatory
+  page-image check for OCR dollar figures plus the OneDrive-OCR fallback for
+  empty Project scans in Step 2. Prompted by the Neyer Management 2026 PMA
+  template for 754 Old SR 74, which arrived carrying another client's property
+  (Fairfield Professional Park, Mack Rd), dates, SF, a garbled construction-fee
+  tier and a healthcare Anti-Kickback clause; and by a tesseract misread of
+  Peak's $1,250 fee as $7,250. P0 is procedural only — `pma_qc.py` does not
+  implement it yet.
 
 - **v1.2 (2026-09-09)** — Adds **PM-19** (manager contracting authority) and the
   two checks that enforce it: **P32** (BLOCK — manager may contract capital or
