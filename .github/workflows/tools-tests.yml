@@ -13,8 +13,9 @@ name: tools tests
 # If a skip is ever legitimately needed, add it to ALLOWED_SKIPS below with a
 # reason rather than loosening the gate.
 #
-# The tests are stdlib-only and build synthetic fixtures, so no install step and
-# no secrets. Note: claude-ci-fix.yml does NOT fire on this workflow's failures --
+# The tests build synthetic fixtures and need no secrets. They are stdlib-only
+# except test_package_census.py, which needs PyMuPDF (installed below) -- without
+# it its 7 tests skip and trip the zero-skip gate. Note: claude-ci-fix.yml does NOT fire on this workflow's failures --
 # GitHub never triggers workflows from check suites created by Actions itself.
 
 on:
@@ -38,6 +39,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check pymupdf
 
       - name: Run tools/test_*.py
         env:
