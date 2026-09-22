@@ -1,6 +1,6 @@
 ---
 name: daily-brief
-description: 'Use when the user says: daily brief, news, morning brief, CRE news, what''s happening today, what should I know — or asks for the Oxford Realty Advisors daily morning intelligence brief covering CRE news, industrial transactions, market rates, portfolio watch, ops tip, reading list, CRE law/regulatory watch, shallow bay case study, and competitive intelligence.'
+description: "Use when the user says: daily brief, news, morning brief, CRE news, what's happening today, what should I know — or asks for the Oxford Realty Advisors daily morning intelligence brief covering CRE news, industrial transactions, market rates, portfolio watch, ops tip, reading list, CRE law/regulatory watch, shallow bay case study, and competitive intelligence."
 ---
 
 # Daily Brief (v2.14)

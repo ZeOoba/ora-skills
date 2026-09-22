@@ -3,10 +3,8 @@ name: ratify-hurdle-rate
 description: >
   Use when Gabriel says: ratify hurdle rate, confirm hurdle rate, lock in IRR hurdle,
   ratify the 8%, make the hurdle rate official, sign off on hurdle rate, or capital
-  allocation hurdle ratification — formally ratifies the Oxford Realty Advisors unlevered
-  IRR hurdle rate in the capital_config table (flipping hurdle_rate_ratification from
-  'proposed' to 'ratified', stamping Gabriel's name and date, running the gate, and
-  producing a durable audit memo). Requires migration 015_hurdle_rate.sql to be applied
+  allocation hurdle ratification — formal ratification of the Oxford Realty Advisors unlevered
+  IRR hurdle rate in the capital_config table. Requires migration 015_hurdle_rate.sql to be applied
   (adds hurdle_rate_* columns to capital_config).
 ---
 

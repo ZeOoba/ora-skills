@@ -141,7 +141,9 @@ class ValidateSkillFrontmatter(unittest.TestCase):
     def test_schema_or_document_versions_in_triggers_allowed(self):
         # Trigger vocabulary may legitimately name a versioned artifact.
         for desc in ('Use when scoring against Buy Box schema rev 1.1',
-                     'Use when a deliverable must follow the ORA Style Guide v1.0 fonts'):
+                     'Use when a deliverable must follow the ORA Style Guide v1.0 fonts',
+                     # user vocabulary, not skill history (review finding 2026-09-22)
+                     'Use when generating a changelog for a release'):
             with tempfile.TemporaryDirectory() as tmp:
                 errors = validate_skill_frontmatter(_make_skill(Path(tmp), 'fixture-skill', desc))
                 self.assertEqual(errors, [], desc)
