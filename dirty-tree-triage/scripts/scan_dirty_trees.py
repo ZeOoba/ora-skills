@@ -31,6 +31,10 @@ DEFAULT_REPOS = [
 # not matching one of these stays in the "modified/untracked, needs review"
 # bucket rather than being auto-labeled trivial.
 TRIVIAL_HINTS = ("scratch", "preview-deploy", "_archive/", ".tmp", "tmpindex")
+# Matched against the DIRECTORY part of a path only -- a file's own name is
+# content ("..._scratch-exclusion_spec.md" is a spec, not scratch). Only these
+# temp-file markers are also checked against the filename itself.
+FILENAME_TRIVIAL_HINTS = (".tmp", "tmpindex")
 
 
 CLONE_ROOT = r"C:\Users\Owner"
@@ -216,7 +220,13 @@ def classify(porcelain_line):
     path = porcelain_line[3:].strip()
     if status == "??":
         is_dir = path.endswith("/")
-        is_trivial = any(hint in path.lower() for hint in TRIVIAL_HINTS)
+        norm = path.lower().replace("\\", "/")
+        if is_dir:
+            dir_part, name = norm.rstrip("/"), ""
+        else:
+            dir_part, _, name = norm.rpartition("/")
+        is_trivial = (any(hint in dir_part + "/" for hint in TRIVIAL_HINTS)
+                      or any(hint in name for hint in FILENAME_TRIVIAL_HINTS))
         category = "untracked-trivial" if is_trivial else (
             "untracked-dir" if is_dir else "untracked-file"
         )
