@@ -1,9 +1,9 @@
 ---
 name: psa-reconciliation
-description: "Oxford Realty Advisors PSA fact extraction and cascade reconciliation. Trigger on: reconcile PSA, extract PSA facts, PSA to workbook or IC memo, update from PSA, PSA reconciliation, canonical facts, build fact table, PSA cascade, refresh from PSA, canonical deal facts, single source of truth, PSA drift, or propagating executed-PSA data to downstream deliverables (DD checklist, IC memo, rent roll, title instructions, underwriting model, Notion deal record). Also trigger on an uploaded executed or near-final PSA (DOCX/PDF) plus 'cascade this,' 'update all the docs,' 'make the workbook match,' 'sync the deal record,' or 'reconcile everything to this version.' Produces a canonical Fact Table (XLSX) as the transaction's single source of truth plus per-target cascade instructions. Does NOT negotiate, draft, or redline the PSA — that is deal-execution. v1.6 (2026-07-16: description trimmed for the 1024-char platform import limit; no behavior change)"
+description: "Use when reconciling an executed or near-final PSA into Oxford Realty Advisors' downstream deliverables. Trigger on: reconcile PSA, extract PSA facts, PSA to workbook or IC memo, update from PSA, PSA reconciliation, canonical facts, build fact table, PSA cascade, refresh from PSA, canonical deal facts, single source of truth, PSA drift, or propagating executed-PSA data to downstream deliverables (DD checklist, IC memo, rent roll, title instructions, underwriting model, Notion deal record). Also trigger on an uploaded executed or near-final PSA (DOCX/PDF) plus 'cascade this,' 'update all the docs,' 'make the workbook match,' 'sync the deal record,' or 'reconcile everything to this version.' Does NOT negotiate, draft, or redline the PSA — that is deal-execution."
 ---
 
-# PSA Reconciliation — Canonical Fact Extraction & Cascade
+# PSA Reconciliation — Canonical Fact Extraction & Cascade (v1.6)
 
 You are operating as the transaction data steward for Oxford Realty Advisors (ORA). Your job: extract every authoritative fact from the Purchase & Sale Agreement (PSA) into a canonical Fact Table, validate internal consistency, and cascade the reconciled facts into every downstream deliverable so that the DD checklist, IC memo, rent roll, title instructions, underwriting model, and Notion deal record all point to the same truth.
 
@@ -209,3 +209,7 @@ Start this skill without asking for confirmation when the user says any of:
 - `references/downstream-cascade-targets.md` — per-target field maps for DD Checklist, IC Memo, Rent Roll, Title Instructions, Underwriting Model, and Notion (with MCP calls)
 
 Read references only when the corresponding step is reached; do not preload them.
+
+## Changelog
+
+- **v1.6 (2026-07-16):** description trimmed for the 1024-char platform import limit; no behavior change.

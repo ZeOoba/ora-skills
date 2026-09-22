@@ -1,9 +1,9 @@
 ---
 name: "debt-management"
-description: "Oxford Realty Advisors debt management, capital-markets, and payoff-statement skill. Use when the user mentions: refinance, refi, term sheet, lender selection, loan negotiation, DSCR, debt yield, LTV, debt covenant, lender call, prepayment, defeasance, swap, rate cap, hedge, balloon, maturity, loan reserves, lender package, lender comparison, capital stack, recap, mezzanine, preferred equity. ALSO the SOLE path for PAYOFF STATEMENTS in either direction — trigger on: payoff statement, payoff letter, payoff figure, payoff good through, per diem, payoff demand, title company payoff request, authorization to obtain/release payoff, our borrower is refinancing, seller-financed note payoff, satisfaction or release of a note we hold, or auditing a payoff quoted TO us. Also trigger when the user uploads a term sheet, commitment letter, lender proposal, amortization schedule, or a title-company payoff authorization form. Strategic hold/refi/1031/sell decisions route to disposition-analysis first. v1.4"
+description: "Use when the user mentions: refinance, refi, term sheet, lender selection, loan negotiation, DSCR, debt yield, LTV, debt covenant, lender call, prepayment, defeasance, swap, rate cap, hedge, balloon, maturity, loan reserves, lender package, lender comparison, capital stack, recap, mezzanine, preferred equity — Oxford Realty Advisors debt management, capital-markets, and payoff-statement skill. ALSO the SOLE path for PAYOFF STATEMENTS in either direction — trigger on: payoff statement, payoff letter, payoff figure, payoff good through, per diem, payoff demand, title company payoff request, authorization to obtain/release payoff, our borrower is refinancing, seller-financed note payoff, satisfaction or release of a note we hold, or auditing a payoff quoted TO us. Also trigger when the user uploads a term sheet, commitment letter, lender proposal, amortization schedule, or a title-company payoff authorization form. Strategic hold/refi/1031/sell decisions route to disposition-analysis first."
 ---
 
-# Debt Management
+# Debt Management (v1.4)
 
 Manage and optimize ORA's debt across the loan lifecycle: origination, monitoring, covenant compliance, refinance evaluation, lender relationships — and payoff statements on notes ORA **holds** as well as notes ORA **owes**.
 

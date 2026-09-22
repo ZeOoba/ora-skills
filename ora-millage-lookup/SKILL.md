@@ -1,9 +1,9 @@
 ---
 name: ora-millage-lookup
-description: "Resolve a parcel's property-tax rate and taxable base from verified government endpoints for Oxford Realty Advisors acquisitions. Use whenever the user mentions: millage, mill rate, certified tax rate, effective tax rate, property tax lookup, tax rate by district, assessed value lookup, assessment lookup, taxable value, tax history, county assessor pull, auditor tax record, parcel tax record, reassessed tax, or when an acquisition SCREEN/UNDERWRITE has an unresolved property-tax figure. Companion to acquisition-underwriting STAGE 2.5 item 5 (millage lookup ladder), which caps any deal with an unknown reassessed tax at T2 WATCH. Distinct from tax-appeal, which owns the assessment-challenge workflow; this skill only resolves the rate and base. Produces a sourced rate + taxable-base block per parcel. v1.1 — changelog in body."
+description: "Use whenever the user mentions: millage, mill rate, certified tax rate, effective tax rate, property tax lookup, tax rate by district, assessed value lookup, assessment lookup, taxable value, tax history, county assessor pull, auditor tax record, parcel tax record, reassessed tax, or when an Oxford Realty Advisors acquisition SCREEN/UNDERWRITE has an unresolved property-tax figure — resolves a parcel's property-tax rate and taxable base from verified government endpoints. Companion to acquisition-underwriting STAGE 2.5 item 5 (millage lookup ladder), which caps any deal with an unknown reassessed tax at T2 WATCH. Distinct from tax-appeal, which owns the assessment-challenge workflow; this skill only resolves the rate and base."
 ---
 
-# ORA Millage & Assessment Lookup
+# ORA Millage & Assessment Lookup (v1.1)
 
 Purpose: turn `[EST]` property-tax figures into sourced, reproducible ones. Under Buy Box v1.1 an unknown reassessed tax caps a deal at **T2 WATCH**, and `acquisition-underwriting` STAGE 2.5 item 5 makes a rate-pull attempt a **pre-FULL requirement** — this skill is that attempt, executed the same way every time.
 

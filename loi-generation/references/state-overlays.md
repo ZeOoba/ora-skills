@@ -67,3 +67,35 @@ Flag `[FORECAST]` in chat, draft generic prose, and require Gabriel to confirm b
 Operating expenses, service contracts, utilities, and similar items prorate as of 11:59 p.m. on the day before Closing. Real estate taxes prorate at Closing through (but not including) the Closing Date, calculated from the most recent ascertainable tax bill, in accordance with the customary method in {{PROPERTY_COUNTY}}, {{PROPERTY_STATE_FULL}}. Special assessments certified before Closing are Seller's; those certified after Closing are Buyer's.
 
 Seller and Buyer will allocate state and county transfer taxes, recordation fees, and customary closing costs in accordance with the standard practice in {{PROPERTY_COUNTY}}, {{PROPERTY_STATE_FULL}}; the parties will confirm specific allocations in the PSA. Each party pays its own attorneys' fees and wire transfer fees.
+
+## Quick reference — county customs by state (from SKILL.md Decision Rule 3)
+
+| State | County customs |
+|---|---|
+| **OH** | Long proration for Franklin/Cuyahoga/Hamilton counties; Seller pays state ($1/$1,000) + permissive county fee (varies $1–$3/$1,000); BOR appeal rights |
+| **MD** | Recordation tax + transfer tax typically split 50/50; verify county (Montgomery, PG, Baltimore County, Frederick — different conventions) |
+| **IN** | No state transfer tax; Sales Disclosure Form required; in-arrears tax billing |
+| **MO** | No state real estate transfer tax; standard recording fees |
+| **KS** | Mortgage registration tax abolished 2019; recording fees only; no transfer tax |
+| **WI** | Wisconsin Real Estate Transfer Fee ($3/$1,000) paid by Seller |
+| **TN** | Tennessee Realty Transfer Tax ($0.37/$100) paid by Seller |
+
+## Ohio BOR risk — HB 126 dual-threshold rule (from SKILL.md Decision Rule 5c)
+
+### 5c. Ohio BOR risk — statutory thresholds (HB 126, eff. 2022)
+
+School districts may file ORIGINAL Board of Revision complaints only when the recorded sale exceeds auditor value by BOTH 10% AND $500,000 [verify thresholds with counsel]. Below either, the school-board route is barred; only scheduled reappraisal applies. Run the dual test at offer price vs auditor value before asserting BOR risk. (470 McCormick: +$117.8K = over 10%, under $500K → original complaint barred.)
+
+## Quick reference — §6 distinguishing language (from SKILL.md STATE OVERLAYS section)
+
+## STATE OVERLAYS — quick reference
+
+Full overlay text in `references/state-overlays.md`. Summary of §6 distinguishing language:
+
+- **OH** — Franklin/Cuyahoga County long proration; Seller pays state conveyance ($1/$1,000) + permissive county fee (varies); BOR appeal rights to Buyer
+- **MD** — Recordation + transfer tax customarily 50/50; verify by county
+- **IN** — No state transfer tax; Sales Disclosure Form required; tax billing in arrears
+- **MO** — No state real estate transfer tax; standard recording fees
+- **KS** — Recording fees only; no transfer tax
+- **WI** — Real Estate Transfer Fee $3/$1,000 Seller-pays
+- **TN** — Realty Transfer Tax $0.37/$100 Seller-pays

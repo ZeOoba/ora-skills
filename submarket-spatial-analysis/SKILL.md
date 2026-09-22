@@ -1,10 +1,10 @@
 ---
 name: submarket-spatial-analysis
-description: Submarket and spatial analysis for ORA properties and acquisition candidates. Use when the user mentions: submarket, spatial analysis, drive time, isochrone, intermodal proximity, highway access, last-mile, demographics, employment density, population growth, MSA, micropolitan, traffic count, locational benchmark, location quality score, GIS, mapping, or any task requiring geographic analysis of properties relative to demand drivers. v1.6 (2026-08-24: see Changelog)
+description: Use when the user mentions: submarket, spatial analysis, drive time, isochrone, intermodal proximity, highway access, last-mile, demographics, employment density, population growth, MSA, micropolitan, traffic count, locational benchmark, location quality score, GIS, mapping, or any task requiring geographic analysis of ORA properties or acquisition candidates relative to demand drivers.
 license: ORA Internal
 ---
 
-# Submarket Spatial Analysis
+# Submarket Spatial Analysis (v1.6)
 
 Analyze ORA properties and acquisition candidates against spatial demand drivers: highway access, intermodal proximity, last-mile geography, employment, and demographics.
 

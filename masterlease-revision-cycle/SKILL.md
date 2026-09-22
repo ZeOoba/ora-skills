@@ -1,9 +1,9 @@
 ---
 name: "masterlease-revision-cycle"
-description: "Oxford Realty Advisors end-to-end master-lease revision cycle — one command from external AI reviews to a new master revision with rebased property templates. Use when the user supplies external LLM reviews (ChatGPT/Grok/Gemini) of the ORA master lease and asks to adjudicate + implement, or says: run the revision cycle, rev the master, adjudicate and build, implement lease review feedback, new master version end-to-end. Chains: lease-form-qc external-review intake (verify claims against XML, screen against ratified positions, rule each point) → adjudication memo → tracked-change build via ora_docx_redline.py → lease_qc regression → masterlease-jurisdiction-rebase --all → pointer/ledger close-out. Proven twice on 2026-08-04 (v2.4.1→v2.5, v2.5→v2.6). v1.0"
+description: "Use when the user supplies external LLM reviews (ChatGPT/Grok/Gemini) of the ORA master lease and asks to adjudicate + implement, or says: run the revision cycle, rev the master, adjudicate and build, implement lease review feedback, new master version end-to-end. Oxford Realty Advisors end-to-end master-lease revision cycle — one command from external AI reviews to a new master revision with rebased property templates, chaining lease-form-qc external-review intake, masterlease-jurisdiction-rebase, and a pointer/ledger close-out."
 ---
 
-# Master Lease Revision Cycle — Oxford Realty Advisors
+# Master Lease Revision Cycle — Oxford Realty Advisors (v1.0)
 
 End-to-end pipeline from external AI reviews of the ORA master lease to a shipped
 master revision with rebased property templates. Extracted 2026-08-04 after the
@@ -83,3 +83,6 @@ deals draft from the new master only.
 - Nothing lands in the OneDrive business folder except finals and run memos.
 - Never delete — `/archive/`.
 
+## Changelog
+
+- **v1.0 (2026-08-04):** Initial. Proven twice on 2026-08-04 (v2.4.1→v2.5 morning cycle, v2.5→v2.6 afternoon cycle) before extraction into a skill.

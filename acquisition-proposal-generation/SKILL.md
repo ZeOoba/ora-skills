@@ -1,9 +1,9 @@
 ---
 name: acquisition-proposal-generation
-description: Generate or revise Oxford Realty Advisors' seller-facing Acquisition Proposal — a two-page, non-legalistic business-terms offer document positioned as an alternative to a traditional LOI. Trigger on: acquisition proposal, offer document, business-terms offer, proposal to purchase, "not a legalistic LOI", make an offer, template offer letter, proposal template. Distinct from loi-generation (the formal conditional-block LOI with QC gate and state overlays) — use THIS skill when the deal calls for a short, principal-to-principal offer that pushes legal detail into the PSA rather than the offer document itself. v3.2 (2026-08-22: walk-price QC gate added — Purchase Price must clear the ORA walk price before the document is produced. Prior: v3.1 named-constant/QC-caveat cleanup, v3.0 final production revision — see git history for detail)
+description: Use when Gabriel needs to generate or revise Oxford Realty Advisors' seller-facing Acquisition Proposal — a two-page, non-legalistic business-terms offer document positioned as an alternative to a traditional LOI. Trigger on: acquisition proposal, offer document, business-terms offer, proposal to purchase, "not a legalistic LOI", make an offer, template offer letter, proposal template. Distinct from loi-generation (the formal conditional-block LOI with QC gate and state overlays) — use THIS skill when the deal calls for a short, principal-to-principal offer that pushes legal detail into the PSA rather than the offer document itself.
 ---
 
-# Acquisition Proposal Generation
+# Acquisition Proposal Generation (v3.2)
 
 ## What this produces
 
@@ -109,3 +109,9 @@ Exactly 2 pages. Aptos-only confirmed via grep. Gold count = 2 via grep. Study P
 ## Grid-cell spacing constants
 
 Why Sellers cell padding lives in one named constant, `WHY_CELL_MARGINS` (twips; 1px @96dpi ≈ 15 twips), defined once near the page-geometry constants at the top of `build.js` and referenced by `whyCell()`. A future "a little more/less space" request is a one-line edit to that constant — do not hand-edit the inline `margins: {...}` object in `whyCell()` directly, and do not let `build.js` and any deal-specific fork (e.g. `build-3700-kinsman.js`) drift out of sync on this value.
+
+## Changelog
+
+- **v3.2 (2026-08-22):** walk-price QC gate added — Purchase Price must clear the ORA walk price before the document is produced.
+- **v3.1 (date not recorded; see git history):** named-constant/QC-caveat cleanup.
+- **v3.0 (date not recorded; see git history):** final production revision.

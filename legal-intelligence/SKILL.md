@@ -1,9 +1,9 @@
 ---
 name: legal-intelligence
-description: "Oxford Realty Advisors legal document analysis, clause library, and contract intelligence. Use this skill whenever the user mentions: lease review, PSA review, contract analysis, redline, clause comparison, compare two versions, blackline, Litera, Workshare, DeltaView, lease clause, indemnification, default provisions, personal guaranty, environmental indemnity, estoppel clause / SNDA analysis (NOT certificate drafting — that's estoppel-request-generation), tenant improvement, CAM clause, assignment and subletting, insurance requirements, memorandum of lease, deed of trust, promissory note, loan document, solar lease, vendor contract, or any request to analyze, compare, draft, or negotiate a legal document. Also trigger when the user uploads a PDF or DOCX that appears to be a lease, contract, PSA, loan document, or legal agreement. Module 6 Step 0 detects whether a marked-up file carries real tracked changes or compare-tool formatting before parsing. v1.3"
+description: "Use when the user mentions: lease review, PSA review, contract analysis, redline, clause comparison, compare two versions, blackline, Litera, Workshare, DeltaView, lease clause, indemnification, default provisions, personal guaranty, environmental indemnity, estoppel clause / SNDA analysis (NOT certificate drafting — that's estoppel-request-generation), tenant improvement, CAM clause, assignment and subletting, insurance requirements, memorandum of lease, deed of trust, promissory note, loan document, solar lease, vendor contract, or any request to analyze, compare, draft, or negotiate a legal document. Also trigger when the user uploads a PDF or DOCX that appears to be a lease, contract, PSA, loan document, or legal agreement. Oxford Realty Advisors legal document analysis, clause library, and contract intelligence."
 ---
 
-# Legal Intelligence — Oxford Realty Advisors
+# Legal Intelligence — Oxford Realty Advisors (v1.3)
 
 ## MODULE 1: DOCUMENT CLASSIFICATION
 

@@ -86,3 +86,29 @@ These positions matter but Gabriel will accept fallbacks if Seller pushes:
 - Internal versioning (during drafting): `YYYYMMDD_[PropertyShortName]_LOI_v##.docx`
   - Example: `20260514_1333-Research-Rd_LOI_v05.docx`
 - The outbound name is what ships to the broker; the internal versioned name is for ORA workspace history
+
+## Deal-size-adjusted defaults (from SKILL.md Decision Rule 6)
+
+| Term | Default (deal <$3M) | Default ($3M–$10M) | Notes |
+|---|---|---|---|
+| EMD | 3% PP, min $50K | 2% PP | Larger EMD for tenanted/complex |
+| Study Period | 30 days | 45 days | Add days for environmental complexity |
+| Closing | 15 days post-Study | 30 days post-Study | Per Gabriel's standing preference |
+| Exclusivity | 60 days vacant / 30 days tenanted | 60 days | Tenanted moves faster, less DD overhang |
+| PSA initial draft | 10 business days | 10 business days | |
+| PSA execution | 15 calendar days | 15 calendar days | |
+
+## Key numbers (from SKILL.md STANDARDS section)
+
+See `references/ora-standards.md` for the full standards table. Key numbers:
+
+| Term | ORA Standard | Acceptable Range | Rationale |
+|---|---|---|---|
+| EMD | 2–3% PP, min $50K | 1–7% PP | Smaller deals warrant proportionally larger % |
+| Study Period | 30 days | 30–60 days | 30 default; 45 if complex DD anticipated |
+| Closing post-Study | 15 days | 15–45 days | Gabriel's standing preference: 15 |
+| Exclusivity | 60 days | 30–90 days | 60 for vacant; 30 acceptable for tenanted |
+| PSA initial draft | 10 BD | 5–15 BD | |
+| PSA execution | 15 calendar days from draft | 10–30 days | |
+| Phase I auto-extension | To Phase II receipt | Standard | |
+| Tenant Estoppel | 10 BD before Closing | 5–15 BD | Condition precedent |

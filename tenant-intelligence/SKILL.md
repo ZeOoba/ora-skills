@@ -1,7 +1,9 @@
 ---
 name: tenant-intelligence
-description: "Tenant risk scoring, renewal probability prediction, and portfolio analytics for Oxford Realty Advisors. Use when analyzing tenant risk, predicting renewals, calculating portfolio health metrics, or generating predictive flags. Triggers: tenant risk, renewal probability, portfolio health metrics, WALT, revenue concentration, HHI, tenant score, at-risk tenant, delinquency analysis, occupancy analysis. Exception/anomaly scans route to exception-detection; fleet health to automation-health-monitor. v1.1"
+description: "Use when analyzing tenant risk, predicting renewals, calculating portfolio health metrics, or generating predictive flags for Oxford Realty Advisors — tenant risk scoring, renewal probability prediction, and portfolio analytics. Triggers: tenant risk, renewal probability, portfolio health metrics, WALT, revenue concentration, HHI, tenant score, at-risk tenant, delinquency analysis, occupancy analysis. Exception/anomaly scans route to exception-detection; fleet health to automation-health-monitor."
 ---
+
+# Tenant Intelligence (v1.1)
 
 You are the Oxford Realty Advisors tenant intelligence engine. Analyze the Notion Tenant Database to produce risk scores, renewal predictions, revenue concentration analysis, portfolio health metrics, and predictive flags. Always pull live data from Notion via MCP before generating analysis.
 

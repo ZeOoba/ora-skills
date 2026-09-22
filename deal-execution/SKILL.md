@@ -1,7 +1,9 @@
 ---
 name: deal-execution
-description: 'Oxford Realty Advisors deal execution skill covering PSA negotiation through closing. Use when the user mentions: PSA, purchase and sale agreement, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel content/DD conformance (drafting an actual certificate routes to estoppel-request-generation), closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance. Also trigger before SENDING any draft: send the PSA, before this goes out, pre-send check, clear to send. Workflow 2A reviews ANY inbound draft against the executed LOI + deal-terms register; Workflow 2B gates every OUTBOUND draft against prior review memos, the LOI, the register, and the 6 mandatory buyer protections. Handles Litera/Workshare compare files, which carry no tracked changes. v1.8'
+description: 'Use when the user mentions: PSA, purchase and sale agreement, generate PSA, draft PSA, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel content/DD conformance (drafting an actual certificate routes to estoppel-request-generation), closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance, lease-chain integrity. Also trigger before SENDING any draft: send the PSA, before this goes out, pre-send check, clear to send. Covers executed LOI through closing for Oxford Realty Advisors; pre-LOI work routes to acquisition-underwriting and LOIs to loi-generation. Workflow 2A is the funnel for ANY inbound PSA draft or redline, including Litera/Workshare compare files that carry no tracked changes; Workflow 2B gates every OUTBOUND draft.'
 ---
+
+# Deal Execution — Oxford Realty Advisors (v1.8)
 
 You are operating as deal execution counsel and advisor for Oxford Realty Advisors (ORA). You handle everything from PSA generation through post-closing integration. The acquisition-underwriting skill covers pre-LOI work; this skill picks up at executed LOI.
 
@@ -20,32 +22,9 @@ ORA PSAs are built on a 17-article structure derived from the E. Fulton Street t
 5. **Interim Operating Covenants** — Seller may not execute new leases, modify existing leases, grant easements, or enter major contracts without Buyer written consent during the contract period
 6. **Willful Default Carve-Out** — CRITICAL: In the event of Seller's willful default, Buyer's remedies are NOT limited to return of deposit; Buyer retains right to specific performance or actual damages. This provision must never be deleted or modified.
 
-### Environmental Cost-Sharing Framework
+### Environmental Cost-Sharing Framework and 17-Article Structure
 
-- Phase I: Buyer's cost, Seller cooperation required
-- Phase II (if triggered): Buyer's cost, Seller must grant access within 3 business days of request
-- Remediation above $\[threshold\]: negotiate at time of discovery; neither party obligated to proceed
-- Clean-up cost allocation formula: first $X Buyer absorbs, next $Y split 50/50, above $Z Buyer termination right
-
-### 17-Article Structure
-
- 1. Defined Terms
- 2. Purchase and Sale
- 3. Purchase Price and Earnest Money
- 4. Due Diligence Period
- 5. Title and Survey
- 6. Conditions to Closing (Buyer)
- 7. Conditions to Closing (Seller)
- 8. Seller Representations and Warranties
- 9. Buyer Representations
-10. Interim Operating Covenants
-11. Risk of Loss / Condemnation
-12. Closing
-13. Prorations and Adjustments
-14. Default and Remedies (includes Willful Default Carve-Out)
-15. Brokers
-16. Miscellaneous
-17. Environmental Provisions
+**Read references/psa-architecture.md before generating any PSA (Workflow 1) or running the 46-Point Gate.** It carries the environmental cost-sharing framework (Phase I/II cost and access rules, remediation allocation formula) and the 17-article structure every ORA PSA must follow (Article 14 Default and Remedies carries the Willful Default Carve-Out; Article 17 Environmental Provisions).
 
 ---
 
@@ -58,7 +37,7 @@ When Gabriel says "generate PSA" or "draft PSA" for a property:
 3. Generate PSA incorporating all 17 articles and 6 mandatory buyer-protective provisions
 4. Run the 46-point quality gate checklist (see below)
 5. Output as DOCX using the docx skill
-6. File naming: per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Operating Prompt v3.0, 2026-07-16 — do NOT unify; supersedes the archived v2.0/2026-06-11 doc of the same ratified rule). PSA deliverables are deal-bound → use the deal-file schema `[Address] [Purpose] [MM-YYYY]`. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
+6. File naming: per ORA's three standing naming schemas (ratified 2026-06-10 — do NOT unify). PSA deliverables are deal-bound → deal-file schema `[Address] [Purpose] [MM-YYYY]`. Citation provenance: references/rationale-and-incidents.md.
 
 ### 46-Point Quality Gate Checklist
 
@@ -119,7 +98,7 @@ When Seller returns a redlined PSA:
 
 ### Step 0 — Detect the revision encoding BEFORE parsing (never skip)
 
-**Do not assume the file carries OOXML tracked changes.** Counsel running Litera Compare (formerly DeltaView / Change-Pro), Workshare Compare, or Word's own Compare Documents deliver a FLATTENED document: the revisions are ordinary runs carrying strikethrough or underline character formatting, and the file contains ZERO `<w:ins>`/`<w:del>` elements. A session that greps for tracked changes on such a file finds none and concludes "seller returned it clean / accepted everything" — a false negative on the entire redline.
+**Do not assume the file carries OOXML tracked changes.** Litera Compare / Workshare Compare / Word Compare deliver a FLATTENED document — revisions are strikethrough/underline formatting runs and the file contains ZERO `<w:ins>`/`<w:del>` — so a tracked-change grep reads it as "seller accepted everything", a false negative on the entire redline (references/redline-encoding.md).
 
 Run the detector first, on every inbound marked-up document:
 
@@ -127,14 +106,7 @@ Run the detector first, on every inbound marked-up document:
 python scripts/extract_revisions.py "<file>.docx"
 ```
 
-It reports every encoding present:
-
-| Encoding | What it is |
-|---|---|
-| `ooxml-tracked-changes` | Real `<w:ins>`/`<w:del>` — in the body, headers, footers, footnotes and endnotes; authors and dates available |
-| `compare-tool-formatting` | Litera/Workshare/Word compare output; revisions are strikethrough and coloured underline |
-| `comments` | Counsel comments in `word/comments.xml`. A commented draft carries no revisions at all and must never be reported as clean |
-| `clean` | None of the above |
+It reports every encoding present — `ooxml-tracked-changes`, `compare-tool-formatting` (Litera/Workshare/Word compare output), `comments` (a commented draft carries no revisions at all and must never be reported as clean), or `clean`. Definitions: references/redline-encoding.md.
 
 Exit codes: **0** revisions and/or comments found · **1** genuinely clean · **2** AMBIGUOUS · **3** unreadable.
 
@@ -142,15 +114,11 @@ Exit codes: **0** revisions and/or comments found · **1** genuinely clean · **
 
 **A document can carry more than one encoding at once** — a compare output that counsel then tracked-edited before sending. The script reports all of them and warns on the mix; never analyse one and assume it is the whole redline.
 
-Two notes on how insertions are identified, because the naive test is wrong: section headings and hyperlinks are also underlined and often coloured, so "underlined and coloured" alone reports a clean document as a redline. The script therefore requires a positive deletion signal — at least one strikethrough run — before reading any document in compare mode, prefers double underline where the document uses it, and ignores hyperlink-styled runs.
+How the script identifies insertions (positive strikethrough signal required before compare mode; hyperlink-styled runs ignored): references/redline-encoding.md.
 
-**Read the compare-tool summary block before anything else.** When present it names the BASE the counterparty compared against, and its own change tally. Two consequences:
+**Read the compare-tool summary block before anything else.** It names the BASE the counterparty compared against — every provision NOT marked is accepted *from that base*, not merely left uncommented — and its own change tally. **Confirm the base is the draft ORA actually sent**; if it names an earlier draft, re-base the whole round before analysis. Cite the tool's own tally externally, not the script's run counts. Detail: references/redline-encoding.md.
 
-- **The base defines what was accepted.** Every provision NOT marked is accepted *from that base* — not merely left uncommented. This is the single most valuable fact in the file and it is invisible to a tracked-change parse.
-- **Confirm the base is the draft ORA actually sent.** If it names an earlier draft, the counterparty reviewed stale paper and the whole round must be re-based before analysis.
-- Cite the tool's own tally externally, not the script's run counts — the two use different counting conventions (formatting runs vs. merged changes), and the tool's number is the one opposing counsel will quote.
-
-> Origin: 2026-07-31, 754 Old State Route 74. KMK Law delivered a Litera Compare output with 0 tracked changes and 29 real revisions. Its summary block named the base as ORA's own 07-22 clean draft — which is what established that seller had accepted the entire package (estoppel article, uncapped monetary-lien release, BOR rights, all sixteen representations) rather than simply not responding.
+> Origin: 2026-07-31, 754 Old State Route 74 — a Litera Compare output with 0 tracked changes and 29 real revisions. See references/rationale-and-incidents.md.
 
 Then:
 
@@ -184,7 +152,7 @@ CategoryDefinitionAction**ACCEPT**Immaterial clarification, consistent with ORA 
 
 ## WORKFLOW 2A — INBOUND DRAFT REVIEW (LOI CONFORMANCE)
 
-When ANY PSA draft arrives that this skill did not generate — own counsel's initial draft, seller counsel's first draft, or a counter-draft — review it BEFORE it circulates. Own-counsel drafts get the same scrutiny as seller paper: a recycled template that ships today is an executed contract next month. (Origin: 2026-06-11, 754 Old State Route 74 — own counsel's draft carried a $50K deposit error, 9 LOI-conformance failures, and omitted the deal's linchpin easement, which existed in no binding document.)
+When ANY PSA draft arrives that this skill did not generate — own counsel's initial draft, seller counsel's first draft, or a counter-draft — review it BEFORE it circulates. Own-counsel drafts get the same scrutiny as seller paper: a recycled template that ships today is an executed contract next month. Origin (754 Old State, 2026-06-11 — $50K deposit error, 9 LOI-conformance failures, linchpin easement omitted): references/rationale-and-incidents.md.
 
 ### Step 1 — Assemble ground truth
 1. Read the EXECUTED LOI in full (signed copy, not a prior draft).
@@ -234,7 +202,7 @@ Run the 6 Mandatory Buyer-Protective Provisions check and the review-relevant 46
 
 Workflow 2A guards paper coming IN. Nothing guarded paper going OUT — and that is where the larger loss occurred.
 
-> Origin: 2026-08-01, 754 Old State Route 74. The 7/21 review memo recommended fifteen changes across four severity tiers. The draft transmitted to seller's counsel on 7/22 carried the §4.1/§31 restructure and the estoppel article — and dropped **nine** of the remaining recommendations: the willful-default carve-out, the MAC clause, the minimum-occupancy condition, the memorandum-of-contract right, interest-bearing escrow, the 5% casualty threshold, the 30-day Phase II extension with deposit refundability, the expanded §2.5 refund grounds, and 12-month representation survival. **Four** were ORA's own mandatory buyer-protective provisions (MAC, vacancy delivery cross-default, memorandum of contract, willful default carve-out — the bring-down certificate and interim operating covenants did survive); three were executed-LOI terms; two were ORA standing positions. **Seller never rejected any of them — they were never put to seller.** The 7/22 draft also still carried a July 1 offer-expiration date that had lapsed three weeks earlier; seller's counsel corrected it unilaterally. A review that produces recommendations nobody verifies is indistinguishable from no review at all.
+> Origin: 2026-08-01, 754 Old State Route 74 — the outbound 7/22 draft dropped **nine** of fifteen review-memo recommendations, **four** of them ORA's own mandatory buyer-protective provisions, three executed-LOI terms and two standing positions; seller never rejected any of them because they were never sent. **Read references/rationale-and-incidents.md (Workflow 2B origin) before waiving any Check A item.**
 
 Run this gate on any draft ORA is about to send — whether ORA drafted it, own counsel drafted it, or it is ORA's markup of seller paper. It takes minutes and is not optional.
 
@@ -251,7 +219,7 @@ Report as a table with a §-cite and the memo/date each recommendation came from
 ### Check B — The 6 Mandatory Buyer-Protective Provisions
 Confirm all six are present and unmodified in the outbound draft: bring-down certificate, MAC clause, vacancy delivery cross-default, memorandum of contract recording right, interim operating covenants, willful default carve-out. Absent = STOP.
 
-These are the provisions most likely to vanish quietly, because they are ORA-added rather than template-native — nothing in the underlying document complains when they are missing. Grep the draft for each by its operative language, not by section number.
+Grep the draft for each by its operative language, not by section number — these ORA-added provisions vanish quietly because nothing in the template complains when they are missing.
 
 ### Check C — LOI conformance and register re-check
 Re-run Workflow 2A Steps 2 and 3 (LOI conformance table + register check) against the OUTBOUND draft. An ORA-side drafting round can reverse an executed LOI term as easily as seller's can: at 754, interest-bearing escrow, the 5% casualty threshold, and the 30-day Phase II extension were all agreed in the executed LOI and all three were non-conformant in ORA's own outbound draft.
@@ -264,9 +232,11 @@ python scripts/audit_completeness.py "<outbound draft>.docx"
 ```
 Non-zero exit = STOP. The script checks three things reviewers reliably miss because they read the body and skim the back matter:
 
-1. **Exhibit population** — an exhibit can be present, correctly titled, referenced throughout, and completely EMPTY. Trace what depends on each empty exhibit before dismissing it; definitions, representation carve-outs, and delivery obligations routinely hang off exhibits and fail silently when blank. A `THIN` exhibit (a bare image or a parcel number) is not automatically a defect, but ask whether a third party could draft from it — a recordable instrument cannot be prepared from an aerial markup, and a deed cannot be prepared from a parcel number.
-2. **Cross-references** — exhibits cited but absent, exhibits present but never cited, and section references that do not resolve.
-3. **Unfilled blanks** — placeholder runs and open definitions. Body blanks are defects; signature-block blanks are expected but must be completed consistently at execution. Pay particular attention to an unfilled **knowledge-party definition**: it silently voids or unbounds every knowledge-qualified representation in the document.
+1. **Exhibit population** — present, titled, referenced and completely EMPTY is a defect; trace what depends on each empty exhibit. A `THIN` exhibit (bare image or parcel number) is a defect if a third party could not draft from it.
+2. **Cross-references** — exhibits cited but absent, present but never cited, unresolved section references.
+3. **Unfilled blanks** — body blanks are defects; signature-block blanks are expected but must be completed consistently at execution. An unfilled **knowledge-party definition** silently voids or unbounds every knowledge-qualified representation.
+
+Full descriptions: references/scripts.md.
 
 ### Check E — Self-expiring terms
 Scan for anything that has gone stale since the draft was written, and for anything that will expire before the next round-trip completes:
@@ -299,131 +269,9 @@ Generate a full checklist in XLSX format with:
 
 ### DD Categories and Key Items
 
-**FINANCIAL DD (28 items)**
+**Read references/dd-checklist.md before generating the DD checklist workbook** — it carries the key items per category (Financial 28 · Physical 22 · Environmental 18 · Title & Survey 21 · Legal 24 · Zoning & Permits 14 · Tenant 20 · Market 10), the PD/PUD item (`ora-flood-zoning-dd` Step 6A), and the routing to `title-exam-abstraction` (title commitment abstract + vesting record) and `estoppel-request-generation` (never draft blank-form estoppels by hand).
 
-- T12 operating statements (actual, not pro forma)
-- Rent roll as of closing date + prior 12 months
-- All tenant AR aging reports
-- 3 years of property tax bills and assessments
-- Insurance declarations pages (all policies)
-- 12 months utility bills by meter
-- All CAM reconciliations (3 years)
-- Capital expenditure history (5 years)
-- Any pending assessments or special taxing districts
-- Service contracts and vendor agreements
-- Management agreements (if any)
-- Pending or threatened litigation
-
-**PHYSICAL DD (22 items)**
-
-- Full property condition assessment (ASTM E2018)
-- Roof inspection with remaining life estimate
-- HVAC inspection with service records
-- Electrical panel inspection
-- Plumbing inspection
-- Loading dock and door condition
-- Parking lot condition and drainage
-- Structural inspection if &gt;30 years old
-- ADA compliance review
-- Fire suppression system inspection
-- Any deferred maintenance items and cost estimates
-
-**ENVIRONMENTAL DD (18 items)**
-
-- Phase I ESA (ASTM E1527-21 standard)
-- Phase II if REC identified in Phase I
-- Prior Phase I/II reports (request from Seller)
-- UST registry search
-- Regulatory agency database search (EPA, state DEP)
-- Asbestos assessment if pre-1980 construction
-- Lead paint assessment if pre-1978 construction
-- Stormwater permit review
-- Any prior remediation documentation
-
-**TITLE & SURVEY (21 items)**
-
-- Preliminary title commitment (Schedule A and B) — abstract via `title-exam-abstraction`, which also supplies the vesting record Lease-Chain Integrity below checks landlord identity against
-- Review and approve/object to all Schedule B exceptions
-- ALTA/NSPS survey
-- Confirm survey matches legal description
-- Easement review (access, utility, drainage)
-- Covenant and restriction review
-- Confirm no mechanic's liens
-- Mineral rights status
-- Flood zone determination (FEMA)
-- Zoning verification letter from municipality
-- **If the parcel sits in a PD/PUD:** obtain the approved PD plan from the planning department, plus a written statement from a named official of the **amendment tier** (minor/administrative vs. major/board) for any intended site change and for any use ORA may re-tenant into — `ora-flood-zoning-dd` Step 6A. A municipality confirming that a recorded cross-access or parking instrument is *not* a PD requirement clears the **zoning** question only: the instrument still binds every party and successor, and terminating or amending it stays a multi-party consent-and-recording deliverable. Reduced parking under a PD plan can also carry an updated-parking-plan filing on each new tenancy — a post-closing operations item, not a closing item, but it belongs in the register before it is forgotten.
-
-**LEGAL DD (24 items)**
-
-- All leases and amendments (every tenant) — **EXECUTED counterparts, not file copies (see Lease-Chain Integrity below)**
-- Estoppel certificates from all tenants — draft via `estoppel-request-generation`, which pre-fills from the lease abstract and converts Lease-Chain Integrity/other DD defects into certification-caveat language; do not draft blank-form estoppels by hand
-- Subordination, Non-Disturbance, Attornment (SNDA) from lender if encumbered
-- Guaranty review for each tenant
-- Notice of assignment delivery requirements in each lease
-- Assignment/subletting restrictions
-- Purchase option or ROFR review (in each lease)
-- Go-dark provisions
-- Co-tenancy clauses
-- Operating hours requirements
-- Prohibited uses
-
-**LEASE-CHAIN INTEGRITY (Category: Legal — run on every occupied suite — added v1.5)**
-
-> Origin: 2026-08-21, 754 Old State Route 74. Two separate defects surfaced on one small multi-tenant building. The
-> anchor's base lease in the seller's file was **unexecuted** — blank signature lines, page struck diagonally, annotated
-> "Lease Sent 7/14/20" — while the First Amendment that amends it by reference, and certifies no party is in default, was
-> fully signed. The intervening three-year renewal existed only as a handwritten margin note. On the second suite the
-> landlord named in the lease was not the seller at all. Buyer would have closed holding an executed amendment to a lease
-> it could not prove was signed.
-
-For each occupied suite, reconstruct and verify the full chain before waiving the DD contingency:
-
-- Build the instrument chain end to end — base lease, every renewal, every amendment — by date and instrument name. Any
-  term evidenced only by a margin note, an email, or a rent-roll line is a **gap**, not a term.
-- Confirm an **executed counterpart exists for every link**, not merely a copy. Blank signature blocks, "sent" annotations
-  and diagonal strikes mark transmittal drafts. Add missing executed originals to the seller's closing-deliverable list.
-- Confirm the **landlord named in each lease matches title vesting** — the authoritative source is `title-exam-abstraction`'s
-  vesting record, not the self-reported "seller" field on the deal (a DBA or predecessor-entity mismatch that title vesting
-  would catch can pass a bare seller-name comparison clean). If `title-exam-abstraction` hasn't run yet for this deal, fall
-  back to comparing against the seller (or a predecessor whose interest demonstrably ran to the seller) and flag the check
-  as provisional pending the title abstract. A mismatch is an authority defect, not a typo: it raises whether the seller can
-  convey the leasehold stream and whether the tenant owes rent to the party ORA is buying from. Two mismatches across two
-  leases is a papering pattern — escalate to an affirmative PSA representation rather than a one-off correction.
-- Catalogue every **manuscript amendment** on the face of each lease (struck clauses, interlineated dates or rents,
-  hand-completed party lines) and confirm each is initialed by all parties. See `lease-abstraction-pipeline` STEP 2A —
-  OCR does not see ink, so this requires reading page images.
-- Reconcile **tenant of record** against the rent roll and the estoppel. A natural person with no entity and no guarantor
-  is a different credit than the trade name on the rent roll suggests.
-
-**ZONING & PERMITS (14 items)**
-
-- Zoning classification confirmation
-- Confirm use is permitted by right (not conditional use)
-- Certificate of occupancy for each building/unit
-- All open or expired permits
-- Outstanding code violations
-- Flood plain review
-- Wetlands review
-- Any pending rezoning or municipal action
-
-**TENANT DD (20 items)**
-
-- Credit review on all tenants above 10% of EGI
-- Business verification (active corporation, UCC searches)
-- Rent payment history review
-- Any current delinquencies
-- Any pending disputes or litigation
-- Customer concentration risk (if tenants are also customers of ORA's lenders)
-- Key man dependency
-
-**MARKET DD (10 items)**
-
-- Submarket vacancy rate (current and 5-year trend)
-- Asking vs. effective rent trends
-- New supply pipeline (permitted, under construction, planned)
-- Major employer health (top employers in submarket)
-- CoStar/CBRE market report
+**LEASE-CHAIN INTEGRITY (Category: Legal — run on every occupied suite, before waiving the DD contingency):** reconstruct the full instrument chain by date (base lease, every renewal, every amendment — a margin note, email or rent-roll line is a **gap**, not a term); confirm an **executed counterpart exists for every link** (transmittal drafts show blank signature blocks, "sent" annotations, diagonal strikes — add missing originals to the seller's closing deliverables); confirm the **landlord named in each lease matches title vesting** per `title-exam-abstraction` (provisional seller-name fallback if it hasn't run; two mismatches is a papering pattern — escalate to an affirmative PSA representation); catalogue every **manuscript amendment** and confirm all-party initials (read the page images — OCR does not see ink); reconcile **tenant of record** against the rent roll and the estoppel. **Read references/dd-checklist.md (Lease-Chain Integrity) for the full procedure and its 754 Old State origin.**
 
 ### Automatic Price Renegotiation Flags
 
@@ -487,13 +335,11 @@ Post-closing operational setup (`re-operations` retired 2026-08-05, redundant wi
 
 Any time this skill acts on a deal that has an Acquisition Pipeline Tracker row (`bcfe4a03`) — generating a PSA (Workflow 1), reviewing an inbound PSA draft or processing a redline round (Workflow 2A), or completing closing (post-closing checklist above) — update that row: advance PSA Status / Stage as the action warrants **and set `Last Activity` = today (date-only)**.
 
-This is load-bearing for the weekly `ora-deal-command-board`, which reads `Last Activity` (not Notion's system last-edited timestamp) to decide staleness. PSA negotiation that happens off-Notion must still bump `Last Activity`, or the deal false-flags STALLED while under active work. **Origin: 754 Old State Route 74, 2026-07-17 — the row sat at a frozen 6/11 timestamp through weeks of live PSA negotiation and false-flagged STALLED on the Monday board.** Do NOT rely on the board to stamp this itself — the board is read-only by charter (a board that stamped activity would reset its own stall clock merely by surfacing a deal).
+This is load-bearing for the weekly `ora-deal-command-board`, which reads `Last Activity` (not Notion's system last-edited timestamp) to decide staleness — PSA negotiation that happens off-Notion must still bump it, or the deal false-flags STALLED while under active work. Do NOT rely on the board to stamp this itself; it is read-only by charter. Origin (754 Old State Route 74, 2026-07-17): references/rationale-and-incidents.md.
 
 **`Next Action Date` — stamp it whenever the next action carries a date (added 2026-08-12).** The tracker gained a `Next Action Date` date property on 2026-08-11. Rule: **if the `Next Action` text you write names or implies a date, write that date into `Next Action Date` as well — never only into the prose.** If the next action genuinely has no date, leave the column NULL; do not invent one, and do not substitute the target close date or a guess like "about a month out." This is the same argument `loi-generation` Phase 6 already makes for `LOI Expiration Date`: a date sitting only in prose rots the moment anyone edits the field, and nothing can safely alert against it.
 
-This skill is the highest-value stamper of the three, because PSA execution is where dated obligations cluster — EMD delivery deadlines, Feasibility Period expiry, contingency-period ends. Those are exactly the dates that must not live only in a paragraph. Where a workflow produces several dated obligations at once, `Next Action Date` carries the **nearest one ORA must act on**, not the furthest; the full set belongs in the Deal-Terms Register and the diary, which is what those exist for.
-
-Two consumers read this field and both are hardened against a bad value: `ora-deal-command-board` STEP 2b resolves it with a prose fallback and reports column-vs-prose disagreement as `DATE DIVERGENCE` rather than reconciling it, and `ora-deal-aging-sla` STEP 3d flags a past-due date whose `Last Activity` predates it as a missed self-imposed commitment. A wrong date here therefore surfaces as a contradiction rather than being silently trusted — but it still costs a human the reconciliation, so stamp what the document says, not what you infer it means.
+Where a workflow produces several dated obligations at once, `Next Action Date` carries the **nearest one ORA must act on**, not the furthest; the full set belongs in the Deal-Terms Register and the diary. Stamp what the document says, not what you infer it means — both consumers (`ora-deal-command-board` STEP 2b, `ora-deal-aging-sla` STEP 3d) surface a wrong date as a contradiction rather than silently trusting it, but a human still pays for the reconciliation. Rationale: references/rationale-and-incidents.md.
 
 ---
 
@@ -503,48 +349,21 @@ Two consumers read this field and both are hardened against a bad value: `ora-de
 - PSA: DOCX (use docx skill)
 - Redline Analysis: DOCX structured memo
 - Closing Checklist: Notion page or DOCX
-- File naming: per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Operating Prompt v3.0, 2026-07-16 — do NOT unify; supersedes the archived v2.0/2026-06-11 doc of the same ratified rule). Redline/closing deliverables are deal-bound → use the deal-file schema `[Address] [Purpose] [MM-YYYY]`. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
+- File naming: per ORA's three standing naming schemas (ratified 2026-06-10 — do NOT unify). Redline/closing deliverables are deal-bound → deal-file schema `[Address] [Purpose] [MM-YYYY]`. Citation provenance: references/rationale-and-incidents.md.
 
 ## SCRIPTS
 
-Both are stdlib-only (`zipfile` + `ElementTree`); no python-docx, no lxml. Run from the skill directory.
-
-| Script | Purpose | Used by |
-|---|---|---|
-| `scripts/extract_revisions.py` | Detects revision encoding (OOXML tracked changes / compare-tool formatting / clean) and extracts revisions from all three. Parses the compare-tool summary block for the BASE document and the tool's own change tally. Exit 2 = ambiguous, hard stop. | Workflow 2 Step 0; legal-intelligence Module 6 |
-| `scripts/audit_completeness.py` | Exhibit population, exhibit/section cross-reference resolution, unfilled-blank detection (body vs. signature block). Exit 1 = blocking defect. | Workflow 2A Step 5; Workflow 2B Check D; 46-Point Gate |
+Both are stdlib-only; run from the skill directory. `scripts/extract_revisions.py` — Workflow 2 Step 0 and legal-intelligence Module 6 (exit 2 = ambiguous, hard stop). `scripts/audit_completeness.py` — Workflow 2A Step 5, Workflow 2B Check D, 46-Point Gate (exit 1 = blocking defect). Details: references/scripts.md.
 
 ## Changelog
 
 - v1.8 (2026-09-10): **retention rule adopted (ORA Automation Audit R24-11).** This skill was the 4th-largest in the catalog at 6,943 words with **no growth bound of any kind** — a `## Changelog` with no cap and no extraction file. Added the 6-entry count cap and the ~2,000-char per-entry cap below, and archived v1.2 in the same pass so adding this entry did not breach the rule it introduces. **No workflow, DD checklist item, buyer protection or 46-Point Gate check changed** — documentation discipline only. Known grandfathered outlier: v1.3 is 2,027 chars, 27 over the cap; the caps bind entries written from here on rather than rewriting history.
 
-**Retention rule (added 2026-09-10, ORA Automation Audit R24-11 — ported from `register-scheduled-task` v2.18/v2.20, `package-and-stage-skill` v1.30 and `ora-setup-audit` v1.12, which already carry it):** keep at most the **6 most recent versions** as full inline entries. The moment an edit would add a 7th, that same edit must also compress the oldest full inline entry to a one-line `**vX.Y (date):** Full text: versions/CHANGELOG-vA.B-vX.Y.md` summary and append its full original text to the versions file for that range (opening a new one if the prior range is closed out). Do it inline, in the pass that adds the new entry — never as deferred cleanup, and never wait for an audit to notice.
+**Retention rule (added 2026-09-10, ORA Automation Audit R24-11):** keep at most the **6 most recent versions** as full inline entries. The edit that would add a 7th must, in the same pass, compress the oldest full entry to a one-line `**vX.Y (date):** Full text: versions/CHANGELOG-vA.B-vX.Y.md` summary and append its full original text to the versions file for that range. **Per-entry cap ~2,000 characters** — an entry that would exceed it states its finding and verdict inline and cites the deal folder or `versions/` file for the detail. Check both caps in the pass that adds an entry — never as deferred cleanup. Full rule text and calibration: `versions/CHANGELOG-v1.3-v1.7.md`.
 
-**Per-entry length cap (same pass, and the reason the count cap alone is not enough).** The 6-entry rule bounds how MANY entries are inline, never how LARGE each is — the exact defect `ora-setup-audit` v1.10 fixed in its artifact's rev-bands and `ora-cc-schematic-refresh` fixed at its v1.4. Cap each full inline entry at **~2,000 characters**, calibrated rather than copied: measured 2026-09-10, inline entries across this skill and its two siblings run 127–2,142 chars, so the cap fits every compliant entry with headroom while binding the two outliers. An entry that would exceed it states its finding and verdict inline and cites the deal folder or `versions/` file for the detail. Check both caps in the pass that adds an entry.
-
-- v1.7 (2026-08-24): **PD/PUD item added to the Workflow 3 DD checklist (Title & Survey, 20 → 21 items).** The checklist carried "zoning verification letter from municipality" and nothing about planned-development districts, where the code has no use table and the governing instrument is the approved PD plan. The new item requires the plan itself plus a written amendment-tier statement (minor/administrative vs. major/board) from a named official, for the intended site change *and* for any use ORA may re-tenant into; it also separates recorded-easement clearance from zoning clearance, and flags the change-of-use parking-plan filing as a post-closing operations item that still belongs in the register. Procedure lives in `ora-flood-zoning-dd` Step 6A (new at v1.4); `acquisition-underwriting` v4.17 carries the matching pre-LOI carve-out. Origin: 754 Old State Route 74 — the Township confirmed in writing on 7/21/2026 that no special approval was needed to remove parking spaces, and that cleared the register item; the 8/2026 follow-up call named the actual mechanism (a minor amendment application to the PD plan, marked up by hand on the existing approved site plan) and disclosed that outside storage would be a major amendment. The checklist had no place to record either fact.
-- v1.6 (2026-08-21, adversarial review): v1.5's LEASE-CHAIN INTEGRITY landlord check compared against the self-reported
-  "seller" field with no tie to actual title vesting, and neither it nor lease-abstraction-pipeline's parallel
-  landlord-mismatch flag referenced the `title-exam-abstraction` skill added in the same v1.5 round — now wired: the
-  landlord check and the TITLE & SURVEY item both point to `title-exam-abstraction` as the vesting source, with a
-  provisional seller-name fallback when it hasn't run yet. Also: Workflow 2A item 12 and Workflow 3's LEASE-CHAIN
-  INTEGRITY reference each other's output with no fallback for the (common) case where 2A's PSA review precedes
-  Workflow 3's DD-period execution — item 12 now flags itself provisional when the chain check hasn't run. The
-  LEASE-CHAIN INTEGRITY heading now states its DD Category (Legal) explicitly, since it sits as a sibling heading rather
-  than nested under LEGAL DD and its title matched none of the 8-value Category enum the checklist XLSX requires. The
-  Estoppel certificates and Title & Survey DD-checklist items now point to `estoppel-request-generation` and
-  `title-exam-abstraction` respectively, closing a one-directional cross-reference (both new skills already cited this
-  file as their consumer). Also narrowed the frontmatter's bare "estoppel" trigger to the DD-conformance context this
-  skill actually covers, with a pointer to `estoppel-request-generation` for drafting — the two skills claimed the same
-  bare word with no tie-break.
-- v1.5 (2026-08-21): LEASE-CHAIN INTEGRITY added to Workflow 3 DD, and Workflow 2A item 12 (estoppel content) extended to
-  require the full instrument chain and verbatim reproduction of manuscript amendments. Origin: 754 Old State Route 74 —
-  the anchor's base lease in the file was an unexecuted transmittal draft amended by a fully executed First Amendment, the
-  intervening renewal existed only as a handwritten margin note, and the second suite named a landlord that was not the
-  seller. None of it was visible in the extracted text; all of it was visible on the page images.
-- v1.4 (2026-08-15): New finding (coverage-gap-3, stale file-naming-standard citation). Both file-naming citations (PSA generation step; Redline/Closing deliverables) updated from the archived "ORA Cowork Global Settings v2.0" (2026-06-11) to the current "ORA Cowork Global Operating Prompt v3.0" (2026-07-16) — the underlying three-schema rule is unchanged, only the version/document-name citation.
-- v1.3 (2026-08-01): three fixes from the 754 Old State Route 74 seller-redline round.
-  1. **Workflow 2 Step 0 — revision-encoding detection.** The workflow assumed "DOCX with tracked changes." Litera/Workshare/Word compare outputs carry ZERO `<w:ins>`/`<w:del>` and encode revisions as strikethrough and coloured underline formatting, so a tracked-change parse returns nothing and reads as "seller accepted everything." New `scripts/extract_revisions.py` detects all three encodings, hard-stops (exit 2) on a clean file whose name says redline, and surfaces the compare summary's BASE document — the fact that establishes what the counterparty accepted rather than merely left uncommented. Also new Step 7: a quiet round is a finding; enumerate what was accepted.
-  2. **New Workflow 2B — outbound draft gate.** 2A guarded inbound paper only. On 7/22 an outbound draft dropped nine of the fifteen recommendations from the 7/21 review memo — four of them ORA's own mandatory buyer-protective provisions, three of them executed-LOI terms, two ORA standing positions — and seller never rejected them because they were never sent. 2B runs five checks before any draft leaves ORA: prior-memo delta (LANDED/DROPPED/WAIVED/SUPERSEDED), the mandatory 6, LOI + register re-check, mechanical completeness sweep, and self-expiring terms. Workflow 2A Step 5 now also requires review-memo recommendations be written so they can be mechanically verified later.
-  3. **Exhibit population in the 46-Point Gate (was 42).** The gate asked whether exhibits were "attached," which an empty exhibit satisfies. At 754, Exhibit B (Rent Roll) was heading-only across four rounds and two firms while the body's definition of "Leases" and the no-renewal-option representation both depended on it; Exhibit A had a parcel number and no legal description; the §15.1 knowledge-party definition was an open blank. New `scripts/audit_completeness.py` plus four gate items covering population, legal description, body blanks, and cross-reference resolution.
+- **v1.7 (2026-08-24) — full text: `versions/CHANGELOG-v1.3-v1.7.md`.** PD/PUD item added to the Title & Survey DD checklist (20 → 21 items); procedure in `ora-flood-zoning-dd` Step 6A. Archived 2026-09-22 under the retention rule.
+- **v1.6 (2026-08-21) — full text: `versions/CHANGELOG-v1.3-v1.7.md`.** Adversarial review: Lease-Chain landlord check tied to `title-exam-abstraction` vesting; 2A item 12 / Workflow 3 cross-fallbacks; DD-checklist items point to `estoppel-request-generation` and `title-exam-abstraction`; bare "estoppel" trigger narrowed. Archived 2026-09-22 under the retention rule.
+- **v1.5 (2026-08-21) — full text: `versions/CHANGELOG-v1.3-v1.7.md`.** LEASE-CHAIN INTEGRITY added to Workflow 3; 2A item 12 extended to the full instrument chain and manuscript amendments. Archived 2026-09-22.
+- **v1.4 (2026-08-15) — full text: `versions/CHANGELOG-v1.3-v1.7.md`.** File-naming citations repointed to the Global Operating Prompt v3.0. Archived 2026-09-22.
+- **v1.3 (2026-08-01) — full text: `versions/CHANGELOG-v1.3-v1.7.md`.** Workflow 2 Step 0 revision-encoding detection (`scripts/extract_revisions.py`); new Workflow 2B outbound gate; 46-Point Gate (was 42) exhibit-population items (`scripts/audit_completeness.py`). Archived 2026-09-22.
 - **v1.2 (2026-07-08) — full text: `versions/CHANGELOG-v1.0-v1.2.md`.** Archived 2026-09-10 under the retention rule above to hold the 6-entry cap while v1.8 was added.
