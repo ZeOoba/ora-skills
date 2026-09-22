@@ -1,9 +1,9 @@
 ---
 name: "deal-folder-intake"
-description: "Archive an uploaded or received acquisition document package into a permanent, hash-verified Oxford Realty Advisors deal folder — structure, byte-verification, source manifest, OneDrive mirror, and memory pointer. Use when the user says: store this deal, archive this package, save these files for [property], file this broker package, set up a deal folder, keep this for the record, or uploads a multi-file acquisition package (OM, leases, tax bills, site plan, Argus/CoStar exports, models, IC memos) without asking for an underwrite. Does NOT underwrite, screen, or price — that is acquisition-underwriting; does NOT pre-screen a single target — that is verified-deal-recon. Run it AFTER an underwrite to make the package permanent, or standalone to park a package that has not been underwritten yet. v1.0 "
+description: "Use when the user says: store this deal, archive this package, save these files for [property], file this broker package, set up a deal folder, keep this for the record, or uploads a multi-file acquisition package (OM, leases, tax bills, site plan, Argus/CoStar exports, models, IC memos) without asking for an underwrite — archives it into a permanent, hash-verified Oxford Realty Advisors deal folder. Does NOT underwrite, screen, or price — that is acquisition-underwriting; does NOT pre-screen a single target — that is verified-deal-recon. Run it AFTER an underwrite to make the package permanent, or standalone to park a package that has not been underwritten yet."
 ---
 
-# DEAL FOLDER INTAKE — ORA acquisition package archiving
+# DEAL FOLDER INTAKE — ORA acquisition package archiving (v1.0)
 
 Turns a pile of uploaded deal documents into a permanent, verifiable deal folder: **structure → hash-verify → manifest → mirror → memory pointer.** Session upload folders are ephemeral; anything not archived is lost when the session ends.
 

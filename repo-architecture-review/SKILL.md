@@ -1,10 +1,10 @@
 ---
 name: repo-architecture-review
-description: Cross-repo architecture-diagram audit for Oxford Realty Advisors' GitHub repos — reads each repo's embedded architecture diagrams (mermaid in README/docs, .drawio, .puml) and surrounding prose, then screens findings against failure patterns already proven costly here (unbounded per-row loops, automation outside the ORA scheduled-task fleet, dual-write data with no drift detection, stale manual build steps, dead links documented as live, missing CI gates on financial-decision code, unproven coordination-layer infrastructure). Produces a prioritized, evidence-cited punch list — does not implement fixes. Use when Gabriel says: review my repos, audit my architecture, review the diagrams in my repos, cross-repo review, how do my systems talk to each other, find inefficiencies across my apps. Distinct from `ora-setup-audit` (audits the Claude Code/Cowork setup itself, not application repos). v1.0.
+description: Use when Gabriel says: review my repos, audit my architecture, review the diagrams in my repos, cross-repo review, how do my systems talk to each other, find inefficiencies across my apps — a cross-repo architecture-diagram audit of Oxford Realty Advisors' GitHub repos (mermaid in README/docs, .drawio, .puml, plus surrounding prose) screened against failure patterns already proven costly here. Produces a prioritized, evidence-cited punch list — does not implement fixes. Distinct from `ora-setup-audit` (audits the Claude Code/Cowork setup itself, not application repos).
 license: ORA Internal
 ---
 
-# Repo Architecture Review
+# Repo Architecture Review (v1.0)
 
 Finds cross-cutting inefficiencies by reading the architecture diagrams repos already carry (most ORA repos document a mermaid `flowchart`/data-flow diagram in their README, kept current as part of normal maintenance) rather than re-deriving system structure from scratch. The diagrams plus the prose around them are usually enough — this skill rarely needs to read implementation source directly except to verify a suspected finding.
 

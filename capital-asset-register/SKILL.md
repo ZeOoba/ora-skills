@@ -1,9 +1,9 @@
 ---
 name: capital-asset-register
-description: "Maintain ORA's per-property building asset register — nameplate capture, remaining useful life, and the replacement pipeline that feeds the annual capital plan. Trigger on: asset register, equipment register, how old is this unit, what model is it, nameplate, serial number, remaining useful life, EUL, when does this need replacing, replacement pipeline, building systems inventory, walk the roof, capital plan inputs."
+description: "Use when maintaining ORA's per-property building asset register — nameplate capture, remaining useful life, and the replacement pipeline that feeds the annual capital plan. Trigger on: asset register, equipment register, how old is this unit, what model is it, nameplate, serial number, remaining useful life, EUL, when does this need replacing, replacement pipeline, building systems inventory, walk the roof, capital plan inputs."
 ---
 
-# Capital Asset Register
+# Capital Asset Register (v1.0)
 
 One row per physical building-system asset across the portfolio, permanent for that
 asset's life. The register answers three questions that ORA could not previously answer

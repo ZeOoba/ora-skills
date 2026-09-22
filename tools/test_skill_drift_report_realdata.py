@@ -27,6 +27,7 @@ was silently disabled on them. See DescriptionParsingOnRealShapes below.
 These tests SKIP rather than fail when the repo is unavailable, so they stay
 runnable from a packaged checkout. Run: python tools/test_skill_drift_report_realdata.py
 """
+import re
 import shutil
 import subprocess
 import sys
@@ -117,8 +118,12 @@ class DescriptionParsingOnRealShapes(unittest.TestCase):
         self.assertIsNotNone(desc)
         self.assertFalse(desc.startswith('"'), 'YAML quotes leaked into the description')
         self.assertFalse(desc.endswith('"'))
-        # The incident record cites 850 chars; the quoted literal is 852.
-        self.assertGreater(len(desc), 700)
+        # Truncation guard (the incident collapsed 850 -> 203 chars). Compare against
+        # the full quoted literal on disk rather than a fixed length: a snapshot floor
+        # on live content broke when the description was legitimately trimmed to a
+        # trigger-only form (2026-09-22).
+        raw = re.search(r'^description:\s*"(.*)"\s*$', fm, re.M).group(1)
+        self.assertEqual(desc, raw, 'parsed description is not the full quoted literal')
         for trigger in LOST_TRIGGERS:
             self.assertIn(trigger, desc)
 

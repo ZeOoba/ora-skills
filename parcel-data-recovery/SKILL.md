@@ -1,10 +1,10 @@
 ---
 
 name: parcel-data-recovery
-description: "County-level building SF, market value, year-built, and tax-delinquency recovery for Oxford Realty Advisors off-market parcel screens. Use when the user mentions: recover SF, missing building SF, parcel data gap, UNSCREENABLE rows, DATA-GAP rows, county GIS pull, footprint SF, assessor values, CAMA extract, refresh parcel data, re-run P1 on recovered data, off-market master rebuild, or when an off-market screen workbook has rows lacking Bldg SF or auditor values. Encodes verified endpoints (per `references/endpoints.md`, live-monitored quarterly by `ora-gis-endpoint-liveping`) for Jackson MO, Wyandotte KS, Clay MO, Hamilton/Butler/Clermont/Warren OH, footprint-vs-GBA rules, value-basis conversions (calibrated per-county, never assumed — Iron rule 10; RCT floor-discount is the default when Year Built coverage can't support a true cost approach), P1 Buy Box recompute math, the v03/v04 QC gate, and RCT-version import (Iron rule 11). Companion to county-parcel-screen; patches an existing master. v1.9"
+description: "Use when an Oxford Realty Advisors off-market screen workbook has rows lacking Bldg SF or auditor values and county-level building SF, market value, year-built, or tax-delinquency data must be recovered from county GIS/CAMA sources (Jackson MO, Wyandotte KS, Clay MO, Hamilton/Butler/Clermont/Warren OH; endpoints in references/endpoints.md, live-monitored quarterly by ora-gis-endpoint-liveping). Trigger on: recover SF, missing building SF, parcel data gap, UNSCREENABLE rows, DATA-GAP rows, county GIS pull, footprint SF, assessor values, CAMA extract, recover year built, recover market value, tax delinquency flags, refresh parcel data, re-run P1 on recovered data, off-market master rebuild. Companion to county-parcel-screen; patches an existing master."
 ---
 
-# Parcel Data Recovery — ORA Off-Market Screens
+# Parcel Data Recovery — ORA Off-Market Screens (v1.9)
 
 Recovers the inputs that block P1 Buy Box economics (building SF, market value, year built, delinquency) from county GIS/CAMA sources, then recomputes P1 and rebuilds the off-market master workbook.
 
@@ -65,6 +65,7 @@ Recovers the inputs that block P1 Buy Box economics (building SF, market value, 
 
 ## Changelog
 
+- v1.9 (2026-09-07): Description-level routing arbitration (R23 trigger-collision sweep, commit ab850fd) — added the “Companion to county-parcel-screen; patches an existing master” tie-break to the frontmatter description so the two skills’ shared parcel/assessor vocabulary routes on scope (existing master vs. fresh county universe) rather than on CLAUDE.md prose. No workflow, endpoint, Iron-rule or QC-gate change.
 - v1.8 (2026-08-15): MEDIUM fix (Skill Text Audit finding F8) + LOW fix (finding F9). The frontmatter description's "Encodes verified endpoints (2026-06-11)" read as a staleness claim once >60 days old, even though `ora-gis-endpoint-liveping`'s quarterly run keeps the endpoints themselves live-monitored — reworded to point at that monitoring instead of a bare date. Also moved the v1.7/v1.6 changelog prose that had accumulated in the description field down here (both entries already existed in this section, so the description copies were pure duplication); description now carries a single trailing version tag. No endpoint, formula, or QC-gate content changed.
 - v1.7 (2026-08-12): Tombstoned the placeholder-rent-grid reference to 'rent-comp P2' - `rent-comp` was retired 2026-08-05 and its P2 successor never shipped. Comment-only; the NOI placeholder formula is unchanged.
 

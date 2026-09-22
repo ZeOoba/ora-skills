@@ -1,9 +1,9 @@
 ---
 name: insurance-renewal-review
-description: "Oxford Realty Advisors property insurance renewal review — extract carrier declarations (text-layer first, OCR only if needed), build a per-property premium history, decompose rate from exposure, diff each renewal against the prior term, reconcile trackers and named insureds against the declarations, and ship both an XLSX and an interactive HTML dashboard. Use when the user says: review insurance policies, insurance renewal review, how has insurance changed, premium history, shop our insurance, self-insure, insurance declarations, coverage changes, deductible options, insurance dashboard — or points at a folder of insurance PDFs/declarations. Also trigger when a folder holds scanned carrier declarations (Erie, Selective, Westchester/Chubb, Mesa, Hartford) and the user asks for trends, comparisons, or a renewal decision. v2.0 (2026-08-17: text-layer-first triage, dashboard deliverable, quoted-vs-realized check — see Changelog)."
+description: "Use when the user says: review insurance policies, insurance renewal review, how has insurance changed, premium history, shop our insurance, self-insure, insurance declarations, coverage changes, deductible options, insurance dashboard — or points at a folder of insurance PDFs/declarations. Also trigger when a folder holds scanned carrier declarations (Erie, Selective, Westchester/Chubb, Mesa, Hartford) and the user asks for trends, comparisons, or a renewal decision, or asks whether the trackers and named insureds match the declarations. Oxford Realty Advisors property insurance renewal review."
 ---
 
-# Insurance Renewal Review (ORA) — v2.0
+# Insurance Renewal Review — ORA (v2.0)
 
 Codifies the extraction/compare/flag pass built 2026-08-13 and materially extended 2026-08-17 (adding a 7th property, correcting two analytical errors, and reconciling three source workbooks against the declarations).
 
