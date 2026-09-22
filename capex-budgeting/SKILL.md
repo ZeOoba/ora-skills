@@ -1,10 +1,10 @@
 ---
 name: capex-budgeting
-description: Multi-year capital expenditure planning and reserve studies for Oxford Realty Advisors. Use when the user mentions: capex budget, capital plan (building-system reserves — for AUM deployment capacity use portfolio-growth), reserve study, multi-year capital, capex schedule, capex forecast, building system replacement, capital reserve, replacement reserve, capex line item, sinking fund, deferred maintenance financial plan, or any task that requires building a capital plan beyond reactive maintenance. Bridges reactive maintenance into financial planning. v1.1 (2026-08-12: tombstoned the three dangling `maintenance-analytics` references left by that skill's 2026-08-05 retirement — predictive failure horizons are now an explicit manual source; no formula or reserve-study method changed)
+description: Use when the user mentions: capex budget, capital plan (building-system reserves — for AUM deployment capacity use portfolio-growth), reserve study, multi-year capital, capex schedule, capex forecast, building system replacement, capital reserve, replacement reserve, capex line item, sinking fund, deferred maintenance financial plan, or any task that requires building a capital plan beyond reactive maintenance — multi-year capital expenditure planning and reserve studies for Oxford Realty Advisors, bridging reactive maintenance into financial planning.
 license: ORA Internal
 ---
 
-# Capex Budgeting
+# Capex Budgeting (v1.1)
 
 Build multi-year capital plans and reserve studies that translate physical asset condition into financial cash-flow obligations.
 
@@ -71,3 +71,6 @@ Annual budget kickoff, refi reserve negotiation, property acquisition (initial 1
 - vendor-management skill (vendor cost benchmarks)
 - xlsx skill (capex schedule models)
 - docx skill (reserve study deliverables)
+
+## Changelog
+- **v1.1 (2026-08-12):** tombstoned the three dangling `maintenance-analytics` references left by that skill's 2026-08-05 retirement — predictive failure horizons are now an explicit manual source; no formula or reserve-study method changed.

@@ -1,13 +1,9 @@
 ---
 name: portfolio-reporting
-description: "Oxford Realty Advisors portfolio-level reporting and investor-ready output generation. Use this skill whenever the user mentions: portfolio report, quarterly report, annual report, investor report, portfolio summary, portfolio overview, portfolio performance, KPI report, management report, board presentation, portfolio PowerPoint, or any request to produce a summary of portfolio performance across all properties and markets. Also trigger when the user asks for a consolidated view of the entire Oxford portfolio. v1.1 — changelog in body."
+description: "Use this skill whenever the user mentions: portfolio report, quarterly report, annual report, investor report, portfolio summary, portfolio overview, portfolio performance, KPI report, management report, board presentation, portfolio PowerPoint, or any request to produce a summary of portfolio performance across all properties and markets — Oxford Realty Advisors portfolio-level reporting and investor-ready output generation. Also trigger when the user asks for a consolidated view of the entire Oxford portfolio."
 ---
 
-## Changelog (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
-
-v1.1 (2026-07-15: LOW fix, ora-skill-text-audit — Parchment token corrected #F5F0E8 -> #F5F3EF to match ORA Institutional Style Guide v1.0+)
-
-# Portfolio Reporting — Oxford Realty Advisors
+# Portfolio Reporting — Oxford Realty Advisors (v1.1)
 
 ## MODULE 1: REPORT TYPES
 
@@ -151,3 +147,8 @@ For portfolio valuation updates:
 ## TRIGGER PHRASES
 Activate this skill when Gabriel says:
 "portfolio report", "quarterly review", "annual report", "how is the portfolio performing", "portfolio summary", "portfolio snapshot", "KPI report", "investor report", "how many properties", "what's our AUM", "occupancy rate", "WALT", "portfolio NOI", "portfolio LTV", "management report", "board deck", "portfolio presentation"
+
+## Changelog
+(moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
+
+- **v1.1 (2026-07-15):** LOW fix, ora-skill-text-audit — Parchment token corrected #F5F0E8 -> #F5F3EF to match ORA Institutional Style Guide v1.0+.

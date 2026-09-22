@@ -1,10 +1,10 @@
 ---
 name: annual-cycle
-description: Year-end and annual planning cycle for Oxford Realty Advisors — twin to monthly-close. Use when the user mentions: year-end, annual close, annual budget, year in review, tax planning, annual report, 1099 cycle, K-1 prep, audit prep, year-end distribution, fiscal year close, annual cycle, or any task related to the firm's annual rhythm. Distinct from portfolio-reporting, which owns investor and portfolio reporting deliverables. Powers the ora-annual-budget-kickoff (Nov 1) and ora-year-end-review (Dec 15) scheduled tasks. v1.0
+description: Use when the user mentions: year-end, annual close, annual budget, year in review, tax planning, annual report, 1099 cycle, K-1 prep, audit prep, year-end distribution, fiscal year close, annual cycle, or any task related to the firm's annual rhythm — Oxford Realty Advisors' year-end and annual planning cycle, twin to monthly-close. Distinct from portfolio-reporting, which owns investor and portfolio reporting deliverables. Powers the ora-annual-budget-kickoff (Nov 1) and ora-year-end-review (Dec 15) scheduled tasks.
 license: ORA Internal
 ---
 
-# Annual Cycle
+# Annual Cycle (v1.0)
 
 Coordinate the firm's annual rhythm: budget kickoff, year-end review, tax planning, audit prep, K-1 cycle, and LP year-end communications.
 

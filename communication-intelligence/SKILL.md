@@ -1,9 +1,9 @@
 ---
 name: communication-intelligence
-description: "Context-enriched communication drafting for Oxford Realty Advisors. Use this skill whenever the user mentions: write an email, draft a response, compose a message, reply to, reach out to, follow up with, send a letter to, communicate with, notify, or any request to produce a written communication to a broker, vendor, lender, attorney, or other external counterparty. Tenant comms route to tenant-email instead (CLAUDE.md Comms drafting tie-break). Also trigger when the user receives an email and needs help crafting a response. Enriches drafts with relationship context from Notion, HubSpot, and conversation history. v1.4 (2026-08-13: dropped 'tenant' from the trigger list to match the ratified tie-break — see Changelog)."
+description: "Use when the user mentions: write an email, draft a response, compose a message, reply to, reach out to, follow up with, send a letter to, communicate with, notify, or any request to produce a written communication to a broker, vendor, lender, attorney, or other external counterparty. Also trigger when the user receives an email and needs help crafting a response, or wants a draft enriched with relationship context (Notion, HubSpot, conversation history). Tenant comms route to tenant-email instead (CLAUDE.md Comms drafting tie-break)."
 ---
 
-# Communication Intelligence — Oxford Realty Advisors
+# Communication Intelligence — Oxford Realty Advisors (v1.4)
 
 ## MODULE 1: CONTEXT ENRICHMENT WORKFLOW
 

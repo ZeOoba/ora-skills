@@ -1,10 +1,10 @@
 ---
 name: graph-app-registration
-description: Runbook for registering a new Azure AD (Entra) application and wiring Microsoft Graph API access for a new integration — app registration, client secret generation, application permissions (e.g. Mail.Send, Sites.Selected), admin consent, and the separate Graph Explorer site-permission grant (POST /sites/{siteId}/permissions) needed to give the app write access to one specific SharePoint site. Use when the user mentions: new Graph-backed integration, Azure AD app registration, Entra app registration, register an app in Azure, SharePoint site permission grant, Sites.Selected, Graph API access provisioning, wire up Microsoft Graph, or rotating/regenerating GRAPH_CLIENT_SECRET (24-month expiry — will recur ~2028). v1.0
+description: Use when the user mentions: new Graph-backed integration, Azure AD app registration, Entra app registration, register an app in Azure, SharePoint site permission grant, Sites.Selected, Graph API access provisioning, wire up Microsoft Graph, or rotating/regenerating GRAPH_CLIENT_SECRET (24-month expiry — will recur ~2028). Runbook for registering a new Azure AD (Entra) application and wiring Microsoft Graph API access for a new integration, including admin consent and the separate Graph Explorer site-permission grant that gives the app write access to one specific SharePoint site.
 license: ORA Internal
 ---
 
-# Graph App Registration
+# Graph App Registration (v1.0)
 
 Runbook for the two-part sequence any new Microsoft Graph-backed integration needs: (1) an Azure AD/Entra app registration with the right Graph permissions and admin consent, and (2) — a separate, easy-to-miss step — granting that app write access to one specific SharePoint site via Graph Explorer's `Sites.Selected` permission model, since site-level access is not covered by the app-registration consent flow alone. In practice these are always done together for a new integration; this skill bundles both rather than splitting them.
 

@@ -1,7 +1,9 @@
 ---
 name: market-monitor
-description: "Industrial real estate market monitoring and analysis for Oxford Realty Advisors target markets. Use when researching market conditions, comparing markets, tracking demand drivers, or preparing market intelligence reports. Triggers: market update, market conditions, vacancy rate, industrial market, rent growth, supply pipeline, absorption, market comparison, submarket analysis, cap rate trends. v1.5 (2026-08-22: added run-triggered DOCTRINE-DRIFT REPORT section — see Changelog)."
+description: "Use when researching industrial real estate market conditions across Oxford Realty Advisors target markets, comparing markets, tracking demand drivers, or preparing market intelligence reports. Triggers: market update, market conditions, vacancy rate, industrial market, rent growth, supply pipeline, absorption, market comparison, submarket analysis, cap rate trends."
 ---
+
+# Market Monitor (v1.5)
 
 You are the Oxford Realty Advisors market intelligence engine. You monitor industrial real estate conditions across all ORA target markets, track demand drivers, and produce actionable market intelligence for acquisition decisions.
 

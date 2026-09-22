@@ -35,3 +35,46 @@ Extracted verbatim from `acquisition-underwriting/SKILL.md` (2026-08-13, progres
 **Full report:** `oxford-command-center/outputs/2026-06-22_Submarket_Intelligence_Report_v01.docx` · **Memory (corrected 2026-07-11):** the table below is the live source for this data — no per-metro `market-intel-*` file was ever created for any of the 8 metros here, and memory-policy.md v2's fixed doc set (rewritten 2026-06-03, anti-sprawl) carves out no exception for one. Independently ORA-validated cross-market stats (vacancy/rent/cap rate, source + date cited) live in `markets.md` instead — cross-check both. **Re-research cadence:** annually or when metro grade changes ±1 tier. **Sourcing discipline (v4.3):** any future refresh of this table MUST cite primary/institutional-grade series (CBRE, Cushman & Wakefield MarketBeat, NCREIF/NAIOP where applicable) and tag each cell's source tier — a 2026-07-18 research pass confirmed the general "shallow-bay is supply-constrained" thesis is genuinely well-sourced at the primary level, but also confirmed at least one widely-repeated brokerage-blog statistic (an unattributed "small buildings are X% of stock but under 2% of the construction pipeline" figure) traces to a single unsourced marketing post with no independent citation anywhere. That specific figure is not cited anywhere in this skill and should not be added on a future refresh without independent primary-source verification — repetition across blogs is not corroboration.
 
 Use for Stage 2 Market scoring calibration, bear-mode context, and IC Memo §4 Market Analysis. Always cross-check against live `market-monitor` at time of screen — the table below is a research snapshot, not live data.
+
+---
+
+## Submarket Intelligence Reference table (June 2026 deep research — 8 target metros; moved verbatim from `SKILL.md` 2026-09-22, v4.23)
+
+Research snapshot, not live data — always cross-check against live `market-monitor`. The Stage 2 Market scoring guidance derived from this table stays inline in `SKILL.md` under the Submarket Intelligence Reference heading.
+
+### Submarket Intelligence Reference (June 2026 deep research — 8 target metros)
+
+Full report + sourcing-discipline detail in `references/market-and-cost-calibration-data.md`. Always cross-check against live `market-monitor` — the table below is a research snapshot, not live data.
+
+| Metro | Metro Grade | Top Submarket | Sub Grade | Vacancy (top sub) | Rent $/SF NNN | Rent Growth YoY | ORA Fit |
+|---|---|---|---|---|---|---|---|
+| Columbus OH | B+ | Southwest/Westbelt/Obetz | A- | Sub-3% small-bay | $4.25–$9.00 | +6.9% | Highest |
+| Cincinnati OH | B+ | Central Hamilton County | A | 3.7% | $7.00–$11.73 | +8.1% | Highest |
+| Indianapolis IN | B+ | South/Greenwood-Southport | A | 5–8% [EST] | $4.50–$9.50 | +33% (5yr flex) | Highest |
+| Louisville KY | B+ | Riverport/West-Southwest | B+ | N/A | $3.90–$5.00 | +7.5% | High |
+| Des Moines IA | B | Ankeny/North Polk County | A- | 2.2% | $6.90–$7.50 [EST] | Stable+ | High |
+| Grand Rapids MI | B | Northwest/Walker/Comstock Pk | B+ | Sub-3% | $6.00–$7.00 [EST] | −13% from peak | Medium |
+| Madison WI | B- | East/East Buckeye | B | Highest relative | $5.00–$8.00 [EST] | Nominally neg. | Medium-Low |
+| Delmarva MD/DE | C+ | Sussex County DE | B- | Small-bay zero | $6.50–$10.00 | N/A | Low-Medium |
+
+
+---
+
+## RCT v03 — paving/lighting-intensity adder detail (v4.6, full text)
+
+**Paving/lighting-intensity adder detail (v4.6):** covers dealership-grade or retail-frontage-grade reinforced concrete/asphalt display paving plus elevated pole-lighting density — a surface-finish and lighting-spec adder, distinct from "excess site work" above (which covers civil/utility SCOPE — deep utilities, detention, heavy yard grading — not surface paving/lighting spec). **Do not stack both site-work adders for the same paving scope:** if a parcel's heavy paving IS its excess site work, apply one adder, not both, and document which. `[EST]` pending a GC/lender quote per "THE ONE EMAIL" below — until then this is a judgment-anchored placeholder like the soft/profit/financing multiplier, not a sourced figure. Formalizes what was an ad-hoc judgment call (Pike Plaza automotive-dealership parcels, 2026-07-27 underwrite) into a standing, documented adder.
+
+---
+
+## RCT v03 — vintage-ramp note and stale downstream consumers (full text)
+
+**Vintage-ramp note:** the linear floor ramp in Stage 1 (**65% discount floor at ≤1995 → 60% at ≥2005**, recalibrated 2026-07-14 alongside RCT v03) is the authoritative hand-screen formula. ⚠️ **DOWNSTREAM CONSUMERS ARE NOW STALE AND MUST BE UPDATED BEFORE USE:** the `parcel-data-recovery` skill still uses the old simplified 25%/30% cliff against RCT v02 constants, and the platform engine (`config/replacement-cost.v1.json`) still carries a flat $125/$137.50/$150. **Both are now WRONG on both the denominator and the floor.** Any screen run through them since 2026-07-14 must be re-derived. On any conflict, the Stage 1 linear ramp + RCT v03 governs IC memos and screens.
+
+---
+
+## RCT v03 — reconciliation: RETIRED BENCHMARKS (do not use, do not re-introduce; full text)
+
+**Reconciliation — RETIRED BENCHMARKS (do not use, do not re-introduce):**
+- `target-markets.json` briefly carried a **C&W-hard-cost operative benchmark** (Columbus $130.51 etc., flat 25% floor), ratified the morning of 2026-07-14 and **retired the same day**. It was a *hard-cost, big-box, March-2025* figure standing in for an *all-in, shallow-bay, 2026* one — a worse instrument than RCT, and a second competing denominator. C&W's proper role is as the **primary source feeding RCT v03**, and as the **coherence check** that caught RCT v02's error. It is not itself a benchmark.
+- The pre-2026-07-14 sourcing-scan constants ($140 Midwest / $170 MD / $150 Richmond / $130 DSM) were never sourced at all. Retired.
+- **There is now ONE denominator: RCT v03. If you find a second, it is a bug.**

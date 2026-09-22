@@ -1,9 +1,9 @@
 ---
 name: capital-bid-comparison
-description: "Level two or more contractor proposals for the same building-system scope into a comparable basis, code-check each, allocate risk, and produce an award recommendation plus per-contractor RFI lists. Trigger on: compare these proposals, bid comparison, bid leveling, normalize these bids, apples to apples, which contractor should we use, award recommendation, scope gap, RFI list, or two or more uploaded proposals for the same work. Hands the winning bid to vendor-management QC before signature."
+description: "Use when two or more contractor proposals for the same building-system scope must be leveled into a comparable basis, code-checked, risk-allocated, and turned into an award recommendation plus per-contractor RFI lists. Trigger on: compare these proposals, bid comparison, bid leveling, normalize these bids, apples to apples, which contractor should we use, award recommendation, scope gap, RFI list, or two or more uploaded proposals for the same work. Hands the winning bid to vendor-management QC before signature."
 ---
 
-# Capital Bid Comparison
+# Capital Bid Comparison (v1.1)
 
 Multi-bid leveling for repeat-trade and capital work on ORA-owned assets. This skill
 runs **before** award and **before** `vendor-management` QC mode. The sequence is fixed:

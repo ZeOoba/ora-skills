@@ -1,9 +1,9 @@
 ---
 name: listing-agreement-qc
-description: "Pre-execution QC gate for BROKER LISTING AGREEMENTS on counterparty paper where Oxford Realty Advisors is the Owner. Use when the user says: QC this listing agreement, check this listing before I sign, review the brokerage agreement, listing agreement review, compare listing agreements, exclusive right to sell, exclusive right to lease, commission schedule, broker engagement, or uploads a DOCX/PDF that is a listing agreement. Run before ANY listing is signed or countersigned. Scans 25 systemic defects (dual gross-price definitions, missing excluded-prospect and affiliate carve-outs, automatic holdover, unconditioned tail, lease language in a sale-only instrument, blanket dual agency, missing lender-consent and Ohio agency-disclosure hooks) with BLOCK/HIGH/MED/LOW severity. Carries ORA's sixteen ratified standing listing positions. Distinct from lease-form-qc (ORA's own lease paper) and legal-intelligence. v1.3"
+description: "Use when the user says: QC this listing agreement, check this listing before I sign, review the brokerage agreement, listing agreement review, compare listing agreements, exclusive right to sell, exclusive right to lease, commission schedule, broker engagement, or uploads a DOCX/PDF that is a listing agreement. Run before ANY listing is signed or countersigned. Pre-execution QC gate for BROKER LISTING AGREEMENTS on counterparty paper where Oxford Realty Advisors is the Owner. Distinct from lease-form-qc (ORA's own lease paper) and legal-intelligence."
 ---
 
-# Listing Agreement QC — counterparty brokerage paper
+# Listing Agreement QC — counterparty brokerage paper (v1.3)
 
 Pre-execution gate for broker listing agreements where ORA is the Owner. Run
 **before** signature or countersignature. This audits the *brokerage engagement*

@@ -1,9 +1,9 @@
 ---
 name: tax-appeal
-description: "Property tax assessment analysis and appeal decision engine for Oxford Realty Advisors. Use this skill whenever the user mentions: property tax, tax assessment, tax appeal, assessed value, tax reduction, county assessor, millage rate, tax bill, reassessment, tax protest, tax grievance, income approach valuation, or any request to evaluate whether a property tax assessment should be appealed. Also trigger when the user uploads a property tax bill or assessment notice. v1.3 (2026-08-24: confirm-the-mechanism rule added to Section 5). v1.2 (2026-08-15: comp-grid pointers repointed from market-monitor to acquisition-underwriting's COMP GRID DISCIPLINE; file-naming citation updated to Cowork Global Operating Prompt v3.0). v1.1 (2026-07-08: file-naming citations repointed from the superseded single 2026-05-14 standard to the ratified three-schema doctrine)"
+description: "Use whenever the user mentions: property tax, tax assessment, tax appeal, assessed value, tax reduction, county assessor, millage rate, tax bill, reassessment, tax protest, tax grievance, income approach valuation, or any request to evaluate whether an Oxford Realty Advisors property tax assessment should be appealed. Also trigger when the user uploads a property tax bill or assessment notice."
 ---
 
-# Property Tax Appeal Decision Engine
+# Property Tax Appeal Decision Engine (v1.3)
 
 Systematic tax assessment analysis and appeal recommendation for Oxford Realty Advisors.
 

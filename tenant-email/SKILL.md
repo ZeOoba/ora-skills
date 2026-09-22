@@ -1,9 +1,11 @@
 ---
 name: tenant-email
-description: Draft a tenant communication email. Use when writing to tenants about renewals, notices, maintenance, rent, or introductions. v1.3 (2026-08-15: see Changelog)
+description: Use when drafting a tenant communication email — writing to tenants about renewals, notices, maintenance, rent, or introductions.
 user-invocable: true
 allowed-tools: Read Glob Grep WebFetch mcp__c0ea3c01-b8f1-4371-aa06-08a1449f59fc__outlook_email_search mcp__a3e380ce-2ea9-4b42-92d9-37c588a4b760__search_crm_objects
 ---
+
+# Tenant Email (v1.3)
 
 ## Instructions
 

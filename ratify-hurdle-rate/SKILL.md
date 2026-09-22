@@ -1,18 +1,16 @@
 ---
 name: ratify-hurdle-rate
 description: >
-  Formally ratify the Oxford Realty Advisors unlevered IRR hurdle rate in the
-  capital_config table — flipping hurdle_rate_ratification from 'proposed' to
-  'ratified', stamping Gabriel's name and date, running the gate, and producing a
-  durable audit memo. Use when Gabriel says: ratify hurdle rate, confirm hurdle rate,
-  lock in IRR hurdle, ratify the 8%, make the hurdle rate official, sign off on hurdle
-  rate, or capital allocation hurdle ratification. Requires migration 015_hurdle_rate.sql
-  to be applied (adds hurdle_rate_* columns to capital_config). v1.3 (2026-08-03:
-  audit-memo template stamped Gabriel as "Principal" against CLAUDE.md's ratified
-  "VP Acquisitions" — corrected; caught by doctrine-integrity-probe Check 13)
+  Use when Gabriel says: ratify hurdle rate, confirm hurdle rate, lock in IRR hurdle,
+  ratify the 8%, make the hurdle rate official, sign off on hurdle rate, or capital
+  allocation hurdle ratification — formally ratifies the Oxford Realty Advisors unlevered
+  IRR hurdle rate in the capital_config table (flipping hurdle_rate_ratification from
+  'proposed' to 'ratified', stamping Gabriel's name and date, running the gate, and
+  producing a durable audit memo). Requires migration 015_hurdle_rate.sql to be applied
+  (adds hurdle_rate_* columns to capital_config).
 ---
 
-# ratify-hurdle-rate
+# ratify-hurdle-rate (v1.3)
 
 Formally ratify the ORA unlevered IRR hurdle rate. Updates the `capital_config` table's
 `hurdle_rate_ratification` column from `proposed` → `ratified`, stamps Gabriel's name
@@ -207,3 +205,7 @@ Confirm the file was written, then report:
 | Gate step fails | Surface exact error — do not write memo |
 | Rate outside [1%, 30%] | Warn before writing, require explicit "yes" |
 | `docs/capital/` dir missing | Create with `mkdir -p` before writing memo |
+
+## Changelog
+
+- **v1.3 (2026-08-03):** audit-memo template stamped Gabriel as "Principal" against CLAUDE.md's ratified "VP Acquisitions" — corrected; caught by doctrine-integrity-probe Check 13.

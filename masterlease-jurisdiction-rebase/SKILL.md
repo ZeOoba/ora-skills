@@ -1,9 +1,9 @@
 ---
 name: masterlease-jurisdiction-rebase
-description: "Rebase Oxford Realty Advisors jurisdiction-conformed Master Lease property templates onto a new master revision in one command, and generate state-conformed (MD/MO) property templates from the OH-anchored master. Use whenever the user mentions: new master lease version, rebase the lease templates, regenerate the MD/MO templates, jurisdiction overlay, conform the lease to a state, state-conformed lease template, update property lease forms, lease template for Easton / Salisbury / Northwood / Raytown / Columbia, or uploads a new ORA_MasterLease_ShallowBayIndustrial_v*.docx. Also use when adding a NEW property or state overlay, or converting a property to NNN. Edits the master DOCX in place with asserted-count substitutions. Companion to lease-form-qc (which QCs drafted leases); this skill produces the templates leases are drafted FROM. v1.7"
+description: "Use when the user mentions: new master lease version, rebase the lease templates, regenerate the MD/MO templates, jurisdiction overlay, conform the lease to a state, state-conformed lease template, update property lease forms, lease template for Easton / Salisbury / Northwood / Raytown / Columbia, or uploads a new ORA_MasterLease_ShallowBayIndustrial_v*.docx. Also use when adding a NEW property or state overlay, or converting a property to NNN. Rebases Oxford Realty Advisors jurisdiction-conformed Master Lease property templates onto a new master revision in one command, and generates state-conformed (MD/MO) property templates from the OH-anchored master. Companion to lease-form-qc (which QCs drafted leases); this skill produces the templates leases are drafted FROM."
 ---
 
-# Master Lease Jurisdiction Rebase — Oxford Realty Advisors
+# Master Lease Jurisdiction Rebase — Oxford Realty Advisors (v1.7)
 
 One-command regeneration of state-conformed property lease templates whenever the
 controlled master (`ORA_MasterLease_ShallowBayIndustrial_v*.docx`) revs. Built from the

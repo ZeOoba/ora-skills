@@ -92,7 +92,7 @@ check("multi-line folded length is summed, not 1", len(_got) > 700, True)
 # extract_description() returns the folded string. The raw count is >= the folded one
 # for a block scalar, and read() must gate on the larger, or this tool clears a skill
 # that package_skills.py then refuses to build.
-from description_budget import packager_description, read  # noqa: E402
+from description_budget import FM, ROOT, packager_description, read  # noqa: E402
 
 _blk = "name: x\ndescription: >\n  alpha beta\n  gamma delta\n"
 check(
@@ -114,9 +114,14 @@ check("inline: packager never under-counts",
       len(packager_description(_inl)) >= len(extract_description(_inl)), True)
 check("inline: the over-count is the trailing newline only",
       len(packager_description(_inl)) - len(extract_description(_inl)), 1)
-# read() gates on the larger: county-parcel-screen is 974 folded / 1002 raw.
+# read() gates on the larger (packager) count. Derived from the live file rather
+# than pinned: a pinned 1002 broke on a legitimate description trim (2026-09-22).
 _nm, _n, _err = read("county-parcel-screen")
-check("read() reports the conservative (packager) count", (_err, _n), (None, 1002))
+_txt = open(os.path.join(ROOT, "county-parcel-screen", "SKILL.md"), encoding="utf-8").read()  # universal newlines
+_fm = FM.match(_txt).group(1)
+check("read() reports the conservative (packager) count",
+      (_err, _n), (None, len(packager_description(_fm))))
+check("read(): packager count >= folded count", _n >= len(extract_description(_fm)), True)
 
 print()
 if FAILURES:

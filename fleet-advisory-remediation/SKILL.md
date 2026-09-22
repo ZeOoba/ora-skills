@@ -1,10 +1,10 @@
 ---
 name: fleet-advisory-remediation
-description: Auto-triage a fleet-status/setup-self-audit advisory report across the dual CC/MCP + LAMS/Cowork scheduled-task fleet — register complete-but-unregistered "dark" task folders, delete expired one-time registry entries, route stale-data-producer symptoms to orphaned-task-forensics for root-causing, and hand off WRITES the current session's fleet can't reach (spawn a background task for the other fleet rather than guessing at data — but check `fleet-status.py` first, it reads both fleets regardless of surface, so a handoff should only ever be for the write itself). Use when the user pastes or references a fleet-status/setup-self-audit/automation-health-monitor advisory report, says fix these advisories, dark tasks, fleet hygiene sweep, or clean up the scheduled-task fleet. Cross-fleet handoffs are dispatched to a NATIVE on-device Cowork session by name, never a bare "Cowork session" (a cloud sandbox carries none of the scheduled-task MCP tools). v1.3
+description: Use when the user pastes or references a fleet-status/setup-self-audit/automation-health-monitor advisory report, says fix these advisories, dark tasks, fleet hygiene sweep, or clean up the scheduled-task fleet — auto-triage across the dual CC/MCP + LAMS/Cowork scheduled-task fleet (register complete-but-unregistered "dark" task folders, delete expired one-time registry entries, route stale-data-producer symptoms to orphaned-task-forensics for root-causing, hand off only the WRITES the current session's fleet can't reach — `fleet-status.py` reads both fleets regardless of surface). Cross-fleet handoffs are dispatched to a NATIVE on-device Cowork session by name, never a bare "Cowork session" (a cloud sandbox carries none of the scheduled-task MCP tools).
 license: ORA Internal
 ---
 
-# Fleet Advisory Remediation
+# Fleet Advisory Remediation (v1.3)
 
 Turns a `fleet-status.py`/`setup-self-audit.py`/`automation-health-monitor` advisory dump into triaged, executed (where safe) or handed-off (where not) fixes — replacing the ad hoc `TaskCreate`/`TaskUpdate` scratch list this has been rebuilt as at least twice.
 

@@ -1,9 +1,9 @@
 ---
 name: rent-roll-reconciliation
-description: Reconcile the Oxford Realty Advisors Notion Tenant Database against an authoritative rent roll export (xlsx), correcting property/suite mistags, filling missing SF/rent/lease-date/escalation fields, retiring phantom or duplicate tenant records, and creating records for genuine gaps. Use whenever the user uploads a rent roll and says it's correct / authoritative and anything that doesn't match should be fixed, or asks to reconcile, audit, true-up, or sync the Tenant Database against a rent roll, master workbook, or PM export. Also trigger on "rent roll reconciliation," "true up the tenant DB," "does the rent roll match Notion," or after any monthly/quarterly rent roll refresh. This is a whole-portfolio pass (all properties, all tenants) — do not treat it as a single-tenant lookup task (use verified-deal-recon or a plain search for that instead).
+description: Use whenever the user uploads a rent roll and says it's correct / authoritative and anything that doesn't match should be fixed, or asks to reconcile, audit, true-up, or sync the Tenant Database against a rent roll, master workbook, or PM export — reconciling the Oxford Realty Advisors Notion Tenant Database against an authoritative rent roll export (xlsx): property/suite mistags, missing SF/rent/lease-date/escalation fields, phantom or duplicate tenant records, and genuine gaps. Also trigger on "rent roll reconciliation," "true up the tenant DB," "does the rent roll match Notion," or after any monthly/quarterly rent roll refresh. This is a whole-portfolio pass (all properties, all tenants) — do not treat it as a single-tenant lookup task (use verified-deal-recon or a plain search for that instead).
 ---
 
-# Rent Roll Reconciliation
+# Rent Roll Reconciliation (v1.0)
 
 ## Why this exists
 

@@ -1,10 +1,10 @@
 ---
 name: dirty-tree-triage
-description: Safely triage uncommitted "dirty" git working trees across ORA's shared checkouts (~/.claude, ora-skills, website-canonical, oxford-command-center) — enumerate what's uncommitted, attribute it to a session with real evidence (never a guess), settle it with a two-pass mtime check, then isolate-and-commit only what's genuinely safe via commit_isolated_replacement(). Also discovers stray clones by grouping every C:\Users\Owner checkout by its git remote, not just the fixed four-repo roster. Contested or live WIP is reported, never force-resolved. Use when the user says dirty tree(s), clean up the dirty repos, investigate and fix dirty trees, uncommitted files backlog, who owns this WIP, reconcile the shared checkout, or git status is a mess across my repos. v1.4 (2026-09-22: trivial-hint matching applies to directories, not filenames)
+description: Use when the user says dirty tree(s), clean up the dirty repos, investigate and fix dirty trees, uncommitted files backlog, who owns this WIP, reconcile the shared checkout, or git status is a mess across my repos — safely triaging uncommitted "dirty" git working trees across ORA's shared checkouts (~/.claude, ora-skills, website-canonical, oxford-command-center), attributing WIP to a session with real evidence, isolate-and-committing only what is genuinely safe, and discovering stray clones by git remote beyond the fixed four-repo roster. Contested or live WIP is reported, never force-resolved.
 license: ORA Internal
 ---
 
-# Dirty-Tree Triage
+# Dirty-Tree Triage (v1.4)
 
 Turns "there's a pile of uncommitted files somewhere" into a per-repo report and, only where the evidence genuinely supports it, a safe isolated commit — never a blind sweep. ORA's checkouts (above all `~/.claude`, driven by a dozen-plus concurrent sessions) accumulate uncommitted WIP by design; the failure mode this skill exists to prevent is treating that pile as a problem to be flattened in one action, which is exactly how another session's in-flight work gets clobbered.
 

@@ -1,9 +1,9 @@
 ---
 name: lease-addendum
-description: "ORA lease amendment/addendum drafting skill -- SOLE path for amending, extending, or modifying a lease already in effect. Use when the user says: draft addendum, lease addendum, amend/amendment, extend the lease, rent change, tenant substitution, name change, novation, add/remove tenant, premises change, add a unit, guaranty exhibit, or uploads a draft addendum to an ORA lease. NOT new leases (masterlease-jurisdiction-rebase + lease-form-qc), NOT counterparty paper (legal-intelligence), NOT LOIs (loi-generation), NOT renewal letters (document-assembly). Encodes MINIMAL AMENDMENT doctrine, 4 modules (Term/Rent/Tenant Change/Premises Change), 7-state recordation overlay, guaranty exhibit for substitutions, 16-check QC gate. DRAFT ONLY -- outbound send needs Gabriel's confirmation. v1.0"
+description: "Use when the user says: draft addendum, lease addendum, amend/amendment, extend the lease, rent change, tenant substitution, name change, novation, add/remove tenant, premises change, add a unit, guaranty exhibit, or uploads a draft addendum to an ORA lease. SOLE path for amending, extending, or modifying a lease already in effect. NOT new leases (masterlease-jurisdiction-rebase + lease-form-qc), NOT counterparty paper (legal-intelligence), NOT LOIs (loi-generation), NOT renewal letters (document-assembly). DRAFT ONLY -- outbound send needs Gabriel's confirmation."
 ---
 
-# Lease Addendum — Oxford Realty Advisors
+# Lease Addendum — Oxford Realty Advisors (v1.0)
 
 Drafts amendments and addenda to leases **already in effect**. This is the sole path for that
 document type — see Scope below for the four adjacent skills it is not.
