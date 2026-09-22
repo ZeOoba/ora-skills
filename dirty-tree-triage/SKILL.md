@@ -4,7 +4,7 @@ description: Use when the user says dirty tree(s), clean up the dirty repos, inv
 license: ORA Internal
 ---
 
-# Dirty-Tree Triage (v1.4)
+# Dirty-Tree Triage (v1.5)
 
 Turns "there's a pile of uncommitted files somewhere" into a per-repo report and, only where the evidence genuinely supports it, a safe isolated commit — never a blind sweep. ORA's checkouts (above all `~/.claude`, driven by a dozen-plus concurrent sessions) accumulate uncommitted WIP by design; the failure mode this skill exists to prevent is treating that pile as a problem to be flattened in one action, which is exactly how another session's in-flight work gets clobbered.
 
@@ -66,6 +66,9 @@ Mechanical enumeration + evidence-gated isolation-commit of settled, attributabl
 
 ## Changelog
 
+**Retention rule (added 2026-09-22, ora-setup-audit R26-8, ported from `register-scheduled-task`):** keep at most the **6 most recent versions** as full inline entries. The edit that would add a 7th must also compress the oldest full entry to a one-line `vX.Y (date): ... Full text: versions/CHANGELOG-vA.B-vX.Y.md` summary and append its full text to that versions file. Do it in the same pass, not as deferred cleanup. **Per-entry length cap:** each full inline entry stays at or under **~2,000 characters**. An entry that would exceed it states its finding and verdict inline and points to the event_log line, OI item or commit for the detail. Check both caps in the pass that adds an entry.
+
+- v1.5 (2026-09-22): adopted the changelog retention rule and per-entry cap above, before this section reaches the 6-entry threshold (4 entries, 583–1,378 chars, all compliant). Doc-only; no triage behavior changed.
 - v1.4 (2026-09-22): the 2026-09-22 run bucketed `docs/2026-09-18_eos-plan-gate-scratch-exclusion_spec.md` and a memory file (`feedback_website_canonical_slug_blocks_scratchpad_and_memory.md`) as `untracked-trivial`. Root cause: `classify()` substring-matched `TRIVIAL_HINTS` against the whole path, so "scratch" in a FILENAME counted. Hints now match the directory part only; the temp-file markers `.tmp` and `tmpindex` (new `FILENAME_TRIVIAL_HINTS`) still match filenames. Backslash paths are normalized. New `TrivialHintsMatchDirectoriesNotFilenames` tests (6). Still report-only.
 - v1.3 (2026-09-17): stray-clone discovery misclassified two shapes on the 2026-09-16 run. (1) Every registered linked worktree (`.claude-wt-bridges`, `.claude-wt-broker`, `claude-wt-evalpoll`, `ora-wt-run-guard-fp`, `ora-pm-wt-billing`, `ora-pm-wt-oi278`, `ora-skills-wp`, `ora-skills-wt-oi283` — all listed by `git worktree list`) came out `stray`; root cause: the classifier grouped by `origin` remote only and had no notion of a linked worktree, so anything past the first child was `stray`. New `worktree` role (detected by git dir ≠ common dir) with `branch`/`main_worktree`/`dirty`/`merged`/`merged_against`/`upstream_gone` (`merged` is ancestor-only and a fresh worktree reads merged, hence `dirty`; `upstream_gone` does not by itself prove a PR merged). (2) `primary` was first-in-sort-order, so the linked worktree `wc-seo-fixes` was labeled primary and `website-canonical` stray; `primary` now resolves roster (`DEFAULT_REPOS`, case/separator-insensitive) → main worktree of a grouped linked worktree → first full clone. Independent re-clones (the OI-200 `oxford-command-center-1` shape) still flag `stray`. `discover_clones_by_remote()` gains a `roster=` parameter (defaults to `DEFAULT_REPOS`). New `tests/test_scan_dirty_trees.py` (14 real-git fixture tests, including a two-full-clone case that only the main-worktree rule can resolve). Still report-only.
 

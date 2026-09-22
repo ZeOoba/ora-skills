@@ -98,9 +98,14 @@ def sweep_all(repo_root: Path = REPO, mirror_root: Path = LOCAL_SKILLS_DIR,
     drifted = []
     if not mirror_root.is_dir():
         return drifted
+    dirty = dirty_skills(repo_root)
     for mirror_dir in sorted(p for p in mirror_root.iterdir() if p.is_dir()):
         skill = mirror_dir.name
         if not (repo_root / skill / 'SKILL.md').is_file():
+            continue
+        if skill in dirty:
+            # The sweep copies the working tree; never publish uncommitted WIP.
+            print(f'local-mirror: {skill}: skipped (uncommitted changes in repo)')
             continue
         try:
             src_files = skill_source_files(skill, repo_root=repo_root)
@@ -128,6 +133,13 @@ def sweep_all(repo_root: Path = REPO, mirror_root: Path = LOCAL_SKILLS_DIR,
                 print(f'local-mirror: {skill}: FAILED copying {rel} ({exc})')
         print(f'local-mirror: {skill}: synced {len(stale)} file(s) (backup: {backup_root / stamp})')
     return drifted
+
+
+def dirty_skills(repo_root: Path = REPO) -> set:
+    """Top-level dirs with uncommitted (staged, unstaged or untracked) changes."""
+    out = subprocess.run(['git', 'status', '--porcelain', '--untracked-files=all'], cwd=repo_root,
+                         capture_output=True, text=True).stdout
+    return {ln[3:].strip('"').split('/')[0] for ln in out.splitlines() if len(ln) > 3}
 
 
 def current_branch() -> str:
