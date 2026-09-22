@@ -9,10 +9,9 @@ description: >
   (Columbus, Cincinnati, Kansas City, Indianapolis, Maryland, Madison, Grand
   Rapids, Richmond, Des Moines, or a new county). Also trigger for "next market",
   "run the screen on X", or any request to build owner-level lead lists from
-  public property records. ORA's direct-to-owner acquisition screen from public
-  county auditor/assessor data, scored against the ORA buy-box into ranked
-  call-list workbooks. Recorded-sales tracking routes to county-sales-monitor; a
-  single already-identified target routes to deal-recon; an inbound broker batch
+  public property records. Recorded-sales tracking routes to county-sales-monitor; a
+  single already-identified target routes to verified-deal-recon (the deal-recon agent
+  for a first look only); an inbound broker batch
   routes to deal-flow-triage.
 ---
 
