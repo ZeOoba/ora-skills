@@ -45,8 +45,11 @@ jobs:
 
       - name: Run tools/test_*.py
         env:
-          # Space-separated test file paths allowed to report skipped=N.
-          ALLOWED_SKIPS: ''
+          # Space-separated `path=N` entries: that file may report exactly
+          # skipped=N, no more. Any other skip count still fails.
+          #   test_package_census.py=1 -- test_path_over_260_characters is
+          #   skipUnless(os.name == "nt"); it cannot run on ubuntu.
+          ALLOWED_SKIPS: 'tools/test_package_census.py=1'
         run: |
           failed=()
           skipped=()
@@ -68,7 +71,7 @@ jobs:
               failed+=("$f")
               echo "::error file=$f::exit $rc -- $summary"
               echo "| \`$f\` | FAIL (exit $rc) $summary |" >> "$GITHUB_STEP_SUMMARY"
-            elif [ -n "$skip" ] && [[ " $ALLOWED_SKIPS " != *" $f "* ]]; then
+            elif [ -n "$skip" ] && [[ " $ALLOWED_SKIPS " != *" $f=${skip#skipped=} "* ]]; then
               skipped+=("$f")
               echo "::error file=$f::$skip -- the skip baseline is zero; a skip hid the rent-comp retirement breakage"
               echo "| \`$f\` | SKIP ($skip) $summary |" >> "$GITHUB_STEP_SUMMARY"
