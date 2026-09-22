@@ -127,6 +127,25 @@ class ValidateSkillFrontmatter(unittest.TestCase):
                 f'expected an over-length description error, got: {errors}',
             )
 
+    def test_changelog_history_in_description_rejected(self):
+        # 2026-09-22: 142 of 171 SKILL.md descriptions carried version/changelog
+        # history. The description is the routing surface; history belongs in the body.
+        for desc in ('Use when X. v1.2 (2026-08-13: fixed Y)',
+                     'Use when X. Changelog in body.',
+                     'Use when X (updated 2026-09-12).',
+                     'Use when X. v4.22'):
+            with tempfile.TemporaryDirectory() as tmp:
+                errors = validate_skill_frontmatter(_make_skill(Path(tmp), 'fixture-skill', desc))
+                self.assertTrue(any('history' in e for e in errors), f'{desc!r}: {errors}')
+
+    def test_schema_or_document_versions_in_triggers_allowed(self):
+        # Trigger vocabulary may legitimately name a versioned artifact.
+        for desc in ('Use when scoring against Buy Box schema rev 1.1',
+                     'Use when a deliverable must follow the ORA Style Guide v1.0 fonts'):
+            with tempfile.TemporaryDirectory() as tmp:
+                errors = validate_skill_frontmatter(_make_skill(Path(tmp), 'fixture-skill', desc))
+                self.assertEqual(errors, [], desc)
+
     def test_valid_skill_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
             skill_dir = _make_skill(Path(tmp), 'fixture-skill', 'a short valid description')
@@ -259,8 +278,10 @@ class FrontmatterYamlValidityGate(unittest.TestCase):
     def test_fixed_parcel_data_recovery_passes(self):
         # The single-quote fix actually committed (dcdc98e) -- must pass clean.
         description = (
-            'County-level building SF recovery. v1.7 (2026-08-12: tombstoned the dangling '
-            "'rent-comp P2' placeholder reference). v1.6 (2026-07-27)"
+            # (history text dropped 2026-09-22 -- the description-history gate would
+            # now reject it; the inner single quotes are what this test exercises)
+            'County-level building SF recovery. Never cites the dangling '
+            "'rent-comp P2' placeholder reference."
         )
         with tempfile.TemporaryDirectory() as tmp:
             skill_dir = _make_skill(Path(tmp), 'fixture-skill', description)
@@ -301,7 +322,7 @@ class FrontmatterYamlValidityGate(unittest.TestCase):
             skill_dir.mkdir()
             (skill_dir / 'SKILL.md').write_text(
                 '---\nname: fixture-skill\n'
-                'description: "Automated document generation. v1.3 — changelog in body.\n'
+                'description: "Automated document generation. Letters and memos.\n'
                 '---\n\n# x\n',
                 encoding='utf-8',
             )
@@ -322,7 +343,7 @@ class FrontmatterYamlValidityGate(unittest.TestCase):
             skill_dir.mkdir()
             (skill_dir / 'SKILL.md').write_text(
                 '---\nname: fixture-skill\n'
-                'description: "Trigger on: flood zone, FEMA, zoning check. v1.4 — changelog in body.\n'
+                'description: "Trigger on: flood zone, FEMA, zoning check. Parcel DD.\n'
                 '---\n\n'
                 '## Changelog (moved from description 2026-07-29)\n\n'
                 'v1.4 (2026-08-24: something happened)"\n\n'
@@ -342,7 +363,7 @@ class FrontmatterYamlValidityGate(unittest.TestCase):
             skill_dir.mkdir()
             (skill_dir / 'SKILL.md').write_text(
                 '---\nname: fixture-skill\n'
-                'description: "Trigger on: flood zone, FEMA. v1.4 — changelog in body."\n'
+                'description: "Trigger on: flood zone, FEMA. Parcel DD."\n'
                 '---\n\n'
                 'The clerk said "no approval needed"\n\n'
                 '# x\n',

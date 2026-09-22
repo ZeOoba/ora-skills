@@ -197,6 +197,18 @@ consumed by `acquisition-underwriting`, `daily-brief`, `deal-comparison`, and
   frontmatter (see `acquisition-underwriting`). Optional fields observed: `user-invocable:
   true` (slash-invocable) and `allowed-tools: <space-separated list>` (an explicit
   tool/MCP allow-list, e.g. `tenant-email`, `deploy-site`, `lease-renewal-pipeline`).
+- **Description = when to use, nothing else** (2026-09-22). Lead with the trigger ("Use
+  when…"), then trigger vocabulary and routing tie-breaks ("NOT X — use Y"). Never a
+  version, a date, changelog text, or a summary of the skill's steps: an agent that reads
+  a workflow summary in the description follows it and skips the body (and its QC gate).
+  The version lives in the body H1 as `# Title (vX.Y)` — `doctrine-integrity-probe`
+  Check 15 reads it there — and history lives under `## Changelog` in the body. Enforced
+  by the pre-commit frontmatter gate (`package_skills.DESC_HISTORY_RE`).
+- **Local mirrors stay current automatically.** `~/.claude/skills/<skill>` copies are
+  re-synced by `post-commit` (skills the commit touched) and by `post-merge` /
+  `post-rewrite` (a full sweep, `main` only, overwritten files backed up to
+  `~/.claude/archive/skill-mirror-overwrites/`). Check by hand with
+  `python tools/sync_local_skills_mirror.py --all --check`.
 - **Token-budget-as-contract for retrieval-heavy steps.** A skill step that fans out into
   multiple tool calls, file reads, or MCP lookups before it produces anything (comp
   pulls, county GIS/parcel lookups, multi-file lease abstraction, cross-repo greps)
