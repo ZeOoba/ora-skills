@@ -22,9 +22,14 @@ re-copies the current bundled content over it. It deliberately does NOT create
 new mirrors for skills that were never locally mirrored -- update-in-place only.
 
 Usage:
-  python tools/sync_local_skills_mirror.py [<commit>]   # default HEAD
+  python tools/sync_local_skills_mirror.py [<commit>]   # default HEAD (post-commit)
+  python tools/sync_local_skills_mirror.py --all        # sweep every mirror (post-merge,
+                                                        # post-rewrite; main branch only)
+  python tools/sync_local_skills_mirror.py --all --check  # report drift, exit 1 if any
 """
 import filecmp
+import subprocess
+import time
 import shutil
 import sys
 from pathlib import Path
@@ -66,19 +71,96 @@ def sync_skill(skill: str, repo_root: Path = REPO, mirror_root: Path = LOCAL_SKI
     return f'{skill}: synced {copied} file(s) to local mirror'
 
 
-def main() -> None:
-    commit = sys.argv[1] if len(sys.argv) > 1 else 'HEAD'
+BACKUP_ROOT = Path(r'C:\Users\Owner\.claude\archive\skill-mirror-overwrites')
+
+
+def _norm(path: Path) -> bytes:
+    return path.read_bytes().replace(b'\r\n', b'\n')
+
+
+def sweep_all(repo_root: Path = REPO, mirror_root: Path = LOCAL_SKILLS_DIR,
+              backup_root: Path = BACKUP_ROOT, check: bool = False) -> list:
+    """Compare EVERY existing local mirror against the repo, independent of git
+    history. Returns the sorted names of drifted skills.
+
+    WHY (2026-09-22): the post-commit hook only fires on `git commit`. main
+    advances mostly by merge/pull/rebase, which run post-merge/post-rewrite, so
+    16 mirrors sat stale behind merged branches (acquisition-underwriting v4.20
+    vs repo v4.22, register-scheduled-task v2.21 vs v2.25). This sweep is the
+    history-independent repair, wired into post-merge + post-rewrite.
+
+    CRLF-only differences are not drift (same rule as skill_drift_report.py).
+    Update-in-place only: never creates a mirror. Every mirror file about to be
+    overwritten is first copied under backup_root/<timestamp>/<skill>/, so a
+    mirror edited in place (a REPO-FIRST violation) is never lost.
+    check=True reports drift and writes nothing."""
+    stamp = time.strftime('%Y%m%d-%H%M%S')
+    drifted = []
+    if not mirror_root.is_dir():
+        return drifted
+    for mirror_dir in sorted(p for p in mirror_root.iterdir() if p.is_dir()):
+        skill = mirror_dir.name
+        if not (repo_root / skill / 'SKILL.md').is_file():
+            continue
+        try:
+            src_files = skill_source_files(skill, repo_root=repo_root)
+        except Exception as exc:  # noqa: BLE001
+            print(f'local-mirror: {skill}: could not resolve source files ({exc})')
+            continue
+        stale = [rel for rel, src in src_files.items()
+                 if not (mirror_dir / rel).is_file() or _norm(mirror_dir / rel) != _norm(src)]
+        if not stale:
+            continue
+        drifted.append(skill)
+        if check:
+            print(f'local-mirror: DRIFT {skill} ({len(stale)} file(s))')
+            continue
+        for rel in stale:
+            dest = mirror_dir / rel
+            try:
+                if dest.is_file():
+                    bak = backup_root / stamp / skill / rel
+                    bak.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(dest, bak)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src_files[rel], dest)
+            except Exception as exc:  # noqa: BLE001
+                print(f'local-mirror: {skill}: FAILED copying {rel} ({exc})')
+        print(f'local-mirror: {skill}: synced {len(stale)} file(s) (backup: {backup_root / stamp})')
+    return drifted
+
+
+def current_branch() -> str:
+    return subprocess.run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], cwd=REPO,
+                          capture_output=True, text=True).stdout.strip()
+
+
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if '--all' in argv:
+        check = '--check' in argv
+        # A write sweep from a stale feature worktree would roll live mirrors
+        # back to that branch's content -- only main may write.
+        if not check and current_branch() != 'main':
+            print('local-mirror: --all sweep skipped (not on main)')
+            return 0
+        try:
+            drifted = sweep_all(check=check)
+        except Exception as exc:  # noqa: BLE001 - never block git
+            print(f'sync_local_skills_mirror: sweep failed ({exc})')
+            return 0
+        return 1 if (check and drifted) else 0
+    commit = argv[0] if argv else 'HEAD'
     try:
         files = changed_files(commit)
         hits = affected_skills(files)
     except Exception as exc:  # noqa: BLE001 - never block the commit
         print(f'sync_local_skills_mirror: could not inspect {commit} ({exc})')
-        return
-    if not hits:
-        return
+        return 0
     for skill in sorted(hits):
         print(f'local-mirror: {sync_skill(skill)}')
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
