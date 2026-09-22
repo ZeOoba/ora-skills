@@ -1,0 +1,5 @@
+# register-scheduled-task — Changelog v2.21–v2.24 (full text)
+
+Entries compressed out of `SKILL.md` under the 6-entry retention rule. Open range: later compressions (v2.22–v2.24) append here.
+
+- **v2.21 (2026-09-07):** Added step 3c — CLAIM-BEARING TASKS must claim under the `sched-` namespace (`sched-<slug>`, hyphen not colon), never the bare slug, when the task's own instructions call `hooks/lib/claim_work.py claim`. This is the carrier for the 2026-09-07 Gabriel ruling (`memory/tech.md` §3e, closing OI-116): the namespace existed in `claim_work.py` alone, but no scheduled task's instructions actually claimed under it, so the shorter 30-minute TTL and the "force-takeover is ROUTINE" refusal never reached a live unattended holder — the exact OI-116 failure mode (an unattended holder that cannot be messaged and self-renews). QC gate gained the matching item. Five full inline entries after this edit — one below the retention cap. Doc-only; no registration/pause/retire procedure changed.
