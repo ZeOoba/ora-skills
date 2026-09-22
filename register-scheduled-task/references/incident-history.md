@@ -51,3 +51,23 @@ Three properties of the failure, each of which the v2.12 rule addresses separate
 3. **The pause swallowed its own detectors.** `ora-cowork-heartbeat` (dead-man chain → Notion `35c6ecd8…` → GitHub watchdog) and `automation-health-monitor` both live on LAMS and were both disabled by the sweep. The two mechanisms that would otherwise have surfaced a 4-day silent gap were themselves inside it. The only thing that flags the asymmetry is a reminder line in the CC resume task's step-6 summary email — which does not send until 2026-08-21 17:00 ET, i.e. at the end of the window rather than the start.
 
 Separately, the CC resume task's step 5 instructs that re-enabling must NOT bump any `[MODEL:]` freshness date, because re-enabling is not an observation (`memory/feedback_verified_null_vs_inferred_null.md`). That is correct, and it contradicts a literal reading of the v2.8 PAUSE bullet's "re-tag it with a CURRENT date in the same pass." v2.12 reconciles them: the v2.8 rule binds a hand re-enable where the model is actually observed; an automated bulk resume leaves the dates alone and simply returns the task to scope for its next normal currency check.
+
+The four sections below were moved verbatim out of SKILL.md § Bounded pause at v2.26 (2026-09-22) under the body-size cap. The rules they justify stay inline there.
+
+## Resume-time collision (2026-08-17 → 2026-08-21 pause)
+
+**Root incident (2026-08-17 → 2026-08-21 pause):** the resume was set for Friday 17:00 ET, a round number chosen off the clock. `ora-friday-closeout` fires Fridays at 16:30. The resume landed **30 minutes after** the slot it needed to precede, so the week-of-08-17 closeout ledger and week-ahead synthesis were never produced and nothing will produce them retroactively. Nothing detected it for three days — `automation-health-monitor` correctly suppresses the *lateness* finding as PAUSED-SLOT (its Step 0.5d), so the missing OUTPUT is the only trace, and that skill now reports it as a content gap precisely because this check did not exist upstream. One `list_scheduled_tasks` read and a glance at the cron column would have moved the resume to 16:00.
+
+## Unattended resume (2026-09-11, OI-273)
+
+- **What happens:** it logs `Not auto-approving "mcp__scheduled-tasks__update_scheduled_task" ... no suggestions on request` and blocks on a permission prompt with no "always allow" option. It ignores the `settings.json` allow rule: every such unattended call in the Desktop `main.log` was refused auto-approval. The count grows daily; grep `Not auto-approving "mcp__scheduled-tasks__update_scheduled_task"` rather than citing a number. Bash in the same run IS auto-approved.
+- **09-11 case:** the resume fired at 20:01Z and sat until someone opened the session at 20:28Z. It then approved 6 calls, blocked again on call 7, and `list_task_runs` still reported `succeeded`.
+- **Permission mode does NOT help.** The 09-11 run's own Desktop session record shows `"permissionMode": "bypassPermissions"`, and it still blocked on every call. The prompt sits above both the allow list and bypass mode, so nothing in our configuration can pre-approve it. Claude Code docs document no field that does.
+
+## Pause-window record (2026-09-12)
+
+It replaces hand-writing a `*_FleetPause_RestoreLedger*.json`, which was done for the 08-17 pause and never for the 09-07 one. Root incident: 2026-09-12, the first `ora-health-guard` run after the 09-07→09-11 pause reported 5 FAILs; 3 were the pause itself, and the run had to reason them out by hand.
+
+## Voided efficacy checks (2026-08-17 → 2026-08-21 pause)
+
+Root incident: `ora-pm-ledger`'s 08-12-armed retime check and `ora-psa-drift-watch`'s same-afternoon check both fired during the 08-17→08-21 pause and reported false misses (43% miss vs. an actual 0-of-4 on eligible days); recommended to Gabriel 08-21 as question 2 of the pm-ledger efficacy report, ratified 2026-08-24.
