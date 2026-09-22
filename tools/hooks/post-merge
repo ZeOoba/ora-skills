@@ -5,5 +5,5 @@
 # under ~/.claude/skills sat stale behind merged branches (acquisition-underwriting v4.20 vs
 # repo v4.22). Sweep every existing mirror against the working tree. main-branch only
 # (enforced in the script); overwritten mirror files are backed up first. Non-blocking.
-python tools/sync_local_skills_mirror.py --all 2>/dev/null || true
+python tools/sync_local_skills_mirror.py --all 2>&1 || true
 exit 0
