@@ -1,9 +1,9 @@
 ---
 name: lease-generation
-description: "Oxford Realty Advisors NEW-LEASE production skill — from an LOI, broker term sheet, e-mail or typed deal terms to an execution-ready lease on ORA landlord paper, with a tracked-change redline and an LOI conformance memo. Use when the user says: generate the lease, draft the lease from this LOI, fill in the lease template, new lease for [suite/tenant], make the lease match the LOI, lease from these terms, produce the lease, or uploads an LOI/proposal to lease and wants a lease. Pipeline: DEAL-TERMS-REGISTER → property template (never the last executed lease) → token fill + clause modules (option, gross vs modified gross, escalations, overnight parking, landlord work, maintenance split, co-tenant) → LOI conformance matrix → cross-reference audit → lease-form-qc gate → clean DOCX + PDF + redline. NOT amendments (lease-addendum), template maintenance (masterlease-jurisdiction-rebase), counterparty paper (legal-intelligence) or LOIs (loi-generation). Draft only — outbound send needs confirmation. v1.0"
+description: "Use when the user says: generate the lease, draft the lease from this LOI, fill in the lease template, new lease for [suite/tenant], make the lease match the LOI, lease from these terms, produce the lease, or uploads an LOI/proposal to lease and wants a lease. Oxford Realty Advisors NEW-LEASE production skill — from an LOI, broker term sheet, e-mail or typed deal terms to an execution-ready lease on ORA landlord paper, with a tracked-change redline and an LOI conformance memo. NOT amendments (lease-addendum), template maintenance (masterlease-jurisdiction-rebase), counterparty paper (legal-intelligence) or LOIs (loi-generation). Draft only — outbound send needs confirmation."
 ---
 
-# lease-generation — LOI/term sheet → execution-ready ORA lease
+# lease-generation — LOI/term sheet → execution-ready ORA lease (v1.0)
 
 Per-deal production skill. It sits between the two skills that already exist on either side of it:
 `masterlease-jurisdiction-rebase` **maintains** the property templates; `lease-form-qc` **grades** a lease.

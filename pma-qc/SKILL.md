@@ -1,9 +1,9 @@
 ---
 name: "pma-qc"
-description: "Pre-execution and pre-renewal QC gate for PROPERTY MANAGEMENT AGREEMENTS on third-party manager paper where Oxford Realty Advisors or an ORA entity is the Owner. Use when the user says: QC this management agreement, review the PM agreement, property management agreement, management agreement review, PM fee review, can I give leasing to another party, can the manager sign contracts for us, terminate the property manager, or uploads a DOCX/PDF that is a property management agreement. Run before signing, before every auto-renewal, and before engaging a third-party leasing broker. Scans 34 defects (exclusive leasing grant with no per-property carve-out, manager authority to execute leases or trade contracts in its own name, indemnity reaching the manager's own negligence, undefined fee bases, no turnover obligations) at BLOCK/HIGH/MED/LOW, plus a template-residue check. Distinct from lease-form-qc, listing-agreement-qc and legal-intelligence. 19 PROPOSED positions, unratified. v1.3"
+description: "Use when the user says: QC this management agreement, review the PM agreement, property management agreement, management agreement review, PM fee review, can I give leasing to another party, can the manager sign contracts for us, terminate the property manager, or uploads a DOCX/PDF that is a property management agreement. Run before signing, before every auto-renewal, and before engaging a third-party leasing broker. Pre-execution and pre-renewal QC gate for PROPERTY MANAGEMENT AGREEMENTS on third-party manager paper where Oxford Realty Advisors or an ORA entity is the Owner. Distinct from lease-form-qc, listing-agreement-qc and legal-intelligence. Standing positions are PROPOSED, unratified."
 ---
 
-# Property Management Agreement QC — third-party manager paper
+# Property Management Agreement QC — third-party manager paper (v1.3)
 
 Pre-execution gate for property management agreements where ORA (or an ORA
 property entity) is the Owner. Run **before** signature, **before** every annual

@@ -1,10 +1,10 @@
 ---
 name: orphaned-task-forensics
-description: Root-cause a stale or missing scheduled-task output (a Notion page, dashboard section, or downstream file that silently stopped updating) back to its producer task across the dual CC/MCP + LAMS/Cowork fleet, and separately recover a scheduled task's own lost SKILL.md content via session-transcript archaeology when the file itself has vanished. Use when the user mentions: stale Notion page, this page stopped updating, what happened to [task name], recover a lost SKILL.md, a scheduled task went missing, silently dropped, trace this back to its producer, or after a health-guard/automation-health-monitor advisory flags a stale-data symptom. Formalizes a trace/recover/verify procedure used ad hoc at least 3-4 times (ora-weekly-hygiene, ora-pm-ledger, ora-health-guard, ora-treasury-yield-prefetch recoveries) before ever being codified. v1.2 — changelog in body.
+description: Use when the user mentions: stale Notion page, this page stopped updating, what happened to [task name], recover a lost SKILL.md, a scheduled task went missing, silently dropped, trace this back to its producer, or after a health-guard/automation-health-monitor advisory flags a stale-data symptom — root-causes a stale or missing scheduled-task output (a Notion page, dashboard section, or downstream file that silently stopped updating) back to its producer task across the dual CC/MCP + LAMS/Cowork fleet, and separately recovers a scheduled task's own lost SKILL.md via session-transcript archaeology when the file itself has vanished.
 license: ORA Internal
 ---
 
-# Orphaned Task Forensics
+# Orphaned Task Forensics (v1.2)
 
 Two related failure modes recur in the dual-fleet scheduler: (1) a task's *output* goes silently stale because the task that used to produce it was archived, refactored, or its duty was assumed-but-not-verified to have been absorbed elsewhere; (2) a task's *own spec file* (`SKILL.md`) is lost outright — deleted in a cleanup pass, clobbered by an app reinstall, or dropped during a fleet-consolidation merge. Both have been fixed before, each time by improvising the same investigative steps from scratch. This skill codifies them.
 

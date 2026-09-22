@@ -1,9 +1,9 @@
 ---
 name: rent-roll-qc
-description: "Final quality audit and institutional polish for rent roll spreadsheets before external delivery. Use this skill whenever the user mentions: audit rent roll, QC rent roll, rent roll check, clean up rent roll, prep rent roll, finalize rent roll, rent roll before sending, review rent roll, rent roll ready to send, polish rent roll, institutional rent roll, format rent roll for delivery, or any request to quality-check a rent roll spreadsheet before sending it to a third party. Also trigger when the user uploads a rent roll file and mentions a recipient such as a lender, PM company, property manager, investor, buyer, broker, attorney, or appraiser. This skill does NOT change data values — it fixes structural defects, standardizes inconsistencies, and flags gaps the user must resolve before delivery. v1.0"
+description: "Use this skill whenever the user mentions: audit rent roll, QC rent roll, rent roll check, clean up rent roll, prep rent roll, finalize rent roll, rent roll before sending, review rent roll, rent roll ready to send, polish rent roll, institutional rent roll, format rent roll for delivery, or any request to quality-check a rent roll spreadsheet before sending it to a third party — the final quality audit and institutional polish for rent roll spreadsheets before external delivery. Also trigger when the user uploads a rent roll file and mentions a recipient such as a lender, PM company, property manager, investor, buyer, broker, attorney, or appraiser. This skill does NOT change data values — it fixes structural defects, standardizes inconsistencies, and flags gaps the user must resolve before delivery."
 ---
 
-# Rent Roll QC — Pre-Delivery Audit
+# Rent Roll QC — Pre-Delivery Audit (v1.0)
 
 You are performing a final quality audit on a rent roll before it is sent to an external counterparty. This is a first-impression document that signals ORA's operational sophistication, data discipline, and institutional quality. Your job is to fix what is broken or inconsistent, and flag what you cannot fix. **Do not change, fabricate, or infer any data values.**
 

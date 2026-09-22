@@ -1,10 +1,10 @@
 ---
 name: file-reconciliation
-description: Two modes for reconciling files against a canonical location. Mode A (dedupe) hash-diffs a candidate directory tree against a canonical one, bucketing every file as identical/new/conflicting/near-dupe, and archives the safe bucket only — never auto-overwrites. Mode B (version conflict) resolves multiple non-identical copies of the same nominal document (leases, estoppels, addenda) by extracting and diffing DOCX/XLSX text content, preferring the executed/signed PDF as source of truth over whichever draft has the newest file hash. Use when the user mentions: dedupe a folder, reconcile OneDrive folders, hash-diff directories, clean up duplicate files, which copy is correct, document version conflict, resolve lease/estoppel discrepancy, or migrating/consolidating a stray file tree into a canonical one. v1.0
+description: Use when the user asks to dedupe a folder, reconcile OneDrive folders, hash-diff directories, clean up duplicate files, decide which copy is correct, resolve a document version conflict or a lease/estoppel discrepancy, or migrate/consolidate a stray file tree into a canonical one. Mode A (dedupe) reconciles a candidate directory tree against a canonical one; Mode B (version conflict) resolves multiple non-identical copies of the same nominal document (leases, estoppels, addenda). Never auto-overwrites.
 license: ORA Internal
 ---
 
-# File Reconciliation
+# File Reconciliation (v1.0)
 
 Two related problems that were previously solved by hand-rewriting the same Bash and DOCX-extraction logic from scratch, repeatedly, in a single session: reconciling a whole duplicate/orphaned directory tree against a canonical one (Mode A), and resolving conflicting copies of one specific document (Mode B). Both ship with a real script in `scripts/` rather than prose alone, since the prior ad hoc versions were rewritten 4+ times in one session for Mode A and at least twice for Mode B's DOCX extraction.
 

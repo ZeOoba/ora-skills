@@ -1,9 +1,9 @@
 ---
 name: settlement-basis-extraction
-description: Extract acquisition/disposition data from HUD-1/ALTA settlement statements and build a capitalizable-basis register for Oxford Realty Advisors property entities. Use when the user says: import settlement statements, build the basis register, extract closing costs, OCR the settlement PDFs, capitalize closing charges, reconcile a settlement to Schedule L, or points at a folder of HUD-1/ALTA settlement statements, deeds, or closing packages. Also trigger when a new acquisition or disposition closes and the settlement package needs to be worked into the entity's basis and the portfolio's EXCHANGE_1031 tracking. Produces a workbook (README, ENTITY_MASTER, PROPERTY_PL, BALANCE_SHEET, DEPR_COSTSEG, BASIS_REGISTER, CHARGE_DETAIL, EXCHANGE_1031, PAYMENTS, EXCEPTIONS, SOURCE_INDEX) with every figure transcribed verbatim and blank cells where a digit can't be read with confidence. v1.4
+description: Use when the user says: import settlement statements, build the basis register, extract closing costs, OCR the settlement PDFs, capitalize closing charges, reconcile a settlement to Schedule L, or points at a folder of HUD-1/ALTA settlement statements, deeds, or closing packages — extracting acquisition/disposition data from HUD-1/ALTA settlement statements into a capitalizable-basis register for Oxford Realty Advisors property entities. Also trigger when a new acquisition or disposition closes and the settlement package needs to be worked into the entity's basis and the portfolio's EXCHANGE_1031 tracking.
 ---
 
-# Settlement-Basis Extraction (ORA) — v1.4
+# Settlement-Basis Extraction — ORA (v1.4)
 
 ## When to use this
 
@@ -199,7 +199,9 @@ Run these six standing checks at every closing:
 ### 7. Build/refresh the workbook
 
 Standard tab structure (create tabs that don't yet exist; append to ones
-that do -- do not create a parallel workbook per batch):
+that do -- do not create a parallel workbook per batch). Every figure is
+transcribed verbatim, with blank cells where a digit can't be read with
+confidence:
 
 - `README` -- what was imported this pass, source paths, coverage, OCR
   method note, gaps to close.

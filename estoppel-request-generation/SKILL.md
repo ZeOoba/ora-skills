@@ -1,9 +1,9 @@
 ---
 name: estoppel-request-generation
-description: 'Build tenant estoppel certificate requests for Oxford Realty Advisors directly from abstracted lease data, so every certified fact is pre-filled from the lease and every known defect is put to the tenant to cure. Use when the user mentions: estoppel, estoppel certificate, tenant estoppel, estoppel request, send estoppels, estoppel form, SNDA, subordination non-disturbance attornment, tenant acknowledgment, or asks what the estoppels should say. Also trigger during DD on any acquisition with occupied suites, and whenever lease-abstraction-pipeline or deal-execution surfaces a chain gap, an unexecuted counterpart, a manuscript amendment or a landlord-of-record mismatch. Pre-fills from the 32-field abstract, converts each quality flag into a certification, and produces one tailored form per tenant plus a cover letter. DRAFT ONLY — outbound counterparty send requires Gabriel confirmation. v1.1'
+description: 'Use when the user mentions: estoppel, estoppel certificate, tenant estoppel, estoppel request, send estoppels, estoppel form, SNDA, subordination non-disturbance attornment, tenant acknowledgment, or asks what the estoppels should say — builds Oxford Realty Advisors tenant estoppel certificate requests directly from abstracted lease data, so every certified fact is pre-filled from the lease and every known defect is put to the tenant to cure. Also trigger during DD on any acquisition with occupied suites, and whenever lease-abstraction-pipeline or deal-execution surfaces a chain gap, an unexecuted counterpart, a manuscript amendment or a landlord-of-record mismatch. DRAFT ONLY — outbound counterparty send requires Gabriel confirmation.'
 ---
 
-# Estoppel Request Generation — Oxford Realty Advisors
+# Estoppel Request Generation — Oxford Realty Advisors (v1.1)
 
 An estoppel is the one instrument in due diligence that makes the tenant — not the seller — certify what
 the lease is. That makes it the cheapest available cure for every document defect found during abstraction,

@@ -1,11 +1,11 @@
 ---
 name: owner-outreach
-description: Oxford Realty Advisors weekly off-market owner cold-outreach pipeline. Use whenever the user mentions owner outreach, off-market letters, T1 letter pack, cold outreach queue, owner mailing, motivated seller outreach, off-market owner letters, or asks to refresh/run/check the weekly owner-outreach cycle -- even if they just say "run outreach" or "what's in the owner outreach queue this week." Promotes qualifying parcels from the off-market master (built by parcel-data-recovery / acquisition-underwriting off-market screens) into a dated queue, dedups against the Notion Owner Outreach ledger, drafts T1 cold-outreach letters on ORA letterhead, and reports promoted/net-new counts. DRAFT ONLY -- this is outbound counterparty communication (Hard Invariant 1); nothing is ever sent without Gabriel's explicit confirmation. v1.3 (2026-08-24: see Changelog).
+description: Use whenever the user mentions owner outreach, off-market letters, T1 letter pack, cold outreach queue, owner mailing, motivated seller outreach, off-market owner letters, or asks to refresh/run/check the weekly Oxford Realty Advisors off-market owner cold-outreach cycle -- even if they just say "run outreach" or "what's in the owner outreach queue this week." Input is the off-market master built by parcel-data-recovery / acquisition-underwriting off-market screens; dedup runs against the Notion Owner Outreach ledger. DRAFT ONLY -- this is outbound counterparty communication (Hard Invariant 1); nothing is ever sent without Gabriel's explicit confirmation.
 metadata:
   type: ora-operations
 ---
 
-# Owner Outreach — Oxford Realty Advisors (off-market cold-outreach pipeline)
+# Owner Outreach — Oxford Realty Advisors off-market cold-outreach pipeline (v1.3)
 
 Weekly refresh of the T1 (first-touch) owner-outreach cycle: off-market master → queue → Notion dedup →
 letter pack. Three scripts live in the project folder and do the real work — this skill's job is to run

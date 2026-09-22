@@ -1,6 +1,6 @@
 ---
 name: website-perfection
-description: "Oxford Realty Advisors website optimization and perfection skill. Use this skill whenever the user mentions: PageSpeed, Lighthouse, Core Web Vitals, website fixes, site performance, image optimization, SEO audit, meta tags, structured data, JSON-LD, sitemap, redirects, soft 404, duplicate URLs, analytics installation, GA4, LinkedIn pixel, AI search visibility, llms.txt, accessibility, WCAG, Netlify headers, CSP, CLS, LCP, TBT, oxfordra.net improvements, or any task related to auditing or improving the Oxford Realty Advisors website. v1.1"
+description: "Use when the user mentions: PageSpeed, Lighthouse, Core Web Vitals, website fixes, site performance, image optimization, SEO audit, meta tags, structured data, JSON-LD, sitemap, redirects, soft 404, duplicate URLs, analytics installation, GA4, LinkedIn pixel, AI search visibility, llms.txt, accessibility, WCAG, Netlify headers, CSP, CLS, LCP, TBT, oxfordra.net improvements, or any task related to auditing, optimizing, or improving the Oxford Realty Advisors website."
 ---
 
 # Website Perfection — Oxford Realty Advisors (v1.1)

@@ -1,9 +1,9 @@
 ---
 name: insurance-climate-risk-comparison
-description: "Compares insurance costs and natural-disaster/climate-change risk for a target market against the national average and Oxford Realty Advisors' other target markets, for underwriting and market-entry decisions. Use when the user mentions: insurance cost comparison, climate risk, natural disaster risk, climate change risk, disaster exposure, hazard risk, how a market compares on insurance or climate, or is evaluating a new/entry-phase target market and needs its risk profile benchmarked against the portfolio. Pulls FEMA National Risk Index composite + per-hazard scores by county, and insurance $/SF (ORA's own realized premiums where owned, a public proxy elsewhere). Distinct from insurance-renewal-review (single-property premium history/renewal decisions) and ora-flood-zoning-dd (single-parcel FEMA flood-zone/zoning DD-Critical gate) — this skill is MARKET-level and comparative, and never gates a deal. v1.0"
+description: "Use when the user mentions: insurance cost comparison, climate risk, natural disaster risk, climate change risk, disaster exposure, hazard risk, FEMA National Risk Index, how a market compares on insurance or climate, or is evaluating a new/entry-phase Oxford Realty Advisors target market and needs its insurance-cost and natural-disaster/climate-change risk profile benchmarked against the national average and the other target markets, for underwriting and market-entry decisions. Distinct from insurance-renewal-review (single-property premium history/renewal decisions) and ora-flood-zoning-dd (single-parcel FEMA flood-zone/zoning DD-Critical gate) — this skill is MARKET-level and comparative, and never gates a deal."
 ---
 
-# Insurance & Climate Risk Market Comparison (ORA) — v1.0
+# Insurance & Climate Risk Market Comparison (ORA) (v1.0)
 
 Purpose: given a target market, answer "how exposed is this market to insurance cost and natural-disaster/climate risk, relative to the national picture and to ORA's other target markets" — for underwriting judgment and market-entry decisions. This is reference context, not a gate: it does not touch acquisition-underwriting's Buy Box scorecard, Stage 1 floors, or any governor constant (DSCR/LTV). Gabriel applies the judgment; this skill supplies the sourced comparison.
 
@@ -68,4 +68,4 @@ Default: markdown comparison table + narrative memo, inline in chat. Only write 
 
 ## Changelog
 
-v1.0 (2026-09-11): Initial skill, built from a brainstormed and Gabriel-approved design. FEMA NRI Counties ArcGIS FeatureServer endpoint and field names verified live the same day (`references/data-sources.md`). No clean free primary source exists for state-level commercial property insurance rates — documented the two-rung PROXY ladder and the ACTUAL/PROXY-GOV/PROXY-AGGREGATOR tagging convention rather than presenting proxy figures as equivalent-confidence to ORA's own realized premiums.
+- **v1.0 (2026-09-11):** Initial skill, built from a brainstormed and Gabriel-approved design. FEMA NRI Counties ArcGIS FeatureServer endpoint and field names verified live the same day (`references/data-sources.md`). No clean free primary source exists for state-level commercial property insurance rates — documented the two-rung PROXY ladder and the ACTUAL/PROXY-GOV/PROXY-AGGREGATOR tagging convention rather than presenting proxy figures as equivalent-confidence to ORA's own realized premiums.

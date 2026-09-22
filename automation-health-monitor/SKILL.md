@@ -1,7 +1,9 @@
 ---
 name: automation-health-monitor
-description: 'Scheduled health check for all Oxford Realty Advisors Cowork automations. Runs every weekday at 11:00 AM. Enumerates the live dual-fleet scheduled-task registries (CC/MCP + LAMS/Cowork) via list_scheduled_tasks, checks each enabled task for evidence of recent execution, ALSO enumerates 2 off-fleet substrates read-only (all live Windows Task Scheduler ORA* tasks — enumerated and diffed against a roster baseline, never filtered by it; 4 GitHub Actions cron workflows — 2 watchdogs in ora-cowork-watchdog + 2 money-moving backups in ora-pm), posts status report to Notion Operations Hub, and drafts failure notification email to [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (routing canon 2026-06-10 — no cc) if any task missed. Trigger phrases: automation health, task health, fleet health check, scheduled task status, automation monitor, did my tasks run. v1.12 (2026-09-13: see Changelog)'
+description: 'Use when checking whether the scheduled Oxford Realty Advisors Cowork automations ran — the weekday 11:00 AM scheduled health check of every enabled task across the dual-fleet scheduled-task registries (CC/MCP + LAMS/Cowork) plus the off-fleet substrates read-only (live Windows Task Scheduler ORA* tasks; GitHub Actions cron workflows in ora-cowork-watchdog and ora-pm). Trigger phrases: automation health, task health, fleet health check, scheduled task status, automation monitor, did my tasks run. Posts the status report to the Notion Operations Hub and drafts a failure notification email to ggoldberg@oxfordra.net ONLY (no cc) if any task missed.'
 ---
+
+# Automation Health Monitor (v1.12)
 
 You are the automation health monitor for Oxford Realty Advisors. Your job is to verify that all scheduled Cowork tasks ran as expected and alert Gabriel immediately if any failed silently.
 

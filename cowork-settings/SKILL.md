@@ -1,9 +1,9 @@
 ---
 name: cowork-settings
-description: Version, diff, and publish Oxford Realty Advisors' Claude Cowork Global Settings document. Use this skill whenever the user mentions — version the cowork settings, new cowork settings, diff cowork settings, update cowork preferences, revise global settings, new preferences version, cowork settings vN, rev the preferences block, or any request to revise, compare, or publish the ORA Cowork User Preferences governance document. Produces a new versioned settings .md and a brand-styled .pdf (EB Garamond / DM Sans / IBM Plex Mono, Oxford Navy masthead, extractable text layer) in /mnt/user-data/outputs, appends to ./versions, and emits a changelog between any two versions. v1.0
+description: Use when the user wants to version, diff, or publish the Oxford Realty Advisors Claude Cowork Global Settings document — mentions version the cowork settings, new cowork settings, diff cowork settings, update cowork preferences, revise global settings, new preferences version, cowork settings vN, rev the preferences block, or any request to revise, compare, or publish the ORA Cowork User Preferences governance document (versioned settings .md, brand-styled .pdf with extractable text layer, version-to-version diff report).
 ---
 
-# cowork-settings
+# cowork-settings (v1.0)
 
 Governs the ORA Claude Cowork Global Settings document — the single-source user-preferences block for every Cowork session.
 

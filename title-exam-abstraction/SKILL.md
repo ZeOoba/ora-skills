@@ -1,9 +1,9 @@
 ---
 name: title-exam-abstraction
-description: 'Abstract a title exam, title commitment, preliminary report, or recorded-instrument set for Oxford Realty Advisors and turn every encumbrance into a tracked deal-terms-register item. Use when the user mentions: title exam, title commitment, title report, prelim, Schedule B, Schedule B-II exceptions, title exceptions, encumbrance review, cross-collateral, cross-default, assignment of rents, mortgage payoff, easement of record, deed restriction, chain of title, vesting, legal description, mortgage location survey, ALTA survey, or uploads a title exam / commitment / recorded instrument. Also trigger when a deal folder contains title work older than 90 days. Distinguishes what a document ESTABLISHES from what it merely reports, separates boundary surveys from mortgage location surveys, and routes every finding to a closing deliverable, a survey order, or a register item. Never substitutes for counsel. v1.1'
+description: 'Use when the user mentions: title exam, title commitment, title report, prelim, Schedule B, Schedule B-II exceptions, title exceptions, encumbrance review, cross-collateral, cross-default, assignment of rents, mortgage payoff, easement of record, deed restriction, chain of title, vesting, legal description, mortgage location survey, ALTA survey, or uploads a title exam / commitment / recorded instrument — abstracts it for Oxford Realty Advisors and turns every encumbrance into a tracked deal-terms-register item. Also trigger when a deal folder contains title work older than 90 days. Never substitutes for counsel.'
 ---
 
-# Title Exam Abstraction — Oxford Realty Advisors
+# Title Exam Abstraction — Oxford Realty Advisors (v1.1)
 
 Turns title work into a decision. Three outputs, every time: **what is established**, **what must be
 cleared before closing**, and **what remains unknown and who is ordering it**.
