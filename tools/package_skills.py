@@ -32,10 +32,14 @@ REPO = Path(__file__).resolve().parent.parent
 SKIP = {'_archive', 'tools', '.git'}
 MAX_DESC = 1024  # platform limit: importer rejects 'description' > 1024 chars (hit 2026-06-11)
 # Skill-version/changelog history in a description: a 'vX.Y (' changelog lead, a
-# trailing bare 'vX.Y', an ISO date, or the word 'changelog'. A versioned artifact
-# named mid-trigger ('Style Guide v1.0 fonts', 'schema rev 1.1') is allowed.
+# trailing bare 'vX.Y', an ISO date, or a pointer to the skill's own changelog
+# ('see Changelog', 'changelog in body'). NOT flagged: a versioned artifact named
+# mid-trigger and followed by a word ('Style Guide v1.0 fonts', 'schema rev 1.1'),
+# or 'changelog' as user vocabulary ('generating a changelog for a release').
+# Known false positive: a literal ISO date in a trigger -- write '[date]' instead.
 DESC_HISTORY_RE = re.compile(
-    r'\bv\d+\.\d+(?:\.\d+)?\s*\(|\bv\d+\.\d+(?:\.\d+)?[\s.)]*$|\b20\d\d-\d\d-\d\d\b|changelog',
+    r'\bv\d+\.\d+(?:\.\d+)?\s*\(|\bv\d+\.\d+(?:\.\d+)?[\s.)]*$|\b20\d\d-\d\d-\d\d\b'
+    r'|see\s+(?:the\s+)?changelog|changelog\s+(?:in|at)\s+(?:the\s+)?body',
     re.I)
 
 # Skills deliberately unpublished from the Cowork/claude.ai skill store (Gabriel's
