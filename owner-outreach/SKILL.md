@@ -1,6 +1,6 @@
 ---
 name: owner-outreach
-description: Oxford Realty Advisors weekly off-market owner cold-outreach pipeline. Use whenever the user mentions owner outreach, off-market letters, T1 letter pack, cold outreach queue, owner mailing, motivated seller outreach, off-market owner letters, or asks to refresh/run/check the weekly owner-outreach cycle -- even if they just say "run outreach" or "what's in the owner outreach queue this week." Promotes qualifying parcels from the off-market master (built by parcel-data-recovery / acquisition-underwriting off-market screens) into a dated queue, dedups against the Notion Owner Outreach ledger, drafts T1 cold-outreach letters on ORA letterhead, and reports promoted/net-new counts. DRAFT ONLY -- this is outbound counterparty communication (Hard Invariant 1); nothing is ever sent without Gabriel's explicit confirmation. v1.3 (2026-08-24: see Changelog).
+description: Oxford Realty Advisors weekly off-market owner cold-outreach pipeline. Use whenever the user mentions owner outreach, off-market letters, T1 letter pack, cold outreach queue, owner mailing, motivated seller outreach, off-market owner letters, or asks to refresh/run/check the weekly owner-outreach cycle -- even if they just say "run outreach" or "what's in the owner outreach queue this week." Promotes qualifying parcels from the off-market master (built by parcel-data-recovery / acquisition-underwriting off-market screens) into a dated queue, dedups against the Notion Owner Outreach ledger, drafts T1 cold-outreach letters on ORA letterhead, and reports promoted/net-new counts. DRAFT ONLY -- this is outbound counterparty communication (Hard Invariant 1); nothing is ever sent without Gabriel's explicit confirmation. v1.4 (2026-09-22: see Changelog).
 metadata:
   type: ora-operations
 ---
@@ -55,6 +55,14 @@ on a stale description here.
 5. **Report:** route the run summary (rows scanned, promoted, net-new by market, RECOVER gaps, upstream
    master age, integrity-check result) to `ggoldberg@oxfordra.net` ONLY, per routing canon. **Do not**
    release or send the letter pack itself — that is a separate, explicit action Gabriel takes.
+
+### Conversion report
+
+The first weekly run of each calendar month writes `_oo_conversion_block.md` (T1/T2/T3/T4 response and
+conversion rates off `log_outreach_response.py`'s log) and it is included in that run's summary email.
+Below 10 logged responses the block opens with an INSUFFICIENT SAMPLE banner -- per-touch counts only,
+no rate/trend claim. Read-only: it reports on the existing ladder and scoring, and changes nothing --
+any scoring or ladder change from what it surfaces needs Gabriel's sign-off.
 
 ## Letter format contract (read before touching letter layout)
 
@@ -120,6 +128,20 @@ with the scripts.
   `build_t1_letterpack.py --exclude`. `_oo_pack_manifest.json` records exactly which parcels a given pack
   contains, so `--released` logs the right set. `mail-log.csv` starts empty -- Gabriel must seed it with
   any packs physically mailed before 2026-08-14 or that history is unknown to the gate.
+  **Scan guard (new):** the weekly scan now HALTs (exit 3) if the last built pack was never recorded
+  with `--released` -- a built-but-unlogged pack means the cadence gate cannot know what was actually
+  mailed, so the scan refuses to build another one on top of it. Override with `--rebuild-unreleased`
+  only when Gabriel confirms the prior pack was genuinely never mailed and should be superseded.
+  **`--released DATE --manifest PATH` records a pack mailed but never logged.** Note that
+  `_oo_pack_manifest.json` lists parcels *before* the institutional-mail exclusion is applied, so a
+  manifest read straight off that file can overstate who was actually mailed; the `--released` path now
+  WARNs when called without an explicit `--manifest`. For a backfill, rebuild the manifest first:
+  `python reconstruct_pack_manifest.py PACK.docx QUEUE.xlsx --out _oo_manifest_YYYYMMDD.json`
+  (all-or-nothing; halts on any unmatched address), then pass that file as `--manifest`.
+  **2026-09-22 incident:** the 08-24 pack was built but never `--released`, so the cadence gate held
+  the same 50 parcels out of rotation and the 09-02/09-07/09-14 packs were regenerated with the
+  identical 50 parcels every week. The set was mailed once; the scan guard above and
+  `reconstruct_pack_manifest.py` were added in response. Backfilled as released 2026-09-02.
 - **Named salutations (code).** `principal-overrides.csv` (beside `mailing-overrides.csv`; columns
   `parcel_id, salutation_name, confidence, source, verified_date`; hand/agent-maintained from the
   recorder worksheet + Notion Principals DB, never auto-resolved) now drives the letter salutation.
@@ -136,11 +158,16 @@ with the scripts.
   `Business\` segment the scripts themselves corrected on 2026-07-21, and step 1 above wrongly described
   `--strict-age` as still always-on after the 2026-07-12 relax to WARN-only. Both fixed today.
 
+T3/T4 render via `--touch 3|4` (live since 2026-08-16). T2 is a call:
+`build_t2_callsheet.py` runs every weekly scan and writes
+`YYYYMMDD_Owner-Outreach_T2-CallSheet_v01.xlsx` (ratified call slice, ranked by Score then Motivation);
+outcomes are logged with `log_outreach_response.py`. The call slice's size and cadence are read from
+`outreach-ratification.json` (OR-2026-001) -- `ladder.cadence_days.t2` (days from T1 to the T2 call) and
+`ladder.t2_call_slice.per_week_max` (weekly call cap) -- never hardcoded here.
+
 **Still pending (not done, don't assume otherwise):** a full v2.0 rewrite of this doc (Gabriel's own
-change list also calls for dropping the version to a clean "v2.0" once landed) and T2--T4 multi-touch
-rendering (`build_t1_letterpack.py --touch N`, body text sourced from a not-yet-supplied sequence-
-templates doc). Both are blocked on source files Gabriel has not yet provided in-session -- verify they
-still say "pending" before assuming either shipped.
+change list also calls for dropping the version to a clean "v2.0" once landed). Blocked on source files
+Gabriel has not yet provided in-session -- verify it still says "pending" before assuming it shipped.
 
 ## What changed 2026-08-24
 
@@ -170,11 +197,12 @@ new integrity gate.
 - Letter layout is spec-governed, not file-governed -- see "Letter format contract" above.
   Never treat a saved pack as the template, and never hand-edit a pack's layout as a substitute
   for patching the generator; the next run will silently undo it.
-- This is the T1 (first-touch) stage only. Second-stage conversation structures (extended-1031-study
-  leaseback, installment sale/seller carry, objection handling) are documented in
+- This skill now covers the full T1--T4 outreach ladder (T1 letters, T2 call slice, T3/T4 renders), not
+  T1 alone. Second-stage conversation structures (extended-1031-study leaseback, installment sale/seller
+  carry, objection handling) are documented in
   `2026-06-15_Owner-Outreach_Creative-Structures-and-Objections_v01.md` in the project folder and are
-  NOT encoded in this skill — treat that file as the playbook once a T1 letter gets a response, don't
-  improvise past it.
+  NOT encoded in this skill — treat that file as the playbook once a letter or call gets a response,
+  don't improvise past it.
 - Standard firm name in outbound mail is "Oxford Realty Advisors" (current as of 2026-07-08) — verify
   this hasn't moved again against `communication-intelligence`'s signature-block canon before a live
   run, the same way the 2026-06-15 draft went stale on this exact point.
@@ -197,6 +225,7 @@ around it.
 
 ## Changelog
 
+- v1.4 (2026-09-22): T2 call sheet (`build_t2_callsheet.py`, ratified call slice from `outreach-ratification.json` -- `ladder.cadence_days.t2` / `ladder.t2_call_slice.per_week_max`) and T3/T4 rendering (`--touch 3|4`, live since 2026-08-16) documented; "Still pending" note retired accordingly. Added the scan guard: the weekly scan HALTs (exit 3) if the last built pack was never `--released`, override `--rebuild-unreleased`. Documented `reconstruct_pack_manifest.py` for backfilling a manifest before a late `--released --manifest` call, and that `_oo_pack_manifest.json` lists parcels before the institutional-mail exclusion (the `--released` path now WARNs without an explicit `--manifest`). Logged the 2026-09-22 incident: the unreleased 08-24 pack caused the 09-02/09-07/09-14 packs to regenerate the same 50 parcels; mailed once, backfilled as released 2026-09-02. Added the "Conversion report" subsection (`_oo_conversion_block.md`, first weekly run of each month, INSUFFICIENT SAMPLE banner below 10 responses). Corrected the Guardrails line that called this the "T1 (first-touch) stage only" -- the skill now covers the full T1-T4 ladder.
 - v1.3 (2026-08-24): Added the "Letter format contract" section and a matching guardrail -- letter geometry now points at `ORA_OwnerOutreach-T1Letter_FormatSpec_v1.1.md` / `t1_letter_format.py`, and the generator (not a saved DOCX) is named as the template of record. Added "What changed 2026-08-24": signature-footer address struck, top margin 1.50", letterhead block dropped for pre-printed stock, 46 pt signature gap, two overflow modes guarded in code, and `verify_pack()` added as a mandatory post-generation gate. Marked the 2026-07-11 "street-address footer unchanged" bullet superseded. No pipeline logic, cadence-gate behavior, or trigger vocabulary changed.
 - v1.2 (2026-08-15): LOW fix (Skill Text Audit finding F9). Moved the v1.1/v1.0 changelog prose that had accumulated in the frontmatter `description` field down here — this is the first `## Changelog` heading in this file (the existing "What changed 2026-07-11" / "What changed 2026-08-14" sections above remain as the detailed operational history; this section is the short version-tag log matching other skills' convention). Description now carries a single trailing version tag. No pipeline logic, cadence-gate behavior, or trigger vocabulary changed.
 - v1.1 (2026-08-14): Cadence gate (`mail-log.csv` / `MIN_TOUCH_GAP_DAYS`), named salutations (`principal-overrides.csv`), and `--wave-cap N` landed; `Scripts` path and `--strict-age` doc description corrected. v2.0 rewrite and T2-T4 multi-touch rendering still pending. Full detail: "What changed 2026-08-14" above.
