@@ -96,6 +96,79 @@ class SyncSkill(FixtureTestCase):
         self.assertFalse((self.mirror / 'noted-skill' / 'versions').exists())
 
 
+class SweepAll(FixtureTestCase):
+    """2026-09-22: main advances by merge/pull/rebase far more often than by a
+    plain commit, and git runs post-merge/post-rewrite for those -- never
+    post-commit. 16 local mirrors sat stale behind merged branches (e.g.
+    acquisition-underwriting v4.20 vs repo v4.22). sweep_all() is the
+    history-independent repair: compare every existing mirror to the repo."""
+
+    def setUp(self):
+        super().setUp()
+        self.backup = self.tmp / 'backup'
+
+    def _sweep(self, check=False):
+        return slm.sweep_all(repo_root=self.repo, mirror_root=self.mirror,
+                             backup_root=self.backup, check=check)
+
+    def test_repairs_every_drifted_mirror_and_skips_unmirrored(self):
+        _write(self.repo / 'a-skill' / 'SKILL.md', 'a v2\n')
+        _write(self.mirror / 'a-skill' / 'SKILL.md', 'a v1\n')
+        _write(self.repo / 'b-skill' / 'SKILL.md', 'b\n')
+        _write(self.mirror / 'b-skill' / 'SKILL.md', 'b\n')
+        _write(self.repo / 'c-skill' / 'SKILL.md', 'c\n')  # never mirrored
+
+        drifted = self._sweep()
+
+        self.assertEqual(drifted, ['a-skill'])
+        self.assertEqual((self.mirror / 'a-skill' / 'SKILL.md').read_text(encoding='utf-8'), 'a v2\n')
+        self.assertFalse((self.mirror / 'c-skill').exists())
+
+    def test_check_mode_reports_without_writing(self):
+        _write(self.repo / 'a-skill' / 'SKILL.md', 'a v2\n')
+        _write(self.mirror / 'a-skill' / 'SKILL.md', 'a v1\n')
+
+        drifted = self._sweep(check=True)
+
+        self.assertEqual(drifted, ['a-skill'])
+        self.assertEqual((self.mirror / 'a-skill' / 'SKILL.md').read_text(encoding='utf-8'), 'a v1\n')
+        self.assertFalse(self.backup.exists())
+
+    def test_overwritten_mirror_file_is_backed_up_first(self):
+        # A mirror edited in place (a REPO-FIRST violation) must never be lost.
+        _write(self.repo / 'a-skill' / 'SKILL.md', 'repo\n')
+        _write(self.mirror / 'a-skill' / 'SKILL.md', 'hand-edited mirror\n')
+
+        self._sweep()
+
+        backups = list(self.backup.rglob('SKILL.md'))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_text(encoding='utf-8'), 'hand-edited mirror\n')
+
+    def test_crlf_only_difference_is_not_drift(self):
+        _write(self.repo / 'a-skill' / 'SKILL.md', 'line\n')
+        _write(self.mirror / 'a-skill' / 'SKILL.md', 'line\r\n')
+
+        self.assertEqual(self._sweep(check=True), [])
+
+
+class MainBranchGuard(unittest.TestCase):
+    def test_sweep_refuses_off_main(self):
+        # A stale feature worktree must never roll live mirrors back.
+        with unittest.mock.patch.object(slm, 'current_branch', return_value='fix/old'), \
+             unittest.mock.patch.object(slm, 'sweep_all') as sweep:
+            rc = slm.main(['--all'])
+        sweep.assert_not_called()
+        self.assertEqual(rc, 0)
+
+    def test_check_runs_on_any_branch(self):
+        with unittest.mock.patch.object(slm, 'current_branch', return_value='fix/old'), \
+             unittest.mock.patch.object(slm, 'sweep_all', return_value=['x']) as sweep:
+            rc = slm.main(['--all', '--check'])
+        sweep.assert_called_once()
+        self.assertEqual(rc, 1)
+
+
 class Main(unittest.TestCase):
     def test_no_affected_skills_does_not_raise(self):
         # A commit touching nothing skill-shaped (empty affected_skills()) must
