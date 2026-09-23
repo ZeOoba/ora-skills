@@ -32,10 +32,12 @@ the actual gap (stale/missing content after a repo edit) without that risk.
 
 Write gates (2026-09-23): the cache is written only (a) from the PRIMARY
 checkout with main checked out -- never a linked worktree or feature branch --
-and (b) into a mirror whose repo_first_check direction verdict is IN-SYNC or
-REPO-AHEAD. Anything else (CACHE-AHEAD, DIVERGENT, REPO-MISSING,
-MAIN-BEHIND-ORIGIN, UNKNOWN) is reported and left untouched: the cache is what
-Cowork loads, so rescuing an overwritten copy afterwards is not enough.
+and (b) into a mirror where every SHIPPED file's repo_first_check direction
+verdict is IN-SYNC or REPO-AHEAD. Any other shipped-file verdict (CACHE-AHEAD,
+DIVERGENT, MAIN-BEHIND-ORIGIN, UNKNOWN) leaves the mirror untouched and is
+reported: the cache is what Cowork loads, so rescuing an overwritten copy
+afterwards is not enough. Cache-only files (REPO-MISSING) are ignored -- the
+additive sync never writes or deletes them.
 
 Never blocks a commit: file-copy failures (permissions, a locked file
 mid-Cowork-read) are a mirror-availability problem, not a content-quality
