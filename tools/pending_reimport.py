@@ -34,7 +34,8 @@ and, since 2026-09-07, the `ora-doctrine-integrity-guard` CC/MCP task, which run
 `backfill` daily as its ninth engine to catch drift from commits made in another
 checkout (the post-commit hook only ever fires in the checkout that committed).
 
-Ledger: _staging/PENDING_REIMPORT.md (UNTRACKED local state; see .gitignore).
+Ledger: <primary checkout>/_staging/PENDING_REIMPORT.md (UNTRACKED local state; see
+.gitignore) -- the PRIMARY checkout's, even when run from a git worktree.
 
 Usage:
   python tools/pending_reimport.py record [<commit>]     # default HEAD
@@ -77,7 +78,35 @@ from package_skills import (  # noqa: E402
 )
 from skill_md_normalize import normalize_skill_md_text  # noqa: E402
 
-LEDGER = REPO / '_staging' / 'PENDING_REIMPORT.md'
+def _primary_checkout(repo_root: Path) -> Path:
+    """The primary checkout that `repo_root` shares its git dir with; repo_root
+    itself when it IS the primary, or when git can't say (missing, not a repo,
+    bare/submodule layout). The ledger is untracked gitignored state: resolved
+    against a worktree it lands in that worktree's _staging/ and dies with
+    `git worktree remove` (2026-09-23, isolated-commit #77's entry stranded)."""
+    # No --path-format=absolute: git < 2.31 echoes an unknown rev-parse option
+    # back on stdout with exit 0 instead of failing. A relative answer is
+    # relative to repo_root (-C), so resolve it ourselves.
+    try:
+        r = subprocess.run(['git', '-C', str(repo_root), 'rev-parse', '--git-common-dir'],
+                           capture_output=True, text=True)
+    except (OSError, ValueError):
+        return repo_root
+    lines = r.stdout.strip().splitlines() if r.returncode == 0 else []
+    if len(lines) != 1:
+        return repo_root
+    common = Path(lines[0])
+    common = (common if common.is_absolute() else repo_root / common).resolve()
+    if common.name != '.git' or not common.is_dir():
+        return repo_root
+    return common.parent
+
+
+def _ledger_path(repo_root: Path) -> Path:
+    return _primary_checkout(repo_root) / '_staging' / 'PENDING_REIMPORT.md'
+
+
+LEDGER = _ledger_path(REPO)
 
 # Same canonical event_log.md the append-event-log.py maintenance script writes
 # (~/.claude/maintenance/append-event-log.py's own LOG constant) -- duplicated

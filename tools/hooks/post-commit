@@ -5,7 +5,8 @@
 # entry. The Cowork runtime cache only re-syncs on Gabriel's manual Save-skill click, so a
 # commit alone leaves the runtime STALE (this is how acquisition-underwriting sat at v4.0
 # after v4.1 b76bf94 was pushed). This hook detects that gap at commit time; it does NOT and
-# cannot reimport. See tools/pending_reimport.py; ledger _staging/PENDING_REIMPORT.md (untracked).
+# cannot reimport. See tools/pending_reimport.py; ledger _staging/PENDING_REIMPORT.md (untracked)
+# in the PRIMARY checkout, even when this fires in a git worktree.
 #
 # Rule (2026-08-16, Automation Audit R13-2 fix): also re-sync any LOCAL Code-surface
 # mirror under ~/.claude/skills/<skill> — a separate store from the Cowork/AppData
