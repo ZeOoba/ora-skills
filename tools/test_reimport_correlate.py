@@ -22,11 +22,13 @@ import tempfile
 import unittest
 import unittest.mock
 from contextlib import redirect_stdout
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pending_reimport as pr  # noqa: E402
 import reimport_correlate as rc  # noqa: E402
+import reimport_cycle as cyc  # noqa: E402
 
 
 def _write(path: Path, text: str) -> None:
@@ -86,7 +88,7 @@ class BaselineAbsentCache(FixtureTestCase):
         code, out = self._run(rc.cmd_baseline, ['never-installed-skill'])
 
         self.assertEqual(code, 0)
-        path = self.baselines / 'never-installed-skill.json'
+        path = rc._baseline_path('never-installed-skill')
         self.assertTrue(path.is_file(), 'baseline file must be written even when absent')
         data = json.loads(path.read_text())
         self.assertIsNone(data['creation_time'])
@@ -98,7 +100,7 @@ class BaselineAbsentCache(FixtureTestCase):
         code, out = self._run(rc.cmd_baseline, ['installed-skill'])
 
         self.assertEqual(code, 0)
-        data = json.loads((self.baselines / 'installed-skill.json').read_text())
+        data = json.loads((rc._baseline_path('installed-skill')).read_text())
         self.assertIsNotNone(data['creation_time'])
         self.assertNotIn('ABSENT', out)
 
@@ -108,7 +110,7 @@ class VerifyAbsentBaseline(FixtureTestCase):
     (nothing happened) and now-present (first install just happened) cases."""
 
     def test_still_absent_reads_no_change_not_no_cache(self):
-        _write(self.baselines / 'never-installed-skill.json',
+        _write(rc._baseline_path('never-installed-skill'),
                json.dumps({'skill': 'never-installed-skill', 'creation_time': None}))
 
         code, out = self._run(rc.cmd_verify, ['never-installed-skill'], None)
@@ -128,7 +130,7 @@ class VerifyAbsentBaseline(FixtureTestCase):
         self.assertIn('NO-CACHE', out)
 
     def test_first_install_confirmed_via_exact_second_log_match(self):
-        _write(self.baselines / 'vendor-management.json',
+        _write(rc._baseline_path('vendor-management'),
                json.dumps({'skill': 'vendor-management', 'creation_time': None}))
         (self.cache / 'vendor-management').mkdir()
         # Backdate the just-created dir's ctime is not portable across platforms,
@@ -148,7 +150,7 @@ class VerifyAbsentBaseline(FixtureTestCase):
         self.assertIn('(first install)', out)
 
     def test_first_install_with_no_log_match_is_moved_only(self):
-        _write(self.baselines / 'vendor-management.json',
+        _write(rc._baseline_path('vendor-management'),
                json.dumps({'skill': 'vendor-management', 'creation_time': None}))
         (self.cache / 'vendor-management').mkdir()
         # No log files written at all -- nothing to corroborate with.
@@ -178,7 +180,7 @@ class VerifyOrdinaryMoveUnaffected(FixtureTestCase):
     def test_unchanged_creation_time_is_no_change(self):
         (self.cache / 'daily-brief').mkdir()
         ct = rc._creation_time('daily-brief')
-        _write(self.baselines / 'daily-brief.json',
+        _write(rc._baseline_path('daily-brief'),
                json.dumps({'skill': 'daily-brief', 'creation_time': ct.isoformat()}))
 
         code, out = self._run(rc.cmd_verify, ['daily-brief'], None)
@@ -188,7 +190,7 @@ class VerifyOrdinaryMoveUnaffected(FixtureTestCase):
         self.assertNotIn('(first install)', out)
 
     def test_cache_dir_removed_after_a_real_baseline_is_no_cache_not_no_change(self):
-        _write(self.baselines / 'daily-brief.json',
+        _write(rc._baseline_path('daily-brief'),
                json.dumps({'skill': 'daily-brief',
                            'creation_time': '2026-01-01T00:00:00'}))
         # cache dir never created this time -- simulates an uninstall/cache-root move.
@@ -237,16 +239,16 @@ class PrecheckTests(FixtureTestCase):
         self.assertIn('PRECHECK OK', out)
         self.assertIn('1 shared root dep', out)
         self.assertIn('baseline CAPTURED', out)
-        self.assertTrue((self.baselines / 'demo-skill.json').is_file())
+        self.assertTrue((rc._baseline_path('demo-skill')).is_file())
 
     def test_existing_baseline_is_never_overwritten(self):
-        _write(self.baselines / 'demo-skill.json',
+        _write(rc._baseline_path('demo-skill'),
                json.dumps({'skill': 'demo-skill', 'creation_time': '2026-01-01T00:00:00'}))
         _make_pkg(self.pkg, 'demo-skill', self._good_entries())
         code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
         self.assertEqual(code, 0, out)
         self.assertIn('baseline kept (2026-01-01T00:00:00)', out)
-        self.assertEqual(json.loads((self.baselines / 'demo-skill.json').read_text())['creation_time'],
+        self.assertEqual(json.loads((rc._baseline_path('demo-skill')).read_text())['creation_time'],
                          '2026-01-01T00:00:00')
 
     def test_missing_package_is_reported_missing_not_stale(self):
@@ -322,7 +324,7 @@ class PostclickTests(FixtureTestCase):
     def _confirmable(self):
         (self.cache / 'demo-skill').mkdir()
         ct = rc._creation_time('demo-skill')
-        _write(self.baselines / 'demo-skill.json',
+        _write(rc._baseline_path('demo-skill'),
                json.dumps({'skill': 'demo-skill', 'creation_time': '2020-01-01T00:00:00'}))
         ts = ct.strftime('%Y-%m-%d %H:%M:%S')
         _write(self.local_log,
@@ -340,7 +342,7 @@ class PostclickTests(FixtureTestCase):
     def test_no_change_stops_and_appends_nothing(self):
         (self.cache / 'demo-skill').mkdir()
         ct = rc._creation_time('demo-skill')
-        _write(self.baselines / 'demo-skill.json',
+        _write(rc._baseline_path('demo-skill'),
                json.dumps({'skill': 'demo-skill', 'creation_time': ct.isoformat()}))
         code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.23', False, False)
         self.assertEqual(code, 1)
@@ -349,7 +351,7 @@ class PostclickTests(FixtureTestCase):
 
     def test_moved_only_stops_and_appends_nothing(self):
         (self.cache / 'demo-skill').mkdir()
-        _write(self.baselines / 'demo-skill.json',
+        _write(rc._baseline_path('demo-skill'),
                json.dumps({'skill': 'demo-skill', 'creation_time': '2020-01-01T00:00:00'}))
         code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.23', False, False)
         self.assertEqual(code, 1)
@@ -399,11 +401,160 @@ class BaselineDirResolvesToPrimaryCheckout(unittest.TestCase):
             rc.cmd_baseline(['demo-skill'])
         _git(self.repo, 'worktree', 'remove', '--force', str(self.wt))
 
-        saved = self.repo / '_staging' / 'reimport-baselines' / 'demo-skill.json'
+        saved = (self.repo / '_staging' / 'reimport-baselines' / 'demo-skill'
+                 / f'{rc._session_key()}.json')
         self.assertEqual(json.loads(saved.read_text(encoding='utf-8'))['skill'], 'demo-skill')
 
     def test_repo_stays_the_checkouts_own_root(self):
         self.assertEqual(rc.REPO, self.wt)
+
+
+class SessionScopedBaselines(FixtureTestCase):
+    """Since #79 every checkout shares ONE baseline dir (the primary's). A baseline
+    must therefore belong to the session that took it and be used up once its
+    install is recorded -- otherwise a session reads another session's install (or
+    its own previous run's) as its own CONFIRMED, and postclick logs an install that
+    never happened (merge-gate race finding F1)."""
+
+    def setUp(self):
+        super().setUp()
+        self.ct = {'demo-skill': datetime(2026, 9, 23, 12, 0, 0)}
+        p = unittest.mock.patch.object(rc, '_creation_time', lambda s: self.ct.get(s))
+        p.start()
+        self.addCleanup(p.stop)
+        self.repo = self.tmp / 'repo'
+        (self.repo / '_staging').mkdir(parents=True)
+        self.calls = self.tmp / 'append_calls.txt'
+        self.fake_append = self.tmp / 'fake_append.py'
+        self.fake_append.write_text(
+            'import sys\n'
+            f'open({str(self.calls)!r}, "a").write(open(sys.argv[2]).read())\n'
+            'sys.exit(int(__import__("os").environ.get("FAKE_APPEND_RC", "0")))\n')
+        for p in (unittest.mock.patch.object(rc, 'REPO', self.repo),
+                  unittest.mock.patch.object(rc, 'APPEND_LOG', self.fake_append)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def _as(self, session, func, *args):
+        with unittest.mock.patch.dict(os.environ, {'CLAUDE_CODE_SESSION_ID': session}):
+            return self._run(func, *args)
+
+    def _install(self, when):
+        self.ct['demo-skill'] = when
+        ts = when.strftime('%Y-%m-%d %H:%M:%S')
+        with open(self.local_log, 'a', encoding='utf-8') as f:
+            f.write(f'{ts} [info] [SkillsPlugin] Delta: 1 to download\n'
+                    f'{ts} [info] [SkillsPlugin] Sync complete: 1 downloaded, 0 failed\n')
+
+    def test_another_sessions_install_is_not_confirmed_for_this_session(self):
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))       # A's package clicked
+
+        _, out = self._as('sess-B', rc.cmd_verify, ['demo-skill'], None)
+
+        self.assertNotIn('CONFIRMED', out)
+        self.assertIn('NO-BASELINE', out)
+
+    def test_another_sessions_baseline_does_not_clobber_this_ones(self):
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))       # A's package clicked
+        self._as('sess-B', rc.cmd_baseline, ['demo-skill'])  # B's pre-check, after A's click
+
+        _, out = self._as('sess-A', rc.cmd_verify, ['demo-skill'], None)
+
+        self.assertIn('demo-skill: CONFIRMED', out)
+
+    def test_recorded_install_uses_the_baseline_up(self):
+        # Without this a later reimport of the same skill in the same session keeps
+        # (precheck never overwrites) the old baseline and CONFIRMs the OLD install.
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        code, out = self._as('sess-A', rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+        self.assertEqual(code, 0, out)
+
+        _, out = self._as('sess-A', rc.cmd_verify, ['demo-skill'], None)
+
+        self.assertIn('NO-BASELINE', out)
+
+    def test_no_append_and_failed_append_keep_the_baseline(self):
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        self._as('sess-A', rc.cmd_postclick, 'demo-skill', None, True, False)
+        with unittest.mock.patch.dict(os.environ, {'FAKE_APPEND_RC': '1'}):
+            self._as('sess-A', rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+
+        _, out = self._as('sess-A', rc.cmd_verify, ['demo-skill'], None)
+
+        self.assertIn('demo-skill: CONFIRMED', out)
+
+    def test_failed_baseline_write_leaves_the_previous_one_intact(self):
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        with unittest.mock.patch.object(pr.os, 'replace',
+                                        side_effect=PermissionError(13, 'locked')), \
+                unittest.mock.patch.object(pr.time, 'sleep'), \
+                self.assertRaises(PermissionError):
+            self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+
+        _, out = self._as('sess-A', rc.cmd_verify, ['demo-skill'], None)
+
+        self.assertIn('demo-skill: CONFIRMED', out)
+        self.assertEqual([p for p in self.baselines.rglob('*') if p.name.endswith('.tmp')], [])
+
+    def test_transient_lock_on_a_baseline_read_is_retried(self):
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        real_read = Path.read_text
+        failed = []
+
+        def locked_once(path, *a, **kw):
+            if self.baselines in path.parents and not failed:
+                failed.append(path)
+                raise PermissionError(13, 'being used by another process')
+            return real_read(path, *a, **kw)
+
+        with unittest.mock.patch.object(Path, 'read_text', locked_once), \
+                unittest.mock.patch.object(pr.time, 'sleep'):
+            _, out = self._as('sess-A', rc.cmd_verify, ['demo-skill'], None)
+
+        self.assertTrue(failed)
+        self.assertIn('demo-skill: CONFIRMED', out)
+
+
+class CycleCloseUsesTheBaselineUp(unittest.TestCase):
+    """reimport_cycle close does its own combined event-log append (postclick runs
+    with --no-append), so it must use the baselines up itself -- and only once that
+    append exited 0."""
+
+    def _close(self, append_rc):
+        calls = []
+
+        def fake_run(args, echo=True):
+            calls.append([str(a) for a in args])
+            rc_ = append_rc if str(args[0]) == str(cyc.APPEND) else 0
+            return subprocess.CompletedProcess(args, rc_, stdout='', stderr='')
+
+        with unittest.mock.patch.object(cyc, '_run', fake_run), \
+                unittest.mock.patch.object(cyc, 'REPO', Path(tempfile.mkdtemp(
+                    prefix='reimport_correlate_test_'))) as repo, redirect_stdout(io.StringIO()):
+            self.addCleanup(_rmtree, repo)
+            code = cyc.cmd_close(['demo-skill'], None, False, False)
+        return code, calls
+
+    def test_consumes_after_a_successful_append(self):
+        code, calls = self._close(0)
+
+        self.assertEqual(code, 0)
+        append_at = next(i for i, c in enumerate(calls) if c[0] == str(cyc.APPEND))
+        consume_at = next(i for i, c in enumerate(calls) if 'consume' in c)
+        self.assertGreater(consume_at, append_at)
+        self.assertIn('demo-skill', calls[consume_at])
+
+    def test_does_not_consume_when_the_append_fails(self):
+        code, calls = self._close(1)
+
+        self.assertEqual(code, 1)
+        self.assertFalse(any('consume' in c for c in calls))
 
 
 if __name__ == '__main__':
