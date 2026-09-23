@@ -200,6 +200,178 @@ class VerifyOrdinaryMoveUnaffected(FixtureTestCase):
         self.assertNotIn('NO-CHANGE', out)
 
 
+def _make_pkg(path: Path, skill: str, entries: dict[str, bytes]) -> None:
+    import zipfile
+    with zipfile.ZipFile(path, 'w') as z:
+        for name, data in entries.items():
+            z.writestr(zipfile.ZipInfo(name), data)
+
+
+class PrecheckTests(FixtureTestCase):
+    """cmd_precheck against a synthetic repo (rc.REPO patched to a temp tree)."""
+
+    SKILL_MD = '---\nname: demo-skill\ndescription: A demo skill.\n---\nbody\n'
+
+    def setUp(self):
+        super().setUp()
+        self.repo = self.tmp / 'repo'
+        (self.repo / 'demo-skill' / 'references').mkdir(parents=True)
+        _write(self.repo / 'demo-skill' / 'SKILL.md', self.SKILL_MD)
+        _write(self.repo / 'demo-skill' / 'references' / 'a.md', 'ref a\n')
+        _write(self.repo / 'shared.json', '{"k": 1}\n')
+        for p in (unittest.mock.patch.object(rc, 'REPO', self.repo),
+                  unittest.mock.patch.object(rc, '_plugin_of', lambda s: None)):
+            p.start()
+            self.addCleanup(p.stop)
+        self.pkg = self.tmp / 'demo-skill.skill'
+
+    def _good_entries(self):
+        return {'demo-skill/SKILL.md': self.SKILL_MD.encode(),
+                'demo-skill/references/a.md': b'ref a\n',
+                'demo-skill/shared.json': b'{"k": 1}\n'}
+
+    def test_good_package_passes_and_captures_baseline(self):
+        _make_pkg(self.pkg, 'demo-skill', self._good_entries())
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 0, out)
+        self.assertIn('PRECHECK OK', out)
+        self.assertIn('1 shared root dep', out)
+        self.assertIn('baseline CAPTURED', out)
+        self.assertTrue((self.baselines / 'demo-skill.json').is_file())
+
+    def test_existing_baseline_is_never_overwritten(self):
+        _write(self.baselines / 'demo-skill.json',
+               json.dumps({'skill': 'demo-skill', 'creation_time': '2026-01-01T00:00:00'}))
+        _make_pkg(self.pkg, 'demo-skill', self._good_entries())
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 0, out)
+        self.assertIn('baseline kept (2026-01-01T00:00:00)', out)
+        self.assertEqual(json.loads((self.baselines / 'demo-skill.json').read_text())['creation_time'],
+                         '2026-01-01T00:00:00')
+
+    def test_missing_package_is_reported_missing_not_stale(self):
+        code, out = self._run(rc.cmd_precheck, [str(self.tmp / 'ghost.skill')])
+        self.assertEqual(code, 1)
+        self.assertIn('MISSING', out)
+
+    def test_stale_content_fails(self):
+        e = self._good_entries()
+        e['demo-skill/references/a.md'] = b'OLD ref a\n'
+        _make_pkg(self.pkg, 'demo-skill', e)
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 1)
+        self.assertIn('MISMATCH', out)
+
+    def test_crlf_only_difference_is_not_drift(self):
+        e = self._good_entries()
+        e['demo-skill/references/a.md'] = b'ref a\r\n'
+        _make_pkg(self.pkg, 'demo-skill', e)
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 0, out)
+
+    def test_backslash_entry_fails(self):
+        e = self._good_entries()
+        e['demo-skill/references/b.md'] = b'x'
+        _make_pkg(self.pkg, 'demo-skill', e)
+        # zipfile normalizes '\\' -> '/' on Windows at write AND read time, so
+        # forge the raw same-length name bytes (local header + central dir).
+        data = self.pkg.read_bytes()
+        self.pkg.write_bytes(data.replace(b'demo-skill/references/b.md',
+                                          b'demo-skill\\references\\b.md'))
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 1)
+        self.assertIn('backslash', out)
+
+    def test_name_dir_mismatch_and_long_description_fail(self):
+        bad = '---\nname: other\ndescription: ' + 'x' * 1030 + '\n---\nb\n'
+        e = self._good_entries()
+        e['demo-skill/SKILL.md'] = bad.encode()
+        _write(self.repo / 'demo-skill' / 'SKILL.md', bad)
+        _make_pkg(self.pkg, 'demo-skill', e)
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 1)
+        self.assertIn("name 'other'", out)
+        self.assertIn('/1024', out)
+
+    def test_repo_file_missing_from_package_warns_only(self):
+        _write(self.repo / 'demo-skill' / 'references' / 'extra.md', 'x\n')
+        _make_pkg(self.pkg, 'demo-skill', self._good_entries())
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 0, out)
+        self.assertIn('WARN references/extra.md', out)
+
+
+class PostclickTests(FixtureTestCase):
+    """cmd_postclick: append happens ONLY on CONFIRMED, and only exit 0 clears."""
+
+    def setUp(self):
+        super().setUp()
+        self.repo = self.tmp / 'repo'
+        (self.repo / '_staging').mkdir(parents=True)
+        self.calls = self.tmp / 'append_calls.txt'
+        self.fake_append = self.tmp / 'fake_append.py'
+        self.fake_append.write_text(
+            'import sys\n'
+            f'open({str(self.calls)!r}, "a").write(open(sys.argv[2]).read())\n'
+            'sys.exit(int(__import__("os").environ.get("FAKE_APPEND_RC", "0")))\n')
+        for p in (unittest.mock.patch.object(rc, 'REPO', self.repo),
+                  unittest.mock.patch.object(rc, 'APPEND_LOG', self.fake_append)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def _confirmable(self):
+        (self.cache / 'demo-skill').mkdir()
+        ct = rc._creation_time('demo-skill')
+        _write(self.baselines / 'demo-skill.json',
+               json.dumps({'skill': 'demo-skill', 'creation_time': '2020-01-01T00:00:00'}))
+        ts = ct.strftime('%Y-%m-%d %H:%M:%S')
+        _write(self.local_log,
+               f'{ts} [info] [SkillsPlugin] Delta: 1 to download\n'
+               f'{ts} [info] [SkillsPlugin] Sync complete: 1 downloaded, 0 failed\n')
+
+    def test_confirmed_appends_dated_entry_with_version(self):
+        self._confirmable()
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.23', False, False)
+        self.assertEqual(code, 0, out)
+        text = self.calls.read_text()
+        self.assertRegex(text, r'^## \d{4}-\d{2}-\d{2} -- demo-skill v4\.23 reimport confirmed')
+        self.assertIn('demo-skill v4.23 reimported via Cowork Save-skill; reimport_correlate CONFIRMED.', text)
+
+    def test_no_change_stops_and_appends_nothing(self):
+        (self.cache / 'demo-skill').mkdir()
+        ct = rc._creation_time('demo-skill')
+        _write(self.baselines / 'demo-skill.json',
+               json.dumps({'skill': 'demo-skill', 'creation_time': ct.isoformat()}))
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.23', False, False)
+        self.assertEqual(code, 1)
+        self.assertIn('STOP', out)
+        self.assertFalse(self.calls.exists())
+
+    def test_moved_only_stops_and_appends_nothing(self):
+        (self.cache / 'demo-skill').mkdir()
+        _write(self.baselines / 'demo-skill.json',
+               json.dumps({'skill': 'demo-skill', 'creation_time': '2020-01-01T00:00:00'}))
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.23', False, False)
+        self.assertEqual(code, 1)
+        self.assertIn('MOVED-ONLY', out)
+        self.assertFalse(self.calls.exists())
+
+    def test_no_append_flag_verifies_only(self):
+        self._confirmable()
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+        self.assertEqual(code, 0)
+        self.assertFalse(self.calls.exists())
+
+    def test_failed_append_returns_1_and_skips_ledger_clear(self):
+        self._confirmable()
+        with unittest.mock.patch.dict('os.environ', {'FAKE_APPEND_RC': '1'}):
+            with unittest.mock.patch.object(rc.subprocess, 'run', wraps=rc.subprocess.run) as run:
+                code, out = self._run(rc.cmd_postclick, 'demo-skill', '1.0', False, True)
+        self.assertEqual(code, 1)
+        self.assertIn('ledger NOT cleared', out)
+        self.assertFalse(any('clear' in [str(a) for a in c.args[0]] for c in run.call_args_list))
+
+
 class BaselineDirResolvesToPrimaryCheckout(unittest.TestCase):
     """A baseline is taken in the packaging pre-check and read back by `verify`
     after the Save-skill reimport -- often after the packaging worktree has been
