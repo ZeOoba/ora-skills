@@ -44,7 +44,9 @@ failure is ignored (the sweep then classifies against whatever origin/main it ha
 On a BAD_VERDICTS finding it (a) prints a loud warning and (b) RESCUES the cache
 copy to `_staging/repo-first-rescue/<skill>/` so the about-to-be-clobbered content
 survives for review. A FULL-SWEEP run (no `--check-staged`) also persists findings
-to the durable `_staging/STORE_AHEAD_OF_REPO.md` ledger.
+to the durable `_staging/STORE_AHEAD_OF_REPO.md` ledger. Both live in the PRIMARY
+checkout's `_staging/` even when run from a git worktree (see STAGING); a worktree's
+full sweep prints its findings but leaves that shared ledger to the primary's sweep.
 
 It NEVER blocks a commit -- same posture as Check 4, and for the same reason: a
 mirror-state finding is not a content-quality finding, and a false positive here
@@ -74,6 +76,7 @@ from pending_reimport import (  # noqa: E402
     _isdir_long,
     _isfile_long,
     _normalized_hash_bytes,
+    _primary_checkout,
     _read_bytes_long,
     _win_long,
     all_skill_dirs,
@@ -82,7 +85,14 @@ from pending_reimport import (  # noqa: E402
     write_entries,
 )
 
-RESCUE_DIR = REPO / '_staging' / 'repo-first-rescue'
+# Untracked durable state lives in the PRIMARY checkout's _staging/, never a
+# worktree's: `git worktree remove` destroys a worktree's _staging/, and a rescue
+# copy is the only surviving copy of the clobbered cache content (the pre-commit
+# hook runs --check-staged inside whichever worktree is committing). Same fix as
+# pending_reimport's ledger (#78). REPO itself stays this checkout's root -- the
+# sweep must read the checkout's own content.
+STAGING = _primary_checkout(REPO) / '_staging'
+RESCUE_DIR = STAGING / 'repo-first-rescue'
 
 ORIGIN_MAIN = 'origin/main'
 MAIN_BEHIND = 'MAIN-BEHIND-ORIGIN'
@@ -104,7 +114,7 @@ BAD_VERDICTS = ('CACHE-AHEAD', 'DIVERGENT', 'REPO-MISSING')
 # unnoticed three times on 2026-08-04 -- still gets caught and stays durably visible
 # past this run's console output, instead of requiring someone to think to run this by
 # hand and read it before the terminal scrolls.
-LEDGER = REPO / '_staging' / 'STORE_AHEAD_OF_REPO.md'
+LEDGER = STAGING / 'STORE_AHEAD_OF_REPO.md'
 
 LEDGER_HEADER = (
     '# STORE AHEAD OF REPO -- runtime cache holds content never committed to this repo\n'
@@ -491,7 +501,14 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
             print(f'   Rescued the cache copy -> {dest}', file=sys.stderr)
             print('   Reconcile it into the repo before relying on either store.', file=sys.stderr)
 
-    if not check_staged:
+    if not check_staged and _primary_checkout(repo_root).resolve() != Path(repo_root).resolve():
+        # The ledger is derived and every verdict is relative to the swept branch,
+        # while the ledger itself is shared (STAGING). A feature worktree's sweep would
+        # replace the primary's ledger -- a clean one wiping entries and resetting
+        # their "pending since" -- so only the primary checkout's sweep owns it.
+        print(f'repo_first_check: {repo_root} is not the primary checkout -- findings '
+              f'printed only, {ledger_path.name} left untouched')
+    elif not check_staged:
         # Full sweep only -- --check-staged's narrower staged-skill scope would
         # otherwise make the ledger flicker skills in and out on every unrelated
         # commit. The full sweep is the only mode that ever sees a skill nobody is

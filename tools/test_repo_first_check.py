@@ -20,7 +20,10 @@ behavior and covers record_ledger(), the new durable _staging/STORE_AHEAD_OF_REP
 companion to _staging/PENDING_REIMPORT.md (which only ever tracked the opposite
 direction — repo-ahead-of-cache).
 """
+import importlib
+import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -28,6 +31,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import pending_reimport as pr  # noqa: E402
 import repo_first_check as rfc  # noqa: E402
 from pending_reimport import read_entries  # noqa: E402
 from unittest import mock  # noqa: E402
@@ -40,6 +44,19 @@ def _git(repo: Path, *args: str) -> None:
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding='utf-8', newline='')
+
+
+def _rmtree(path: Path) -> None:
+    """git writes object files read-only; on Windows rmtree cannot unlink them and
+    ignore_errors=True leaks the whole fixture silently. Clear the bit and retry;
+    still best-effort, so a locked file never fails a test."""
+    def _retry(func, p, _exc):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except Exception:  # onexc can also hand over os.open/os.close
+            pass
+    shutil.rmtree(rfc._win_long(path), onexc=_retry)
 
 
 def _commit(repo: Path, rel: str, text: str, message: str) -> None:
@@ -60,7 +77,7 @@ class FixtureTestCase(unittest.TestCase):
         _git(self.repo, 'config', 'user.name', 'Test')
 
     def tearDown(self):
-        shutil.rmtree(rfc._win_long(self.tmp), ignore_errors=True)
+        _rmtree(self.tmp)
 
 
 class ClassifySkill(FixtureTestCase):
@@ -414,7 +431,7 @@ class MainBehindOrigin(unittest.TestCase):
         _commit(self.repo, 'local-only.md', 'unpushed\n', 'unpushed local commit')
 
     def tearDown(self):
-        shutil.rmtree(rfc._win_long(self.tmp), ignore_errors=True)
+        _rmtree(self.tmp)
 
     def _merge_pr_on_origin(self, rel, text):
         _commit(self.seed, rel, text, 'merged PR (#99)')
@@ -496,6 +513,62 @@ class MainBehindOrigin(unittest.TestCase):
         self.assertIn('catch_up_main.py', out.getvalue())
         self.assertFalse(ledger.is_file())
         self.assertFalse(rescue_dir.exists())
+
+
+
+class StagingResolvesToPrimaryCheckout(FixtureTestCase):
+    """RESCUE_DIR and LEDGER are untracked durable state, and the rescue copy is the
+    ONLY surviving copy of clobbered cache content. Resolved against a git worktree
+    they land in that worktree's _staging/ and die with `git worktree remove` -- and
+    the pre-commit hook runs --check-staged (so rescue()) inside whichever worktree is
+    committing. The module is reloaded with REPO pointed at a real fixture worktree,
+    so a revert to REPO-relative paths fails whether the suite itself runs from a
+    worktree or from the primary checkout."""
+
+    def setUp(self):
+        super().setUp()
+        _git(self.repo, 'commit', '-q', '--allow-empty', '-m', 'init')
+        self.wt = self.tmp / 'wt'
+        _git(self.repo, 'worktree', 'add', '-q', str(self.wt))
+        self.addCleanup(importlib.reload, rfc)
+        with mock.patch.object(pr, 'REPO', self.wt):
+            importlib.reload(rfc)
+
+    def test_rescued_copy_survives_worktree_remove(self):
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'cache-only content\n')
+
+        self.assertIsNotNone(rfc.rescue('demo-skill', ['SKILL.md'], cache_root=self.cache))
+        _git(self.repo, 'worktree', 'remove', '--force', str(self.wt))
+
+        rescued = self.repo / '_staging' / 'repo-first-rescue' / 'demo-skill' / 'SKILL.md'
+        self.assertEqual(rescued.read_text(encoding='utf-8'), 'cache-only content\n')
+
+    def test_ledger_survives_worktree_remove(self):
+        rfc.record_ledger([('demo-skill', 'CACHE-AHEAD', [('SKILL.md', 'CACHE-AHEAD')])])
+        _git(self.repo, 'worktree', 'remove', '--force', str(self.wt))
+
+        self.assertIn('demo-skill',
+                      read_entries(self.repo / '_staging' / 'STORE_AHEAD_OF_REPO.md'))
+
+    def test_repo_stays_the_checkouts_own_root(self):
+        # The sweep reads the checkout's OWN content; only the untracked state moves.
+        self.assertEqual(rfc.REPO, self.wt)
+
+    def test_worktree_sweep_leaves_the_primary_ledger_untouched(self):
+        # The ledger is DERIVED -- each full sweep replaces it -- and verdicts are
+        # branch-relative. A clean sweep from a feature worktree must not read as
+        # "resolved" and wipe what the primary's sweep recorded (nor reset its
+        # carried-forward "pending since").
+        rfc.record_ledger([('demo-skill', 'DIVERGENT', [('SKILL.md', 'DIVERGENT')])])
+        before = rfc.LEDGER.read_bytes()
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()) as out, \
+                contextlib.redirect_stderr(io.StringIO()):
+            rfc.run(False, repo_root=self.wt, cache_root=self.cache)
+
+        self.assertEqual(rfc.LEDGER.read_bytes(), before)
+        self.assertIn('not the primary checkout', out.getvalue())
 
 
 if __name__ == '__main__':
