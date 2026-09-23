@@ -15,7 +15,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from sync_appdata_mirror import check_staged, discover_mirror_dirs, sync_skill
+from sync_appdata_mirror import check_staged, discover_mirror_dirs, sync_changed_range, sync_skill
 
 
 class DiscoverMirrorDirsTests(unittest.TestCase):
@@ -57,6 +57,10 @@ class SyncSkillTests(unittest.TestCase):
         (self.skill_dir / 'SKILL.md').write_text('---\nname: my-skill\ndescription: x\n---\nbody v1', encoding='utf-8')
         (self.skill_dir / 'references' / 'notes.md').write_text('note v1', encoding='utf-8')
         self.appdata = self.tmp / 'appdata'
+        # Fixture repos are not git repos; direction is exercised in WriteGateTests.
+        p = patch('sync_appdata_mirror.cache_verdict', return_value='REPO-AHEAD')
+        p.start()
+        self.addCleanup(p.stop)
 
     def test_no_installed_mirror_reports_informational_line_only(self):
         lines = sync_skill(self.skill_dir, appdata=self.appdata)
@@ -136,6 +140,96 @@ class CheckStagedNeverBlocksTests(unittest.TestCase):
         with patch('sync_appdata_mirror.staged_skill_dirs', return_value=[]):
             code = check_staged(files=[])
         self.assertEqual(code, 0)
+
+
+class WriteGateTests(unittest.TestCase):
+    """2026-09-23: Check 4 wrote the runtime cache Cowork loads from ANY branch in
+    ANY worktree. A feature-branch commit (register-scheduled-task v2.29, pre-review)
+    overwrote a just-installed v2.28 for 11 minutes; on 09-22 a main commit clobbered
+    a platform-side pma-qc v1.3 that existed only in the cache. Writes are now gated
+    on (a) the primary checkout on main and (b) the cache not being ahead of or
+    divergent from the repo."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.skill_dir = self.tmp / 'repo' / 'my-skill'
+        self.skill_dir.mkdir(parents=True)
+        (self.skill_dir / 'SKILL.md').write_text('repo body', encoding='utf-8')
+        self.appdata = self.tmp / 'appdata'
+        self.mirror = self.appdata / 'Claude' / 'local-agent-mode-sessions' / 'skills-plugin' / 'u1' / 'u2' / 'skills' / 'my-skill'
+        self.mirror.mkdir(parents=True)
+        (self.mirror / 'SKILL.md').write_text('cache body', encoding='utf-8')
+
+    def _sync(self, verdict):
+        with patch('sync_appdata_mirror.cache_verdict', return_value=verdict):
+            return sync_skill(self.skill_dir, appdata=self.appdata)
+
+    def test_repo_ahead_cache_is_written(self):
+        lines = self._sync('REPO-AHEAD')
+        self.assertEqual((self.mirror / 'SKILL.md').read_text(encoding='utf-8'), 'repo body')
+        self.assertIn('synced', lines[0])
+
+    def test_in_sync_cache_is_written(self):
+        self._sync('IN-SYNC')
+        self.assertEqual((self.mirror / 'SKILL.md').read_text(encoding='utf-8'), 'repo body')
+
+    def test_unsafe_directions_never_overwrite_the_cache(self):
+        for verdict in ('CACHE-AHEAD', 'DIVERGENT', 'REPO-MISSING', 'MAIN-BEHIND-ORIGIN', 'UNKNOWN'):
+            with self.subTest(verdict=verdict):
+                (self.mirror / 'SKILL.md').write_text('cache body', encoding='utf-8')
+                lines = self._sync(verdict)
+                self.assertEqual((self.mirror / 'SKILL.md').read_text(encoding='utf-8'), 'cache body')
+                self.assertIn(verdict, lines[0])
+                self.assertIn('NOT written', lines[0])
+
+    def test_classifier_error_fails_closed(self):
+        with patch('sync_appdata_mirror.cache_verdict', side_effect=RuntimeError('git gone')):
+            lines = sync_skill(self.skill_dir, appdata=self.appdata)
+        self.assertEqual((self.mirror / 'SKILL.md').read_text(encoding='utf-8'), 'cache body')
+        self.assertIn('NOT written', lines[0])
+
+
+class CanonicalCheckoutGateTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.skill_dir = self.tmp / 'my-skill'
+        self.skill_dir.mkdir()
+
+    def _check_staged(self, canonical):
+        with patch('sync_appdata_mirror.staged_skill_dirs', return_value=[self.skill_dir]), \
+             patch('sync_appdata_mirror.is_canonical_checkout', return_value=canonical), \
+             patch('sync_appdata_mirror.sync_skill', return_value=['x: synced']) as sync:
+            code = check_staged(files=[])
+        return code, sync
+
+    def test_feature_branch_or_linked_worktree_defers_the_write(self):
+        code, sync = self._check_staged(canonical=False)
+        sync.assert_not_called()
+        self.assertEqual(code, 0)
+
+    def test_primary_checkout_on_main_writes(self):
+        code, sync = self._check_staged(canonical=True)
+        sync.assert_called_once()
+        self.assertEqual(code, 0)
+
+    def test_changed_range_syncs_skills_a_merge_brought_in(self):
+        # A fast-forward/merge on main runs no pre-commit hook; post-merge covers it.
+        with patch('sync_appdata_mirror.is_canonical_checkout', return_value=True), \
+             patch('sync_appdata_mirror.skills_changed_between', return_value=[self.skill_dir]), \
+             patch('sync_appdata_mirror.sync_skill', return_value=['x: synced']) as sync:
+            code = sync_changed_range('ORIG_HEAD', 'HEAD')
+        sync.assert_called_once_with(self.skill_dir)
+        self.assertEqual(code, 0)
+
+    def test_changed_range_off_main_is_a_noop(self):
+        with patch('sync_appdata_mirror.is_canonical_checkout', return_value=False), \
+             patch('sync_appdata_mirror.skills_changed_between') as changed, \
+             patch('sync_appdata_mirror.sync_skill') as sync:
+            sync_changed_range('ORIG_HEAD', 'HEAD')
+        sync.assert_not_called()
+        changed.assert_not_called()
 
 
 if __name__ == '__main__':
