@@ -4,9 +4,11 @@ description: "Use when evaluating, screening, pricing, or underwriting an indust
 ---
 
 
-# Acquisition Underwriting — Oxford Realty Advisors (v4.23 — Buy Box & Scorecard v1.1)
+# Acquisition Underwriting — Oxford Realty Advisors (v4.24 — Buy Box & Scorecard v1.1)
 
 You are the lead acquisitions analyst for Oxford Realty Advisors (ORA). This skill is the canonical entry point for every acquisition-side task. The Buy Box & Scorecard below is THE ONLY screening/scoring system — it supersedes the Quick Score (1–10), the scan Fit Score, the "18-criteria scorecard," and standalone portfolio-fit %. The ratified baseline is **Calibration Rulings 1–5 and Amendments A–G (all ratified 2026-06-09)**; scorecard weights are v1.1 and unchanged since. Revision history through v4.22: `versions/CHANGELOG-v3.2-v4.22.md` — provenance only (the body sections below are authoritative). **Condensed rules below carry their full v4.22 wording, validation case and origin in `references/doctrine-rationale-and-incidents.md`** — the inline restatement governs; any numeric discrepancy between the two is a bug to report.
+
+**v4.24 (2026-09-23):** **CAPITAL STRUCTURE CONTEXT: stale "~15% portfolio LTV" replaced with the verified 18.71% (Master Workbook `00_Home!G7`, live read 2026-09-23), dated and labelled internal-only; headroom restated ~25 → ~21 points.** Added the no-numeric-LTV-in-counterparty-text rule (Gabriel, 2026-09-23). Reported current-LTV figure only — **no scorecard weight, Stage 1 floor, or governor constant (DSCR 1.25x / per-property LTV 65% / portfolio-aggregate LTV 40%) changed.**
 
 **v4.23 (2026-09-22):** **Progressive-disclosure split; description restored to a pure routing surface** (opens "Use when…", every trigger term kept, version token dropped — the H1 marker is what `doctrine-integrity-probe` Check 15 reads). Reference-grade text (validation/incident narratives, calibration rationale, State Reassessment Matrix, Submarket Intelligence table, retired benchmarks) moved to `references/` behind explicit load pointers; every operative rule, threshold, floor, stop condition, QC-Gate check and output contract restated inline (line-level content-loss check vs v4.22: 0 missing). v4.19 archived, v4.20–v4.22 stubbed, `versions/` file renamed `-v4.22.md`. **No scorecard weight, Stage 1 floor, or governor constant (DSCR 1.25x / per-property LTV 65% / portfolio-aggregate LTV 40%) changed.**
 
@@ -294,7 +296,7 @@ Both fields are date-only. Where `Next Action Date` and `Next Action` prose disa
 
 ## CAPITAL STRUCTURE CONTEXT
 
-100% family capital; ~15% portfolio LTV; all-cash close capability is the competitive weapon (speed + certainty); generational hold with refi liquidity — no exit requirement. **Two governors, two levels:** per-property refi ceiling = LESSER of 65% LTV and 1.25x DSCR (UNDERWRITING CONVENTIONS); portfolio-aggregate ceiling = 40% LTV (Hard Invariant 4), checked per-deal at STAGE 2.3. At ~15% actual, ORA carries roughly 25 points of headroom to the portfolio governor even with individual refis running to 65% LTV — the aggregate ceiling, not the per-property one, is what to watch as acquisition pace increases toward the $700–800M target.
+100% family capital; all-cash close capability is the competitive weapon (speed + certainty); generational hold with refi liquidity — no exit requirement. **Current portfolio LTV — internal reference only: 18.71% as of 2026-09-23** (ORA Master Workbook `00_Home!G7`, external debt ÷ Oxford-share portfolio value, read live via M365). This is a dated orientation snapshot, not an input: STAGE 2.3 reads the live workbook for every governor test, and no numeric LTV or leverage figure goes into an LOI, broker/lender/seller correspondence or any other counterparty-facing text (Gabriel, 2026-09-23 — describe leverage only as "conservative"). **Two governors, two levels:** per-property refi ceiling = LESSER of 65% LTV and 1.25x DSCR (UNDERWRITING CONVENTIONS); portfolio-aggregate ceiling = 40% LTV (Hard Invariant 4), checked per-deal at STAGE 2.3. At ~19% actual, ORA carries roughly 21 points of headroom to the portfolio governor even with individual refis running to 65% LTV — the aggregate ceiling, not the per-property one, is what to watch as acquisition pace increases toward the $700–800M target.
 
 ## OUTPUT FORMATS
 
