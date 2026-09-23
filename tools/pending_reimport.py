@@ -65,6 +65,8 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -248,7 +250,33 @@ def write_entries(entries: dict[str, str], ledger_path: Path = LEDGER, header: s
             ledger_path.unlink()
         return
     body = '\n'.join(entries[k] for k in sorted(entries)) + '\n'
-    ledger_path.write_text(header + body, encoding='utf-8')
+    # Write-then-rename: Path.write_text truncates the target before writing, so a
+    # write that died midway left an EMPTY ledger. A same-directory temp file plus
+    # os.replace leaves either the old ledger or the new one, never a torn one.
+    # Atomic per write only -- two concurrent read-modify-write callers can still
+    # lose an update.
+    fd, tmp = tempfile.mkstemp(dir=ledger_path.parent, prefix=f'.{ledger_path.name}.',
+                               suffix='.tmp')
+    try:
+        with open(fd, 'w', encoding='utf-8') as f:
+            f.write(header + body)
+        # On Windows os.replace fails while any reader holds the target open (Python's
+        # open() doesn't share delete access); write_text tolerated that. Readers hold
+        # it for milliseconds, so a short bounded retry covers them.
+        for attempt in range(5):
+            try:
+                os.replace(tmp, ledger_path)
+                break
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def _normalized_hash_bytes(data: bytes) -> str:

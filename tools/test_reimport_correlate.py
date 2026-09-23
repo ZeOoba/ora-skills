@@ -10,9 +10,13 @@ case -- a brand-new publish -- this tool exists to make routine. These tests
 build synthetic cache/log fixture trees (never the real AppData runtime cache
 or main.log) so they're deterministic regardless of live install state.
 """
+import importlib
 import io
 import json
+import os
 import shutil
+import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -21,12 +25,30 @@ from contextlib import redirect_stdout
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import pending_reimport as pr  # noqa: E402
 import reimport_correlate as rc  # noqa: E402
 
 
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding='utf-8', newline='')
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(['git', '-C', str(repo), *args], check=True, capture_output=True)
+
+
+def _rmtree(path: Path) -> None:
+    """git writes object files read-only; on Windows rmtree cannot unlink them and
+    ignore_errors=True leaks the whole fixture silently. Clear the bit and retry;
+    still best-effort, so a locked file never fails a test."""
+    def _retry(func, p, _exc):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except Exception:  # onexc can also hand over os.open/os.close
+            pass
+    shutil.rmtree(pr._win_long(path), onexc=_retry)
 
 
 class FixtureTestCase(unittest.TestCase):
@@ -48,7 +70,7 @@ class FixtureTestCase(unittest.TestCase):
             self.addCleanup(p.stop)
 
     def tearDown(self):
-        shutil.rmtree(self.tmp, ignore_errors=True)
+        _rmtree(self.tmp)
 
     def _run(self, func, *args):
         buf = io.StringIO()
@@ -176,6 +198,40 @@ class VerifyOrdinaryMoveUnaffected(FixtureTestCase):
         self.assertEqual(code, 1)
         self.assertIn('NO-CACHE', out)
         self.assertNotIn('NO-CHANGE', out)
+
+
+class BaselineDirResolvesToPrimaryCheckout(unittest.TestCase):
+    """A baseline is taken in the packaging pre-check and read back by `verify`
+    after the Save-skill reimport -- often after the packaging worktree has been
+    removed. Resolved against that worktree, BASELINE_DIR dies with
+    `git worktree remove` and `verify` degrades to NO-BASELINE. The module is
+    reloaded with REPO pointed at a real fixture worktree, so a revert to a
+    REPO-relative path fails whether the suite runs from a worktree or the primary."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='reimport_correlate_test_'))
+        self.addCleanup(_rmtree, self.tmp)
+        self.repo, self.wt, self.cache = self.tmp / 'repo', self.tmp / 'wt', self.tmp / 'cache'
+        self.repo.mkdir()
+        self.cache.mkdir()
+        _git(self.repo, 'init', '-q')
+        _git(self.repo, '-c', 'user.name=t', '-c', 'user.email=t@t',
+             'commit', '-q', '--allow-empty', '-m', 'init')
+        _git(self.repo, 'worktree', 'add', '-q', str(self.wt))
+        self.addCleanup(importlib.reload, rc)
+        with unittest.mock.patch.object(pr, 'REPO', self.wt):
+            importlib.reload(rc)
+
+    def test_baseline_survives_worktree_remove(self):
+        with unittest.mock.patch.object(rc, 'CACHE_ROOT', self.cache), redirect_stdout(io.StringIO()):
+            rc.cmd_baseline(['demo-skill'])
+        _git(self.repo, 'worktree', 'remove', '--force', str(self.wt))
+
+        saved = self.repo / '_staging' / 'reimport-baselines' / 'demo-skill.json'
+        self.assertEqual(json.loads(saved.read_text(encoding='utf-8'))['skill'], 'demo-skill')
+
+    def test_repo_stays_the_checkouts_own_root(self):
+        self.assertEqual(rc.REPO, self.wt)
 
 
 if __name__ == '__main__':
