@@ -21,7 +21,7 @@ Usage
 -----
     python tools/reimport_correlate.py baseline <skill> [<skill> ...]
         Record each skill's current cache-directory CreationTime to
-        _staging/reimport-baselines/<skill>.json. Run this during the
+        <primary checkout>/_staging/reimport-baselines/<skill>.json. Run this during the
         pre-packaging pre-check, before presenting the Save-skill button.
 
     python tools/reimport_correlate.py verify <skill> [<skill> ...] [--baseline TIME]
@@ -65,9 +65,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from pending_reimport import CACHE_ROOT, REPO  # noqa: E402
+from pending_reimport import CACHE_ROOT, REPO, _primary_checkout  # noqa: E402
 
-BASELINE_DIR = REPO / '_staging' / 'reimport-baselines'
+# The PRIMARY checkout's _staging/, never a worktree's: a baseline taken during a
+# packaging pre-check in a worktree must survive `git worktree remove` to be read
+# back by `verify` after the reimport (same fix as pending_reimport's ledger, #78).
+BASELINE_DIR = _primary_checkout(REPO) / '_staging' / 'reimport-baselines'
 
 LOCAL_LOG = Path(r'C:\Users\Owner\AppData\Local\Claude\Logs\main.log')
 ROAMING_LOG = Path(r'C:\Users\Owner\AppData\Roaming\Claude\logs\main.log')
