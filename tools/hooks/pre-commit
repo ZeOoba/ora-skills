@@ -50,8 +50,10 @@ fi
 # prevent. Four such violations surfaced in the nine days to 2026-08-03 (acquisition-
 # underwriting v4.5 and v4.6; disposition-analysis and parcel-data-recovery), every one of
 # them caught late and by hand. This runs first, warns loudly, and rescues the
-# about-to-be-clobbered cache copy to _staging/repo-first-rescue/. Advisory only -- exits 0
-# on every path, including its own errors, so it can never block a commit.
+# about-to-be-clobbered cache copy to the PRIMARY checkout's _staging/repo-first-rescue/ --
+# even when this commit runs in a git worktree, so `git worktree remove` can't destroy the
+# only surviving copy (see repo_first_check.STAGING). Advisory only -- exits 0 on every
+# path, including its own errors, so it can never block a commit.
 python tools/repo_first_check.py --check-staged
 
 # Check 4 (2026-07-26): sync every staged skill's shipped files into whichever AppData
