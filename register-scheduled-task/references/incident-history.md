@@ -68,6 +68,14 @@ The four sections below were moved verbatim out of SKILL.md § Bounded pause at 
 
 It replaces hand-writing a `*_FleetPause_RestoreLedger*.json`, which was done for the 08-17 pause and never for the 09-07 one. Root incident: 2026-09-12, the first `ora-health-guard` run after the 09-07→09-11 pause reported 5 FAILs; 3 were the pause itself, and the run had to reason them out by hand.
 
+## Money-moving host outage (2026-08-29 → 09-01, step 3b)
+
+Root incident: `ora-pm-monthly-billing` (cron `10 11 1 * *`) missed its ONLY monthly fire inside the 2026-08-29→09-01 host outage — every trigger it had lived on the laptop whose downtime WAS the outage, and `fleet-status.py` read it as "0 overdue" for 25h (Automation Audit Rev 21, R21-2 / R21-4). Moved here verbatim from SKILL.md step 3b at v2.29 (body-size cap).
+
+## Fire-time gap (2026-08-12, step 4c)
+
+Root incident: `ora-psa-drift-watch`, registered 2026-08-12 (a Wednesday, after a 42+-minute permission-request delay pushed registration past its own 1:30 PM Wednesday slot) — it silently sat until the following Wednesday with nothing flagging the wait; the cron-collision fix that eventually touched it was found by separate investigation, not by this check. Moved here verbatim from SKILL.md step 4c at v2.29 (body-size cap).
+
 ## Voided efficacy checks (2026-08-17 → 2026-08-21 pause)
 
 Root incident: `ora-pm-ledger`'s 08-12-armed retime check and `ora-psa-drift-watch`'s same-afternoon check both fired during the 08-17→08-21 pause and reported false misses (43% miss vs. an actual 0-of-4 on eligible days); recommended to Gabriel 08-21 as question 2 of the pm-ledger efficacy report, ratified 2026-08-24.
