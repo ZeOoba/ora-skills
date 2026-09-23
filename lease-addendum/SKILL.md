@@ -1,9 +1,9 @@
 ---
 name: lease-addendum
-description: "Use when the user says: draft addendum, lease addendum, amend/amendment, extend the lease, rent change, tenant substitution, name change, novation, add/remove tenant, premises change, add a unit, guaranty exhibit, or uploads a draft addendum to an ORA lease. SOLE path for amending, extending, or modifying a lease already in effect. NOT new leases (masterlease-jurisdiction-rebase + lease-form-qc), NOT counterparty paper (legal-intelligence), NOT LOIs (loi-generation), NOT renewal letters (document-assembly). DRAFT ONLY -- outbound send needs Gabriel's confirmation."
+description: "Use when the user says: draft addendum, lease addendum, amend/amendment, extend the lease, rent change, tenant substitution, name change, novation, add/remove tenant, premises change, add a unit, guaranty exhibit, or uploads a draft addendum to an ORA lease. SOLE path for amending, extending, or modifying a lease already in effect. NOT new leases (lease-generation), NOT counterparty paper (legal-intelligence), NOT LOIs (loi-generation), NOT renewal letters (document-assembly). DRAFT ONLY -- outbound send needs Gabriel's confirmation."
 ---
 
-# Lease Addendum — Oxford Realty Advisors (v1.0)
+# Lease Addendum — Oxford Realty Advisors (v1.1)
 
 Drafts amendments and addenda to leases **already in effect**. This is the sole path for that
 document type — see Scope below for the four adjacent skills it is not.
@@ -16,7 +16,7 @@ document type — see Scope below for the four adjacent skills it is not.
 
 | If the request is... | Route to |
 |---|---|
-| A new lease on ORA paper | `masterlease-jurisdiction-rebase` (template) then `lease-form-qc` (gate) |
+| A new lease on ORA paper | `lease-generation` (runs `lease-form-qc` as its gate; `masterlease-jurisdiction-rebase` only maintains the templates) |
 | Analysis of counterparty-drafted paper, or a redline/compare of a returned addendum | `legal-intelligence` |
 | A letter of intent | `loi-generation` |
 | A renewal offer letter or other generic template | `document-assembly` |
@@ -252,7 +252,7 @@ paragraph the correct numbering/style rather than defaulting to Normal).
 ## Failure modes — when NOT to use this skill
 
 - The document is a brand-new lease, not an amendment to an in-force one → route to
-  `masterlease-jurisdiction-rebase` + `lease-form-qc`.
+  `lease-generation` (it runs `lease-form-qc` as its gate).
 - The counterparty sent back a redlined/compared version of a draft addendum →
   `legal-intelligence` Module 6 (reuse its Step 0 tracked-changes-vs-compare-tool detection,
   which itself routes to `deal-execution`'s `extract_revisions.py` — don't reimplement it here).
@@ -263,6 +263,12 @@ paragraph the correct numbering/style rather than defaulting to Normal).
   consequences.
 
 ## Changelog
+
+- **v1.1** (2026-09-23) — new-lease routing corrected in the description, the route table
+  and the failure modes: a brand-new lease goes to `lease-generation` (the new-lease
+  production skill, which runs `lease-form-qc` as its gate), not to
+  `masterlease-jurisdiction-rebase` + `lease-form-qc`. Matches the CLAUDE.md tie-break.
+  No module, doctrine or QC-gate change.
 
 - **v1.0** (2026-08-14) — initial build. Structural model: `loi-generation` (sole-path skill,
   state overlays, mandatory QC gate, versioned DOCX + extractable-text PDF). Doctrine, modules,
