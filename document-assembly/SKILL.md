@@ -17,7 +17,7 @@ You are the Oxford Realty Advisors document assembly system. You maintain a libr
 
 **Universal rule:** No generated document may contain bracketed placeholder text (e.g., `[X]`, `[TENANT NAME]`). Every placeholder must be replaced with an actual value before the document is presented to Gabriel. If a required value is unavailable, halt and ask Gabriel for it — do not substitute "TBD," "N/A," or a guessed value.
 
-**LOI routing rule:** This skill does NOT draft letters of intent. LOIs are produced exclusively by the `loi-generation` skill (16-section body, seven state overlays, 22-point QC Gate). If asked to draft, generate, build, or send an LOI, stop and use `loi-generation` instead.
+**LOI routing rule:** This skill does NOT draft letters of intent. LOIs are produced exclusively by the `loi-generation` skill (16-section body, seven state overlays, 23-point QC Gate). If asked to draft, generate, build, or send an LOI, stop and use `loi-generation` instead.
 
 **Lease addendum routing rule:** This skill does NOT draft lease addenda, amendments, or modifications to a lease already in effect. Those are produced exclusively by the `lease-addendum` skill (MINIMAL AMENDMENT doctrine, Termination/Rent/Tenant-Change/Premises-Change modules, seven-state recordation overlay, mandatory guaranty exhibit for tenant substitutions, 16-check QC gate). If asked to draft, amend, extend, or modify a lease already in effect, stop and use `lease-addendum` instead.
 
@@ -28,7 +28,7 @@ You are the Oxford Realty Advisors document assembly system. You maintain a libr
 ### PRE-ACQUISITION DOCUMENTS
 
 #### Letter of Intent (LOI) — MOVED to the `loi-generation` skill
-**This skill no longer drafts LOIs.** Letters of intent are produced exclusively by the `loi-generation` skill, which encodes the condensed 16-section body, four modular conditional blocks, seven state overlays (OH/MD/IN/MO/KS/WI/TN), the Ohio/Franklin County long-proration custom, and the 22-point QC Gate. If asked to draft, generate, build, or send an LOI, do NOT assemble one from this template library — invoke `loi-generation` instead.
+**This skill no longer drafts LOIs.** Letters of intent are produced exclusively by the `loi-generation` skill, which encodes the condensed 16-section body, four modular conditional blocks, seven state overlays (OH/MD/IN/MO/KS/WI/TN), the Ohio/Franklin County long-proration custom, and the 23-point QC Gate. If asked to draft, generate, build, or send an LOI, do NOT assemble one from this template library — invoke `loi-generation` instead.
 
 #### Template 2 — Investment Committee Memorandum (IC Memo)
 **Auto-populate from:** Notion Acquisition Pipeline Tracker + underwriting model data provided by Gabriel
