@@ -340,15 +340,15 @@ it — as of the last audit, no ORA-specific skill remained plugin-only-and-unve
       (`python -m pip install pymupdf`); without it `test_package_census.py` prints
       `SKIP … skipped=7`, which is a missing dependency, not a pass:
       ```bash
-      for f in tools/test_*.py; do out=$(python "$f" 2>&1) || echo "FAIL $f"; grep -o "skipped=[0-9]*" <<<"$out" | sed "s|^|SKIP $f |"; done
+      bash tools/run_suite.sh
       ```
       (2026-09-09: `investor-relations` was retired without this, and `main` stayed red
       until #60 added the `RETIRED` map that step 3 now maintains.)
 
       Since #63 this is also enforced: `.github/workflows/tools-tests.yml` runs the same
-      suite on every push to any branch and fails on any failing test **or** any skipped
+      script on every push to any branch and fails on any failing test **or** any skipped
       one (baseline is zero skips; a genuinely-needed skip goes in that workflow's
-      `ALLOWED_SKIPS` as an exact-count `path=N` entry with a reason — since #72 the only
+      `ALLOWED_SKIPS` in `tools/run_suite.sh` as an exact-count `path=N` entry with a reason — since #72 the only
       one is `tools/test_package_census.py=1`, its Windows-only long-path test, which
       skips on ubuntu). Run it locally anyway — CI tells you after the push,
       and it runs on `ubuntu-latest` while this repo is developed on Windows, so a
