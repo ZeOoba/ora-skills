@@ -99,10 +99,22 @@ WRITABLE_VERDICTS = ('IN-SYNC', 'REPO-AHEAD')
 
 
 def cache_verdict(skill: str, repo_root: Path, mirror: Path) -> str:
-    """repo_first_check's direction verdict for one installed mirror dir."""
+    """Direction verdict for one installed mirror dir, over the files this sync
+    would WRITE. repo_first_check.classify_skill headlines the worst file, and it
+    ranks a cache-only file (REPO-MISSING) as high as CACHE-AHEAD -- but the additive
+    sync never writes or deletes a cache-only file, so counting it would block the
+    skill forever after any shipped-file deletion or rename (review finding
+    2026-09-23; lease-form-qc was already stuck on cached .pytest_cache junk).
+    REPO-MISSING rows are therefore excluded; every other per-file verdict counts."""
     from repo_first_check import classify_skill
-    verdict, _ = classify_skill(skill, repo_root=repo_root, cache_root=mirror.parent)
-    return verdict
+    verdict, per_file = classify_skill(skill, repo_root=repo_root, cache_root=mirror.parent)
+    if not per_file:
+        return verdict
+    shipped = [v for _, v in per_file if v != 'REPO-MISSING']
+    unsafe = [v for v in shipped if v not in WRITABLE_VERDICTS]
+    if unsafe:
+        return unsafe[0]
+    return 'REPO-AHEAD' if 'REPO-AHEAD' in shipped else 'IN-SYNC'
 
 
 def _git(*args: str) -> str:
@@ -200,7 +212,7 @@ def check_staged(files: list[str] | None = None) -> int:
     dirs = staged_skill_dirs(files)
     if dirs and not is_canonical_checkout():
         print('sync_appdata_mirror: not the primary checkout on main -- runtime cache NOT '
-              'written for ' + ', '.join(d.name for d in dirs) + ' (syncs after merge to main).')
+              'written for ' + ', '.join(d.name for d in dirs) + ' (it syncs when the change reaches main in the primary checkout, via post-merge).')
         return 0
     for skill_dir in dirs:
         try:

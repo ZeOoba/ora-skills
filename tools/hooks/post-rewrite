@@ -10,5 +10,6 @@ python tools/sync_local_skills_mirror.py --all 2>&1 || true
 # pre-commit hook, so Check 4 never sees skills that arrive this way. Same gates as
 # Check 4: primary checkout on main only, and never over a cache that is ahead of or
 # divergent from the repo.
-python tools/sync_appdata_mirror.py --changed-range ORIG_HEAD HEAD 2>&1 || true
+# Skip amend: it does not move ORIG_HEAD, and pre-commit Check 4 already ran for it.
+[ "$1" = amend ] || python tools/sync_appdata_mirror.py --changed-range ORIG_HEAD HEAD 2>&1 || true
 exit 0
