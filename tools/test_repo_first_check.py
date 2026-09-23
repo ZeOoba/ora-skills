@@ -396,10 +396,79 @@ class RunIntegration(FixtureTestCase):
         self.assertEqual(code, 0)
         entries = read_entries(self.ledger)
         self.assertIn('demo-skill', entries)
-        rescued = self.rescue_dir / 'demo-skill' / 'scripts' / 'run.py'
+        rescued = rfc._newest_rescue(self.rescue_dir / 'demo-skill') / 'scripts' / 'run.py'
         self.assertTrue(rescued.is_file())
         self.assertEqual(rescued.read_text(encoding='utf-8'), 'v2-never-committed\n')
         self.assertIn('Rescued the cache copy', stderr)
+
+    def test_ledger_write_failure_is_reported_and_still_exits_0(self):
+        # The tool never blocks (module docstring; the doctrine guard relies on exit 0).
+        # write_entries can now raise PermissionError after its bounded retry when a
+        # reader holds the ledger, so run() must degrade that to a warning.
+        _commit(self.repo, 'demo-skill/SKILL.md', 'name: demo-skill\n', 'init')
+        _commit(self.repo, 'demo-skill/scripts/run.py', 'v1\n', 'add script')
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'name: demo-skill\n')
+        _write(self.cache / 'demo-skill' / 'scripts' / 'run.py', 'v2-never-committed\n')
+
+        with mock.patch.object(rfc, 'record_ledger', side_effect=PermissionError(13, 'locked')):
+            code, stderr = self._run(check_staged=False)
+
+        self.assertEqual(code, 0)
+        self.assertIn('ledger write failed', stderr)
+        self.assertFalse(self.ledger.exists())
+
+
+class RescueNeverOverwrites(FixtureTestCase):
+    """Every checkout's pre-commit and sweep now share ONE rescue dir (the primary's),
+    and a rescue is the only surviving copy of clobbered cache content. A later rescue
+    of different content must never overwrite an earlier one, nor leave a half-copied
+    mix of two builds (merge-gate race finding F2)."""
+
+    def setUp(self):
+        super().setUp()
+        self.rescue_dir = self.tmp / 'rescue'
+
+    def _rescue(self, rels):
+        import contextlib
+        import io
+        with contextlib.redirect_stderr(io.StringIO()):
+            return rfc.rescue('demo-skill', rels, cache_root=self.cache,
+                              rescue_dir=self.rescue_dir)
+
+    def test_a_later_different_rescue_keeps_the_earlier_one(self):
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'X: platform edit\n')
+        _write(self.cache / 'demo-skill' / 'references' / 'notes.md', 'X-notes\n')
+        first = self._rescue(['SKILL.md', 'references/notes.md'])
+        (self.cache / 'demo-skill' / 'references' / 'notes.md').unlink()
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'Z: another build\n')
+
+        second = self._rescue(['SKILL.md'])
+
+        self.assertNotEqual(first, second)
+        self.assertEqual((first / 'SKILL.md').read_text(encoding='utf-8'), 'X: platform edit\n')
+        self.assertEqual((second / 'SKILL.md').read_text(encoding='utf-8'), 'Z: another build\n')
+        self.assertFalse((second / 'references' / 'notes.md').exists())
+
+    def test_an_identical_rescue_is_not_duplicated(self):
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'X: platform edit\n')
+
+        first = self._rescue(['SKILL.md'])
+        second = self._rescue(['SKILL.md'])
+
+        self.assertEqual(first, second)
+        self.assertEqual(len([p for p in (self.rescue_dir / 'demo-skill').iterdir()
+                              if p.is_dir()]), 1)
+
+    def test_a_failed_rescue_leaves_no_partial_copy(self):
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'X: platform edit\n')
+        first = self._rescue(['SKILL.md'])
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'Z: another build\n')
+
+        self.assertIsNone(self._rescue(['SKILL.md', 'missing.md']))
+
+        self.assertEqual((first / 'SKILL.md').read_text(encoding='utf-8'), 'X: platform edit\n')
+        self.assertEqual([p for p in (self.rescue_dir / 'demo-skill').iterdir()
+                          if p.is_dir() and not p.name.startswith('.')], [first])
 
 
 class MainBehindOrigin(unittest.TestCase):
@@ -537,10 +606,11 @@ class StagingResolvesToPrimaryCheckout(FixtureTestCase):
     def test_rescued_copy_survives_worktree_remove(self):
         _write(self.cache / 'demo-skill' / 'SKILL.md', 'cache-only content\n')
 
-        self.assertIsNotNone(rfc.rescue('demo-skill', ['SKILL.md'], cache_root=self.cache))
+        dest = rfc.rescue('demo-skill', ['SKILL.md'], cache_root=self.cache)
+        self.assertIsNotNone(dest)
         _git(self.repo, 'worktree', 'remove', '--force', str(self.wt))
 
-        rescued = self.repo / '_staging' / 'repo-first-rescue' / 'demo-skill' / 'SKILL.md'
+        rescued = self.repo / '_staging' / 'repo-first-rescue' / 'demo-skill' / dest.name / 'SKILL.md'
         self.assertEqual(rescued.read_text(encoding='utf-8'), 'cache-only content\n')
 
     def test_ledger_survives_worktree_remove(self):
