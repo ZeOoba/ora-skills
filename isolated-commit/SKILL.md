@@ -15,7 +15,7 @@ One command for landing a change you just finished writing in a shared ORA check
 - You've written and tested a change in `~/.claude`, `ora-skills`, `website-canonical`, or `oxford-command-center` and need to land it.
 - NOT for cleaning up a pile of pre-existing uncommitted files you didn't write — use `dirty-tree-triage` instead.
 - **Mixed ownership: you are about to edit, or already edited, a file another session wrote and never committed.** It is untracked on every branch, and another session's `touched-files.txt` lists it. This is not purely your own work, so apply "Foreign untracked files" below BEFORE your first edit. If you already edited without a snapshot, say so to the user and review the whole file as if it were all new, since your delta can no longer be separated.
-- NOT a substitute for the mandatory Fable/Opus independent review gate on `hooks/**`/financial/governor code (`eos-review-gate.py`) — this skill's own review step (4) is the SAME requirement generalized to repos/files that gate doesn't cover.
+- NOT a substitute for the mandatory Fable/Opus independent review gate on anything `eos-review-gate.py` gates (path classes listed in step 4) — this skill's own review step (4) is the SAME requirement generalized to repos/files that gate doesn't cover.
 
 ## Workflow
 
@@ -25,7 +25,15 @@ One command for landing a change you just finished writing in a shared ORA check
 
 3. **Stage + verify.** `git add -- <exact paths>` — never `-A`/`.`/`-a`. Then `git diff --cached --name-only` and abort if anything you didn't intend appears.
 
-4. **Independent review.** Dispatch a review agent with NO knowledge of your reasoning — diff and repo access only — to (a) re-derive every numeric/factual claim your commit message is about to make from the actual repo state, and (b) confirm the diff matches exactly the pathspec from step 3. For `hooks/**`/financial/governor code this IS `eos-review-gate.py`'s mandatory pass (pin the reviewer model, record the verdict, re-review if the diff changes after — a stale verdict does not carry over an edit). For everything else, spawn the same shape of review anyway; do not skip it just because no gate enforces it mechanically.
+4. **Independent review.** Dispatch a review agent with NO knowledge of your reasoning — diff and repo access only — to (a) re-derive every numeric/factual claim your commit message is about to make from the actual repo state, and (b) confirm the diff matches exactly the pathspec from step 3. For anything `eos-review-gate.py` gates, this IS its mandatory pass. That covers `hooks/**`, `CLAUDE.md`, `settings.json`, `*.env*`/credentials, `confidential-terms.json`, scheduled-task registries, CSP/headers, `~/.claude` config, and financial-decision/governor code. Pin the reviewer model and re-review if the diff changes afterward; a stale verdict does not carry over an edit. For everything else, spawn the same shape of review anyway; do not skip it just because no gate enforces it mechanically.
+
+   **4a. Record the verdict before committing (gated paths).** The gate blocks the commit until the verdict is recorded, even if a review already ran. Record it once, in the same session that will run the commit (artifacts are stored per session), from the root of the checkout or worktree you will commit from, with the exact step-5 invocation as `--cmd`:
+   `python "$HOME/.claude/hooks/eos-review-gate.py" --record --verdict approved --model <pinned-model-id> --notes-file <scratch-notes> --cmd "git commit -F <message-file> -- <paths>"`
+   - `--cmd` scopes the key to just this commit's paths. Without it, other sessions' dirty risk files in a shared checkout get scored in and the key never matches.
+   - `--notes-file` keeps the prose out of the command line, where an ASCII arrow reads as a redirect and trips `config-write-guard`.
+   - Run `--key` with the same `--cmd` first if you want the exact path list to hand the reviewer.
+   - The artifact is keyed to content: edit after recording and you must re-review, then record the new verdict. Never re-record without re-reviewing.
+   - Never mint `allow-unreviewed-commit` in place of recording a review that actually ran.
 
 5. **Commit.** Bare `git commit -F <message-file> -- <paths>` (a message file, not `-m`/a heredoc, sidesteps quoting fragility — see rules.md §24). Every claim in the message must trace to a command you actually ran this session.
 
@@ -48,6 +56,7 @@ An untracked file that another session wrote is that session's work, even after 
 |---|---|---|
 | Stage | `git add -A` / `git add .` / `git commit -a` | `git add -- <exact paths>`, verify with `git diff --cached --name-only` |
 | Review | Skip it because "it's a small diff" | Independent agent re-derives claims + checks pathspec, every time |
+| Gated commit | Commit right after the review and hit the block | `eos-review-gate.py --record ... --notes-file ... --cmd "<exact commit>"` first (step 4a) |
 | Gate failure | Retry blindly or override immediately | Run the failing test directly first; distinguish flake/pre-existing from real regression |
 | Override token | Mint it yourself on a hunch | Only after the user's explicit in-turn authorization, one confirmed reason |
 | Commit message | Inline `-m`/heredoc for anything nontrivial | A message file via `-F` |
