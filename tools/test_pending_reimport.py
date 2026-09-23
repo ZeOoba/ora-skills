@@ -1151,5 +1151,56 @@ class CmdRecordDeliberatelyUnpublishedWarning(unittest.TestCase):
         self.assertNotIn('ordinary-skill', warning_line)
 
 
+class LedgerResolvesToPrimaryCheckout(FixtureTestCase):
+    """The ledger is untracked, gitignored state. Resolved relative to a git
+    worktree it lands in that worktree's _staging/ and is destroyed by
+    `git worktree remove` (2026-09-23: isolated-commit #77's entry was stranded
+    that way). It must resolve to the PRIMARY checkout that every worktree shares."""
+
+    def setUp(self):
+        super().setUp()
+        _git(self.repo, 'init', '-q')
+        _git(self.repo, '-c', 'user.name=t', '-c', 'user.email=t@t',
+             'commit', '-q', '--allow-empty', '-m', 'init')
+
+    def tearDown(self):
+        # git object files are read-only on Windows; a plain rmtree fails on them
+        # silently (ignore_errors) and leaks the fixture.
+        for p in Path(pr._win_long(self.tmp)).rglob('*'):
+            try:
+                os.chmod(p, 0o700)
+            except OSError:
+                pass
+        super().tearDown()
+
+    def test_worktree_resolves_to_primary_checkout(self):
+        wt = self.tmp / 'wt'
+        _git(self.repo, 'worktree', 'add', '-q', str(wt))
+        self.assertEqual(pr._primary_checkout(wt).resolve(), self.repo.resolve())
+
+    def test_ledger_path_from_worktree_lands_in_primary_staging(self):
+        wt = self.tmp / 'wt'
+        _git(self.repo, 'worktree', 'add', '-q', str(wt))
+        self.assertEqual(pr._ledger_path(wt).resolve(),
+                         (self.repo / '_staging' / 'PENDING_REIMPORT.md').resolve())
+
+    def test_primary_checkout_resolves_to_itself(self):
+        self.assertEqual(pr._primary_checkout(self.repo).resolve(), self.repo.resolve())
+
+    def test_non_git_dir_falls_back_to_itself(self):
+        plain = self.tmp / 'plain'
+        plain.mkdir()
+        self.assertEqual(pr._primary_checkout(plain), plain)
+
+    def test_module_ledger_uses_ledger_path(self):
+        self.assertEqual(pr.LEDGER, pr._ledger_path(pr.REPO))
+
+    def test_old_git_echoing_unknown_option_falls_back(self):
+        # git < 2.31 prints an unrecognised rev-parse option back with exit 0.
+        fake = subprocess.CompletedProcess([], 0, stdout='--path-format=absolute\nC:/x/.git\n', stderr='')
+        with unittest.mock.patch.object(pr.subprocess, 'run', return_value=fake):
+            self.assertEqual(pr._primary_checkout(self.repo), self.repo)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
