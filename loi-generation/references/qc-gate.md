@@ -1,4 +1,4 @@
-# 22-Point QC Gate — LOI Pre-Transmission Checklist
+# 23-Point QC Gate — LOI Pre-Transmission Checklist
 
 This gate runs after document assembly and before the file is presented or shipped. Every item must pass; if any fails, fix and re-run. Do not present a failing file.
 
@@ -26,6 +26,7 @@ This gate runs after document assembly and before the file is presented or shipp
 | 20 | If concealment overlay active (Rule 0c): leak-check confirms zero occurrences of "1031" / "exchange" / "drop-and-swap" | Grep final document text for each term — must return zero |
 | 21 | Deposit-timing consistency: all Deposit due-window mentions resolve from `{{EMD_DUE_DAYS_WORDS}}` and are identical in the final text | Grep for every deposit-due mention; confirm same value throughout |
 | 22 | Vacant deals: preservation covenant present; casualty threshold "five percent (5%) of the Purchase Price" survived CONDENSED compression | Visual inspection of Continued Operations / Casualty sections |
+| 23 | **Offer ≤ Walk Price (hard fail).** `ORA Offer Price` does not exceed the `Walk Price` from `acquisition-underwriting`; an overage passes only against a ratified Exception Register entry | Compare the two figures before saving. On FAIL, refuse to save and report the offer, the walk price, and the $ and % gap. The PDF helper below cannot check this (the walk price is not in the document), so verify it by hand every run |
 
 ---
 
