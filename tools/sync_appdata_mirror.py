@@ -30,6 +30,13 @@ skill_source_files(). A destructive two-way sync risks deleting installer
 metadata this module has no visibility into; an additive copy still closes
 the actual gap (stale/missing content after a repo edit) without that risk.
 
+Write gates (2026-09-23): the cache is written only (a) from the PRIMARY
+checkout with main checked out -- never a linked worktree or feature branch --
+and (b) into a mirror whose repo_first_check direction verdict is IN-SYNC or
+REPO-AHEAD. Anything else (CACHE-AHEAD, DIVERGENT, REPO-MISSING,
+MAIN-BEHIND-ORIGIN, UNKNOWN) is reported and left untouched: the cache is what
+Cowork loads, so rescuing an overwritten copy afterwards is not enough.
+
 Never blocks a commit: file-copy failures (permissions, a locked file
 mid-Cowork-read) are a mirror-availability problem, not a content-quality
 problem — this prints what it did/skipped and always exits 0. Frontmatter
@@ -41,6 +48,10 @@ CLI (also the tools/hooks/pre-commit entry point):
     --check-staged   sync every skill dir with staged changes (pre-commit's
                       actual call — mirrors package_skills.py's own
                       --check-staged convention)
+    --changed-range OLD NEW
+                      sync skills whose shipped files changed between two commits
+                      (post-merge / post-rewrite: a merge or fast-forward on main
+                      runs no pre-commit hook)
     skill ...         sync specific named skill dirs regardless of git state
                       (no args and no --check-staged: sync every tracked
                       skill dir, for a manual full-repo re-sync)
@@ -49,6 +60,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -78,10 +90,46 @@ def discover_mirror_dirs(skill: str, *, appdata: Path | None = None) -> list[Pat
     return sorted(p for p in base.glob(f'*/*/skills/{skill}') if p.is_dir())
 
 
+# Directions in which overwriting the cache is safe: it holds either exactly the
+# repo's content or an older point on HEAD's history. Every other verdict means the
+# cache holds something the repo does not (a platform-side edit, a branch copy,
+# content from origin/main that local main lacks, or an undeterminable state), and
+# writing over it destroys the only copy Cowork loads (2026-09-22 pma-qc v1.3).
+WRITABLE_VERDICTS = ('IN-SYNC', 'REPO-AHEAD')
+
+
+def cache_verdict(skill: str, repo_root: Path, mirror: Path) -> str:
+    """repo_first_check's direction verdict for one installed mirror dir."""
+    from repo_first_check import classify_skill
+    verdict, _ = classify_skill(skill, repo_root=repo_root, cache_root=mirror.parent)
+    return verdict
+
+
+def _git(*args: str) -> str:
+    return subprocess.run(['git', *args], cwd=REPO, capture_output=True, text=True,
+                          check=True).stdout.strip()
+
+
+def is_canonical_checkout() -> bool:
+    """True only in the PRIMARY checkout with `main` checked out. A linked worktree
+    (git-dir != git-common-dir) or any other branch holds unreviewed content: on
+    2026-09-23 a feature-branch commit in a worktree wrote a pre-review
+    register-scheduled-task v2.29 over a just-installed v2.28 for 11 minutes."""
+    try:
+        branch = _git('rev-parse', '--abbrev-ref', 'HEAD')
+        git_dir = Path(_git('rev-parse', '--absolute-git-dir')).resolve()
+        common = Path(_git('rev-parse', '--git-common-dir'))
+        common = (common if common.is_absolute() else REPO / common).resolve()
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    return branch == 'main' and git_dir == common
+
+
 def sync_skill(skill_dir: Path, *, appdata: Path | None = None) -> list[str]:
     """Copy skill_dir's shipped files into every existing AppData mirror for
-    it. Returns human-readable log lines (never raises for a missing
-    mirror -- that's just nothing to report beyond an informational line)."""
+    it whose direction verdict is in WRITABLE_VERDICTS. Returns human-readable
+    log lines (never raises for a missing mirror -- that's just nothing to
+    report beyond an informational line)."""
     skill = skill_dir.name
     lines: list[str] = []
     mirrors = discover_mirror_dirs(skill, appdata=appdata)
@@ -91,6 +139,14 @@ def sync_skill(skill_dir: Path, *, appdata: Path | None = None) -> list[str]:
 
     files = skill_source_files(skill, repo_root=skill_dir.parent)
     for mirror in mirrors:
+        try:
+            verdict = cache_verdict(skill, skill_dir.parent, mirror)
+        except Exception as exc:  # noqa: BLE001 - fail closed, never block the commit
+            verdict = f'UNKNOWN ({exc})'
+        if verdict not in WRITABLE_VERDICTS:
+            lines.append(f'{skill}: cache {verdict} -- NOT written ({mirror}). '
+                         f'Reconcile with repo_first_check.py before reimporting.')
+            continue
         copied = 0
         for rel, src in files.items():
             dest = mirror / rel
@@ -101,12 +157,52 @@ def sync_skill(skill_dir: Path, *, appdata: Path | None = None) -> list[str]:
     return lines
 
 
+def _sync_all(skill_dirs) -> None:
+    for skill_dir in skill_dirs:
+        try:
+            for line in sync_skill(skill_dir):
+                print(line)
+        except OSError as exc:
+            # Best-effort: a copy failure (locked file, permissions) is reported,
+            # never fatal -- see module docstring.
+            print(f'{skill_dir.name}: mirror sync skipped (non-fatal): {exc}', file=sys.stderr)
+
+
+def skills_changed_between(old: str, new: str) -> list[Path]:
+    """Skill dirs whose shipped files differ between two commits."""
+    from pending_reimport import affected_skills
+    out = _git('diff', '--name-only', old, new)
+    return [REPO / s for s in sorted(affected_skills([ln for ln in out.splitlines() if ln]))]
+
+
+def sync_changed_range(old: str, new: str) -> int:
+    """post-merge / post-rewrite entry point: a merge, pull or fast-forward on main
+    runs no pre-commit hook, so skills it brings in are synced here -- same gates.
+    Always returns 0."""
+    if not is_canonical_checkout():
+        return 0
+    try:
+        dirs = skills_changed_between(old, new)
+    except Exception as exc:  # noqa: BLE001
+        print(f'sync_appdata_mirror: could not diff {old}..{new} ({exc})', file=sys.stderr)
+        return 0
+    _sync_all(dirs)
+    return 0
+
+
 def check_staged(files: list[str] | None = None) -> int:
     """tools/hooks/pre-commit entry point: sync every skill dir with staged
-    changes. Always returns 0 -- a mirror-sync hiccup must never block a
-    commit; this is best-effort automation of a previously-manual step, not
-    a correctness gate (see check_staged() in package_skills.py for that)."""
-    for skill_dir in staged_skill_dirs(files):
+    changes, but only from the primary checkout on main. Always returns 0 -- a
+    mirror-sync hiccup must never block a commit; this is best-effort
+    automation, not a correctness gate (see check_staged() in package_skills.py
+    for that). A deferred skill is not lost: `pending_reimport.py candidates`
+    sweeps repo-vs-cache content, and post-merge syncs it once it lands."""
+    dirs = staged_skill_dirs(files)
+    if dirs and not is_canonical_checkout():
+        print('sync_appdata_mirror: not the primary checkout on main -- runtime cache NOT '
+              'written for ' + ', '.join(d.name for d in dirs) + ' (syncs after merge to main).')
+        return 0
+    for skill_dir in dirs:
         try:
             for line in sync_skill(skill_dir):
                 print(line)
@@ -120,6 +216,8 @@ def check_staged(files: list[str] | None = None) -> int:
 def main() -> None:
     if len(sys.argv) >= 2 and sys.argv[1] == '--check-staged':
         sys.exit(check_staged())
+    if len(sys.argv) == 4 and sys.argv[1] == '--changed-range':
+        sys.exit(sync_changed_range(sys.argv[2], sys.argv[3]))
 
     skills = sys.argv[1:] or [d.name for d in REPO.iterdir() if d.is_dir() and is_skill_dir(d.name)]
     for skill in skills:
