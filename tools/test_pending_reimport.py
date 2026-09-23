@@ -1280,6 +1280,25 @@ class WriteEntriesIsAtomic(FixtureTestCase):
         self.assertEqual(self.ledger.read_bytes(), self.before)
         self.assertEqual([p.name for p in self.ledger.parent.iterdir()], ['LEDGER.md'])
 
+    def test_transient_lock_on_a_ledger_read_is_retried(self):
+        # os.replace makes a reader that opens mid-rename fail with PermissionError on
+        # Windows (merge-gate race finding F3: 14 of 6,000 reads under contention).
+        real_read = Path.read_text
+        failures = []
+
+        def locked_twice(path, *a, **kw):
+            if path == self.ledger and len(failures) < 2:
+                failures.append(path)
+                raise PermissionError(13, 'being used by another process')
+            return real_read(path, *a, **kw)
+
+        with unittest.mock.patch.object(Path, 'read_text', locked_twice), \
+                unittest.mock.patch.object(pr.time, 'sleep'):
+            entries = pr.read_entries(self.ledger)
+
+        self.assertEqual(len(failures), 2)
+        self.assertEqual(list(entries), ['kept-skill'])
+
     def test_successful_write_replaces_content(self):
         pr.write_entries({'new-skill': '- new-skill | pending'}, self.ledger)
 

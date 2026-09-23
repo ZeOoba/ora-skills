@@ -139,6 +139,9 @@ def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool) -> 
     if _run([str(APPEND), "--entry-file", str(entry)]).returncode:
         print("close: append FAILED -- ledger NOT cleared.")
         return 1
+    # postclick ran with --no-append, so it left the baselines in place; the install is
+    # recorded now, so use them up (a kept baseline would CONFIRM this install again).
+    _run([str(TOOLS / "reimport_correlate.py"), "consume", *skills])
     if clear:
         for s in skills:
             _run([str(TOOLS / "pending_reimport.py"), "clear", s])

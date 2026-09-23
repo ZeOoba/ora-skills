@@ -60,6 +60,7 @@ import re
 import shutil
 import os
 import subprocess
+import tempfile
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -413,19 +414,47 @@ def record_ledger(findings, ledger_path: Path = LEDGER) -> list[str]:
     return sorted(set(existing) - set(entries))
 
 
+_RESCUE_RUN = re.compile(r'^\d{8}T\d{12}Z-')
+
+
+def _newest_rescue(skill_dir: Path) -> Path | None:
+    if not skill_dir.is_dir():
+        return None
+    runs = sorted(p for p in skill_dir.iterdir() if p.is_dir() and _RESCUE_RUN.match(p.name))
+    return runs[-1] if runs else None
+
+
 def rescue(skill: str, rels: list[str], cache_root: Path = CACHE_ROOT,
-           rescue_dir: Path = RESCUE_DIR) -> Path | None:
-    dest = rescue_dir / skill
+           rescue_dir: Path = RESCUE_DIR, checkout: str = REPO.name) -> Path | None:
+    """Copy the about-to-be-clobbered cache files into their OWN
+    `<rescue_dir>/<skill>/<UTC timestamp>-<checkout>/` dir. Every checkout's pre-commit
+    and sweep share rescue_dir (STAGING), and a rescue is the only surviving copy, so a
+    later rescue must never overwrite an earlier one. The copy is built under a
+    dot-prefixed temp dir and renamed into place, so a failed copy never leaves a
+    half-rescue; content identical to the newest rescue reuses that dir."""
+    skill_dir = rescue_dir / skill
+    tmp = None
     try:
-        dest.mkdir(parents=True, exist_ok=True)
-        for rel in rels:
-            src = Path(cache_root) / skill / rel
-            tgt = dest / rel
+        data = {rel: _read_bytes_long(Path(cache_root) / skill / rel) for rel in rels}
+        newest = _newest_rescue(skill_dir)
+        if newest and all((newest / rel).is_file() and (newest / rel).read_bytes() == b
+                          for rel, b in data.items()):
+            return newest
+        stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+        name = f"{stamp}-{re.sub(r'[^A-Za-z0-9._-]', '_', checkout)}"
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        tmp = Path(tempfile.mkdtemp(prefix=f'.tmp-{name}-', dir=skill_dir))
+        for rel, b in data.items():
+            tgt = tmp / rel
             tgt.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(_win_long(src), tgt)  # long-path-safe source read
-        return dest
+            tgt.write_bytes(b)
+        final = skill_dir / name
+        os.rename(tmp, final)
+        return final
     except OSError as exc:                # never let a rescue failure block anything
-        print(f'repo_first_check: rescue copy failed for {skill}: {exc}', file=sys.stderr)
+        # A temp dir that got this far may hold the only copy -- leave it, say where.
+        kept = f' (partial copy kept at {tmp})' if tmp is not None and tmp.exists() else ''
+        print(f'repo_first_check: rescue copy failed for {skill}: {exc}{kept}', file=sys.stderr)
         return None
 
 
@@ -496,7 +525,8 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
             if v in {bv for _, bv in bad}:
                 print(f'   {fix[v]}', file=sys.stderr)
         print('   The mirror sync that runs next WILL overwrite it.', file=sys.stderr)
-        dest = rescue(skill, [rel for rel, _ in bad], cache_root, rescue_dir)
+        dest = rescue(skill, [rel for rel, _ in bad], cache_root, rescue_dir,
+                      checkout=Path(repo_root).resolve().name)
         if dest:
             print(f'   Rescued the cache copy -> {dest}', file=sys.stderr)
             print('   Reconcile it into the repo before relying on either store.', file=sys.stderr)
@@ -515,13 +545,19 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
         # currently committing to, so it's the only mode that owns this ledger. Safe
         # to call unconditionally here: the cache-reachability guard above already
         # returned before this point if cache_root were unreachable.
-        cleared = record_ledger(findings, ledger_path)
-        if cleared:
-            noun = 'entry' if len(cleared) == 1 else 'entries'
-            print(f'repo_first_check: cleared {len(cleared)} resolved ledger {noun} '
-                  f'-> {ledger_path.name}: {", ".join(cleared)}')
-        elif findings:
-            print(f'repo_first_check: {len(findings)} skill(s) recorded -> {ledger_path}')
+        try:
+            cleared = record_ledger(findings, ledger_path)
+        except OSError as exc:
+            # Never blocks: write_entries re-raises a lock that outlasts its retry.
+            print(f'repo_first_check: ledger write failed ({exc}) -- {ledger_path.name} '
+                  f'left untouched; findings above still stand', file=sys.stderr)
+        else:
+            if cleared:
+                noun = 'entry' if len(cleared) == 1 else 'entries'
+                print(f'repo_first_check: cleared {len(cleared)} resolved ledger {noun} '
+                      f'-> {ledger_path.name}: {", ".join(cleared)}')
+            elif findings:
+                print(f'repo_first_check: {len(findings)} skill(s) recorded -> {ledger_path}')
 
     behind = sorted(s for s, v, _ in all_results if v == MAIN_BEHIND)
     if behind and not quiet:
