@@ -8,14 +8,15 @@ name: tools tests
 # retirement check in README step 7 documents running this suite; this workflow
 # enforces it.
 #
-# The job fails on any failing test file AND on any skipped test: the suite's
-# skip baseline is zero, and a skip is exactly how the rent-comp breakage hid.
-# If a skip is ever legitimately needed, add it to ALLOWED_SKIPS below with a
-# reason rather than loosening the gate.
+# The gate logic lives in tools/run_suite.sh -- the same script README step 7
+# runs locally. It fails on any failing test file AND on any skipped test (zero
+# baseline); a legitimately-needed skip goes in that script's ALLOWED_SKIPS as an
+# exact-count path=N entry with a reason, never by loosening the gate.
 #
 # The tests build synthetic fixtures and need no secrets. They are stdlib-only
 # except test_package_census.py, which needs PyMuPDF (installed below) -- without
-# it its 7 tests skip and trip the zero-skip gate. Note: claude-ci-fix.yml does NOT fire on this workflow's failures --
+# it its 7 tests skip and trip the zero-skip gate.
+# Note: claude-ci-fix.yml does NOT fire on this workflow's failures --
 # GitHub never triggers workflows from check suites created by Actions itself.
 
 on:
@@ -44,40 +45,4 @@ jobs:
         run: python -m pip install --disable-pip-version-check pymupdf
 
       - name: Run tools/test_*.py
-        env:
-          # Space-separated `path=N` entries: that file may report exactly
-          # skipped=N, no more. Any other skip count still fails.
-          #   test_package_census.py=1 -- test_path_over_260_characters is
-          #   skipUnless(os.name == "nt"); it cannot run on ubuntu.
-          ALLOWED_SKIPS: 'tools/test_package_census.py=1'
-        run: |
-          failed=()
-          skipped=()
-          {
-            echo '| Test file | Result |'
-            echo '|---|---|'
-          } >> "$GITHUB_STEP_SUMMARY"
-          for f in tools/test_*.py; do
-            echo "::group::$f"
-            set +e
-            out=$(python "$f" 2>&1)
-            rc=$?
-            set -e
-            printf '%s\n' "$out"
-            echo "::endgroup::"
-            summary=$(printf '%s\n' "$out" | grep -E '^(Ran [0-9]+ tests? in|OK|FAILED|all checks passed)' | tr '\n' ' ' || true)
-            skip=$(printf '%s\n' "$out" | grep -o 'skipped=[0-9]*' | head -1 || true)
-            if [ "$rc" -ne 0 ]; then
-              failed+=("$f")
-              echo "::error file=$f::exit $rc -- $summary"
-              echo "| \`$f\` | FAIL (exit $rc) $summary |" >> "$GITHUB_STEP_SUMMARY"
-            elif [ -n "$skip" ] && [[ " $ALLOWED_SKIPS " != *" $f=${skip#skipped=} "* ]]; then
-              skipped+=("$f")
-              echo "::error file=$f::$skip -- the skip baseline is zero; a skip hid the rent-comp retirement breakage"
-              echo "| \`$f\` | SKIP ($skip) $summary |" >> "$GITHUB_STEP_SUMMARY"
-            else
-              echo "| \`$f\` | ok $summary |" >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
-          echo "failed: ${#failed[@]}  unallowed skips: ${#skipped[@]}"
-          [ "${#failed[@]}" -eq 0 ] && [ "${#skipped[@]}" -eq 0 ]
+        run: bash tools/run_suite.sh
