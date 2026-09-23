@@ -19,3 +19,4 @@ tools/hooks/* text eol=lf
 # Display/search only -- git itself, the tools/ suite (which asserts on _archive/ contents)
 # and every local checkout are unaffected.
 _archive/** linguist-generated=true
+*.sh text eol=lf
