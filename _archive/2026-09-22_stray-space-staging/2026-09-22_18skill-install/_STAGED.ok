@@ -1,0 +1,116 @@
+{
+  "staged_at": "2026-09-22T22:49:38Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\ _staging\\2026-09-22_18skill-install",
+  "packages": [
+    {
+      "skill": "capex-budgeting",
+      "file": "capex-budgeting.skill",
+      "bytes": 2078
+    },
+    {
+      "skill": "cowork-settings",
+      "file": "cowork-settings.skill",
+      "bytes": 961964
+    },
+    {
+      "skill": "deal-retirement",
+      "file": "deal-retirement.skill",
+      "bytes": 9525
+    },
+    {
+      "skill": "personal-portfolio",
+      "file": "personal-portfolio.skill",
+      "bytes": 3435
+    },
+    {
+      "skill": "acquisition-underwriting-eval-harness",
+      "file": "acquisition-underwriting-eval-harness.skill",
+      "bytes": 209354
+    },
+    {
+      "skill": "automation-health-monitor",
+      "file": "automation-health-monitor.skill",
+      "bytes": 15423
+    },
+    {
+      "skill": "capital-asset-register",
+      "file": "capital-asset-register.skill",
+      "bytes": 4774
+    },
+    {
+      "skill": "capital-bid-comparison",
+      "file": "capital-bid-comparison.skill",
+      "bytes": 7082
+    },
+    {
+      "skill": "county-parcel-screen",
+      "file": "county-parcel-screen.skill",
+      "bytes": 88737
+    },
+    {
+      "skill": "dirty-tree-triage",
+      "file": "dirty-tree-triage.skill",
+      "bytes": 11316
+    },
+    {
+      "skill": "insurance-climate-risk-comparison",
+      "file": "insurance-climate-risk-comparison.skill",
+      "bytes": 7630
+    },
+    {
+      "skill": "isolated-commit",
+      "file": "isolated-commit.skill",
+      "bytes": 3599
+    },
+    {
+      "skill": "masterlease-jurisdiction-rebase",
+      "file": "masterlease-jurisdiction-rebase.skill",
+      "bytes": 67812
+    },
+    {
+      "skill": "owner-outreach",
+      "file": "owner-outreach.skill",
+      "bytes": 15987
+    },
+    {
+      "skill": "pma-qc",
+      "file": "pma-qc.skill",
+      "bytes": 43354
+    },
+    {
+      "skill": "register-scheduled-task",
+      "file": "register-scheduled-task.skill",
+      "bytes": 25696
+    },
+    {
+      "skill": "settlement-basis-extraction",
+      "file": "settlement-basis-extraction.skill",
+      "bytes": 12492
+    },
+    {
+      "skill": "vendor-management",
+      "file": "vendor-management.skill",
+      "bytes": 33525
+    }
+  ],
+  "last_batch": [
+    "capex-budgeting",
+    "cowork-settings",
+    "deal-retirement",
+    "personal-portfolio",
+    "acquisition-underwriting-eval-harness",
+    "automation-health-monitor",
+    "capital-asset-register",
+    "capital-bid-comparison",
+    "county-parcel-screen",
+    "dirty-tree-triage",
+    "insurance-climate-risk-comparison",
+    "isolated-commit",
+    "masterlease-jurisdiction-rebase",
+    "owner-outreach",
+    "pma-qc",
+    "register-scheduled-task",
+    "settlement-basis-extraction",
+    "vendor-management"
+  ]
+}
