@@ -276,6 +276,15 @@ class RealClassifierIntegrationTests(unittest.TestCase):
         self.assertIn('v3', self._mirror_skill_md())
         self.assertTrue((self.mirror / 'scripts' / 'old.py').exists())  # additive: never deleted
 
+    def test_platform_edit_to_a_script_blocks_even_beside_a_cache_only_file(self):
+        (self.mirror / 'scripts' / 'old.py').write_text('print("platform")\n', encoding='utf-8')
+        (self.mirror / 'scripts' / 'junk.py').write_text('cache only\n', encoding='utf-8')
+        (self.skill / 'SKILL.md').write_text('---\nname: my-skill\ndescription: x\n---\nv2\n', encoding='utf-8')
+        lines = sync_skill(self.skill, appdata=self.appdata)
+        self.assertIn('CACHE-AHEAD', lines[0], lines)
+        self.assertNotIn('v2', self._mirror_skill_md())
+        self.assertIn('platform', (self.mirror / 'scripts' / 'old.py').read_text(encoding='utf-8'))
+
     def test_uncommitted_platform_edit_is_not_overwritten(self):
         (self.mirror / 'SKILL.md').write_text('---\nname: my-skill\ndescription: x\n---\nPLATFORM EDIT\n', encoding='utf-8')
         (self.skill / 'SKILL.md').write_text('---\nname: my-skill\ndescription: x\n---\nv2\n', encoding='utf-8')
