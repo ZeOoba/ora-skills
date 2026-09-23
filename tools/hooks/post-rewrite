@@ -6,4 +6,9 @@
 # repo v4.22). Sweep every existing mirror against the working tree. main-branch only
 # (enforced in the script); overwritten mirror files are backed up first. Non-blocking.
 python tools/sync_local_skills_mirror.py --all 2>&1 || true
+# Runtime cache (what Cowork loads), 2026-09-23: a merge / pull / fast-forward runs no
+# pre-commit hook, so Check 4 never sees skills that arrive this way. Same gates as
+# Check 4: primary checkout on main only, and never over a cache that is ahead of or
+# divergent from the repo.
+python tools/sync_appdata_mirror.py --changed-range ORIG_HEAD HEAD 2>&1 || true
 exit 0
