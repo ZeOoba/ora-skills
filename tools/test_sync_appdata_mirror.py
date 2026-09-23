@@ -232,5 +232,57 @@ class CanonicalCheckoutGateTests(unittest.TestCase):
         changed.assert_not_called()
 
 
+class RealClassifierIntegrationTests(unittest.TestCase):
+    """End-to-end through the REAL repo_first_check.classify_skill on a throwaway git
+    repo (review finding 2026-09-23: patched verdicts hid a skill-level REPO-MISSING
+    that permanently disabled syncing after any shipped-file deletion)."""
+
+    def setUp(self):
+        import subprocess
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.repo = self.tmp / 'repo'
+        self.skill = self.repo / 'my-skill'
+        (self.skill / 'scripts').mkdir(parents=True)
+        self.git = lambda *a: subprocess.run(['git', '-C', str(self.repo), *a], check=True,
+                                             capture_output=True)
+        self.git('init', '-q')
+        for k, v in (('user.email', 't@t.invalid'), ('user.name', 't'), ('core.autocrlf', 'false')):
+            self.git('config', k, v)
+        (self.skill / 'SKILL.md').write_text('---\nname: my-skill\ndescription: x\n---\nv1\n', encoding='utf-8')
+        (self.skill / 'scripts' / 'old.py').write_text('print(1)\n', encoding='utf-8')
+        self.git('add', '-A')
+        self.git('commit', '-q', '-m', 'v1')
+        self.appdata = self.tmp / 'appdata'
+        self.mirror = self.appdata / 'Claude' / 'local-agent-mode-sessions' / 'skills-plugin' / 'u1' / 'u2' / 'skills' / 'my-skill'
+        shutil.copytree(self.skill, self.mirror)  # cache == HEAD
+
+    def _mirror_skill_md(self):
+        return (self.mirror / 'SKILL.md').read_text(encoding='utf-8')
+
+    def test_ordinary_edit_is_written(self):
+        (self.skill / 'SKILL.md').write_text('---\nname: my-skill\ndescription: x\n---\nv2\n', encoding='utf-8')
+        lines = sync_skill(self.skill, appdata=self.appdata)
+        self.assertIn('synced', lines[0], lines)
+        self.assertIn('v2', self._mirror_skill_md())
+
+    def test_deleted_shipped_file_does_not_disable_future_syncs(self):
+        (self.skill / 'scripts' / 'old.py').unlink()
+        self.git('add', '-A')
+        self.git('commit', '-q', '-m', 'drop old.py')
+        (self.skill / 'SKILL.md').write_text('---\nname: my-skill\ndescription: x\n---\nv3\n', encoding='utf-8')
+        lines = sync_skill(self.skill, appdata=self.appdata)
+        self.assertIn('synced', lines[0], lines)
+        self.assertIn('v3', self._mirror_skill_md())
+        self.assertTrue((self.mirror / 'scripts' / 'old.py').exists())  # additive: never deleted
+
+    def test_uncommitted_platform_edit_is_not_overwritten(self):
+        (self.mirror / 'SKILL.md').write_text('---\nname: my-skill\ndescription: x\n---\nPLATFORM EDIT\n', encoding='utf-8')
+        (self.skill / 'SKILL.md').write_text('---\nname: my-skill\ndescription: x\n---\nv2\n', encoding='utf-8')
+        lines = sync_skill(self.skill, appdata=self.appdata)
+        self.assertIn('NOT written', lines[0], lines)
+        self.assertIn('PLATFORM EDIT', self._mirror_skill_md())
+
+
 if __name__ == '__main__':
     unittest.main()
