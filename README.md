@@ -283,7 +283,8 @@ consumed by `acquisition-underwriting`, `daily-brief`, `deal-comparison`, and
   branch-relative and each sweep replaces the ledger). Because those dirs are shared, each
   rescue lands in its own `repo-first-rescue/<skill>/<UTC timestamp>-<checkout>/` dir
   (never overwritten), and reimport baselines are per session
-  (`reimport-baselines/<skill>/<session>.json`) and used up once the install is recorded. Built
+  (`reimport-baselines/<skill>/<session>.json`); once an install is recorded, every
+  session's baseline that predates it is used up. Built
   2026-08-04 after `masterlease-jurisdiction-rebase` drifted cache-ahead of the repo
   three times in one session, twice caught only by manual diffing because nothing ran
   this check automatically and nothing durable recorded what it found.

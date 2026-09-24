@@ -58,7 +58,6 @@ it never lets an unreachable cache root masquerade as a clean sweep (see main())
 from __future__ import annotations
 
 import re
-import shutil
 import os
 import subprocess
 import tempfile
@@ -419,6 +418,11 @@ def record_ledger(findings, ledger_path: Path = LEDGER) -> list[str]:
 _RESCUE_RUN = re.compile(r'^\d{8}T\d{12}Z-')
 
 
+def _read_with_stat(path: Path):
+    with open(_win_long(path), 'rb') as f:        # long-path-safe, like _read_bytes_long
+        return f.read(), os.fstat(f.fileno())
+
+
 def _newest_rescue(skill_dir: Path) -> Path | None:
     if not skill_dir.is_dir():
         return None
@@ -437,21 +441,28 @@ def rescue(skill: str, rels: list[str], cache_root: Path = CACHE_ROOT,
     skill_dir = rescue_dir / skill
     tmp = None
     try:
-        data = {rel: _read_bytes_long(Path(cache_root) / skill / rel) for rel in rels}
+        # Bytes AND stat from one open handle: the cache can be replaced (a concurrent
+        # Save-skill reimport, or Check 4's mirror sync) the moment the read finishes,
+        # and a second look would then abort the rescue or stamp the wrong mtime.
+        data = {rel: _read_with_stat(Path(cache_root) / skill / rel) for rel in rels}
         newest = _newest_rescue(skill_dir)
         if newest and all((newest / rel).is_file() and (newest / rel).read_bytes() == b
-                          for rel, b in data.items()):
+                          for rel, (b, _st) in data.items()):
             return newest
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
         name = f"{stamp}-{re.sub(r'[^A-Za-z0-9._-]', '_', checkout)}"
         skill_dir.mkdir(parents=True, exist_ok=True)
         tmp = Path(tempfile.mkdtemp(prefix=f'.tmp-{name}-', dir=skill_dir))
-        for rel, b in data.items():
+        for rel, (b, st) in data.items():
             tgt = tmp / rel
             tgt.parent.mkdir(parents=True, exist_ok=True)
             tgt.write_bytes(b)
-            # Keep the cache file's mtime: it records when the platform-side edit happened.
-            shutil.copystat(_win_long(Path(cache_root) / skill / rel), tgt)
+            # Keep the cache file's mtime (when the platform-side edit happened).
+            # Metadata is best-effort: it must never cost the bytes.
+            try:
+                os.utime(tgt, ns=(st.st_atime_ns, st.st_mtime_ns))
+            except OSError:
+                pass
         final = skill_dir / name
         os.rename(tmp, final)
         return final

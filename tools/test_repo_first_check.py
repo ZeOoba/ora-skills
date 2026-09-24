@@ -473,6 +473,26 @@ class RescueNeverOverwrites(FixtureTestCase):
                           if not p.name.startswith('.')], [])
         self.assertIsNone(rfc._newest_rescue(self.rescue_dir / 'demo-skill'))
 
+    def test_a_cache_replaced_after_the_read_still_rescues_everything_read(self):
+        # Round 3 MEDIUM: copystat re-stat'ed the cache after the bytes were read; a
+        # concurrent Save-skill reimport replacing the dir in that window aborted the
+        # rescue and lost bytes that were the only copy.
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'X: platform edit\n')
+        _write(self.cache / 'demo-skill' / 'references' / 'notes.md', 'X-notes\n')
+        real_mkdtemp = rfc.tempfile.mkdtemp
+
+        def reimport_lands_first(*a, **kw):
+            _rmtree(self.cache / 'demo-skill')
+            return real_mkdtemp(*a, **kw)
+
+        with mock.patch.object(rfc.tempfile, 'mkdtemp', reimport_lands_first):
+            dest = self._rescue(['SKILL.md', 'references/notes.md'])
+
+        self.assertIsNotNone(dest)
+        self.assertEqual((dest / 'SKILL.md').read_text(encoding='utf-8'), 'X: platform edit\n')
+        self.assertEqual((dest / 'references' / 'notes.md').read_text(encoding='utf-8'),
+                         'X-notes\n')
+
     def test_a_rescue_keeps_the_cache_files_mtime(self):
         # The rescue is the only surviving copy, and its mtime records when the
         # platform-side edit happened (merge-gate round 2, scope auditor F-1).

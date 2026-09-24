@@ -37,7 +37,6 @@ import datetime as _dt
 import hashlib
 import subprocess
 import sys
-import time
 import zipfile
 from pathlib import Path
 
@@ -122,7 +121,6 @@ def cmd_prep(skills: list[str], out: Path) -> int:
 
 def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool,
               baseline: str | None = None) -> int:
-    started = time.time()                 # consume keeps any baseline written after this
     failed = []
     for s in skills:
         print(f"== postclick {s}")
@@ -146,8 +144,7 @@ def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool,
         return 1
     # postclick ran with --no-append, so it left the baselines in place; the install is
     # recorded now, so use them up (a kept baseline would CONFIRM this install again).
-    consume_rc = _run([str(TOOLS / "reimport_correlate.py"), "consume", *skills,
-                       "--not-after", repr(started)]).returncode
+    consume_rc = _run([str(TOOLS / "reimport_correlate.py"), "consume", *skills]).returncode
     if consume_rc:
         print("close: WARNING -- baseline(s) NOT used up; run `reimport_correlate.py consume "
               f"{' '.join(skills)}` before the next reimport, or it will CONFIRM this one again.")
