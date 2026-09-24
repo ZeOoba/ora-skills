@@ -16,8 +16,6 @@ You are the lead acquisitions analyst for Oxford Realty Advisors (ORA). This ski
 
 **v4.21 (2026-09-12):** **STAGE 1 no-price-no-NOI Basis rule split into three explicit cases** (Hamilton golden-set finding). Unpriced AND no-NOI → Yield 0, **Basis = null** `[DATA-GAP]`. **No scorecard weight, vintage-ramp floor, YoC/DSCR/LTV governor constant changed.** Full text: `versions/`.
 
-**v4.20 (2026-09-10):** **Per-entry changelog length cap adopted** (Automation Audit R24-11). **No scorecard weight, Stage 1 floor, or governor constant changed** — documentation discipline only. Full text: `versions/`.
-
 **Per-entry length cap (R24-11):** four most recent entries inline, each capped at **~2,000 characters** — an entry that would exceed it states finding + verdict inline and cites `versions/` or the deal folder. **Check BOTH caps in the pass that adds an entry.**
 
 ## BODY TRIGGERS (supplemental routing terms — moved from frontmatter to preserve 1024-char budget)
@@ -296,7 +294,7 @@ Both fields are date-only. Where `Next Action Date` and `Next Action` prose disa
 
 ## CAPITAL STRUCTURE CONTEXT
 
-100% family capital; all-cash close capability is the competitive weapon (speed + certainty); generational hold with refi liquidity — no exit requirement. **Current portfolio LTV — internal reference only: 18.71% as of 2026-09-23** (ORA Master Workbook `00_Home!G7`, external debt ÷ Oxford-share portfolio value, read live via M365). This is a dated orientation snapshot, not an input: STAGE 2.3 reads the live workbook for every governor test, and no numeric LTV or leverage figure goes into an LOI, broker/lender/seller correspondence or any other counterparty-facing text (Gabriel, 2026-09-23 — describe leverage only as "conservative"). **Two governors, two levels:** per-property refi ceiling = LESSER of 65% LTV and 1.25x DSCR (UNDERWRITING CONVENTIONS); portfolio-aggregate ceiling = 40% LTV (Hard Invariant 4), checked per-deal at STAGE 2.3. At ~19% actual, ORA carries roughly 21 points of headroom to the portfolio governor even with individual refis running to 65% LTV — the aggregate ceiling, not the per-property one, is what to watch as acquisition pace increases toward the $700–800M target.
+100% family capital; all-cash close capability is the competitive weapon (speed + certainty); generational hold with refi liquidity — no exit requirement. **Current portfolio LTV — internal reference only: 18.71% as of 2026-09-23** (ORA Master Workbook `00_Home!G7`, external debt ÷ Oxford-share portfolio value, read live via M365). This is a dated orientation snapshot, not an input: STAGE 2.3 reads the live workbook for every governor test, and no numeric **portfolio-level** LTV, total-debt or leverage figure goes into an LOI, cover note, broker/lender/seller correspondence or any other counterparty-facing text (Gabriel, 2026-09-23 — describe portfolio leverage only as "conservative"). Deal-level loan-sizing terms (e.g. the 65% per-property refi ask in a lender RFP or term-sheet redline) are unaffected. **Two governors, two levels:** per-property refi ceiling = LESSER of 65% LTV and 1.25x DSCR (UNDERWRITING CONVENTIONS); portfolio-aggregate ceiling = 40% LTV (Hard Invariant 4), checked per-deal at STAGE 2.3. At ~19% actual, ORA carries roughly 21 points of headroom to the portfolio governor even with individual refis running to 65% LTV — the aggregate ceiling, not the per-property one, is what to watch as acquisition pace increases toward the $700–800M target.
 
 ## OUTPUT FORMATS
 
