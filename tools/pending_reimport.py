@@ -265,7 +265,11 @@ def read_entries(ledger_path: Path = LEDGER) -> dict[str, str]:
     entries: dict[str, str] = {}
     if not ledger_path.is_file():
         return entries
-    for ln in _read_text_retry(ledger_path).splitlines():
+    try:
+        text = _read_text_retry(ledger_path)
+    except FileNotFoundError:        # a concurrent clear deleted it after is_file()
+        return entries
+    for ln in text.splitlines():
         s = ln.strip()
         if not s or s.startswith('#'):
             continue

@@ -1299,6 +1299,15 @@ class WriteEntriesIsAtomic(FixtureTestCase):
         self.assertEqual(len(failures), 2)
         self.assertEqual(list(entries), ['kept-skill'])
 
+    def test_a_ledger_that_vanishes_before_the_read_reads_as_empty(self):
+        # A concurrent `clear` of the last entry deletes the file between is_file()
+        # and the read (merge-gate round 2, race F1); that is "absent", not a crash.
+        def vanished(path, *a, **kw):
+            raise FileNotFoundError(2, 'No such file or directory', str(path))
+
+        with unittest.mock.patch.object(Path, 'read_text', vanished):
+            self.assertEqual(pr.read_entries(self.ledger), {})
+
     def test_successful_write_replaces_content(self):
         pr.write_entries({'new-skill': '- new-skill | pending'}, self.ledger)
 
