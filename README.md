@@ -358,7 +358,13 @@ it — as of the last audit, no ORA-specific skill remained plugin-only-and-unve
       one (baseline is zero skips; a genuinely-needed skip goes in that workflow's
       `ALLOWED_SKIPS` in `tools/run_suite.sh` as an exact-count `path=N` entry with a reason — since #72 the only
       one is `tools/test_package_census.py=1`, its Windows-only long-path test, which
-      skips on ubuntu). Run it locally anyway — CI tells you after the push,
+      skips on ubuntu). It also fails any file that exits 0 having run **zero** tests —
+      every `tools/test_*.py` must use stdlib `unittest` with an `if __name__ == '__main__':
+      unittest.main(...)` runner and print `Ran N tests` with N ≥ 1; bare pytest-style
+      `def test_*` functions never execute under `python <file>` (2026-09-23,
+      `test_reimport_cycle.py`), so any module-level `def test_*` also fails (`BARE`). A whole-module skip
+      (`Ran 0 tests … skipped=N`) counts as zero tests too, never as an allowed skip. The only exemption is a plain-assert check script listed
+      in `NON_UNITTEST`, which must print `all checks passed`. Run it locally anyway — CI tells you after the push,
       and it runs on `ubuntu-latest` while this repo is developed on Windows, so a
       platform-specific test can pass in one place and fail in the other.
 8. Update the inventory in this README — it has drifted stale before (once for a full

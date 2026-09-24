@@ -1,6 +1,6 @@
 # Doctrine Rationale, Validation Cases and Incident History
 
-Full v4.22 wording of every `SKILL.md` rule that v4.23 (2026-09-22, progressive-disclosure pass) states in condensed form. Each line below is reproduced verbatim from `SKILL.md` as it stood at v4.22, grouped under the section it came from, so the validation case, incident narrative, calibration rationale and provenance behind each condensed rule stay on the record.
+Full v4.22 wording of every `SKILL.md` rule that v4.23 (2026-09-22, progressive-disclosure pass) states in condensed form. Each line below is reproduced verbatim from `SKILL.md` as it stood at v4.22 (one exception: v4.24, 2026-09-23, updated the STAGE 2.3 current-LTV aside in both files to keep the numbers identical), grouped under the section it came from, so the validation case, incident narrative, calibration rationale and provenance behind each condensed rule stay on the record.
 
 **The condensed rule in `SKILL.md` is operative.** No number here differs from the inline one by design — a discrepancy is a bug to report, not a second source of doctrine. Load this file when a rule's origin matters (disputing, extending, or back-testing it), not for a routine screen.
 
@@ -110,7 +110,7 @@ Assign P(execution) from already-collected seller signals. These are the **opera
 
 Two distinct checks — a ratified governor and a proposed set of fit flags. Do not conflate them: the LTV check below is binding ORA doctrine (Hard Invariant 4); the state/market/tenant flags are analytical aids pending ratification.
 
-**A. Portfolio-aggregate LTV governor (RATIFIED — Hard Invariant 4):** compute pro-forma portfolio-aggregate LTV = (aggregate outstanding secured debt across the portfolio, including this deal's post-refi debt at the LESSER-of-65%-LTV/1.25x-DSCR sizing from UNDERWRITING CONVENTIONS) ÷ (aggregate portfolio value at each asset's market exit cap, including this deal). Source current debt/value from the live SharePoint Master Workbook (first source) or Notion. This governor is **distinct from and does not conflict with** the per-property 65% LTV / 1.25x DSCR refi-sizing convention — a single property can refi to 65% LTV while the portfolio in aggregate stays well under 40%, and in ORA's case (~15% actual) normally will.
+**A. Portfolio-aggregate LTV governor (RATIFIED — Hard Invariant 4):** compute pro-forma portfolio-aggregate LTV = (aggregate outstanding secured debt across the portfolio, including this deal's post-refi debt at the LESSER-of-65%-LTV/1.25x-DSCR sizing from UNDERWRITING CONVENTIONS) ÷ (aggregate portfolio value at each asset's market exit cap, including this deal). Source current debt/value from the live SharePoint Master Workbook (first source) or Notion. This governor is **distinct from and does not conflict with** the per-property 65% LTV / 1.25x DSCR refi-sizing convention — a single property can refi to 65% LTV while the portfolio in aggregate stays well under 40%, and in ORA's case (18.71% actual as of 2026-09-23, `00_Home!G7` — read live for the test) normally will.
 
 - Pro-forma portfolio-aggregate LTV **> 40%** → **LTV-FLAGGED (portfolio)** — flag, not kill (Ruling 5), but report explicitly and require Gabriel sign-off before proceeding to LOI; this is the one governor in this section that is not calibration-pending.
 
