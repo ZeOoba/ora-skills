@@ -27,6 +27,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -292,6 +293,57 @@ class RecordLedger(FixtureTestCase):
         entries = read_entries(self.ledger)
         self.assertEqual(set(entries), {'skill-a', 'skill-b'})
         self.assertIn('DIVERGENT', entries['skill-b'])
+
+
+_HOLDER = r"""
+import sys, time
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import pending_reimport as pr
+ledger, held, release = Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4])
+with pr.ledger_lock(ledger):
+    held.write_text('held')
+    while not release.exists():
+        time.sleep(0.005)
+"""
+
+
+class RecordLedgerTakesTheLedgerLock(FixtureTestCase):
+    """record_ledger's read (to carry "pending since" forward) and its replace-write
+    run under the same cross-process lock as pending_reimport's writers. Held past
+    its bound, the lock raises instead of writing unlocked, and run() already turns
+    that OSError into a warning."""
+
+    def setUp(self):
+        super().setUp()
+        self.ledger = self.tmp / 'STORE_AHEAD_OF_REPO.md'
+        rfc.record_ledger([('kept-skill', 'CACHE-AHEAD', [('SKILL.md', 'CACHE-AHEAD')])],
+                          ledger_path=self.ledger)
+        self.before = self.ledger.read_bytes()
+        held, self.release = self.tmp / 'held', self.tmp / 'release'
+        self.holder = subprocess.Popen(
+            [sys.executable, '-c', _HOLDER, str(Path(pr.__file__).parent),
+             str(self.ledger), str(held), str(self.release)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        while not held.exists():
+            if self.holder.poll() is not None:
+                err = self.holder.stderr.read()
+                super().tearDown()       # a failing setUp skips tearDown
+                self.fail(f'lock holder died: {err}')
+            time.sleep(0.01)
+
+    def tearDown(self):
+        # Release before super().tearDown() removes the temp dir the release file lives in.
+        self.release.write_text('release')
+        self.holder.communicate()
+        super().tearDown()
+
+    def test_held_lock_raises_and_leaves_the_ledger_untouched(self):
+        with mock.patch.object(pr, 'LOCK_TIMEOUT_S', 0), \
+                self.assertRaises(pr.LedgerLockTimeout):
+            rfc.record_ledger([], ledger_path=self.ledger)
+
+        self.assertEqual(self.ledger.read_bytes(), self.before)
 
 
 class FullSweepIntegration(FixtureTestCase):
