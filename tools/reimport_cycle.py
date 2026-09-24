@@ -25,7 +25,9 @@ Usage
         (exit 0 required), THEN pending_reimport.py clear per skill, THEN the
         closing sweep (repo_first_check, frontmatter_sweep,
         verify_installed_cache). Any non-CONFIRMED verdict stops with exit 1
-        and appends nothing.
+        and appends nothing. After a successful append it runs
+        `reimport_correlate.py consume`; if that fails, close still finishes but
+        exits 1 (the append stands -- re-run only `consume`, not close).
 
 Host-only: needs the real AppData cache and main.log (Code surface or the
 Desktop Commander bridge). From Cowork bash it inherits CACHE_ROOT blindness.

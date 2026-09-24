@@ -437,14 +437,29 @@ def rescue(skill: str, rels: list[str], cache_root: Path = CACHE_ROOT,
     and sweep share rescue_dir (STAGING), and a rescue is the only surviving copy, so a
     later rescue must never overwrite an earlier one. The copy is built under a
     dot-prefixed temp dir and renamed into place, so a failed copy never leaves a
-    half-rescue; content identical to the newest rescue reuses that dir."""
+    half-rescue; content identical to the newest rescue reuses that dir. A file that
+    cannot be read (a concurrent reimport replaced the cache mid-rescue) is reported
+    and skipped -- it never costs the files that were read."""
     skill_dir = rescue_dir / skill
     tmp = None
     try:
         # Bytes AND stat from one open handle: the cache can be replaced (a concurrent
         # Save-skill reimport, or Check 4's mirror sync) the moment the read finishes,
         # and a second look would then abort the rescue or stamp the wrong mtime.
-        data = {rel: _read_with_stat(Path(cache_root) / skill / rel) for rel in rels}
+        data, unread = {}, []
+        for rel in rels:
+            try:
+                data[rel] = _read_with_stat(Path(cache_root) / skill / rel)
+            except OSError as exc:
+                unread.append(f'{rel} ({exc.strerror or exc})')
+        if unread:
+            print(f'repo_first_check: rescue of {skill} could not read {len(unread)} '
+                  f'file(s) from the cache (replaced mid-rescue?): {", ".join(unread)}',
+                  file=sys.stderr)
+        if not data:
+            print(f'repo_first_check: rescue copy failed for {skill}: nothing readable',
+                  file=sys.stderr)
+            return None
         newest = _newest_rescue(skill_dir)
         if newest and all((newest / rel).is_file() and (newest / rel).read_bytes() == b
                           for rel, (b, _st) in data.items()):

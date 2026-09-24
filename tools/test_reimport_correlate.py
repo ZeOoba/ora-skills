@@ -251,6 +251,22 @@ class PrecheckTests(FixtureTestCase):
         self.assertEqual(json.loads((rc._baseline_path('demo-skill')).read_text())['creation_time'],
                          '2026-01-01T00:00:00')
 
+    def test_precheck_recaptures_a_baseline_an_install_has_made_stale(self):
+        # Through cmd_precheck itself, not the helper: unwiring precheck from the
+        # refresh must fail a test (merge-gate round 4, test-validity F3).
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({'skill': 'demo-skill', 'creation_time': '2026-01-01T00:00:00'}))
+        _make_pkg(self.pkg, 'demo-skill', self._good_entries())
+
+        with unittest.mock.patch.object(rc, '_creation_time',
+                                        lambda s: datetime(2026, 9, 23, 12, 5, 0)):
+            code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+
+        self.assertEqual(code, 0, out)
+        self.assertIn('baseline was stale', out)
+        self.assertEqual(json.loads(rc._baseline_path('demo-skill').read_text())['creation_time'],
+                         '2026-09-23T12:05:00')
+
     def test_missing_package_is_reported_missing_not_stale(self):
         code, out = self._run(rc.cmd_precheck, [str(self.tmp / 'ghost.skill')])
         self.assertEqual(code, 1)
@@ -730,6 +746,139 @@ class RoundThreeGateFindings(_SessionFixture):
             cyc.main(['close', 'demo-skill', '--baseline', '2026-09-23 12:00:00'])
 
         self.assertEqual(seen['args'][-1], '2026-09-23 12:00:00')
+
+
+class RoundFourGateFindings(_SessionFixture):
+    """Merge-gate round 4: the 1-second "predates" boundary and the first-install
+    case pinned, foreign baseline files, and a claim rename that is not exclusive."""
+
+    def _names(self):
+        return sorted(p.name for p in (self.baselines / 'demo-skill').iterdir())
+
+    def test_a_baseline_taken_seconds_before_the_install_is_used_up(self):
+        # Every other test puts 5 minutes between baseline and install, so a rule that
+        # only used up baselines a minute old would pass them -- and CONFIRM a click
+        # taken 30 seconds after the baseline again with no click at all.
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 0, 30))
+        code, out = self._as('sess-A', rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+        self.assertEqual(code, 0, out)
+
+        _, out = self._as('sess-A', rc.cmd_verify, ['demo-skill'], None)
+
+        self.assertIn('NO-BASELINE', out)
+
+    def test_predates_is_one_second_either_way_and_absent_always_predates(self):
+        installed = datetime(2026, 9, 23, 12, 5, 0)
+        self.assertTrue(rc._predates(datetime(2026, 9, 23, 12, 4, 59), installed))
+        self.assertFalse(rc._predates(datetime(2026, 9, 23, 12, 4, 59, 500000), installed))
+        self.assertFalse(rc._predates(installed, installed))
+        self.assertTrue(rc._predates(None, installed))
+
+    def test_a_first_install_uses_up_the_absent_baseline(self):
+        self.ct['demo-skill'] = None
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        code, out = self._as('sess-A', rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+        self.assertEqual(code, 0, out)
+
+        _, out = self._as('sess-A', rc.cmd_verify, ['demo-skill'], None)
+
+        self.assertIn('NO-BASELINE', out)
+
+    def test_foreign_baseline_files_are_used_up_and_never_stop_the_sweep(self):
+        # Correctness F1: a hand-written tz-aware or UTF-16 file raised out of the loop,
+        # leaving every older baseline sorted after it to CONFIRM the next reimport.
+        skill_dir = self.baselines / 'demo-skill'
+        skill_dir.mkdir(parents=True)
+        (skill_dir / '0-aware.json').write_text(
+            json.dumps({'skill': 'demo-skill', 'creation_time': '2026-09-01T09:00:00+00:00'}),
+            encoding='utf-8')
+        (skill_dir / '1-utf16.json').write_text(
+            json.dumps({'skill': 'demo-skill', 'creation_time': '2026-09-01T09:00:00'}),
+            encoding='utf-16')
+        self._as('sess-B', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+
+        code, out = self._as('sess-B', rc.cmd_consume, ['demo-skill'])
+
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self._names(), [])
+
+    def test_precheck_recaptures_a_tz_aware_baseline_instead_of_crashing(self):
+        with unittest.mock.patch.dict(os.environ, {'CLAUDE_CODE_SESSION_ID': 'sess-A'}):
+            _write(rc._baseline_path('demo-skill'),
+                   json.dumps({'skill': 'demo-skill',
+                               'creation_time': '2026-09-23T12:00:00+00:00'}))
+            note = rc._refresh_stale_baseline('demo-skill')
+
+        self.assertIn('stale', note)
+
+    def test_a_claim_another_consumer_moved_on_is_theirs_not_a_failure(self):
+        # Race F2: a rename is not exclusive on Windows -- two can both "succeed", the
+        # second moving the first's claim. The loser must skip it, not exit 1.
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        real_rename = os.rename
+
+        def stolen_after_claim(src, dst):
+            real_rename(src, dst)
+            if Path(dst).name.startswith('.'):              # our claim, taken by B
+                Path(dst).unlink()
+
+        with unittest.mock.patch.object(rc.os, 'rename', stolen_after_claim):
+            code, out = self._as('sess-A', rc.cmd_consume, ['demo-skill'])
+
+        self.assertEqual(code, 0, out)
+        self.assertNotIn('NOT used up', out)
+
+    def test_a_claim_rename_that_finds_the_file_gone_is_skipped(self):
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+
+        with unittest.mock.patch.object(rc.os, 'rename',
+                                        side_effect=FileNotFoundError(2, 'gone')):
+            code, out = self._as('sess-A', rc.cmd_consume, ['demo-skill'])
+
+        self.assertEqual(code, 0, out)
+
+    def _put_back(self, on_put_back):
+        """Consume a post-install (kept) baseline with the put-back rename replaced."""
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        real_rename = os.rename
+
+        def rename(src, dst):
+            if Path(src).name.startswith('.'):              # claim -> path: the put-back
+                on_put_back(Path(src), Path(dst))
+            else:
+                real_rename(src, dst)
+
+        with unittest.mock.patch.object(rc.os, 'rename', rename):
+            return self._as('sess-A', rc.cmd_consume, ['demo-skill'])
+
+    def test_a_newer_baseline_that_lands_before_the_put_back_wins(self):
+        def newer_lands(src, dst):
+            dst.write_text('{"skill": "demo-skill", "creation_time": "NEWER"}',
+                           encoding='utf-8')
+            raise FileExistsError(17, 'exists', str(dst))
+
+        code, out = self._put_back(newer_lands)
+
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self._names(), ['sess-A.json'])
+        self.assertIn('NEWER', (self.baselines / 'demo-skill' / 'sess-A.json')
+                      .read_text(encoding='utf-8'))
+
+    def test_a_claim_taken_before_the_put_back_is_theirs_not_a_failure(self):
+        def taken(src, dst):
+            src.unlink()
+            raise FileNotFoundError(2, 'gone', str(src))
+
+        code, out = self._put_back(taken)
+
+        self.assertEqual(code, 0, out)
+        self.assertNotIn('NOT used up', out)
 
 
 class CycleCloseUsesTheBaselineUp(unittest.TestCase):

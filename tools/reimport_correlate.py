@@ -189,12 +189,16 @@ def _read_baseline(path: Path) -> str | None:
 
 def _recorded(text: str | None):
     """(parsed, ok): a baseline's recorded CreationTime (None = ABSENT); ok=False if
-    the file is unreadable as a baseline."""
+    the file is unreadable as a baseline -- including a timezone-aware time, which this
+    tool never writes and which cannot be compared with the naive CreationTime."""
     try:
         stored = json.loads(text)['creation_time']
-        return (datetime.fromisoformat(stored) if stored else None), True
+        parsed = datetime.fromisoformat(stored) if stored else None
     except (TypeError, ValueError, KeyError):
         return None, False
+    if parsed is not None and parsed.tzinfo is not None:
+        return None, False
+    return parsed, True
 
 
 def _predates(recorded, installed) -> bool:
@@ -210,8 +214,12 @@ def consume_baseline(skill: str) -> int:
     session's" is not enough), and keep any captured after it (a subagent sharing
     this session re-capturing while the parent appends). Each file is claimed by
     rename before it is judged, so a baseline written concurrently is never deleted
-    unseen. Returns how many were used up; raises OSError if a file stays locked past
-    the bounded retry -- callers must report that, never swallow it."""
+    unseen. A rename is not exclusive on Windows -- two consumers can both "succeed",
+    the second moving the first's claim on -- so a claim that vanishes belongs to the
+    other consumer and is skipped. A file that is not a readable baseline (foreign,
+    UTF-16, timezone-aware) is used up. Returns how many were used up; raises OSError
+    if a file stays locked past the bounded retry -- callers must report that, never
+    swallow it."""
     installed = _creation_time(skill)
     skill_dir = BASELINE_DIR / skill
     if installed is None or not skill_dir.is_dir():
@@ -221,14 +229,19 @@ def consume_baseline(skill: str) -> int:
         claim = path.with_name(f'.{path.name}.claim-{os.getpid()}-{uuid.uuid4().hex[:8]}')
         try:
             _retry_locked(lambda: os.rename(path, claim))
-        except FileNotFoundError:                 # another consumer got it first
+            text = _read_text_retry(claim)
+        except FileNotFoundError:                 # another consumer has it
             continue
-        recorded, ok = _recorded(_read_text_retry(claim))
+        except UnicodeDecodeError:
+            text = None
+        recorded, ok = _recorded(text)
         if ok and not _predates(recorded, installed):
             try:
                 os.rename(claim, path)            # post-install: put it back
             except FileExistsError:               # a newer one landed meanwhile; it wins
                 claim.unlink(missing_ok=True)
+            except FileNotFoundError:             # another consumer moved it on
+                pass
             continue
         _retry_locked(lambda: claim.unlink(missing_ok=True))
         used += 1

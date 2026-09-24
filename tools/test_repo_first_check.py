@@ -493,6 +493,42 @@ class RescueNeverOverwrites(FixtureTestCase):
         self.assertEqual((dest / 'references' / 'notes.md').read_text(encoding='utf-8'),
                          'X-notes\n')
 
+    def test_a_cache_replaced_mid_read_still_rescues_the_files_already_read(self):
+        # Round 4 MEDIUM (race): reading every file before writing any meant one file
+        # vanishing mid-read threw away the bytes already read -- a regression on the
+        # base's file-by-file copy, which kept what it had copied.
+        import contextlib
+        import io
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'X: platform edit\n')
+        _write(self.cache / 'demo-skill' / 'references' / 'notes.md', 'X-notes\n')
+        real_read = rfc._read_with_stat
+        reads = []
+
+        def reimport_lands_mid_read(path):
+            reads.append(path)
+            if len(reads) == 2:
+                _rmtree(self.cache / 'demo-skill')
+            return real_read(path)
+
+        err = io.StringIO()
+        with mock.patch.object(rfc, '_read_with_stat', reimport_lands_mid_read), \
+                contextlib.redirect_stderr(err):
+            dest = rfc.rescue('demo-skill', ['SKILL.md', 'references/notes.md'],
+                              cache_root=self.cache, rescue_dir=self.rescue_dir)
+
+        self.assertIsNotNone(dest, err.getvalue())
+        self.assertEqual((dest / 'SKILL.md').read_text(encoding='utf-8'), 'X: platform edit\n')
+        self.assertIn('references/notes.md', err.getvalue())
+
+    def test_a_failed_mtime_copy_never_costs_the_bytes(self):
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'X: platform edit\n')
+
+        with mock.patch.object(rfc.os, 'utime', side_effect=PermissionError(13, 'denied')):
+            dest = self._rescue(['SKILL.md'])
+
+        self.assertIsNotNone(dest)
+        self.assertEqual((dest / 'SKILL.md').read_text(encoding='utf-8'), 'X: platform edit\n')
+
     def test_a_rescue_keeps_the_cache_files_mtime(self):
         # The rescue is the only surviving copy, and its mtime records when the
         # platform-side edit happened (merge-gate round 2, scope auditor F-1).
@@ -514,16 +550,22 @@ class RescueNeverOverwrites(FixtureTestCase):
         self.assertEqual(len([p for p in (self.rescue_dir / 'demo-skill').iterdir()
                               if p.is_dir()]), 1)
 
-    def test_a_failed_rescue_leaves_no_partial_copy(self):
+    def test_a_missing_file_keeps_the_rest_and_never_touches_an_earlier_rescue(self):
+        # Round 4 changed the contract: a file gone from the cache no longer costs the
+        # files that could be read (the rescue is their only copy); it is reported.
         _write(self.cache / 'demo-skill' / 'SKILL.md', 'X: platform edit\n')
         first = self._rescue(['SKILL.md'])
         _write(self.cache / 'demo-skill' / 'SKILL.md', 'Z: another build\n')
 
-        self.assertIsNone(self._rescue(['SKILL.md', 'missing.md']))
+        second = self._rescue(['SKILL.md', 'missing.md'])
 
         self.assertEqual((first / 'SKILL.md').read_text(encoding='utf-8'), 'X: platform edit\n')
-        self.assertEqual([p for p in (self.rescue_dir / 'demo-skill').iterdir()
-                          if p.is_dir() and not p.name.startswith('.')], [first])
+        self.assertEqual((second / 'SKILL.md').read_text(encoding='utf-8'), 'Z: another build\n')
+        self.assertFalse((second / 'missing.md').exists())
+
+    def test_a_rescue_with_nothing_readable_makes_no_dir(self):
+        self.assertIsNone(self._rescue(['missing.md']))
+        self.assertIsNone(rfc._newest_rescue(self.rescue_dir / 'demo-skill'))
 
 
 class MainBehindOrigin(unittest.TestCase):
