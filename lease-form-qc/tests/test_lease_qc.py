@@ -209,7 +209,7 @@ def _new_verdicts(path):
            "is_template": "_TEMPLATE" in os.path.basename(path).upper()}
     out = {}
     for cid, _sev, _title, _pos, fn in lease_qc.CHECKS:
-        if cid in ("T1", "T2"):
+        if cid in ("T1", "T2", "T3", "T4", "D1", "D2"):   # not among the 51 originals
             continue
         out[cid] = fn(ctx) not in (None, False)
     return out
@@ -271,7 +271,7 @@ def _paras(texts):
                    for x in texts)
 
 
-def make_docx(path, body_paras, footer_text=None, extra_parts=None):
+def make_docx(path, body_paras, footer_text=None, extra_parts=None, filler_first=False):
     """Write a minimal but structurally real .docx.
 
     body_paras: list of paragraph strings (filler is appended automatically so
@@ -279,7 +279,7 @@ def make_docx(path, body_paras, footer_text=None, extra_parts=None):
     footer_text: None omits word/footer1.xml entirely (the "document has no
     footer part at all" case); a string writes one footer paragraph.
     """
-    paras = list(body_paras) + [_FILLER]
+    paras = ([_FILLER] + list(body_paras)) if filler_first else (list(body_paras) + [_FILLER])
     doc = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
            f'<w:body>{_paras(paras)}</w:body></w:document>')
@@ -670,7 +670,7 @@ class TestTokenGate(TempDirCase):
     def test_master_template_is_clean_including_t1(self):
         rc, out = run_cli(str(MASTER_V26))
         self.assertEqual(rc, 0, out)
-        self.assertIn("0 of 53 checks FAILED", out)
+        self.assertIn("0 of 57 checks FAILED", out)
 
     # ---- T1 must scan the FOOTER, not only the body -----------------------
     #
@@ -787,11 +787,11 @@ class TestTokenGate(TempDirCase):
 
 class TestRegistryAndCli(TempDirCase):
 
-    def test_registry_holds_the_51_original_checks_plus_t1_and_t2(self):
+    def test_registry_holds_the_51_original_checks_plus_t1_t2_and_v28_additions(self):
         ids = [c[0] for c in lease_qc.CHECKS]
-        self.assertEqual(len(ids), 53)
-        self.assertEqual(len(set(ids)), 53, "duplicate check IDs")
-        self.assertEqual(set(ids), set(_ORIGINAL_IDS) | {"T1", "T2"})
+        self.assertEqual(len(ids), 57)
+        self.assertEqual(len(set(ids)), 57, "duplicate check IDs")
+        self.assertEqual(set(ids), set(_ORIGINAL_IDS) | {"T1", "T2", "T3", "T4", "D1", "D2"})
 
     def test_every_entry_is_a_valid_five_tuple(self):
         for entry in lease_qc.CHECKS:
@@ -843,7 +843,7 @@ class TestRegistryAndCli(TempDirCase):
         rc, out = run_cli(str(MASTER_V26), "--json")
         payload = json.loads(out)
         self.assertEqual(len(payload), 1)
-        self.assertEqual(payload[0]["checks_run"], 53)
+        self.assertEqual(payload[0]["checks_run"], 57)
         self.assertFalse(payload[0]["unreadable"])
         self.assertEqual(payload[0]["failures"], [])
 
@@ -873,7 +873,10 @@ class TestRegistryAndCli(TempDirCase):
                 continue
             kept.append(tok.string)
         code = "\n".join(kept)
-        for banned in ("def text_of", "[[FOOTER]]", "zipfile", "ZipFile"):
+        # zipfile/ZipFile were banned with the retrofit; v2.8's T4 uses them ONLY
+        # to count word/media/ parts (ctx carries no drawing signal) -- never to
+        # extract text, which is what this guard exists to keep out.
+        for banned in ("def text_of", "[[FOOTER]]"):
             self.assertFalse(banned in code,
                              f"{banned!r} is back in lease_qc.py's executable code")
         self.assertIn("ora_doc_qc", code)
@@ -1086,7 +1089,7 @@ class TestT2FooterTenantMismatch(TempDirCase):
         """Premise check: the real v2.6 master's footer complex fields are
         PAGE/NUMPAGES (page numbering), never FILENAME/DOCPROPERTY -- so T2
         has nothing to catch there, and test_master_template_is_clean_
-        including_t1 (0 of 53) is not accidentally vacuous for T2."""
+        including_t1 (0 of 57) is not accidentally vacuous for T2."""
         self.assertTrue(MASTER_V26.exists())
         _body, meta = extract(str(MASTER_V26), want_footer=True)
         self.assertEqual(lease_qc._footer_field_candidates(meta["footer"]), [])
@@ -1502,6 +1505,455 @@ class TestDevCheckoutFallbackOrdering(TempDirCase):
             p.stdout.strip(), "correct",
             "dev-checkout tools/ fallback shadowed the co-located module -- "
             "lease_qc.py's sys.path shim regressed to insert(0, ...)")
+
+
+# --------------------------------------------------------------------------
+# v2.8 -- Class 5d (T3/T4/D1/D2), open_items carry-through, --loi-audit
+# --------------------------------------------------------------------------
+
+def _scan(path, allow_tokens=False):
+    """Run the full registry through ora_doc_qc.scan() the way the CLI does."""
+    import ora_doc_qc
+    lease_qc.register_scan_path(path)
+    return ora_doc_qc.scan(str(path), lease_qc.CHECKS, allow_tokens=allow_tokens,
+                           want_footer=True)
+
+
+def _ids(report):
+    return {f["id"]: f for f in report["failures"]}
+
+
+SIG_BLOCK = [
+    "IN WITNESS WHEREOF, the parties have executed this Lease.",
+    "LANDLORD: 2203 Northwood, LLC",
+    "By: ______________________________",
+    "Print Name: ______________________",
+    "Title: ___________________________",
+    "Date: ____________________________",
+    "TENANT: Acme Holdings LLC",
+    "Signature: ________________________",
+    "Its: ______________________________",
+    "Signed this ____ day of __________, 20__",
+    "(SEAL) __________",
+]
+
+
+class TestT3UnderscoreBlanks(TempDirCase):
+
+    def test_fires_on_blank_attn_line(self):
+        p = make_docx(self.tmp / "exec_lease.docx", [
+            "TENANT NOTICE ADDRESS: 100 Test Drive, Suite 5B",
+            "ATTN: ______________________",
+        ])
+        f = _ids(_scan(p))
+        self.assertIn("T3", f)
+        self.assertEqual(f["T3"]["severity"], "HIGH")
+        self.assertIn("ATTN", f["T3"]["detail"])
+        self.assertTrue(f["T3"]["detail"].startswith("1 "), f["T3"]["detail"])
+
+    def test_fires_on_blank_inside_a_rent_sentence(self):
+        p = make_docx(self.tmp / "exec_lease.docx", [
+            "Base Rent for Lease Year 1 shall be $__________ per month.",
+        ])
+        self.assertIn("T3", _ids(_scan(p)))
+
+    def test_commencement_date_blank_is_not_a_signing_label(self):
+        p = make_docx(self.tmp / "exec_lease.docx", ["Commencement Date: __________"])
+        self.assertIn("T3", _ids(_scan(p)))
+
+    def test_silent_on_full_signature_block(self):
+        p = make_docx(self.tmp / "exec_lease.docx", SIG_BLOCK)
+        self.assertNotIn("T3", _ids(_scan(p)))
+
+    def test_silent_on_label_on_previous_line(self):
+        p = make_docx(self.tmp / "exec_lease.docx", ["Landlord signs here:", "By:",
+                                                    "______________________________"])
+        self.assertNotIn("T3", _ids(_scan(p)))
+
+    def test_silent_on_template_file(self):
+        p = make_docx(self.tmp / "ORA_Lease_TEMPLATE.docx", ["ATTN: ______________"])
+        self.assertNotIn("T3", _ids(_scan(p)))
+
+    def test_silent_with_allow_tokens(self):
+        p = make_docx(self.tmp / "exec_lease.docx", ["ATTN: ______________"])
+        self.assertNotIn("T3", _ids(_scan(p, allow_tokens=True)))
+
+    def test_footer_blanks_counted(self):
+        p = make_docx(self.tmp / "exec_lease.docx", ["clean body"],
+                      footer_text="Notice: ATTN: ________________")
+        self.assertIn("T3", _ids(_scan(p)))
+
+    def test_short_runs_ignored_and_detail_caps_at_six(self):
+        p = make_docx(self.tmp / "exec_lease.docx",
+                      ["a ____ b"] + [f"Email{i}: ________" for i in range(8)])
+        f = _ids(_scan(p))
+        self.assertTrue(f["T3"]["detail"].startswith("8 "), f["T3"]["detail"])
+        self.assertNotIn("Email7", f["T3"]["detail"])
+
+
+class TestT4ExhibitStubs(TempDirCase):
+
+    def test_fires_on_each_phrase(self):
+        for phrase in ("TO BE ATTACHED", "To Be Attached Prior To Execution",
+                       "TO BE INSERTED", "to be provided", "[ATTACH site plan]",
+                       "PLACEHOLDER"):
+            with self.subTest(phrase=phrase):
+                p = make_docx(self.tmp / "exec_lease.docx", ["EXHIBIT A", f"Site plan {phrase}."])
+                f = _ids(_scan(p))
+                self.assertIn("T4", f)
+                self.assertEqual(f["T4"]["severity"], "BLOCK")
+
+    def test_nbsp_folded(self):
+        p = make_docx(self.tmp / "exec_lease.docx", ["EXHIBIT A", "TO\xa0BE\xa0ATTACHED"])
+        self.assertIn("T4", _ids(_scan(p)))
+
+    def test_fires_on_bare_exhibit_heading_no_body_no_media(self):
+        p = make_docx(self.tmp / "exec_lease.docx", ["EXHIBIT D"], filler_first=True)
+        f = _ids(_scan(p))
+        self.assertIn("T4", f)
+        self.assertIn("EXHIBIT D", f["T4"]["detail"])
+
+    def test_silent_when_exhibit_has_substantive_body(self):
+        body = " ".join(["Rule"] * 60)
+        p = make_docx(self.tmp / "exec_lease.docx", ["EXHIBIT B", body])
+        self.assertNotIn("T4", _ids(_scan(p)))
+
+    def test_silent_when_docx_carries_embedded_drawing(self):
+        p = make_docx(self.tmp / "exec_lease.docx", ["EXHIBIT A"],
+                      extra_parts={"word/media/image1.png": b"\x89PNG"})
+        self.assertNotIn("T4", _ids(_scan(p)))
+
+    def test_silent_on_template(self):
+        p = make_docx(self.tmp / "ORA_Lease_TEMPLATE.docx", ["EXHIBIT A", "TO BE ATTACHED"])
+        self.assertNotIn("T4", _ids(_scan(p)))
+
+    def test_inline_exhibit_reference_is_not_a_heading(self):
+        p = make_docx(self.tmp / "exec_lease.docx",
+                      ["The Premises are depicted on Exhibit A attached to this Lease."])
+        self.assertNotIn("T4", _ids(_scan(p)))
+
+
+BLI = [
+    "BASIC LEASE INFORMATION",
+    "Landlord: 2203 Northwood, LLC",
+    "Security Deposit: $2,500.00",
+    "Monthly Rent (Lease Year 1): $2,000.00",
+    "Tenant's Proportionate Share: 12.5%",
+    "Parking: 4 vehicles",
+    "Late Fee: 10% of any payment not made when due",
+    "Default Interest: 18% per annum",
+    "Escalation: 3% per Lease Year, compounded",
+    "Utilities: Tenant pays electric and water",
+    "This Basic Lease Information is provided for convenience.",
+]
+BODY_OK = [
+    "SERVICES AND UTILITIES.",
+    "Tenant shall pay for electric and water service to the Premises as additional rent.",
+    "SECURITY DEPOSIT.",
+    "Tenant shall deposit a Security Deposit of $2,500.00 with Landlord.",
+    "RENT.",
+    "Monthly Base Rent for Lease Year 1 shall be $2,000.00 per month, increasing 3% annually.",
+    "Tenant's Proportionate Share is 12.5%.",
+    "Tenant may park 4 overnight vehicles at the Premises.",
+    "Late fee of 10% of the overdue amount shall apply.",
+    "Past-due sums bear interest at 18% per annum.",
+]
+
+
+class TestD1BliBodyDrift(TempDirCase):
+
+    def test_silent_without_bli_block(self):
+        p = make_docx(self.tmp / "exec_lease.docx", BODY_OK)
+        self.assertNotIn("D1", _ids(_scan(p)))
+
+    def test_passes_when_equal(self):
+        p = make_docx(self.tmp / "exec_lease.docx", BLI + BODY_OK)
+        f = _ids(_scan(p))
+        self.assertNotIn("D1", f, f.get("D1"))
+
+    def test_fires_on_utility_scope_drift(self):
+        body = [b.replace("electric and water service", "electric, water and sewer service")
+                for b in BODY_OK]
+        p = make_docx(self.tmp / "exec_lease.docx", BLI + body)
+        f = _ids(_scan(p))
+        self.assertIn("D1", f)
+        self.assertEqual(f["D1"]["severity"], "MED")
+        self.assertIn("Utilities", f["D1"]["detail"])
+        self.assertIn("sewer", f["D1"]["detail"])
+
+    def test_fires_on_deposit_cents_and_names_both_values(self):
+        body = [b.replace("$2,500.00", "$2,500.50") for b in BODY_OK]
+        p = make_docx(self.tmp / "exec_lease.docx", BLI + body)
+        f = _ids(_scan(p))
+        self.assertIn("D1", f)
+        self.assertIn("Security Deposit", f["D1"]["detail"])
+        self.assertIn("2,500.00", f["D1"]["detail"])
+        self.assertIn("2,500.50", f["D1"]["detail"])
+
+    def test_fires_once_per_drifted_label(self):
+        body = [b.replace("12.5%", "15%").replace("4 overnight", "6 overnight")
+                for b in BODY_OK]
+        p = make_docx(self.tmp / "exec_lease.docx", BLI + body)
+        d = _ids(_scan(p))["D1"]["detail"]
+        self.assertIn("Proportionate Share", d)
+        self.assertIn("Parking", d)
+        self.assertNotIn("Late Fee", d)
+
+    def test_token_valued_bli_line_is_skipped(self):
+        bli = [b.replace("$2,500.00", "$[SECURITY DEPOSIT]") for b in BLI]
+        p = make_docx(self.tmp / "exec_lease.docx", bli + BODY_OK)
+        self.assertNotIn("D1", _ids(_scan(p, allow_tokens=True)))
+
+
+def _sched(rows):
+    out = ["Lease Year | Annual Base Rent | Monthly Rent"]
+    out += [f"Lease Year {y} | ${a} | ${m}" for y, a, m in rows]
+    return out
+
+
+RENT_HEAD = [
+    "Demised Premises: 100 Test Drive - approximately 1,350 rentable square feet",
+    "Annual Base Rent shall be $38.30 per rentable square foot.",
+    "Base Rent shall escalate at 3% per Lease Year, compounded.",
+]
+MONTHLY_METHOD = [(1, "51,705.00", "4,308.75"), (2, "53,256.12", "4,438.01"),
+                  (3, "54,853.80", "4,571.15"), (4, "56,499.36", "4,708.28"),
+                  (5, "58,194.36", "4,849.53")]
+ANNUAL_METHOD = [(1, "51,705.00", "4,308.75"), (2, "53,256.15", "4,438.01"),
+                 (3, "54,853.83", "4,571.15"), (4, "56,499.44", "4,708.29"),
+                 (5, "58,194.42", "4,849.54")]
+
+
+class TestD2RentArithmetic(TempDirCase):
+
+    def _run(self, rows, extra=()):
+        p = make_docx(self.tmp / "exec_lease.docx", RENT_HEAD + list(extra) + _sched(rows))
+        return _ids(_scan(p))
+
+    def test_passes_monthly_rounded_schedule(self):
+        f = self._run(MONTHLY_METHOD)
+        self.assertNotIn("D2", f, f.get("D2"))
+
+    def test_passes_annual_compounded_schedule(self):
+        f = self._run(ANNUAL_METHOD)
+        self.assertNotIn("D2", f, f.get("D2"))
+
+    def test_fails_one_wrong_row(self):
+        rows = list(MONTHLY_METHOD)
+        rows[2] = (3, "54,853.80", "4,571.99")
+        f = self._run(rows)
+        self.assertIn("D2", f)
+        self.assertEqual(f["D2"]["severity"], "HIGH")
+        self.assertIn("Lease Year 3", f["D2"]["detail"])
+        self.assertIn("4,571.99", f["D2"]["detail"])
+
+    def test_fails_year_one_psf_mismatch(self):
+        rows = [(1, "60,000.00", "5,000.00")] + MONTHLY_METHOD[1:]
+        self.assertIn("D2", self._run(rows))
+
+    def test_fails_mixed_methods_without_controls_clause(self):
+        rows = [MONTHLY_METHOD[0], MONTHLY_METHOD[1], ANNUAL_METHOD[2],
+                ANNUAL_METHOD[3], ANNUAL_METHOD[4]]
+        self.assertIn("D2", self._run(rows))
+
+    def test_mixed_methods_pass_when_schedule_controls(self):
+        rows = [MONTHLY_METHOD[0], MONTHLY_METHOD[1], ANNUAL_METHOD[2],
+                ANNUAL_METHOD[3], ANNUAL_METHOD[4]]
+        self.assertNotIn("D2", self._run(
+            rows, ["In the event of any discrepancy, the rent schedule controls."]))
+
+    def test_passes_flat_schedule(self):
+        head = [h for h in RENT_HEAD if "escalate" not in h]
+        rows = [(y, "51,705.00", "4,308.75") for y in range(1, 4)]
+        p = make_docx(self.tmp / "exec_lease.docx", head + _sched(rows))
+        self.assertNotIn("D2", _ids(_scan(p)))
+
+    def test_fails_flat_schedule_with_a_stray_row(self):
+        head = [h for h in RENT_HEAD if "escalate" not in h] + ["Escalation: 0%"]
+        rows = [(1, "51,705.00", "4,308.75"), (2, "52,000.00", "4,333.33")]
+        p = make_docx(self.tmp / "exec_lease.docx", head + _sched(rows))
+        self.assertIn("D2", _ids(_scan(p)))
+
+    def test_space_separated_rows(self):
+        p = make_docx(self.tmp / "exec_lease.docx", RENT_HEAD + [
+            "Lease Year 1 $51,705.00 $4,308.75", "Lease Year 2 $53,256.12 $4,438.01"])
+        f = _ids(_scan(p))
+        self.assertNotIn("D2", f, f.get("D2"))
+
+    def test_silent_without_schedule_table(self):
+        p = make_docx(self.tmp / "exec_lease.docx", RENT_HEAD)
+        self.assertNotIn("D2", _ids(_scan(p)))
+
+
+class TestOpenItemsRow(TempDirCase):
+
+    BASE = TestLoiConformanceMode.REGISTER
+    TEXT = ("the exterior signage shall be subject to landlord approval "
+            "and a suite plan is attached as exhibit a")
+
+    def _row(self, items):
+        reg = dict(self.BASE)
+        if items is not None:
+            reg["open_items"] = items
+        rows = lease_qc.build_conformance_matrix(reg, self.TEXT)
+        return {r["category"]: r for r in rows}.get("open_items")
+
+    def test_omitted_when_absent_or_empty(self):
+        self.assertIsNone(self._row(None))
+        self.assertIsNone(self._row([]))
+
+    def test_conforms_when_all_resolved_and_clause_present(self):
+        r = self._row([{"item": "Exhibit A", "resolution": "attached",
+                        "lease_clause": "suite plan is attached as exhibit a", "source": "LOI"}])
+        self.assertEqual(r["status"], "CONFORMS", r)
+
+    def test_partial_when_some_resolved(self):
+        r = self._row([{"item": "Exhibit A", "resolution": "attached",
+                        "lease_clause": "suite plan is attached as exhibit a", "source": "LOI"},
+                       {"item": "Water meter basis", "resolution": None,
+                        "lease_clause": None, "source": "PM"}])
+        self.assertEqual(r["status"], "PARTIAL")
+        self.assertIn("Water meter basis", r["detail"])
+
+    def test_missing_when_none_resolved_and_string_form_is_unresolved(self):
+        r = self._row(["Exhibit A suite plan", "dual agency consent"])
+        self.assertEqual(r["status"], "MISSING")
+        self.assertIn("Exhibit A suite plan", r["detail"])
+        self.assertIn("dual agency consent", r["detail"])
+
+    def test_resolution_without_clause_present_in_lease_is_unresolved(self):
+        r = self._row([{"item": "Parking cap", "resolution": "4 vehicles",
+                        "lease_clause": "tenant may keep ten trailers", "source": "LOI"}])
+        self.assertEqual(r["status"], "MISSING")
+
+    def test_example_register_and_schema(self):
+        ex = REPO / "lease-generation" / "references" / "example-register-northwood-15a.json"
+        reg = json.loads(ex.read_text(encoding="utf-8"))
+        schema = json.loads((REPO / "lease-generation" / "references"
+                             / "deal-terms-register.schema.json").read_text(encoding="utf-8"))
+        self.assertIn("oneOf", schema["properties"]["open_items"]["items"])
+        self.assertTrue(any(isinstance(i, dict) for i in reg["open_items"]))
+        self.assertTrue(any(isinstance(i, str) for i in reg["open_items"]))
+        rows = lease_qc.build_conformance_matrix(reg, "")
+        self.assertEqual(rows[-1]["category"], "open_items")
+        self.assertEqual(len(rows), 18)
+
+
+class TestLoiAuditMode(TempDirCase):
+
+    def setUp(self):
+        super().setUp()
+        self.reg = self.tmp / "register.json"
+        self.reg.write_text(json.dumps(TestLoiConformanceMode.REGISTER), encoding="utf-8")
+        self.lease = make_docx(self.tmp / "test_lease.docx", TestLoiConformanceMode.LEASE_BODY,
+                               footer_text="Page 1 of 4")
+
+    def test_text_report_composes_scan_matrix_and_audit_line(self):
+        rc, out = run_cli("--loi-audit", str(self.reg), self.lease)
+        self.assertEqual(rc, 1, out)
+        self.assertIn("checks FAILED", out)
+        self.assertIn("SUMMARY", out)
+        self.assertRegex(out, r"AUDIT: \d+ scan failure\(s\) \[\d+ BLOCK\] \S+ \d+ matrix row\(s\) \S+ exit 1")
+
+    def test_json_shape_and_exit_is_max(self):
+        rc, out = run_cli("--loi-audit", str(self.reg), self.lease, "--json")
+        payload = json.loads(out)
+        self.assertEqual(set(payload), {"scan", "matrix", "exit"})
+        self.assertEqual(payload["exit"], rc)
+        self.assertEqual(payload["scan"][0]["checks_run"], 57)
+        self.assertEqual(payload["matrix"]["lease_file"], "test_lease.docx")
+
+    def test_exit_2_wins_over_1(self):
+        rc, out = run_cli("--loi-audit", str(self.tmp / "nope.json"), self.lease)
+        self.assertEqual(rc, 2, out)
+        rc, out = run_cli("--loi-audit", str(self.reg), str(PDF_FIXTURE))
+        self.assertEqual(rc, 2, out)
+
+    def test_exit_is_max_of_components(self):
+        rc, out = run_cli("--loi-audit", str(self.reg), self.lease, "--json")
+        payload = json.loads(out)
+        scan_rc = 1 if payload["scan"][0]["failures"] else 0
+        mat_rc = 1 if any(r["status"] in ("PARTIAL", "MISSING", "CONFLICT")
+                          for r in payload["matrix"]["rows"]) else 0
+        self.assertEqual(payload["exit"], max(scan_rc, mat_rc))
+        self.assertEqual(mat_rc, 1)
+
+
+class TestV28ReviewFixes(TempDirCase):
+
+    def test_d2_handles_psf_column_and_monthly_first(self):
+        rows = ["Lease Year | PSF | Annual | Monthly",
+                "Lease Year 1 | $38.30 | $51,705.00 | $4,308.75",
+                "Lease Year 2 | $39.45 | $53,256.12 | $4,438.01"]
+        p = make_docx(self.tmp / "exec_lease.docx", RENT_HEAD + rows)
+        f = _ids(_scan(p))
+        self.assertNotIn("D2", f, f.get("D2"))
+        rows = ["Lease Year 1 | $4,308.75 | $51,705.00", "Lease Year 2 | $4,438.01 | $53,256.12"]
+        p = make_docx(self.tmp / "exec_lease.docx", RENT_HEAD + rows)
+        f = _ids(_scan(p))
+        self.assertNotIn("D2", f, f.get("D2"))
+
+    def test_d2_ignores_ti_allowance_psf(self):
+        head = ["Tenant improvement allowance shall be $5.00 per square foot."] + RENT_HEAD
+        p = make_docx(self.tmp / "exec_lease.docx", head + _sched(MONTHLY_METHOD))
+        f = _ids(_scan(p))
+        self.assertNotIn("D2", f, f.get("D2"))
+
+    def test_d2_multi_year_row_only_truncates(self):
+        rows = _sched(MONTHLY_METHOD[:2]) + ["Lease Years 3-5 | $55,000.00 | $4,583.33"]
+        p = make_docx(self.tmp / "exec_lease.docx", RENT_HEAD + rows)
+        self.assertNotIn("D2", _ids(_scan(p)))
+
+    def test_t4_exhibit_list_is_not_a_stub(self):
+        p = make_docx(self.tmp / "exec_lease.docx",
+                      ["EXHIBIT A - Site Plan", "EXHIBIT B - Rules"], filler_first=True)
+        f = _ids(_scan(p))
+        self.assertIn("EXHIBIT B", f["T4"]["detail"])
+        self.assertNotIn("EXHIBIT A", f["T4"]["detail"])
+
+    def test_d1_default_interest_ignores_monthly_basis(self):
+        body = [b.replace("interest at 18% per annum", "x") for b in BODY_OK]
+        body.append("Late payments also bear a charge of interest at 1.5% per month.")
+        p = make_docx(self.tmp / "exec_lease.docx", BLI + body)
+        d = _ids(_scan(p)).get("D1", {}).get("detail", "")
+        self.assertNotIn("Default Interest", d)
+
+    def test_t3_label_elsewhere_on_line_does_not_excuse_a_blank(self):
+        p = make_docx(self.tmp / "exec_lease.docx", ["Email: ________  By: ________"])
+        d = _ids(_scan(p))["T3"]["detail"]
+        self.assertTrue(d.startswith("1 "), d)
+        p = make_docx(self.tmp / "exec_lease.docx",
+                      ["Rent commences the ______ day of ____________, 20__"])
+        self.assertIn("T3", _ids(_scan(p)))
+
+    def test_t3_caption_after_rule_still_exempt(self):
+        p = make_docx(self.tmp / "exec_lease.docx", ["______________________ Signature"])
+        self.assertNotIn("T3", _ids(_scan(p)))
+
+    def test_t3_signature_block_with_name_below_and_initials_exempt(self):
+        p = make_docx(self.tmp / "exec_lease.docx", [
+            "LANDLORD:", "Oxford Northwood LLC", "______________________",
+            "Name: Eric Goldberg", "Title: Member",
+            "Tenant Initials: ______   Landlord Initials: ______", "WITNESS: ______"])
+        self.assertNotIn("T3", _ids(_scan(p)))
+
+    def test_d2_psf_and_annual_only_table(self):
+        p = make_docx(self.tmp / "exec_lease.docx", [
+            "Demised Premises: approximately 12,000 rentable square feet",
+            "Base Rent is $12.50 per rentable square foot, escalating 3% per Lease Year.",
+            "Lease Year 1 $12.50 $150,000.00", "Lease Year 2 $12.88 $154,500.00"])
+        f = _ids(_scan(p))
+        self.assertNotIn("D2", f, f.get("D2"))
+
+
+class TestV28MasterBenchmark(TempDirCase):
+
+    def test_new_checks_silent_on_v26_master(self):
+        if not MASTER_V26.exists():
+            self.skipTest("master fixture absent")
+        r = _scan(MASTER_V26)
+        self.assertEqual(r["failures"], [], r["failures"])
+        self.assertEqual(r["checks_run"], 57)
 
 
 if __name__ == "__main__":
