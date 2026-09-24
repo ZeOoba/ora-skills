@@ -19,7 +19,9 @@ Fixtures are synthetic temp trees + throwaway git repos — never the real
 ora-skills repo or the real AppData runtime cache — so results are deterministic
 regardless of live drift state.
 """
+import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -28,6 +30,20 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import skill_drift_report as sdr  # noqa: E402
+
+
+def _rmtree(path) -> None:
+    """git writes object files read-only, which rmtree cannot unlink on Windows --
+    with ignore_errors=True every git-backed fixture here leaked silently into %TEMP%.
+    Clear the bit and retry; still best-effort, so a locked file never fails a test.
+    (Same helper as PR #79 adds to tools/test_pending_reimport.py.)"""
+    def _retry(func, p, _exc):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except Exception:  # onexc can also hand over os.open/os.close
+            pass
+    shutil.rmtree(path, onexc=_retry)
 
 
 def _write(path: Path, text: str, newline: str = '') -> None:
@@ -48,7 +64,7 @@ class FixtureTestCase(unittest.TestCase):
         self.cache.mkdir()
 
     def tearDown(self):
-        shutil.rmtree(self.tmp, ignore_errors=True)
+        _rmtree(self.tmp)
 
     def _git(self, *args):
         subprocess.run(['git', '-C', str(self.repo), *args],
@@ -747,6 +763,21 @@ class PublishStatusRendering(FixtureTestCase):
         out = sdr.render_publish_status(rep)
         self.assertIn('CACHE ROOT UNREADABLE', out)
         self.assertIn('do not report', out)
+
+
+class FixtureTeardownRemovesGitRepos(unittest.TestCase):
+    """git writes object files read-only; rmtree(ignore_errors=True) skipped them on
+    Windows and every git-backed fixture in this file leaked into %TEMP%."""
+
+    def test_teardown_removes_a_committed_fixture_repo(self):
+        fx = FixtureTestCase()
+        fx.setUp()
+        fx._git('init', '-q')
+        fx._git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q',
+                '--allow-empty', '-m', 'init')
+        fx.tearDown()
+
+        self.assertFalse(fx.tmp.exists())
 
 
 if __name__ == '__main__':
