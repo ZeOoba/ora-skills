@@ -65,6 +65,8 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -220,12 +222,54 @@ def affected_skills(files: list[str]) -> dict[str, set[str]]:
     return hits
 
 
+def _retry_locked(op):
+    """Run op(), retrying briefly on PermissionError. On Windows os.replace fails while
+    any reader holds the target open, and a reader opening mid-rename fails the same
+    way (Python's open() doesn't share delete access). Both sides hold the file for
+    milliseconds, so a short bounded retry covers them; a persistent lock re-raises."""
+    for attempt in range(5):
+        try:
+            return op()
+        except PermissionError:
+            if attempt == 4:
+                raise
+            time.sleep(0.05 * (attempt + 1))
+
+
+def _read_text_retry(path: Path) -> str:
+    return _retry_locked(lambda: path.read_text(encoding='utf-8'))
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write-then-rename: Path.write_text truncates the target before writing, so a
+    write that died midway left an EMPTY file. A same-directory temp file plus
+    os.replace leaves either the old content or the new, never a torn file. Atomic
+    per write only -- two concurrent read-modify-write callers can still lose an
+    update."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f'.{path.name}.', suffix='.tmp')
+    try:
+        with open(fd, 'w', encoding='utf-8') as f:
+            f.write(text)
+        _retry_locked(lambda: os.replace(tmp, path))
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def read_entries(ledger_path: Path = LEDGER) -> dict[str, str]:
     """Parse existing ledger into {skill: full_line} (skips comments/blanks)."""
     entries: dict[str, str] = {}
     if not ledger_path.is_file():
         return entries
-    for ln in ledger_path.read_text(encoding='utf-8').splitlines():
+    try:
+        text = _read_text_retry(ledger_path)
+    except FileNotFoundError:        # a concurrent clear deleted it after is_file()
+        return entries
+    for ln in text.splitlines():
         s = ln.strip()
         if not s or s.startswith('#'):
             continue
@@ -245,10 +289,10 @@ def write_entries(entries: dict[str, str], ledger_path: Path = LEDGER, header: s
     if not entries:
         # nothing pending -> remove the ledger so its mere presence always means "work to do"
         if ledger_path.is_file():
-            ledger_path.unlink()
+            _retry_locked(lambda: ledger_path.unlink(missing_ok=True))
         return
     body = '\n'.join(entries[k] for k in sorted(entries)) + '\n'
-    ledger_path.write_text(header + body, encoding='utf-8')
+    _atomic_write_text(ledger_path, header + body)
 
 
 def _normalized_hash_bytes(data: bytes) -> str:

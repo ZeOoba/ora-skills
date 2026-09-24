@@ -20,7 +20,10 @@ behavior and covers record_ledger(), the new durable _staging/STORE_AHEAD_OF_REP
 companion to _staging/PENDING_REIMPORT.md (which only ever tracked the opposite
 direction — repo-ahead-of-cache).
 """
+import importlib
+import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -28,6 +31,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import pending_reimport as pr  # noqa: E402
 import repo_first_check as rfc  # noqa: E402
 from pending_reimport import read_entries  # noqa: E402
 from unittest import mock  # noqa: E402
@@ -40,6 +44,19 @@ def _git(repo: Path, *args: str) -> None:
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding='utf-8', newline='')
+
+
+def _rmtree(path: Path) -> None:
+    """git writes object files read-only; on Windows rmtree cannot unlink them and
+    ignore_errors=True leaks the whole fixture silently. Clear the bit and retry;
+    still best-effort, so a locked file never fails a test."""
+    def _retry(func, p, _exc):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except Exception:  # onexc can also hand over os.open/os.close
+            pass
+    shutil.rmtree(rfc._win_long(path), onexc=_retry)
 
 
 def _commit(repo: Path, rel: str, text: str, message: str) -> None:
@@ -60,7 +77,7 @@ class FixtureTestCase(unittest.TestCase):
         _git(self.repo, 'config', 'user.name', 'Test')
 
     def tearDown(self):
-        shutil.rmtree(rfc._win_long(self.tmp), ignore_errors=True)
+        _rmtree(self.tmp)
 
 
 class ClassifySkill(FixtureTestCase):
@@ -379,10 +396,176 @@ class RunIntegration(FixtureTestCase):
         self.assertEqual(code, 0)
         entries = read_entries(self.ledger)
         self.assertIn('demo-skill', entries)
-        rescued = self.rescue_dir / 'demo-skill' / 'scripts' / 'run.py'
+        run_dir = rfc._newest_rescue(self.rescue_dir / 'demo-skill')
+        self.assertTrue(run_dir.name.endswith('-' + self.repo.resolve().name))
+        rescued = run_dir / 'scripts' / 'run.py'
         self.assertTrue(rescued.is_file())
         self.assertEqual(rescued.read_text(encoding='utf-8'), 'v2-never-committed\n')
         self.assertIn('Rescued the cache copy', stderr)
+
+    def test_ledger_write_failure_is_reported_and_still_exits_0(self):
+        # The tool never blocks (module docstring; the doctrine guard relies on exit 0).
+        # write_entries can now raise PermissionError after its bounded retry when a
+        # reader holds the ledger, so run() must degrade that to a warning.
+        _commit(self.repo, 'demo-skill/SKILL.md', 'name: demo-skill\n', 'init')
+        _commit(self.repo, 'demo-skill/scripts/run.py', 'v1\n', 'add script')
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'name: demo-skill\n')
+        _write(self.cache / 'demo-skill' / 'scripts' / 'run.py', 'v2-never-committed\n')
+
+        with mock.patch.object(rfc, 'record_ledger', side_effect=PermissionError(13, 'locked')):
+            code, stderr = self._run(check_staged=False)
+
+        self.assertEqual(code, 0)
+        self.assertIn('ledger write failed', stderr)
+        self.assertFalse(self.ledger.exists())
+
+
+class RescueNeverOverwrites(FixtureTestCase):
+    """Every checkout's pre-commit and sweep now share ONE rescue dir (the primary's),
+    and a rescue is the only surviving copy of clobbered cache content. A later rescue
+    of different content must never overwrite an earlier one, nor leave a half-copied
+    mix of two builds (merge-gate race finding F2)."""
+
+    def setUp(self):
+        super().setUp()
+        self.rescue_dir = self.tmp / 'rescue'
+
+    def _rescue(self, rels):
+        import contextlib
+        import io
+        with contextlib.redirect_stderr(io.StringIO()):
+            return rfc.rescue('demo-skill', rels, cache_root=self.cache,
+                              rescue_dir=self.rescue_dir)
+
+    def test_a_later_different_rescue_keeps_the_earlier_one(self):
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'X: platform edit\n')
+        _write(self.cache / 'demo-skill' / 'references' / 'notes.md', 'X-notes\n')
+        first = self._rescue(['SKILL.md', 'references/notes.md'])
+        (self.cache / 'demo-skill' / 'references' / 'notes.md').unlink()
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'Z: another build\n')
+
+        second = self._rescue(['SKILL.md'])
+
+        self.assertNotEqual(first, second)
+        self.assertEqual((first / 'SKILL.md').read_text(encoding='utf-8'), 'X: platform edit\n')
+        self.assertEqual((second / 'SKILL.md').read_text(encoding='utf-8'), 'Z: another build\n')
+        self.assertFalse((second / 'references' / 'notes.md').exists())
+
+    def test_a_rescue_that_fails_mid_copy_is_never_visible(self):
+        # A missing source fails before any dir exists; this fails AFTER the first file
+        # is written, so only the temp-dir-then-rename step keeps the half-copy out of
+        # sight (merge-gate round 2, test-validity F1).
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'X\n')
+        _write(self.cache / 'demo-skill' / 'references' / 'notes.md', 'X-notes\n')
+        real_write = Path.write_bytes
+        writes = []
+
+        def disk_full_on_second(path, data):
+            writes.append(path)
+            if len(writes) == 2:
+                raise OSError(28, 'No space left on device')
+            return real_write(path, data)
+
+        with mock.patch.object(Path, 'write_bytes', disk_full_on_second):
+            self.assertIsNone(self._rescue(['SKILL.md', 'references/notes.md']))
+
+        self.assertEqual([p.name for p in (self.rescue_dir / 'demo-skill').iterdir()
+                          if not p.name.startswith('.')], [])
+        self.assertIsNone(rfc._newest_rescue(self.rescue_dir / 'demo-skill'))
+
+    def test_a_cache_replaced_after_the_read_still_rescues_everything_read(self):
+        # Round 3 MEDIUM: copystat re-stat'ed the cache after the bytes were read; a
+        # concurrent Save-skill reimport replacing the dir in that window aborted the
+        # rescue and lost bytes that were the only copy.
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'X: platform edit\n')
+        _write(self.cache / 'demo-skill' / 'references' / 'notes.md', 'X-notes\n')
+        real_mkdtemp = rfc.tempfile.mkdtemp
+
+        def reimport_lands_first(*a, **kw):
+            _rmtree(self.cache / 'demo-skill')
+            return real_mkdtemp(*a, **kw)
+
+        with mock.patch.object(rfc.tempfile, 'mkdtemp', reimport_lands_first):
+            dest = self._rescue(['SKILL.md', 'references/notes.md'])
+
+        self.assertIsNotNone(dest)
+        self.assertEqual((dest / 'SKILL.md').read_text(encoding='utf-8'), 'X: platform edit\n')
+        self.assertEqual((dest / 'references' / 'notes.md').read_text(encoding='utf-8'),
+                         'X-notes\n')
+
+    def test_a_cache_replaced_mid_read_still_rescues_the_files_already_read(self):
+        # Round 4 MEDIUM (race): reading every file before writing any meant one file
+        # vanishing mid-read threw away the bytes already read -- a regression on the
+        # base's file-by-file copy, which kept what it had copied.
+        import contextlib
+        import io
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'X: platform edit\n')
+        _write(self.cache / 'demo-skill' / 'references' / 'notes.md', 'X-notes\n')
+        real_read = rfc._read_with_stat
+        reads = []
+
+        def reimport_lands_mid_read(path):
+            reads.append(path)
+            if len(reads) == 2:
+                _rmtree(self.cache / 'demo-skill')
+            return real_read(path)
+
+        err = io.StringIO()
+        with mock.patch.object(rfc, '_read_with_stat', reimport_lands_mid_read), \
+                contextlib.redirect_stderr(err):
+            dest = rfc.rescue('demo-skill', ['SKILL.md', 'references/notes.md'],
+                              cache_root=self.cache, rescue_dir=self.rescue_dir)
+
+        self.assertIsNotNone(dest, err.getvalue())
+        self.assertEqual((dest / 'SKILL.md').read_text(encoding='utf-8'), 'X: platform edit\n')
+        self.assertIn('references/notes.md', err.getvalue())
+
+    def test_a_failed_mtime_copy_never_costs_the_bytes(self):
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'X: platform edit\n')
+
+        with mock.patch.object(rfc.os, 'utime', side_effect=PermissionError(13, 'denied')):
+            dest = self._rescue(['SKILL.md'])
+
+        self.assertIsNotNone(dest)
+        self.assertEqual((dest / 'SKILL.md').read_text(encoding='utf-8'), 'X: platform edit\n')
+
+    def test_a_rescue_keeps_the_cache_files_mtime(self):
+        # The rescue is the only surviving copy, and its mtime records when the
+        # platform-side edit happened (merge-gate round 2, scope auditor F-1).
+        src = self.cache / 'demo-skill' / 'SKILL.md'
+        _write(src, 'X: platform edit\n')
+        os.utime(src, (1577836800, 1577836800))
+
+        dest = self._rescue(['SKILL.md'])
+
+        self.assertEqual(int((dest / 'SKILL.md').stat().st_mtime), 1577836800)
+
+    def test_an_identical_rescue_is_not_duplicated(self):
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'X: platform edit\n')
+
+        first = self._rescue(['SKILL.md'])
+        second = self._rescue(['SKILL.md'])
+
+        self.assertEqual(first, second)
+        self.assertEqual(len([p for p in (self.rescue_dir / 'demo-skill').iterdir()
+                              if p.is_dir()]), 1)
+
+    def test_a_missing_file_keeps_the_rest_and_never_touches_an_earlier_rescue(self):
+        # Round 4 changed the contract: a file gone from the cache no longer costs the
+        # files that could be read (the rescue is their only copy); it is reported.
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'X: platform edit\n')
+        first = self._rescue(['SKILL.md'])
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'Z: another build\n')
+
+        second = self._rescue(['SKILL.md', 'missing.md'])
+
+        self.assertEqual((first / 'SKILL.md').read_text(encoding='utf-8'), 'X: platform edit\n')
+        self.assertEqual((second / 'SKILL.md').read_text(encoding='utf-8'), 'Z: another build\n')
+        self.assertFalse((second / 'missing.md').exists())
+
+    def test_a_rescue_with_nothing_readable_makes_no_dir(self):
+        self.assertIsNone(self._rescue(['missing.md']))
+        self.assertIsNone(rfc._newest_rescue(self.rescue_dir / 'demo-skill'))
 
 
 class MainBehindOrigin(unittest.TestCase):
@@ -414,7 +597,7 @@ class MainBehindOrigin(unittest.TestCase):
         _commit(self.repo, 'local-only.md', 'unpushed\n', 'unpushed local commit')
 
     def tearDown(self):
-        shutil.rmtree(rfc._win_long(self.tmp), ignore_errors=True)
+        _rmtree(self.tmp)
 
     def _merge_pr_on_origin(self, rel, text):
         _commit(self.seed, rel, text, 'merged PR (#99)')
@@ -496,6 +679,63 @@ class MainBehindOrigin(unittest.TestCase):
         self.assertIn('catch_up_main.py', out.getvalue())
         self.assertFalse(ledger.is_file())
         self.assertFalse(rescue_dir.exists())
+
+
+
+class StagingResolvesToPrimaryCheckout(FixtureTestCase):
+    """RESCUE_DIR and LEDGER are untracked durable state, and the rescue copy is the
+    ONLY surviving copy of clobbered cache content. Resolved against a git worktree
+    they land in that worktree's _staging/ and die with `git worktree remove` -- and
+    the pre-commit hook runs --check-staged (so rescue()) inside whichever worktree is
+    committing. The module is reloaded with REPO pointed at a real fixture worktree,
+    so a revert to REPO-relative paths fails whether the suite itself runs from a
+    worktree or from the primary checkout."""
+
+    def setUp(self):
+        super().setUp()
+        _git(self.repo, 'commit', '-q', '--allow-empty', '-m', 'init')
+        self.wt = self.tmp / 'wt'
+        _git(self.repo, 'worktree', 'add', '-q', str(self.wt))
+        self.addCleanup(importlib.reload, rfc)
+        with mock.patch.object(pr, 'REPO', self.wt):
+            importlib.reload(rfc)
+
+    def test_rescued_copy_survives_worktree_remove(self):
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'cache-only content\n')
+
+        dest = rfc.rescue('demo-skill', ['SKILL.md'], cache_root=self.cache)
+        self.assertIsNotNone(dest)
+        _git(self.repo, 'worktree', 'remove', '--force', str(self.wt))
+
+        rescued = self.repo / '_staging' / 'repo-first-rescue' / 'demo-skill' / dest.name / 'SKILL.md'
+        self.assertEqual(rescued.read_text(encoding='utf-8'), 'cache-only content\n')
+
+    def test_ledger_survives_worktree_remove(self):
+        rfc.record_ledger([('demo-skill', 'CACHE-AHEAD', [('SKILL.md', 'CACHE-AHEAD')])])
+        _git(self.repo, 'worktree', 'remove', '--force', str(self.wt))
+
+        self.assertIn('demo-skill',
+                      read_entries(self.repo / '_staging' / 'STORE_AHEAD_OF_REPO.md'))
+
+    def test_repo_stays_the_checkouts_own_root(self):
+        # The sweep reads the checkout's OWN content; only the untracked state moves.
+        self.assertEqual(rfc.REPO, self.wt)
+
+    def test_worktree_sweep_leaves_the_primary_ledger_untouched(self):
+        # The ledger is DERIVED -- each full sweep replaces it -- and verdicts are
+        # branch-relative. A clean sweep from a feature worktree must not read as
+        # "resolved" and wipe what the primary's sweep recorded (nor reset its
+        # carried-forward "pending since").
+        rfc.record_ledger([('demo-skill', 'DIVERGENT', [('SKILL.md', 'DIVERGENT')])])
+        before = rfc.LEDGER.read_bytes()
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()) as out, \
+                contextlib.redirect_stderr(io.StringIO()):
+            rfc.run(False, repo_root=self.wt, cache_root=self.cache)
+
+        self.assertEqual(rfc.LEDGER.read_bytes(), before)
+        self.assertIn('not the primary checkout', out.getvalue())
 
 
 if __name__ == '__main__':

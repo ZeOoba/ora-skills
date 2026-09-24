@@ -275,7 +275,16 @@ consumed by `acquisition-underwriting`, `daily-brief`, `deal-comparison`, and
   committed it — reconcile that FIRST, or a later commit's `pre-commit` Check 4 mirror
   sync will silently clobber it. Findings persist to `_staging/STORE_AHEAD_OF_REPO.md`
   (gitignored, self-clearing once reconciled) so they survive past one run's console
-  output — the reverse-direction companion to `_staging/PENDING_REIMPORT.md`. Built
+  output — the reverse-direction companion to `_staging/PENDING_REIMPORT.md`. Both
+  ledgers, the `repo-first-rescue/` copies and `reimport-baselines/` live in the PRIMARY
+  checkout's `_staging/` even when a tool runs from a git worktree, so
+  `git worktree remove` can't destroy them; a full sweep run from a worktree prints its
+  findings but leaves `STORE_AHEAD_OF_REPO.md` to the primary's sweep (its verdicts are
+  branch-relative and each sweep replaces the ledger). Because those dirs are shared, each
+  rescue lands in its own `repo-first-rescue/<skill>/<UTC timestamp>-<checkout>/` dir
+  (never overwritten), and reimport baselines are per session
+  (`reimport-baselines/<skill>/<session>.json`); once an install is recorded, every
+  session's baseline that predates it is used up. Built
   2026-08-04 after `masterlease-jurisdiction-rebase` drifted cache-ahead of the repo
   three times in one session, twice caught only by manual diffing because nothing ran
   this check automatically and nothing durable recorded what it found.
