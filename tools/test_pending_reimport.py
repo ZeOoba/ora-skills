@@ -13,9 +13,11 @@ or the real AppData runtime cache) so they're deterministic regardless of live
 drift state.
 """
 import contextlib
+import importlib
 import io
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -42,6 +44,22 @@ def _write_long(path: Path, text: str) -> None:
         f.write(text)
 
 
+def _rmtree(path: Path) -> None:
+    """Long-path-safe: a fixture built past MAX_PATH (see WindowsMaxPath below) is
+    invisible to a plain rmtree the same way it's invisible to a plain is_file().
+    And git writes object files read-only, which rmtree cannot unlink on Windows --
+    with ignore_errors=True every git-backed fixture leaked silently (~2,585 dirs in
+    %TEMP% by 2026-09-23). Clear the bit and retry; still best-effort, so a locked
+    file never fails a test."""
+    def _retry(func, p, _exc):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except Exception:  # onexc can also hand over os.open/os.close
+            pass
+    shutil.rmtree(pr._win_long(path), onexc=_retry)
+
+
 class FixtureTestCase(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix='pending_reimport_test_'))
@@ -51,10 +69,7 @@ class FixtureTestCase(unittest.TestCase):
         self.cache.mkdir()
 
     def tearDown(self):
-        # Long-path-safe: a fixture built past MAX_PATH (see WindowsMaxPath below)
-        # is invisible to a plain rmtree the same way it's invisible to a plain
-        # is_file() -- ignore_errors=True would otherwise leak it on disk forever.
-        shutil.rmtree(pr._win_long(self.tmp), ignore_errors=True)
+        _rmtree(self.tmp)
 
 
 class SweepDrift(FixtureTestCase):
@@ -889,7 +904,7 @@ class ChangedFilesMergeCommit(unittest.TestCase):
         self._git('config', 'core.hooksPath', str(self.tmp / 'no-hooks'))
 
     def tearDown(self):
-        shutil.rmtree(pr._win_long(self.tmp), ignore_errors=True)
+        _rmtree(self.tmp)
 
     def _git(self, *args):
         return subprocess.run(['git', '-C', str(self.repo), *args],
@@ -1099,7 +1114,7 @@ class CmdRecordDeliberatelyUnpublishedWarning(unittest.TestCase):
             self.addCleanup(p.stop)
 
     def tearDown(self):
-        shutil.rmtree(pr._win_long(self.tmp), ignore_errors=True)
+        _rmtree(self.tmp)
 
     def _git(self, *args):
         return subprocess.run(['git', '-C', str(self.repo), *args],
@@ -1163,16 +1178,6 @@ class LedgerResolvesToPrimaryCheckout(FixtureTestCase):
         _git(self.repo, '-c', 'user.name=t', '-c', 'user.email=t@t',
              'commit', '-q', '--allow-empty', '-m', 'init')
 
-    def tearDown(self):
-        # git object files are read-only on Windows; a plain rmtree fails on them
-        # silently (ignore_errors) and leaks the fixture.
-        for p in Path(pr._win_long(self.tmp)).rglob('*'):
-            try:
-                os.chmod(p, 0o700)
-            except OSError:
-                pass
-        super().tearDown()
-
     def test_worktree_resolves_to_primary_checkout(self):
         wt = self.tmp / 'wt'
         _git(self.repo, 'worktree', 'add', '-q', str(wt))
@@ -1195,11 +1200,134 @@ class LedgerResolvesToPrimaryCheckout(FixtureTestCase):
     def test_module_ledger_uses_ledger_path(self):
         self.assertEqual(pr.LEDGER, pr._ledger_path(pr.REPO))
 
+    def test_module_ledger_from_a_worktree_survives_worktree_remove(self):
+        # The assertion above passes on a revert whenever the suite runs from the
+        # primary checkout (both sides collapse to REPO/_staging). Reloading with
+        # REPO pointed at a real fixture worktree fails a revert from anywhere.
+        import package_skills
+        wt = self.tmp / 'wt'
+        _git(self.repo, 'worktree', 'add', '-q', str(wt))
+        self.addCleanup(importlib.reload, pr)
+        with unittest.mock.patch.object(package_skills, 'REPO', wt):
+            importlib.reload(pr)
+
+        pr.write_entries({'demo-skill': '- demo-skill | pending'})
+        _git(self.repo, 'worktree', 'remove', '--force', str(wt))
+
+        self.assertIn('demo-skill',
+                      pr.read_entries(self.repo / '_staging' / 'PENDING_REIMPORT.md'))
+
     def test_old_git_echoing_unknown_option_falls_back(self):
         # git < 2.31 prints an unrecognised rev-parse option back with exit 0.
         fake = subprocess.CompletedProcess([], 0, stdout='--path-format=absolute\nC:/x/.git\n', stderr='')
         with unittest.mock.patch.object(pr.subprocess, 'run', return_value=fake):
             self.assertEqual(pr._primary_checkout(self.repo), self.repo)
+
+
+class WriteEntriesIsAtomic(FixtureTestCase):
+    """write_entries() is the only writer of both durable ledgers (PENDING_REIMPORT
+    and repo_first_check's STORE_AHEAD_OF_REPO). A write that dies midway must leave
+    the previous ledger intact -- Path.write_text truncates the target BEFORE
+    writing, so any failure after open() used to leave an empty ledger behind."""
+
+    def setUp(self):
+        super().setUp()
+        self.ledger = self.tmp / '_staging' / 'LEDGER.md'
+        pr.write_entries({'kept-skill': '- kept-skill | pending'}, self.ledger)
+        self.before = self.ledger.read_bytes()
+
+    def test_failed_write_leaves_previous_ledger_intact(self):
+        # A lone surrogate cannot be UTF-8 encoded, so the write fails after open().
+        with self.assertRaises(UnicodeEncodeError):
+            pr.write_entries({'bad-skill': '- bad-skill | \ud800'}, self.ledger)
+
+        self.assertEqual(self.ledger.read_bytes(), self.before)
+
+    def test_failed_write_leaves_no_temp_file_behind(self):
+        with self.assertRaises(UnicodeEncodeError):
+            pr.write_entries({'bad-skill': '- bad-skill | \ud800'}, self.ledger)
+
+        self.assertEqual([p.name for p in self.ledger.parent.iterdir()], ['LEDGER.md'])
+
+    def test_transient_lock_on_the_ledger_is_retried(self):
+        # On Windows os.replace fails while ANY reader has the target open (Python's
+        # open() does not share delete access) -- a concurrent read_entries from
+        # another session, which write_text used to tolerate.
+        real_replace = os.replace
+        calls = []
+
+        def locked_twice(src, dst):
+            calls.append(dst)
+            if len(calls) <= 2:
+                raise PermissionError(13, 'being used by another process')
+            real_replace(src, dst)
+
+        with unittest.mock.patch.object(pr.os, 'replace', side_effect=locked_twice), \
+                unittest.mock.patch.object(pr.time, 'sleep'):
+            pr.write_entries({'new-skill': '- new-skill | pending'}, self.ledger)
+
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(list(pr.read_entries(self.ledger)), ['new-skill'])
+        self.assertEqual([p.name for p in self.ledger.parent.iterdir()], ['LEDGER.md'])
+
+    def test_persistent_lock_raises_and_leaves_previous_ledger_intact(self):
+        with unittest.mock.patch.object(pr.os, 'replace',
+                                        side_effect=PermissionError(13, 'locked')), \
+                unittest.mock.patch.object(pr.time, 'sleep'), \
+                self.assertRaises(PermissionError):
+            pr.write_entries({'new-skill': '- new-skill | pending'}, self.ledger)
+
+        self.assertEqual(self.ledger.read_bytes(), self.before)
+        self.assertEqual([p.name for p in self.ledger.parent.iterdir()], ['LEDGER.md'])
+
+    def test_transient_lock_on_a_ledger_read_is_retried(self):
+        # os.replace makes a reader that opens mid-rename fail with PermissionError on
+        # Windows (merge-gate race finding F3: 14 of 6,000 reads under contention).
+        real_read = Path.read_text
+        failures = []
+
+        def locked_twice(path, *a, **kw):
+            if path == self.ledger and len(failures) < 2:
+                failures.append(path)
+                raise PermissionError(13, 'being used by another process')
+            return real_read(path, *a, **kw)
+
+        with unittest.mock.patch.object(Path, 'read_text', locked_twice), \
+                unittest.mock.patch.object(pr.time, 'sleep'):
+            entries = pr.read_entries(self.ledger)
+
+        self.assertEqual(len(failures), 2)
+        self.assertEqual(list(entries), ['kept-skill'])
+
+    def test_a_ledger_that_vanishes_before_the_read_reads_as_empty(self):
+        # A concurrent `clear` of the last entry deletes the file between is_file()
+        # and the read (merge-gate round 2, race F1); that is "absent", not a crash.
+        def vanished(path, *a, **kw):
+            raise FileNotFoundError(2, 'No such file or directory', str(path))
+
+        with unittest.mock.patch.object(Path, 'read_text', vanished):
+            self.assertEqual(pr.read_entries(self.ledger), {})
+
+    def test_successful_write_replaces_content(self):
+        pr.write_entries({'new-skill': '- new-skill | pending'}, self.ledger)
+
+        self.assertEqual(list(pr.read_entries(self.ledger)), ['new-skill'])
+        self.assertEqual([p.name for p in self.ledger.parent.iterdir()], ['LEDGER.md'])
+
+
+class FixtureTeardownRemovesGitRepos(unittest.TestCase):
+    """git writes object files read-only; rmtree(ignore_errors=True) skipped them on
+    Windows and every git-backed fixture in this suite leaked into %TEMP%."""
+
+    def test_rmtree_removes_a_git_repo_with_read_only_objects(self):
+        tmp = Path(tempfile.mkdtemp(prefix='pending_reimport_test_'))
+        _git(tmp, 'init', '-q')
+        _git(tmp, '-c', 'user.name=t', '-c', 'user.email=t@t',
+             'commit', '-q', '--allow-empty', '-m', 'init')
+
+        _rmtree(tmp)
+
+        self.assertFalse(tmp.exists())
 
 
 if __name__ == '__main__':

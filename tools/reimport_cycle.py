@@ -18,13 +18,16 @@ Usage
 
     python tools/reimport_cycle.py close <skill> [<skill> ...]
                                      [--note TEXT] [--no-clear] [--no-sweep]
+                                     [--baseline "YYYY-MM-DD HH:MM:SS"]
         After the click(s). Runs `reimport_correlate.py postclick --no-append`
         per skill (log liveness + verify). ONLY if every skill is CONFIRMED:
         one combined event-log append via append-event-log.py --entry-file
         (exit 0 required), THEN pending_reimport.py clear per skill, THEN the
         closing sweep (repo_first_check, frontmatter_sweep,
         verify_installed_cache). Any non-CONFIRMED verdict stops with exit 1
-        and appends nothing.
+        and appends nothing. After a successful append it runs
+        `reimport_correlate.py consume`; if that fails, close still finishes but
+        exits 1 (the append stands -- re-run only `consume`, not close).
 
 Host-only: needs the real AppData cache and main.log (Code surface or the
 Desktop Commander bridge). From Cowork bash it inherits CACHE_ROOT blindness.
@@ -118,12 +121,14 @@ def cmd_prep(skills: list[str], out: Path) -> int:
     return 0
 
 
-def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool) -> int:
+def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool,
+              baseline: str | None = None) -> int:
     failed = []
     for s in skills:
         print(f"== postclick {s}")
+        extra = ["--baseline", baseline] if baseline else []
         if _run([str(TOOLS / "reimport_correlate.py"), "postclick", s,
-                 "--no-append"]).returncode:
+                 "--no-append", *extra]).returncode:
             failed.append(s)
     if failed:
         print(f"close: STOP -- not CONFIRMED: {', '.join(failed)}. Nothing appended.")
@@ -139,6 +144,12 @@ def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool) -> 
     if _run([str(APPEND), "--entry-file", str(entry)]).returncode:
         print("close: append FAILED -- ledger NOT cleared.")
         return 1
+    # postclick ran with --no-append, so it left the baselines in place; the install is
+    # recorded now, so use them up (a kept baseline would CONFIRM this install again).
+    consume_rc = _run([str(TOOLS / "reimport_correlate.py"), "consume", *skills]).returncode
+    if consume_rc:
+        print("close: WARNING -- baseline(s) NOT used up; run `reimport_correlate.py consume "
+              f"{' '.join(skills)}` before the next reimport, or it will CONFIRM this one again.")
     if clear:
         for s in skills:
             _run([str(TOOLS / "pending_reimport.py"), "clear", s])
@@ -155,7 +166,7 @@ def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool) -> 
         if rc:
             print("close: closing sweep reported findings -- re-run the failing tool.")
             return 1
-    return 0
+    return 1 if consume_rc else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -171,10 +182,12 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--note")
     c.add_argument("--no-clear", action="store_true")
     c.add_argument("--no-sweep", action="store_true")
+    c.add_argument("--baseline", help='"YYYY-MM-DD HH:MM:SS" -- when prep ran in another '
+                                      'session (baselines are session-scoped)')
     a = ap.parse_args(argv)
     if a.cmd == "prep":
         return cmd_prep(a.skills, a.out)
-    return cmd_close(a.skills, a.note, not a.no_clear, not a.no_sweep)
+    return cmd_close(a.skills, a.note, not a.no_clear, not a.no_sweep, a.baseline)
 
 
 if __name__ == "__main__":

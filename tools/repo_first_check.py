@@ -42,9 +42,12 @@ remote-tracking refs only -- never the working tree or local main -- and any fet
 failure is ignored (the sweep then classifies against whatever origin/main it has).
 
 On a BAD_VERDICTS finding it (a) prints a loud warning and (b) RESCUES the cache
-copy to `_staging/repo-first-rescue/<skill>/` so the about-to-be-clobbered content
-survives for review. A FULL-SWEEP run (no `--check-staged`) also persists findings
-to the durable `_staging/STORE_AHEAD_OF_REPO.md` ledger.
+copy to `_staging/repo-first-rescue/<skill>/<UTC timestamp>-<checkout>/` so the
+about-to-be-clobbered content survives for review (each rescue its own dir; the newest
+is the one to reconcile; flat files directly under `<skill>/` are pre-#79 legacy). A FULL-SWEEP run (no `--check-staged`) also persists findings
+to the durable `_staging/STORE_AHEAD_OF_REPO.md` ledger. Both live in the PRIMARY
+checkout's `_staging/` even when run from a git worktree (see STAGING); a worktree's
+full sweep prints its findings but leaves that shared ledger to the primary's sweep.
 
 It NEVER blocks a commit -- same posture as Check 4, and for the same reason: a
 mirror-state finding is not a content-quality finding, and a false positive here
@@ -55,9 +58,9 @@ it never lets an unreachable cache root masquerade as a clean sweep (see main())
 from __future__ import annotations
 
 import re
-import shutil
 import os
 import subprocess
+import tempfile
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -74,6 +77,7 @@ from pending_reimport import (  # noqa: E402
     _isdir_long,
     _isfile_long,
     _normalized_hash_bytes,
+    _primary_checkout,
     _read_bytes_long,
     _win_long,
     all_skill_dirs,
@@ -82,7 +86,14 @@ from pending_reimport import (  # noqa: E402
     write_entries,
 )
 
-RESCUE_DIR = REPO / '_staging' / 'repo-first-rescue'
+# Untracked durable state lives in the PRIMARY checkout's _staging/, never a
+# worktree's: `git worktree remove` destroys a worktree's _staging/, and a rescue
+# copy is the only surviving copy of the clobbered cache content (the pre-commit
+# hook runs --check-staged inside whichever worktree is committing). Same fix as
+# pending_reimport's ledger (#78). REPO itself stays this checkout's root -- the
+# sweep must read the checkout's own content.
+STAGING = _primary_checkout(REPO) / '_staging'
+RESCUE_DIR = STAGING / 'repo-first-rescue'
 
 ORIGIN_MAIN = 'origin/main'
 MAIN_BEHIND = 'MAIN-BEHIND-ORIGIN'
@@ -104,7 +115,7 @@ BAD_VERDICTS = ('CACHE-AHEAD', 'DIVERGENT', 'REPO-MISSING')
 # unnoticed three times on 2026-08-04 -- still gets caught and stays durably visible
 # past this run's console output, instead of requiring someone to think to run this by
 # hand and read it before the terminal scrolls.
-LEDGER = REPO / '_staging' / 'STORE_AHEAD_OF_REPO.md'
+LEDGER = STAGING / 'STORE_AHEAD_OF_REPO.md'
 
 LEDGER_HEADER = (
     '# STORE AHEAD OF REPO -- runtime cache holds content never committed to this repo\n'
@@ -119,7 +130,8 @@ LEDGER_HEADER = (
     '# committed here. This is the REVERSE of _staging/PENDING_REIMPORT.md (repo-ahead-of-\n'
     '# cache, pending a Save-skill reimport). Companion rescue copies of the about-to-be-\n'
     '# clobbered cache content (if a commit has since touched the skill) live under\n'
-    '# _staging/repo-first-rescue/<skill>/.\n'
+    '# _staging/repo-first-rescue/<skill>/<UTC timestamp>-<checkout>/ -- reconcile from\n'
+    '# the newest; flat files directly under <skill>/ are pre-#79 legacy rescues.\n'
     '#\n'
     '# THIS LEDGER IS DERIVED, NOT AN EVENT LOG -- unlike PENDING_REIMPORT.md, no line here\n'
     '# is ever hand-cleared. It reflects live state as of the last full-sweep run: commit the\n'
@@ -403,19 +415,76 @@ def record_ledger(findings, ledger_path: Path = LEDGER) -> list[str]:
     return sorted(set(existing) - set(entries))
 
 
+_RESCUE_RUN = re.compile(r'^\d{8}T\d{12}Z-')
+
+
+def _read_with_stat(path: Path):
+    with open(_win_long(path), 'rb') as f:        # long-path-safe, like _read_bytes_long
+        return f.read(), os.fstat(f.fileno())
+
+
+def _newest_rescue(skill_dir: Path) -> Path | None:
+    if not skill_dir.is_dir():
+        return None
+    runs = sorted(p for p in skill_dir.iterdir() if p.is_dir() and _RESCUE_RUN.match(p.name))
+    return runs[-1] if runs else None
+
+
 def rescue(skill: str, rels: list[str], cache_root: Path = CACHE_ROOT,
-           rescue_dir: Path = RESCUE_DIR) -> Path | None:
-    dest = rescue_dir / skill
+           rescue_dir: Path = RESCUE_DIR, checkout: str = REPO.name) -> Path | None:
+    """Copy the about-to-be-clobbered cache files into their OWN
+    `<rescue_dir>/<skill>/<UTC timestamp>-<checkout>/` dir. Every checkout's pre-commit
+    and sweep share rescue_dir (STAGING), and a rescue is the only surviving copy, so a
+    later rescue must never overwrite an earlier one. The copy is built under a
+    dot-prefixed temp dir and renamed into place, so a failed copy never leaves a
+    half-rescue; content identical to the newest rescue reuses that dir. A file that
+    cannot be read (a concurrent reimport replaced the cache mid-rescue) is reported
+    and skipped -- it never costs the files that were read."""
+    skill_dir = rescue_dir / skill
+    tmp = None
     try:
-        dest.mkdir(parents=True, exist_ok=True)
+        # Bytes AND stat from one open handle: the cache can be replaced (a concurrent
+        # Save-skill reimport, or Check 4's mirror sync) the moment the read finishes,
+        # and a second look would then abort the rescue or stamp the wrong mtime.
+        data, unread = {}, []
         for rel in rels:
-            src = Path(cache_root) / skill / rel
-            tgt = dest / rel
+            try:
+                data[rel] = _read_with_stat(Path(cache_root) / skill / rel)
+            except OSError as exc:
+                unread.append(f'{rel} ({exc.strerror or exc})')
+        if unread:
+            print(f'repo_first_check: rescue of {skill} could not read {len(unread)} '
+                  f'file(s) from the cache (replaced mid-rescue?): {", ".join(unread)}',
+                  file=sys.stderr)
+        if not data:
+            print(f'repo_first_check: rescue copy failed for {skill}: nothing readable',
+                  file=sys.stderr)
+            return None
+        newest = _newest_rescue(skill_dir)
+        if newest and all((newest / rel).is_file() and (newest / rel).read_bytes() == b
+                          for rel, (b, _st) in data.items()):
+            return newest
+        stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+        name = f"{stamp}-{re.sub(r'[^A-Za-z0-9._-]', '_', checkout)}"
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        tmp = Path(tempfile.mkdtemp(prefix=f'.tmp-{name}-', dir=skill_dir))
+        for rel, (b, st) in data.items():
+            tgt = tmp / rel
             tgt.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(_win_long(src), tgt)  # long-path-safe source read
-        return dest
+            tgt.write_bytes(b)
+            # Keep the cache file's mtime (when the platform-side edit happened).
+            # Metadata is best-effort: it must never cost the bytes.
+            try:
+                os.utime(tgt, ns=(st.st_atime_ns, st.st_mtime_ns))
+            except OSError:
+                pass
+        final = skill_dir / name
+        os.rename(tmp, final)
+        return final
     except OSError as exc:                # never let a rescue failure block anything
-        print(f'repo_first_check: rescue copy failed for {skill}: {exc}', file=sys.stderr)
+        # A temp dir that got this far may hold the only copy -- leave it, say where.
+        kept = f' (partial copy kept at {tmp})' if tmp is not None and tmp.exists() else ''
+        print(f'repo_first_check: rescue copy failed for {skill}: {exc}{kept}', file=sys.stderr)
         return None
 
 
@@ -486,25 +555,39 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
             if v in {bv for _, bv in bad}:
                 print(f'   {fix[v]}', file=sys.stderr)
         print('   The mirror sync that runs next WILL overwrite it.', file=sys.stderr)
-        dest = rescue(skill, [rel for rel, _ in bad], cache_root, rescue_dir)
+        dest = rescue(skill, [rel for rel, _ in bad], cache_root, rescue_dir,
+                      checkout=Path(repo_root).resolve().name)
         if dest:
             print(f'   Rescued the cache copy -> {dest}', file=sys.stderr)
             print('   Reconcile it into the repo before relying on either store.', file=sys.stderr)
 
-    if not check_staged:
+    if not check_staged and _primary_checkout(repo_root).resolve() != Path(repo_root).resolve():
+        # The ledger is derived and every verdict is relative to the swept branch,
+        # while the ledger itself is shared (STAGING). A feature worktree's sweep would
+        # replace the primary's ledger -- a clean one wiping entries and resetting
+        # their "pending since" -- so only the primary checkout's sweep owns it.
+        print(f'repo_first_check: {repo_root} is not the primary checkout -- findings '
+              f'printed only, {ledger_path.name} left untouched')
+    elif not check_staged:
         # Full sweep only -- --check-staged's narrower staged-skill scope would
         # otherwise make the ledger flicker skills in and out on every unrelated
         # commit. The full sweep is the only mode that ever sees a skill nobody is
         # currently committing to, so it's the only mode that owns this ledger. Safe
         # to call unconditionally here: the cache-reachability guard above already
         # returned before this point if cache_root were unreachable.
-        cleared = record_ledger(findings, ledger_path)
-        if cleared:
-            noun = 'entry' if len(cleared) == 1 else 'entries'
-            print(f'repo_first_check: cleared {len(cleared)} resolved ledger {noun} '
-                  f'-> {ledger_path.name}: {", ".join(cleared)}')
-        elif findings:
-            print(f'repo_first_check: {len(findings)} skill(s) recorded -> {ledger_path}')
+        try:
+            cleared = record_ledger(findings, ledger_path)
+        except OSError as exc:
+            # Never blocks: write_entries re-raises a lock that outlasts its retry.
+            print(f'repo_first_check: ledger write failed ({exc}) -- {ledger_path.name} '
+                  f'left untouched; findings above still stand', file=sys.stderr)
+        else:
+            if cleared:
+                noun = 'entry' if len(cleared) == 1 else 'entries'
+                print(f'repo_first_check: cleared {len(cleared)} resolved ledger {noun} '
+                      f'-> {ledger_path.name}: {", ".join(cleared)}')
+            elif findings:
+                print(f'repo_first_check: {len(findings)} skill(s) recorded -> {ledger_path}')
 
     behind = sorted(s for s, v, _ in all_results if v == MAIN_BEHIND)
     if behind and not quiet:
