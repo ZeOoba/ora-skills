@@ -63,6 +63,9 @@
     "special_provisions": {"type": "array", "items": {"type": "object", "properties": {"title": {"type": "string"}, "text": {"type": "string"}, "placement": {"type": "string"}}}},
     "ratified_position_departures": {"type": "array", "items": {"type": "object", "properties": {"position": {"type": "integer"}, "reason": {"type": "string"}, "compelled_by_loi": {"type": "boolean"}}}},
     "decision_gates": {"type": "array", "items": {"type": "object", "properties": {"question": {"type": "string"}, "options": {"type": "array", "items": {"type": "string"}}, "recommendation": {"type": "string"}, "resolved": {"type": ["string", "null"]}}}},
-    "open_items": {"type": "array", "items": {"type": "string"}}
+    "open_items": {"type": "array", "items": {"oneOf": [
+      {"type": "string"},
+      {"type": "object", "required": ["item", "source"], "properties": {"item": {"type": "string"}, "resolution": {"type": ["string", "null"]}, "lease_clause": {"type": ["string", "null"]}, "source": {"type": "string"}}}
+    ]}, "description": "String items are unresolved by definition. Object items are resolved (for the conformance matrix's open_items row) only when `resolution` is non-null AND the `lease_clause` phrase appears in the lease."}
   }
 }

@@ -60,5 +60,5 @@
     {"question": "Option Term rent", "options": ["flat", "3% compounding", "FMR with floor"], "recommendation": "3% compounding", "resolved": "3% compounding"},
     {"question": "HVAC filters on tenant", "options": ["yes", "no"], "recommendation": "yes", "resolved": "yes"}
   ],
-  "open_items": ["Exhibit A suite plan", "tenant notice address/e-mail (blank lines left)", "confirm water meter basis with SVN PM", "SVN dual-agency consent on file", "permit timing for office partition vs 1 Oct delivery"]
+  "open_items": [{"item": "Exhibit A suite plan", "resolution": "Suite plan attached as Exhibit A", "lease_clause": "Exhibit A suite plan", "source": "LOI p.2 / Cowork 2026-09"}, "tenant notice address/e-mail (blank lines left)", "confirm water meter basis with SVN PM", "SVN dual-agency consent on file", "permit timing for office partition vs 1 Oct delivery"]
 }
