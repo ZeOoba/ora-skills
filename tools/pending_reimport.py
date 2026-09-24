@@ -60,8 +60,10 @@ overrides it for a genuine edge case (skips the check for every skill named in
 this invocation) and is never silent -- it prints why the guard would have
 refused before proceeding.
 """
+import contextlib
 import hashlib
 import os
+import random
 import re
 import subprocess
 import sys
@@ -244,8 +246,8 @@ def _atomic_write_text(path: Path, text: str) -> None:
     """Write-then-rename: Path.write_text truncates the target before writing, so a
     write that died midway left an EMPTY file. A same-directory temp file plus
     os.replace leaves either the old content or the new, never a torn file. Atomic
-    per write only -- two concurrent read-modify-write callers can still lose an
-    update."""
+    per write only -- a read-modify-write must go through update_entries(), which
+    holds the ledger's cross-process lock, or a concurrent writer's update is lost."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f'.{path.name}.', suffix='.tmp')
     try:
@@ -284,7 +286,8 @@ def write_entries(entries: dict[str, str], ledger_path: Path = LEDGER, header: s
     """`header` is parameterized (default = this module's own PENDING_REIMPORT
     header) so tools/repo_first_check.py can reuse this same read/write/empty-file-
     deletes convention for its own STORE_AHEAD_OF_REPO ledger -- the reverse-
-    direction companion -- without writing the wrong header into it."""
+    direction companion -- without writing the wrong header into it. A bare write
+    with no lock: callers that read first go through update_entries()."""
     ledger_path.parent.mkdir(parents=True, exist_ok=True)
     if not entries:
         # nothing pending -> remove the ledger so its mere presence always means "work to do"
@@ -293,6 +296,137 @@ def write_entries(entries: dict[str, str], ledger_path: Path = LEDGER, header: s
         return
     body = '\n'.join(entries[k] for k in sorted(entries)) + '\n'
     _atomic_write_text(ledger_path, header + body)
+
+
+# Cross-process lock for every ledger read-modify-write (2026-09-24). write_entries()
+# is atomic per write, but read_entries -> mutate -> write_entries is not: two
+# processes that both read before either writes each drop the other's update. The
+# ledgers live in the PRIMARY checkout's _staging/, shared by every worktree's
+# post-commit hook, the daily backfill and repo_first_check's sweep, so concurrent
+# writers are routine. PR #79's merge gate (race finding F2, 3 processes x 200 cycles)
+# measured 21.7-40.2% of updates lost.
+#
+# The lock is a kernel byte-range lock (msvcrt.locking / fcntl.flock) on a sidecar
+# file that is never deleted. The OS releases it when the holder's handle closes or
+# its process dies, so there is no stale-lock state to time out or break. Deleting
+# the sidecar would let a waiter lock an unlinked file while a newcomer locks a fresh
+# one, so it stays in place.
+LOCK_TIMEOUT_S = 10.0
+
+if os.name == 'nt':
+    import msvcrt
+
+    def _try_lock(fd: int) -> bool:
+        os.lseek(fd, 0, os.SEEK_SET)
+        try:
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        except PermissionError:          # EACCES: another handle holds the byte
+            return False
+        return True
+
+    def _unlock(fd: int) -> None:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+else:
+    import fcntl
+
+    def _try_lock(fd: int) -> bool:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        return True
+
+    def _unlock(fd: int) -> None:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+
+
+class LedgerLockTimeout(OSError):
+    """The ledger's lock was not free within the bound. Nothing was written. An
+    OSError so a caller that already degrades a failed ledger write to a warning
+    (repo_first_check.run) treats it the same way."""
+
+
+def _lock_path(ledger_path: Path) -> Path:
+    return ledger_path.with_name(f'.{ledger_path.name}.lock')
+
+
+@contextlib.contextmanager
+def ledger_lock(ledger_path: Path, timeout: float | None = None):
+    """Hold ledger_path's cross-process lock for the duration of the block. Polls
+    for up to `timeout` seconds (default LOCK_TIMEOUT_S, read at call time), then
+    raises LedgerLockTimeout. Never proceeds unlocked."""
+    timeout = LOCK_TIMEOUT_S if timeout is None else timeout
+    lock = _lock_path(ledger_path)
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    fd = _retry_locked(lambda: os.open(lock, os.O_RDWR | os.O_CREAT, 0o644))
+    try:
+        deadline = time.monotonic() + timeout
+        delay = 0.002
+        while not _try_lock(fd):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise LedgerLockTimeout(
+                    f'{ledger_path.name} is locked by another process; not acquired '
+                    f'within {timeout:g}s ({lock})')
+            # Jittered backoff so waiters released together don't retry in lockstep.
+            # Capped low: a ledger write holds the lock ~10ms, and a long sleep leaves
+            # it idle while every waiter naps.
+            time.sleep(min(remaining, delay * (0.5 + random.random())))
+            delay = min(delay * 2, 0.01)
+        try:
+            yield
+        finally:
+            try:
+                _unlock(fd)
+            except OSError:
+                pass                     # os.close below releases it regardless
+    finally:
+        os.close(fd)
+
+
+def update_entries(mutate, ledger_path: Path | None = None, header: str = HEADER,
+                   timeout: float | None = None) -> None:
+    """The ONLY sanctioned read-modify-write of a ledger: take its lock, read, call
+    mutate(entries) to change the dict in place, write. mutate returning False
+    skips the write (backfill's no-change case keeps hand annotations). Anything
+    slow belongs BEFORE this call, never inside mutate, because every other writer
+    waits on it. `ledger_path` defaults to LEDGER read at call time, so a test that
+    patches LEDGER redirects the lock too."""
+    ledger_path = LEDGER if ledger_path is None else ledger_path
+    with ledger_lock(ledger_path, timeout):
+        entries = read_entries(ledger_path)
+        if mutate(entries) is not False:
+            write_entries(entries, ledger_path, header)
+
+
+def record_hits(hits, shorthash, subject, ledger_path: Path | None = None,
+                timeout: float | None = None) -> None:
+    """cmd_record's ledger write: one line per affected skill, replacing any prior
+    line for that skill."""
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%MZ')
+    lines = {skill: format_ledger_line(skill, now, shorthash, subject,
+                                       ', '.join(sorted(triggers)), plugin_of(skill))
+             for skill, triggers in hits.items()}
+    update_entries(lambda entries: entries.update(lines), ledger_path, timeout=timeout)
+
+
+def clear_entries(skills, ledger_path: Path | None = None,
+                  timeout: float | None = None) -> list[str]:
+    """cmd_clear's ledger write, after its log-before-clear guard. Returns the
+    skills that were actually pending and are now cleared."""
+    cleared: list[str] = []
+
+    def mutate(entries):
+        cleared[:] = [s for s in skills if entries.pop(s, None) is not None]
+
+    update_entries(mutate, ledger_path, timeout=timeout)
+    return cleared
+
+
+def _ledger_failure_message(exc: OSError, not_done: str, remedy: str) -> str:
+    label = 'LEDGER LOCK TIMEOUT' if isinstance(exc, LedgerLockTimeout) else 'LEDGER WRITE FAILED'
+    return f'pending_reimport: {label} -- {exc}. {not_done}; the ledger is unchanged. {remedy}'
 
 
 def _normalized_hash_bytes(data: bytes) -> str:
@@ -487,16 +621,39 @@ def candidates(
 
 
 def backfill(
-    repo_root: Path = REPO, cache_root: Path = CACHE_ROOT, ledger_path: Path = LEDGER,
+    repo_root: Path = REPO, cache_root: Path = CACHE_ROOT, ledger_path: Path | None = None,
+    timeout: float | None = None,
 ) -> list[str]:
     """Run a full sweep and PERSIST any drifted skill missing from the ledger,
     so it becomes durably visible via `list` (not just a one-off union computed
     by `candidates`). Never touches an entry that's already in the ledger --
     a real commit-hash entry is never clobbered by a backfill stub."""
-    entries = read_entries(ledger_path)
+    # The sweep hashes every skill (seconds), so it runs BEFORE taking the lock; the
+    # ledger is read under the lock, so a commit recorded mid-sweep is never dropped.
+    drifted = sweep_drift(repo_root, cache_root)
+    if not drifted:
+        return []                        # nothing to seed: stay read-free and lock-free
     now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%MZ')
+    seeded: list[str] = []
+
+    def mutate(entries):
+        seeded[:] = _seed(entries, drifted, now)
+        # Do NOT rewrite when nothing was seeded. write_entries() reconstructs the file
+        # from parsed "- <skill> |" lines only, so an unconditional write silently drops
+        # any hand-added annotation. That was tolerable when this ran only on commit;
+        # as of 2026-09-07 it also runs DAILY and unattended from the doctrine guard,
+        # which would make the loss a recurring, invisible one.
+        return bool(seeded)
+
+    update_entries(mutate, ledger_path, timeout=timeout)
+    return seeded
+
+
+def _seed(entries: dict[str, str], drifted, now: str) -> list[str]:
+    """backfill's mutation: add a stub line for each drifted skill not already in
+    the ledger. Returns the skills it added."""
     seeded = []
-    for skill in sweep_drift(repo_root, cache_root):
+    for skill in drifted:
         if skill in entries:
             continue
         # OI-157, extended to backfill 2026-09-07 (adversarial review of the
@@ -514,14 +671,6 @@ def backfill(
             f'| trigger: full repo-vs-cache SHA256 sweep'
         )
         seeded.append(skill)
-    # Do NOT rewrite when nothing was seeded. write_entries() reconstructs the file
-    # from parsed "- <skill> |" lines only, so an unconditional write silently drops
-    # any hand-added annotation. That was tolerable when this ran only on commit;
-    # as of 2026-09-07 it also runs DAILY and unattended from the doctrine guard,
-    # which would make the loss a recurring, invisible one.
-    if not seeded:
-        return []
-    write_entries(entries, ledger_path)
     return seeded
 
 
@@ -693,17 +842,29 @@ def cmd_record(commit: str) -> None:
         return
     shorthash = _git('rev-parse', '--short', commit).strip()
     subject = _git('log', '-1', '--format=%s', commit).strip().replace('|', '/')
-    now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%MZ')
-    entries = read_entries()
-    for skill, triggers in hits.items():
-        trig = ', '.join(sorted(triggers))
-        entries[skill] = format_ledger_line(
-            skill, now, shorthash, subject, trig, plugin_of(skill)
-        )
-    write_entries(entries)
+    try:
+        record_hits(hits, shorthash, subject)
+    except OSError as exc:
+        # Any OSError, not just LedgerLockTimeout: main()'s blanket except would route
+        # the rest to stderr, which post-commit discards, so the row would vanish
+        # silently. stdout is the console of whoever just ran `git commit`. The remedy
+        # is re-running record, not backfill: backfill never seeds a skill with no
+        # cache dir or a DELIBERATELY_UNPUBLISHED one, drops the plugin routing tag,
+        # and loses the commit's hash and subject. record replaces each skill's line,
+        # so re-running it is safe (if a later commit has recorded the same skill
+        # since, the older hash replaces the newer one; the skill stays pending).
+        print(_ledger_failure_message(
+            exc, f'{", ".join(sorted(hits))} from commit {shorthash} NOT recorded',
+            f'Re-run `python tools/pending_reimport.py record {shorthash}`.'))
+        _warn_deliberately_unpublished(hits)
+        sys.exit(1)
     print(f'pending_reimport: recorded {len(hits)} skill(s) -> {LEDGER}')
     for skill in sorted(hits):
         print(f'   {skill}')
+    _warn_deliberately_unpublished(hits)
+
+
+def _warn_deliberately_unpublished(hits) -> None:
     # Commit-time flag for OI-157 skills (added 2026-09-11, ORA Setup Audit R25
     # remediation). Before this, a commit touching a DELIBERATELY_UNPUBLISHED
     # skill's packaged files (e.g. today's vendor-contract-qc-into-vendor-
@@ -771,7 +932,12 @@ def cmd_candidates() -> None:
 
 
 def cmd_backfill() -> None:
-    seeded = backfill()
+    try:
+        seeded = backfill()
+    except LedgerLockTimeout as exc:
+        print(_ledger_failure_message(exc, 'Sweep-detected drift NOT seeded',
+                                      'The next backfill run seeds it.'), file=sys.stderr)
+        sys.exit(1)
     if not seeded:
         print('pending_reimport: backfill found no drift beyond what the ledger already tracks')
         return
@@ -951,9 +1117,12 @@ def cmd_clear(skills: list[str], force: bool = False) -> None:
             skills = [s for s in skills if s not in unlogged]
             if not skills:
                 sys.exit(1)
-    entries = read_entries()
-    cleared = [s for s in skills if entries.pop(s, None) is not None]
-    write_entries(entries)
+    try:
+        cleared = clear_entries(skills)
+    except LedgerLockTimeout as exc:
+        print(_ledger_failure_message(exc, f'{", ".join(skills)} NOT cleared',
+                                      'Re-run the same clear.'), file=sys.stderr)
+        sys.exit(1)
     if cleared:
         print(f'pending_reimport: cleared {", ".join(cleared)}')
     missing = [s for s in skills if s not in cleared]
