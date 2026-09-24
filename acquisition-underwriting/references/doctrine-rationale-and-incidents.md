@@ -1,6 +1,6 @@
 # Doctrine Rationale, Validation Cases and Incident History
 
-Full v4.22 wording of every `SKILL.md` rule that v4.23 (2026-09-22, progressive-disclosure pass) states in condensed form. Each line below is reproduced verbatim from `SKILL.md` as it stood at v4.22, grouped under the section it came from, so the validation case, incident narrative, calibration rationale and provenance behind each condensed rule stay on the record.
+Full v4.22 wording of every `SKILL.md` rule that v4.23 (2026-09-22, progressive-disclosure pass) states in condensed form. Each line below is reproduced verbatim from `SKILL.md` as it stood at v4.22 (one exception: v4.24, 2026-09-23, updated the STAGE 2.3 current-LTV aside in both files to keep the numbers identical), grouped under the section it came from, so the validation case, incident narrative, calibration rationale and provenance behind each condensed rule stay on the record.
 
 **The condensed rule in `SKILL.md` is operative.** No number here differs from the inline one by design — a discrepancy is a bug to report, not a second source of doctrine. Load this file when a rule's origin matters (disputing, extending, or back-testing it), not for a routine screen.
 
