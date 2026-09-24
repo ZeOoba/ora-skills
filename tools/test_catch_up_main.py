@@ -14,7 +14,9 @@ installed from those merged PRs as DIVERGENT, and each catch-up was a hand-run
 unattended writer into a shared single-writer checkout: it merges ONLY when every
 safety condition holds, and otherwise leaves HEAD exactly where it was.
 """
+import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -23,6 +25,20 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import catch_up_main as cum  # noqa: E402
+
+
+def _rmtree(path) -> None:
+    """git writes object files read-only, which rmtree cannot unlink on Windows --
+    with ignore_errors=True every git-backed fixture here leaked silently into %TEMP%.
+    Clear the bit and retry; still best-effort, so a locked file never fails a test.
+    (Same helper as PR #79 adds to tools/test_pending_reimport.py.)"""
+    def _retry(func, p, _exc):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except Exception:  # onexc can also hand over os.open/os.close
+            pass
+    shutil.rmtree(path, onexc=_retry)
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -66,7 +82,7 @@ class Fixture(unittest.TestCase):
         _git(self.seed, 'push', '-q', 'origin', 'main')
 
     def tearDown(self):
-        shutil.rmtree(self.tmp, ignore_errors=True)
+        _rmtree(self.tmp)
 
 
 class CatchUp(Fixture):
@@ -497,6 +513,18 @@ class TimeBudget(Fixture):
         self.assertEqual(status, 'MERGED')
         self.assertIn('verify', detail)
         self.assertEqual(_git(self.local, 'rev-list', '--count', 'HEAD..origin/main'), '0')
+
+
+class FixtureTeardownRemovesGitRepos(unittest.TestCase):
+    """git writes object files read-only; rmtree(ignore_errors=True) skipped them on
+    Windows and every git-backed fixture in this file leaked into %TEMP%."""
+
+    def test_teardown_removes_the_bare_origin_and_both_clones(self):
+        fx = CatchUp('test_noop_when_already_caught_up')
+        fx.setUp()
+        fx.tearDown()
+
+        self.assertFalse(fx.tmp.exists())
 
 
 if __name__ == '__main__':
