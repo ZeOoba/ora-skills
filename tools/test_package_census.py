@@ -2,6 +2,8 @@
 """Tests for settlement-basis-extraction/scripts/package_census.py. Run: python tools/test_package_census.py"""
 import json
 import os
+import shutil
+import stat
 import sys
 import tempfile
 import unittest
@@ -14,6 +16,21 @@ try:
     import fitz
 except ImportError:  # pragma: no cover
     fitz = None
+
+
+def _rmtree(path) -> None:
+    """Extended-length-safe: the >260-character fixture in
+    test_path_over_260_characters_is_read_and_flagged is invisible to a plain rmtree
+    on Windows. Clears a read-only bit and retries; still best-effort, so a locked
+    file never fails a test. (Same helper as PR #79 adds to
+    tools/test_pending_reimport.py.)"""
+    def _retry(func, p, _exc):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except Exception:  # onexc can also hand over os.open/os.close
+            pass
+    shutil.rmtree(pc.extended(path), onexc=_retry)
 
 
 def make_pdf(path, pages):
@@ -31,6 +48,7 @@ def make_pdf(path, pages):
 class Census(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
+        self.addCleanup(_rmtree, self.dir)
         self.long_text = "Settlement statement line item " * 8
 
     def test_text_scan_and_partial_are_classified(self):
@@ -100,6 +118,7 @@ class Census(unittest.TestCase):
 class FactBase(unittest.TestCase):
     def write(self, obj):
         fd, p = tempfile.mkstemp(suffix=".json")
+        self.addCleanup(os.remove, p)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(obj, f)
         return p
@@ -123,6 +142,31 @@ class FactBase(unittest.TestCase):
         fb = pc.scan_factbase(p)
         self.assertTrue(fb["corporate_folder_read"])
         self.assertFalse(fb["rechecked"])
+
+
+class FixturesCleanUp(unittest.TestCase):
+    """Census.setUp's mkdtemp() and FactBase.write's mkstemp() were never removed, so
+    every run left bare tmp* dirs and tmp*.json files in %TEMP%."""
+
+    def test_census_dir_is_removed_even_past_260_characters(self):
+        fx = Census('test_sampling_reads_only_the_first_pages')
+        fx.setUp()
+        deep = fx.dir
+        for _ in range(3):
+            deep = os.path.join(deep, "d" * 90)
+        os.makedirs(pc.extended(deep))
+        with open(pc.extended(os.path.join(deep, "a.pdf")), "wb") as f:
+            f.write(b"x")
+        fx.doCleanups()
+
+        self.assertFalse(os.path.exists(pc.extended(fx.dir)))
+
+    def test_factbase_json_is_removed(self):
+        fx = FactBase('test_recheck_recorded_is_recognised')
+        p = fx.write({})
+        fx.doCleanups()
+
+        self.assertFalse(os.path.exists(p))
 
 
 if __name__ == "__main__":
