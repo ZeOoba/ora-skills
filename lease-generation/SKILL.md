@@ -1,13 +1,16 @@
 ---
-name: lease-generation
-description: "Use when the user says: generate the lease, draft the lease from this LOI, fill in the lease template, new lease for [suite/tenant], make the lease match the LOI, lease from these terms, produce the lease, or uploads an LOI/proposal to lease and wants a lease. Oxford Realty Advisors NEW-LEASE production skill — from an LOI, broker term sheet, e-mail or typed deal terms to an execution-ready lease on ORA landlord paper, with a tracked-change redline and an LOI conformance memo. NOT amendments (lease-addendum), template maintenance (masterlease-jurisdiction-rebase), counterparty paper (legal-intelligence) or LOIs (loi-generation). Draft only — outbound send needs confirmation."
+name: "lease-generation"
+description: "Oxford Realty Advisors NEW-LEASE production skill — from an LOI, broker term sheet, e-mail or typed deal terms to an execution-ready lease on ORA landlord paper, with a tracked-change redline and an LOI conformance memo. Use when the user says: generate the lease, draft the lease from this LOI, fill in the lease template, new lease for [suite/tenant], lease from these terms, produce the lease, or uploads an LOI/proposal and wants a lease. Pipeline: DEAL-TERMS-REGISTER → property template (never the last executed lease) → token fill + clause modules → LOI conformance matrix → cross-reference audit → lease-form-qc gate → clean DOCX + PDF + redline. NOT amendments (lease-addendum), template maintenance (masterlease-jurisdiction-rebase), counterparty paper (legal-intelligence), LOIs (loi-generation), or grading an EXISTING lease against its LOI (does the lease match the LOI, LOI vs lease) — that is lease-form-qc's LOI-Lease Audit mode. Draft only — outbound send needs confirmation."
 ---
 
-# lease-generation — LOI/term sheet → execution-ready ORA lease (v1.0)
+# lease-generation — LOI/term sheet → execution-ready ORA lease (v1.2)
 
 Per-deal production skill. It sits between the two skills that already exist on either side of it:
 `masterlease-jurisdiction-rebase` **maintains** the property templates; `lease-form-qc` **grades** a lease.
 This skill **produces** one. It never grades its own output — the QC gate is the independent scanner.
+When a lease already exists (broker- or counsel-drafted, or a prior run) and the ask is whether it matches
+the LOI, do not enter this pipeline — run `lease-form-qc`'s LOI ↔ Lease Audit mode, which reuses this
+skill's register schema and `--loi-conformance` and adds the reverse pass and mechanics.
 
 Proven end-to-end on 2207 Northwood Suite 15A / Impact Home Technology LLC (2026-09-06/07): legacy draft failed
 46/52 scanner checks and conformed to 7 of 16 LOI terms; the produced lease passed 51/52 (F5 Ohio-only), conformed
@@ -66,6 +69,7 @@ file when available; the module library carries a fallback set).
    left for the tenant (or convert to underscores), B7 only if Gabriel chose Premises-only notice.
 4. **LOI conformance matrix**: one row per register field → lease section → CONFORMS / CONFORMS+ / PARTIAL /
    MISSING / CONFLICT. Nothing ships with PARTIAL/MISSING/CONFLICT unless Gabriel resolved it as a gate.
+   (`lease_qc.py --loi-audit` runs Gate 3 and Gate 4 in one call.)
 Render to PDF (`soffice --headless --convert-to pdf`, never Print-to-PDF) and look at the pages: numbering 1…N
 continuous, sub-items (a)(b)(c), schedule lines, signature seals, exhibits.
 
@@ -105,10 +109,18 @@ notice-to-quit waiver, state-specific items).
 - `masterlease-revision-cycle`: tokenize M-03 (option), M-05 (gross §4 variant), M-04 (schedule block), M-08
   (overnight parking), M-09 (landlord work + Exhibit B), M-01 defs into the master (v2.7) so this skill becomes a pure
   token fill + module toggle; rebase Northwood/MD and re-paper that building's 31 suites over time.
-- `lease-form-qc`: add a FILENAME/DOCPROPERTY-field check (a footer resolving to another tenant's lease path = cloned
-  from an executed lease) and an "LOI conformance" mode that consumes the register.
+- `lease-form-qc`: ~~FILENAME/DOCPROPERTY check, "LOI conformance" mode, and the v2.7 Code-surface list (T3 blanks,
+  T4 exhibit stubs, BLI diff, schedule recompute, `open_items` carry-through, composed `--loi-audit`)~~ — shipped
+  in lease-form-qc v2.8.
 - `package-and-stage-skill`: package into ora-skills via tools/package_skills.py.
 
 ## Changelog
+- v1.2 (2026-09-24) — routing/handoff note only. Gate 4 notes that `lease_qc.py --loi-audit` runs Gate 3 and Gate 4
+  in one call; the Code-surface handoff to lease-form-qc is marked shipped (v2.8). The register schema's
+  `open_items` gained an object form (`resolution`, `lease_clause`) — see `references/`. No procedure, module or
+  engine change.
+- v1.1 (2026-09-24) — routing only. Description and intro now send "does the lease match the LOI" (an existing
+  lease + LOI) to `lease-form-qc`'s LOI ↔ Lease Audit mode; this skill produces, that one grades. Handoff list
+  updated for lease-form-qc v2.6/v2.7. No procedure, module, engine or schema change.
 - v1.0 (2026-09-07) — initial. Engine, xref audit, register schema, 13 modules, four-gate procedure. Built from the
   Northwood 15A / Impact Home Technology run.

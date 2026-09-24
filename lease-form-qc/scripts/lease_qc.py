@@ -112,6 +112,8 @@ import json
 import os
 import re
 import sys
+import zipfile
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 # Dev-checkout fallback: Python already puts this script's own directory at
@@ -126,7 +128,7 @@ from pathlib import Path
 # and a real extracted .skill (see task-4-fix-report.md).
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent / 'tools'))
 
-from ora_doc_qc import bool_check, run_cli, extract, norm
+from ora_doc_qc import bool_check, run_cli, extract, norm, scan, print_report
 
 Q = '["“”‘’«»]'
 
@@ -637,6 +639,402 @@ CHECKS.append(("T2", "BLOCK", "Footer FILENAME/DOCPROPERTY field names a differe
 
 
 # ==========================================================================
+# Class 5d -- INTERNAL CONSISTENCY / EXECUTION READINESS (added v2.8)
+# ==========================================================================
+# T3 / T4 / D1 / D2 read only what extract(want_footer=True) already
+# provides (ctx["raw"], ctx["t"], ctx["meta"]["footer"], ctx["name"]);
+# tools/ora_doc_qc.py is untouched. (The v2.8 brief called the last two
+# "C1"/"C2"; those IDs already exist at v2.6 -- Class 6 no-recording and
+# default-cure -- so they ship as D1/D2 and no existing ID changes.)
+
+# ctx carries only the file's BASENAME (ctx["name"]), so T4's embedded-drawing
+# test (word/media/ count) cannot open the docx from ctx alone. main() and
+# --loi-audit register each scanned path here first; a check that finds no
+# entry degrades to its phrase-only behavior (documented in T4).
+_SCAN_PATHS = {}
+
+
+def register_scan_path(path):
+    _SCAN_PATHS[os.path.basename(str(path))] = str(path)
+
+
+def _docx_media_count(ctx):
+    path = _SCAN_PATHS.get(ctx.get("name"))
+    if not path or ctx["meta"].get("format") != "docx":
+        return None
+    try:
+        with zipfile.ZipFile(path) as z:
+            return sum(1 for n in z.namelist()
+                       if n.startswith("word/media/") and not n.endswith("/"))
+    except Exception:                                               # noqa: BLE001
+        return None
+
+
+_BLANK_RE = re.compile(r"_{5,}")
+# Signing-time labels. `Date:`/`Name:` must not be preceded by another word
+# ("Commencement Date: ____" is an operative blank, not a signing line).
+_SIGN_LABEL_RE = re.compile(
+    r"Signature|\bSigned\b|\bBy\s*:|(?<![A-Za-z]\s)Date\s*:|Print\s+Name|"
+    r"(?<![A-Za-z]\s)Name\s*:|\bTitle\s*:|\bIts\s*:|\bInitials\b|\bWitness|"
+    r"\bNotary\b|commission\s+expires|\bday\s+of\b|,\s*20_|\(SEAL\)",
+    re.I)
+
+
+_DAY_OF_RE = re.compile(r"\bday\s+of\b", re.I)
+_OPERATIVE_RE = re.compile(r"\b(?:rent|commenc|expir|term|deposit)", re.I)
+
+
+def _t3(ctx):
+    """Unfilled underscore blanks in an execution copy (body + footer).
+
+    Severity is HIGH, not BLOCK: a blank tenant `ATTN:` line is a notice
+    defect a party can cure by hand, not a fabricated-verdict risk like an
+    unfilled [TOKEN] (T1, BLOCK). Execution copies legitimately carry blank
+    signature/date lines, so a run of underscores is exempt when its line --
+    or, for a bare rule line, the line above it -- carries a signing-time
+    label (Signature, Signed, By:, Date:, Print Name, Name:, Title:, Its:,
+    'day of', ', 20__', (SEAL)). Everything else (ATTN:, Email:, notice
+    addresses, a rent/deposit/SF/parcel/commencement blank) fires.
+    Gated like T1: silent on `_TEMPLATE` files and under --allow-tokens.
+    """
+    if ctx.get("is_template") or ctx.get("allow_tokens"):
+        return None
+    hits = []
+    for hay in (ctx["raw"], ctx["meta"].get("footer", "")):
+        lines = hay.replace("\xa0", " ").split("\n")
+        for i, line in enumerate(lines):
+            for m in _BLANK_RE.finditer(line):
+                pre = line[:m.start()]
+                # Judge THIS blank by the label nearest it: the 40 chars
+                # before, plus (for a bare rule line) the line above and the
+                # caption after ("_____ Signature"). A label elsewhere on the
+                # line does not excuse it ("Email: ____  By: ____").
+                scope = pre[-40:]
+                if not pre.strip():
+                    scope = ((lines[i - 1][-40:] if i > 0 else "") + " "
+                             + line[m.end():m.end() + 25] + " "
+                             + (lines[i + 1][:30] if i + 1 < len(lines) else ""))
+                if _SIGN_LABEL_RE.search(scope):
+                    continue
+                if (_DAY_OF_RE.search(line)
+                        and not _OPERATIVE_RE.search(line)
+                        and line[m.end():m.end() + 12].lstrip("_ ,").startswith("20")):
+                    continue                     # ', 20__' tail of a date-fill line
+                lead = re.sub(r"\s+", " ", _BLANK_RE.sub("", pre))[-30:].strip()
+                hits.append(f'"{lead} {m.group(0)[:8]}..."'.replace('" ', '"', 1) if lead
+                            else f'"{m.group(0)[:8]}..."')
+    if not hits:
+        return None
+    shown = "; ".join(hits[:6]) + ("..." if len(hits) > 6 else "")
+    return f"{len(hits)} unfilled blank(s): {shown}"
+
+
+_STUB_PHRASE_RE = re.compile(
+    r"TO BE ATTACHED|TO BE INSERTED|TO BE PROVIDED|\[ATTACH|PLACEHOLDER", re.I)
+_EXHIBIT_HEAD_RE = re.compile(
+    r"^\s*((?:EXHIBIT\s+[A-Z]\b|SCHEDULE\s+[A-Z](?:-?\d+)?\b)[^\n]{0,60})$", re.I)
+
+
+def _t4(ctx):
+    """Exhibit / schedule stubs left in an execution copy (BLOCK).
+
+    Fires on a stub phrase (TO BE ATTACHED [PRIOR TO EXECUTION], TO BE
+    INSERTED, TO BE PROVIDED, [ATTACH..., PLACEHOLDER) anywhere in body or
+    footer, and on an EXHIBIT X / SCHEDULE X[-n] heading whose text (to the
+    next such heading or end of document) is under 40 words -- unless the
+    docx embeds a drawing (word/media/). The media count needs the file path,
+    which ctx does not carry; main()/--loi-audit register it via
+    register_scan_path(). Without a registered path (e.g. a caller running
+    CHECKS through ora_doc_qc.scan() directly) the heading-stub test is
+    skipped and only the phrase test runs. Templates pass by design."""
+    if ctx.get("is_template"):
+        return None
+    hay = (ctx["raw"] + "\n" + ctx["meta"].get("footer", "")).replace("\xa0", " ")
+    hay = re.sub(r"[ \t]+", " ", hay)
+    m = _STUB_PHRASE_RE.search(re.sub(r"\s+", " ", hay))
+    if m:
+        letter = ""
+        pre = re.sub(r"\s+", " ", hay)[:m.start()]
+        heads = re.findall(r"(EXHIBIT\s+[A-Z]\b|SCHEDULE\s+[A-Z](?:-?\d+)?\b)", pre, re.I)
+        if heads:
+            letter = f"{heads[-1].upper()}: "
+        return f'{letter}stub phrase "{m.group(0)}" remains'
+    media = _docx_media_count(ctx)
+    if media is None or media > 0:
+        return None
+    lines = ctx["raw"].replace("\xa0", " ").split("\n")
+    heads = [(i, hm.group(1).strip()) for i, ln in enumerate(lines)
+             if len(ln.split()) <= 10 and (hm := _EXHIBIT_HEAD_RE.match(ln))]
+    for n, (i, title) in enumerate(heads):
+        end = heads[n + 1][0] if n + 1 < len(heads) else len(lines)
+        words = len(" ".join(lines[i + 1:end]).split())
+        if words == 0 and n + 1 < len(heads) and not any(lines[i + 1:heads[n + 1][0]]):
+            continue                             # exhibit LIST / TOC, not a stub
+        if words < 40:
+            return f"{title.upper()}: heading with only {words} word(s) of content and no embedded drawing"
+    return None
+
+
+# ---- D1: BASIC LEASE INFORMATION <-> body drift ---------------------------
+
+_UTIL_WORDS = {"electric": "electric", "electricity": "electric", "gas": "gas",
+               "water": "water", "sewer": "sewer", "trash": "trash"}
+
+
+def _bli_block(raw):
+    """(bli_lines, rest_text). The block runs from the BASIC LEASE INFORMATION
+    heading to the first blank line after >=3 'Label: value' lines, or to a
+    'This Basic Lease Information' / 'THIS LEASE' line."""
+    text = raw.replace("\xa0", " ")
+    lines = text.split("\n")
+    start = next((i for i, ln in enumerate(lines)
+                  if re.match(r"\s*BASIC LEASE INFORMATION\s*$", ln, re.I)), None)
+    if start is None:
+        return None, text
+    block, end = [], len(lines)
+    for j in range(start + 1, len(lines)):
+        ln = lines[j]
+        if re.match(r"\s*(This Basic Lease Information|THIS LEASE\b)", ln):
+            end = j + 1
+            break
+        if not ln.strip():
+            if len(block) >= 3:
+                end = j
+                break
+            continue
+        block.append(ln)
+    return block, "\n".join(lines[end:])
+
+
+def _bli_values(block):
+    out = {}
+    for ln in block:
+        m = re.match(r"\s*([A-Za-z][A-Za-z '’/()0-9-]*?)\s*:\s*(.+)$", ln)
+        if m:
+            out[re.sub(r"\s+", " ", m.group(1)).lower().replace("’", "'")] = m.group(2).strip()
+    return out
+
+
+def _bli_get(vals, *prefixes):
+    for k, v in vals.items():
+        if any(k.startswith(p) for p in prefixes):
+            return v
+    return None
+
+
+def _money(s):
+    m = re.search(r"\$\s*([\d,]+(?:\.\d+)?)", s or "")
+    return float(m.group(1).replace(",", "")) if m else None
+
+
+def _pct(s):
+    m = re.search(r"(\d+(?:\.\d+)?)\s*%", s or "")
+    return float(m.group(1)) if m else None
+
+
+def _money_matches(text, pattern):
+    return [m.group(0) for m in re.finditer(pattern, text, re.I | re.S)]
+
+
+def _d1(ctx):
+    """BASIC LEASE INFORMATION values that disagree with the body (MED).
+
+    Applies only when a BASIC LEASE INFORMATION block exists (v2.5+ paper).
+    For each label the BLI states, the body is searched for the matching
+    statement; a label drifts only when the body states a value for it and
+    none equals the BLI value (an absent body statement or a token-valued BLI
+    line is silent -- absence is Class 6's job, tokens are T1's). Dollars are
+    compared to the cent via _find_dollar_amount."""
+    block, rest = _bli_block(ctx["raw"])
+    if not block:
+        return None
+    vals = _bli_values(block)
+    body = re.sub(r"\s+", " ", rest.replace("\xa0", " "))
+    drifts = []
+
+    def money_label(label, bli_v, pat):
+        amt = _money(bli_v)
+        if amt is None or "[" in (bli_v or ""):
+            return
+        spans = _money_matches(body, pat)
+        if not spans or any(_find_dollar_amount(s, amt) for s in spans):
+            return
+        found = re.search(r"\$\s*[\d,]+(?:\.\d+)?", spans[0]).group(0)
+        drifts.append(f"{label}: BLI ${amt:,.2f} vs body {found}")
+
+    def pct_label(label, bli_v, pat):
+        want = _pct(bli_v)
+        if want is None or "[" in (bli_v or ""):
+            return
+        got = [float(x) for x in re.findall(pat, body, re.I | re.S)]
+        if got and want not in got:
+            drifts.append(f"{label}: BLI {want:g}% vs body {got[0]:g}%")
+
+    money_label("Security Deposit", _bli_get(vals, "security deposit"),
+                r"security\s+deposit[^.$]{0,120}\$\s*[\d,]+(?:\.\d+)?")
+    money_label("Monthly Rent", _bli_get(vals, "monthly rent", "monthly base rent"),
+                r"monthly\s+(?:base\s+)?rent[^.$]{0,80}\$\s*[\d,]+(?:\.\d+)?")
+    money_label("Annual Base Rent", _bli_get(vals, "annual base rent"),
+                r"annual\s+base\s+rent[^.$]{0,80}\$\s*[\d,]+(?:\.\d+)?")
+    pct_label("Tenant's Proportionate Share", _bli_get(vals, "tenant's proportionate share"),
+              r"proportionate\s+share[^.%]{0,120}?(\d+(?:\.\d+)?)\s*%")
+    pct_label("Late Fee", _bli_get(vals, "late fee"),
+              r"late\s+(?:fee|charge)[^.%]{0,120}?(\d+(?:\.\d+)?)\s*%")
+    pct_label("Default Interest", _bli_get(vals, "default interest"),
+              r"(?:default\s+)?interest[^.%]{0,80}?(\d+(?:\.\d+)?)\s*%\s*"
+              r"(?:per\s+annum|per\s+year|annually|a\s+year)")
+    pct_label("Escalation", _bli_get(vals, "escalation"),
+              r"(?:escalat|annual\s+increase)[^.%]{0,100}?(\d+(?:\.\d+)?)\s*%")
+
+    parking = _bli_get(vals, "parking")
+    pm = re.search(r"\d+", parking or "")
+    if pm and "[" not in parking:
+        want = int(pm.group(0))
+        got = [int(x) for x in re.findall(
+            r"(\d+)\)?\s*(?:overnight\s+)?(?:vehicles?|parking\s+spaces?)", body, re.I)]
+        if got and want not in got:
+            drifts.append(f"Parking: BLI {want} vs body {got[0]}")
+
+    util = _bli_get(vals, "utilities")
+    if util and "[" not in util:
+        bli_set = {v for k, v in _UTIL_WORDS.items()
+                   if re.search(r"\b" + k + r"\b", util, re.I)}
+        sec = re.search(r"^\s*SERVICES AND UTILITIES\.?\s*$(.*?)(?=^\s*[A-Z][A-Z ,&'-]{6,}\.?\s*$|\Z)",
+                        rest.replace("\xa0", " "), re.M | re.S)
+        if bli_set and sec:
+            sents = [s for s in re.split(r"(?<=[.;])\s+", sec.group(1))
+                     if re.search(r"\b(pay|paid|bill|billed|charge|charged|cost|responsible)\b", s, re.I)]
+            body_set = {v for s in sents for k, v in _UTIL_WORDS.items()
+                        if re.search(r"\b" + k + r"\b", s, re.I)}
+            if body_set and body_set != bli_set:
+                drifts.append("Utilities: BLI {" + ", ".join(sorted(bli_set)) +
+                              "} vs body {" + ", ".join(sorted(body_set)) + "}")
+    if not drifts:
+        return None
+    return f"{len(drifts)} drifted label(s): " + "; ".join(drifts)
+
+
+# ---- D2: rent-schedule arithmetic ----------------------------------------
+
+_AMT = r"\$\s*[\d,]+(?:\.\d+)?"
+_ROW_RE = re.compile(
+    r"((?:Lease\s+)?Years?\s*\d+(?:\s*-\s*\d+)?|Months?\s*\d+\s*-\s*\d+|"
+    r"\d{1,2}/\d{1,2}/\d{2,4}\s*-\s*\d{1,2}/\d{1,2}/\d{2,4})\s*[|:]?\s*"
+    r"((?:" + _AMT + r")(?:\s*\|?\s*(?:per\s+year\s*)?(?:" + _AMT + r")){1,3})", re.I)
+
+
+def _cents(x):
+    return Decimal(str(x)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _d2(ctx):
+    """Rent-schedule arithmetic (HIGH). Skips silently when no schedule table
+    is found (legacy paper -- Class 6 flags the missing table).
+
+    Year 1: round(PSF x RSF, 2) must equal the row-1 annual (within the
+    half-cent-per-SF a 2-dp PSF can hide) and round(annual/12, 2) the row-1
+    monthly. Later rows: every row must reproduce under ONE method to the
+    cent -- (i) annual x (1+e), monthly = annual/12; (ii) monthly x (1+e)
+    rounded each year, annual = monthly x 12. A row matching neither method,
+    or rows that each match a method but not the same one, FAIL (the mixed
+    case is excused only by a 'schedule controls' clause). PSF/RSF/e come from
+    the BLI or the RENT text; any missing input skips just the test that
+    needs it."""
+    t = ctx["t"]
+    rows = []
+    for m in _ROW_RE.finditer(t):
+        per = m.group(1)
+        rng = re.search(r"(\d+)\s*-\s*(\d+)", per)
+        if rng and re.match(r"(?:Lease\s+)?Years", per, re.I) and int(rng.group(2)) > int(rng.group(1)):
+            break                            # multi-year row: verify only the rows before it
+        # A PSF column may sit beside annual and monthly, in either order:
+        # the two LARGEST amounts are annual (max) and monthly (min).
+        amts = sorted((_cents(a.replace("$", "").replace(",", "").strip())
+                       for a in re.findall(_AMT, m.group(2))), reverse=True)[:2]
+        if len(amts) == 2 and amts[1] * 50 < amts[0]:
+            amts = [amts[0], _cents(amts[0] / 12)]      # small figure is a PSF, not monthly
+        rows.append((re.sub(r"\s+", " ", per), amts[0], amts[-1]))
+    if not rows:
+        return None
+
+    e = None
+    for pat in (r"escalat\w*[^.%]{0,100}?(\d+(?:\.\d+)?)\s*%",
+                r"(\d+(?:\.\d+)?)\s*%[^.]{0,60}(?:escalat|annual(?:ly)?\s+increase|per\s+lease\s+year)"):
+        em = re.search(pat, t, re.I)
+        if em:
+            e = Decimal(em.group(1)) / 100
+            break
+    # PSF must sit in a rent sentence: a TI allowance "$5.00 per square foot"
+    # elsewhere in the lease is not the rental rate.
+    psf = re.search(r"rent[^.$]{0,100}?\$\s*(\d+(?:\.\d+)?)\s*(?:per|/)\s*(?:rentable\s+)?"
+                    r"(?:square\s+foot|square\s+feet|RSF|SF)\b", t, re.I)
+    rsf = re.search(r"Premises[^.]{0,200}?([\d,]{3,7})\s*(?:rentable\s+)?"
+                    r"(?:square\s+feet|RSF|SF)\b", t, re.I)
+    problems = []
+    name1, a1, m1 = rows[0]
+    if psf and rsf:
+        rsf_n = Decimal(rsf.group(1).replace(",", ""))
+        exp = _cents(Decimal(psf.group(1)) * rsf_n)
+        tol = Decimal("0.005") * rsf_n
+        if abs(exp - a1) > tol:
+            problems.append(f"{name1} annual ${a1:,} != PSF ${psf.group(1)} x {rsf_n:,} RSF = ${exp:,}")
+    if _cents(a1 / 12) != m1:
+        problems.append(f"{name1} monthly ${m1:,} != annual/12 = ${_cents(a1 / 12):,}")
+
+    later = rows[1:]
+    if later:
+        if e is None or e == 0:
+            if e == 0 and any((a, m) != (a1, m1) for _, a, m in later):
+                bad = next(r for r in later if (r[1], r[2]) != (a1, m1))
+                problems.append(f"flat schedule (0% escalation) but {bad[0]} is "
+                                f"${bad[1]:,} / ${bad[2]:,}, not ${a1:,} / ${m1:,}")
+            elif e is None and all((a, m) == (a1, m1) for _, a, m in later):
+                pass
+            # e absent and rows differ: escalation unknown -- cannot verify.
+        else:
+            controls = bool(re.search(r"schedule\s+(?:shall\s+)?control", t, re.I))
+            sets, exp_i, exp_ii = [], [], []
+            pa, pm_, ca = a1, m1, a1
+            for n, (name, a, m) in enumerate(later, start=1):
+                pa = _cents(pa * (1 + e))                       # (i) chained annual
+                closed = _cents(ca * (1 + e) ** n)              # (i) closed-form
+                mi = _cents(pa / 12)
+                pm_ = _cents(pm_ * (1 + e))                     # (ii) monthly
+                ai_i = _cents(pm_ * 12)
+                ok_i = (a, m) == (pa, mi) or (a, m) == (closed, _cents(closed / 12))
+                ok_ii = (a, m) == (ai_i, pm_)
+                sets.append(({"i"} if ok_i else set()) | ({"ii"} if ok_ii else set()))
+                exp_i.append((name, pa, mi))
+                exp_ii.append((name, ai_i, pm_))
+            bad = next((k for k, s in enumerate(sets) if not s), None)
+            if bad is not None:
+                name, a, m = later[bad]
+                problems.append(
+                    f"{name} found ${a:,} / ${m:,}; expected (i annual-compounded) "
+                    f"${exp_i[bad][1]:,} / ${exp_i[bad][2]:,}, (ii monthly-rounded) "
+                    f"${exp_ii[bad][1]:,} / ${exp_ii[bad][2]:,}")
+            elif not (set.intersection(*sets)) and not controls:
+                k = next(k for k in range(1, len(sets)) if not (sets[0] & sets[k]))
+                name, a, m = later[k]
+                problems.append(f"{name} follows a different rounding method than "
+                                f"{later[0][0]} (found ${a:,} / ${m:,}; the two methods "
+                                f"diverge and the lease has no 'schedule controls' clause)")
+    if not problems:
+        return None
+    return "; ".join(problems)
+
+
+CHECKS.append(("T3", "HIGH", "Unfilled underscore blanks remain in an execution copy",
+               None, _t3))
+CHECKS.append(("T4", "BLOCK", "Exhibit/schedule stub or placeholder remains",
+               None, _t4))
+CHECKS.append(("D1", "MED", "Basic Lease Information value drifts from the body",
+               None, _d1))
+CHECKS.append(("D2", "HIGH", "Rent schedule arithmetic does not reproduce",
+               None, _d2))
+
+
+# ==========================================================================
 # --loi-conformance mode -- deal-terms register vs. drafted lease
 # ==========================================================================
 # lease-generation's SKILL.md ("3. Gates", item 4) hands this skill a second
@@ -763,6 +1161,7 @@ _SECTION_HINTS = {
     "insurance": "INSURANCE",
     "broker": "BROKER",
     "signage": "SIGNAGE",
+    "open_items": "DEAL-TERMS REGISTER open_items",
 }
 
 
@@ -1095,6 +1494,36 @@ def _check_signage(reg, text):
             "detail": "register grants a signage right not found in the lease text"}
 
 
+def _check_open_items(reg, text):
+    """Carry-through of the register's open_items. String items (v1.0 shape)
+    are unresolved by definition; object items are resolved only when
+    `resolution` is non-null AND the `lease_clause` phrase is present in the
+    lease (a resolution with no clause to verify stays unresolved -- the
+    conservative call for a pre-signature gate). Returns None (row omitted,
+    NOT CONFORMS) when the array is empty or absent."""
+    items = reg.get("open_items") or []
+    if not items:
+        return None
+    unresolved, resolved = [], 0
+    for it in items:
+        if isinstance(it, str):
+            unresolved.append(it)
+            continue
+        label = it.get("item") or "(unnamed item)"
+        clause = it.get("lease_clause")
+        if (it.get("resolution") is not None and clause
+                and _phrase_present(clause, text, threshold=0.6)):
+            resolved += 1
+        else:
+            unresolved.append(label)
+    if not unresolved:
+        return {"status": "CONFORMS",
+                "detail": f"all {resolved} open item(s) resolved and carried into the lease"}
+    status = "PARTIAL" if resolved else "MISSING"
+    return {"status": status,
+            "detail": f"{len(unresolved)} unresolved of {len(items)}: " + "; ".join(unresolved)}
+
+
 _CONFORMANCE_CHECKERS = [
     ("landlord", _check_landlord),
     ("tenant", _check_tenant),
@@ -1113,6 +1542,7 @@ _CONFORMANCE_CHECKERS = [
     ("insurance", _check_insurance),
     ("broker", _check_broker),
     ("signage", _check_signage),
+    ("open_items", _check_open_items),
 ]
 # Deliberately NOT covered by a row: `special_provisions` (a heterogeneous
 # array of ad-hoc title/text/placement clauses with no fixed shape to match
@@ -1135,6 +1565,8 @@ def build_conformance_matrix(register, text):
     for category, fn in _CONFORMANCE_CHECKERS:
         try:
             result = fn(register, text)
+            if result is None:          # row omitted (e.g. open_items empty)
+                continue
         except Exception as e:                                      # noqa: BLE001
             # One malformed register field (wrong type, missing nested
             # key) must not crash the whole matrix -- mirrors
@@ -1232,6 +1664,68 @@ def _run_loi_conformance(argv):
     return 1 if blocking else 0
 
 
+# ==========================================================================
+# --loi-audit mode -- standard scan + conformance matrix, one call (v2.8)
+# ==========================================================================
+# Composition only: no new check logic lives here. It runs ora_doc_qc.scan()
+# over CHECKS (T3/T4/D1/D2 included) and build_conformance_matrix(), prints
+# both, and exits with the max of the two component codes (2 > 1 > 0).
+
+def _run_loi_audit(argv):
+    ap = argparse.ArgumentParser(
+        description="ORA LOI-Lease Audit: full scan + register-vs-lease conformance matrix")
+    ap.add_argument("--loi-audit", metavar="REGISTER_JSON", required=True)
+    ap.add_argument("lease_file")
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--allow-tokens", action="store_true")
+    ap.add_argument("--no-ocr", action="store_true")
+    a = ap.parse_args(argv)
+
+    try:
+        with open(a.loi_audit, encoding="utf-8") as f:
+            register = json.load(f)
+    except Exception as e:                                          # noqa: BLE001
+        print(f"ERROR: could not read register {a.loi_audit}: {e}", file=sys.stderr)
+        return 2
+    if not isinstance(register, dict):
+        print(f"ERROR: {a.loi_audit} is not a JSON object -- a deal-terms "
+              f"register must be a top-level object.", file=sys.stderr)
+        return 2
+
+    register_scan_path(a.lease_file)
+    scan_report = scan(a.lease_file, CHECKS, a.allow_tokens, allow_ocr=not a.no_ocr,
+                       want_footer=True)
+    if scan_report is None:
+        return 2                        # scan() already printed the reason
+    if scan_report["unreadable"]:
+        if a.json:
+            print(json.dumps({"scan": [scan_report], "matrix": None, "exit": 2}, indent=2))
+        else:
+            print_report(scan_report)
+            print("AUDIT: unreadable lease -- no scan or matrix result - exit 2")
+        return 2
+
+    body, _meta = extract(a.lease_file, allow_ocr=not a.no_ocr, want_footer=True)
+    rows = build_conformance_matrix(register, norm(body))
+    matrix = {"register": os.path.basename(a.loi_audit),
+              "lease_file": os.path.basename(a.lease_file),
+              "rows": rows, "summary": _conformance_summary(rows)}
+    failures = scan_report["failures"]
+    n_block = sum(1 for f in failures if f["severity"] == "BLOCK")
+    bad_rows = [r for r in rows if r["status"] in ("PARTIAL", "MISSING", "CONFLICT")]
+    code = max(1 if failures else 0, 1 if bad_rows else 0)
+
+    if a.json:
+        print(json.dumps({"scan": [scan_report], "matrix": matrix, "exit": code}, indent=2))
+    else:
+        print_report(scan_report)
+        print("=" * 78)
+        _print_conformance_report(matrix)
+        print(f"AUDIT: {len(failures)} scan failure(s) [{n_block} BLOCK] · "
+              f"{len(bad_rows)} matrix row(s) · exit {code}")
+    return code
+
+
 def main():
     argv = sys.argv[1:]
     # Matches both the space form ("--loi-conformance reg.json") and
@@ -1239,8 +1733,13 @@ def main():
     # `in argv` membership test missed the latter, silently falling through
     # to the standard scan mode's build_cli(), which does not know the flag
     # and dies with a misleading "unrecognized arguments" usage error.
+    if any(a == "--loi-audit" or a.startswith("--loi-audit=") for a in argv):
+        sys.exit(_run_loi_audit(argv))
     if any(a == "--loi-conformance" or a.startswith("--loi-conformance=") for a in argv):
         sys.exit(_run_loi_conformance(argv))
+    for a in argv:
+        if not a.startswith("-") and os.path.exists(a):
+            register_scan_path(a)
     run_cli(CHECKS, "ORA lease-form QC gate", want_footer=True,
             ocr_absence_note=("Absence findings (A6, B5, B6a-B6c, B7, C1-C8, "
                               "F10, F11) are PROVISIONAL - OCR text is lossy, "

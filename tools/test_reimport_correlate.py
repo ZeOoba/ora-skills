@@ -251,6 +251,22 @@ class PrecheckTests(FixtureTestCase):
         self.assertEqual(json.loads((rc._baseline_path('demo-skill')).read_text())['creation_time'],
                          '2026-01-01T00:00:00')
 
+    def test_precheck_recaptures_a_baseline_an_install_has_made_stale(self):
+        # Through cmd_precheck itself, not the helper: unwiring precheck from the
+        # refresh must fail a test (merge-gate round 4, test-validity F3).
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({'skill': 'demo-skill', 'creation_time': '2026-01-01T00:00:00'}))
+        _make_pkg(self.pkg, 'demo-skill', self._good_entries())
+
+        with unittest.mock.patch.object(rc, '_creation_time',
+                                        lambda s: datetime(2026, 9, 23, 12, 5, 0)):
+            code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+
+        self.assertEqual(code, 0, out)
+        self.assertIn('baseline was stale', out)
+        self.assertEqual(json.loads(rc._baseline_path('demo-skill').read_text())['creation_time'],
+                         '2026-09-23T12:05:00')
+
     def test_missing_package_is_reported_missing_not_stale(self):
         code, out = self._run(rc.cmd_precheck, [str(self.tmp / 'ghost.skill')])
         self.assertEqual(code, 1)
@@ -585,31 +601,47 @@ class ConsumeRaceFindings(_SessionFixture):
         self.assertEqual(code, 1)
         self.assertIn('NO-BASELINE', out)
 
-    def test_consume_keeps_a_baseline_captured_after_the_verify(self):
-        # Subagents share the parent's session id: one can re-capture a baseline
-        # while the parent's postclick is still appending.
-        with unittest.mock.patch.dict(os.environ, {'CLAUDE_CODE_SESSION_ID': 'sess-A'}):
-            self._run(rc.cmd_baseline, ['demo-skill'])
-            verified_at = rc._baseline_path('demo-skill').stat().st_mtime - 10
-            used = rc.consume_baseline('demo-skill', not_after=verified_at)
-            self.assertFalse(used)
-            self.assertTrue(rc._baseline_path('demo-skill').is_file())
-
-    def test_postclick_only_consumes_a_baseline_no_newer_than_its_verify(self):
+    def test_a_baseline_captured_after_the_install_is_kept(self):
+        # Subagents share the parent's session id: one can re-capture while the
+        # parent's postclick is still appending. That baseline records the NEW
+        # CreationTime, so it can still tell the next install from this one.
         self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
         self._install(datetime(2026, 9, 23, 12, 5, 0))
-        seen = {}
-        real = rc.consume_baseline
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])       # the re-capture
 
-        def spy(skill, not_after=None):
-            seen['not_after'] = not_after
-            return real(skill, not_after=not_after)
+        self._as('sess-A', rc.cmd_consume, ['demo-skill'])
 
-        with unittest.mock.patch.object(rc, 'consume_baseline', spy):
-            code, out = self._as('sess-A', rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+        with unittest.mock.patch.dict(os.environ, {'CLAUDE_CODE_SESSION_ID': 'sess-A'}):
+            kept = json.loads(rc._baseline_path('demo-skill').read_text(encoding='utf-8'))
+        self.assertEqual(kept['creation_time'], '2026-09-23T12:05:00')
 
+    def test_a_recorded_install_uses_up_every_sessions_older_baseline(self):
+        # Merge-gate round 3 MEDIUM: the documented --baseline path (e.g. verify via
+        # the DC bridge, which has no session id) used up only ITS session's baseline;
+        # session A's pre-install one survived and CONFIRMed A's next reimport of the
+        # skill with no click at all.
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._as('sess-B', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        code, out = self._as('no-session', rc.cmd_postclick, 'demo-skill', '1.0', False, False,
+                             '2026-09-23 12:00:00')
         self.assertEqual(code, 0, out)
-        self.assertIsNotNone(seen.get('not_after'))
+
+        for session in ('sess-A', 'sess-B'):
+            _, out = self._as(session, rc.cmd_verify, ['demo-skill'], None)
+            self.assertIn('NO-BASELINE', out, session)
+            self.assertNotIn('CONFIRMED', out, session)
+
+    def test_consume_leaves_no_claim_files_behind(self):
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._as('sess-B', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        self._as('sess-B', rc.cmd_baseline, ['demo-skill'])       # post-install: kept
+
+        self._as('sess-A', rc.cmd_consume, ['demo-skill'])
+
+        self.assertEqual(sorted(p.name for p in (self.baselines / 'demo-skill').iterdir()),
+                         ['sess-B.json'])
 
     def test_postclick_reports_a_consume_that_failed(self):
         self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
@@ -631,6 +663,284 @@ class ConsumeRaceFindings(_SessionFixture):
 
         self.assertEqual(code, 1)
         self.assertIn('NOT used up', out)
+
+    def test_postclick_with_clear_ledger_still_reports_a_consume_that_failed(self):
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        ok = self.tmp / 'ok.py'
+        ok.write_text('import sys\nsys.exit(0)\n')
+
+        with unittest.mock.patch.object(rc, 'PENDING', ok), \
+                unittest.mock.patch.object(rc, 'consume_baseline',
+                                           side_effect=PermissionError(32, 'in use')):
+            code, out = self._as('sess-A', rc.cmd_postclick, 'demo-skill', '1.0', False, True)
+
+        self.assertEqual(code, 1)
+        self.assertIn('baseline NOT used up', out)
+
+
+class RoundThreeGateFindings(_SessionFixture):
+    """Merge-gate round 3: legacy-hint robustness, the ABSENT hint, stale baselines
+    kept by precheck, and the CLI plumbing for the new flags."""
+
+    def test_a_malformed_legacy_baseline_never_crashes_verify(self):
+        for i, bad in enumerate(('[1, 2]', '{"creation_time": "yesterday"}',
+                                 '{"creation_time": 123}', 'not json')):
+            skill = f'bad-{i}'
+            _write(self.baselines / f'{skill}.json', bad)
+            self.ct[skill] = datetime(2026, 9, 23, 12, 0, 0)
+
+        code, out = self._as('sess-A', rc.cmd_verify, ['bad-0', 'bad-1', 'bad-2', 'bad-3'], None)
+
+        self.assertEqual(code, 1)
+        self.assertEqual(out.count('NO-BASELINE'), 4)
+
+    def test_an_absent_legacy_baseline_gets_its_own_hint(self):
+        _write(self.baselines / 'demo-skill.json',
+               json.dumps({'skill': 'demo-skill', 'creation_time': None}))
+
+        _, out = self._as('sess-A', rc.cmd_verify, ['demo-skill'], None)
+
+        self.assertIn('pre-#79 unscoped ABSENT baseline', out)
+        self.assertIn('--baseline "2000-01-01 00:00:00"', out)
+
+    def test_precheck_recaptures_a_baseline_an_install_has_made_stale(self):
+        # A kept baseline that no longer matches the cache predates an install; kept,
+        # it would CONFIRM that install again as the next one.
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        with unittest.mock.patch.dict(os.environ, {'CLAUDE_CODE_SESSION_ID': 'sess-A'}):
+            rc._refresh_stale_baseline('demo-skill')
+            kept = json.loads(rc._baseline_path('demo-skill').read_text(encoding='utf-8'))
+
+        self.assertEqual(kept['creation_time'], '2026-09-23T12:05:00')
+
+    def _main(self, session, *argv):
+        with unittest.mock.patch.object(sys, 'argv', ['reimport_correlate.py', *argv]):
+            return self._as(session, rc.main)
+
+    def test_cli_postclick_honours_baseline(self):
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+
+        code, out = self._main('sess-B', 'postclick', 'demo-skill', '--no-append',
+                               '--baseline', '2026-09-23 12:00:00')
+
+        self.assertEqual(code, 0, out)
+        self.assertIn('demo-skill: CONFIRMED', out)
+
+    def test_cli_consume_uses_up_a_stale_baseline(self):
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+
+        code, out = self._main('sess-A', 'consume', 'demo-skill')
+
+        self.assertEqual(code, 0, out)
+        _, out = self._as('sess-A', rc.cmd_verify, ['demo-skill'], None)
+        self.assertIn('NO-BASELINE', out)
+
+    def test_cycle_main_passes_baseline_to_close(self):
+        seen = {}
+        with unittest.mock.patch.object(cyc, 'cmd_close',
+                                        lambda *a: seen.setdefault('args', a) and 0):
+            cyc.main(['close', 'demo-skill', '--baseline', '2026-09-23 12:00:00'])
+
+        self.assertEqual(seen['args'][-1], '2026-09-23 12:00:00')
+
+
+class RoundFourGateFindings(_SessionFixture):
+    """Merge-gate round 4: the 1-second "predates" boundary and the first-install
+    case pinned, foreign baseline files, and a claim rename that is not exclusive."""
+
+    def _names(self):
+        return sorted(p.name for p in (self.baselines / 'demo-skill').iterdir())
+
+    def test_a_baseline_taken_seconds_before_the_install_is_used_up(self):
+        # Every other test puts 5 minutes between baseline and install, so a rule that
+        # only used up baselines a minute old would pass them -- and CONFIRM a click
+        # taken 30 seconds after the baseline again with no click at all.
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 0, 30))
+        code, out = self._as('sess-A', rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+        self.assertEqual(code, 0, out)
+
+        _, out = self._as('sess-A', rc.cmd_verify, ['demo-skill'], None)
+
+        self.assertIn('NO-BASELINE', out)
+
+    def test_predates_is_one_second_either_way_and_absent_always_predates(self):
+        installed = datetime(2026, 9, 23, 12, 5, 0)
+        self.assertTrue(rc._predates(datetime(2026, 9, 23, 12, 4, 59), installed))
+        self.assertFalse(rc._predates(datetime(2026, 9, 23, 12, 4, 59, 500000), installed))
+        self.assertFalse(rc._predates(installed, installed))
+        self.assertTrue(rc._predates(None, installed))
+
+    def test_a_first_install_uses_up_the_absent_baseline(self):
+        self.ct['demo-skill'] = None
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        code, out = self._as('sess-A', rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+        self.assertEqual(code, 0, out)
+
+        _, out = self._as('sess-A', rc.cmd_verify, ['demo-skill'], None)
+
+        self.assertIn('NO-BASELINE', out)
+
+    def test_foreign_baseline_files_are_used_up_and_never_stop_the_sweep(self):
+        # Correctness F1: a hand-written tz-aware or UTF-16 file raised out of the loop,
+        # leaving every older baseline sorted after it to CONFIRM the next reimport.
+        skill_dir = self.baselines / 'demo-skill'
+        skill_dir.mkdir(parents=True)
+        (skill_dir / '0-aware.json').write_text(
+            json.dumps({'skill': 'demo-skill', 'creation_time': '2026-09-01T09:00:00+00:00'}),
+            encoding='utf-8')
+        (skill_dir / '1-utf16.json').write_text(
+            json.dumps({'skill': 'demo-skill', 'creation_time': '2026-09-01T09:00:00'}),
+            encoding='utf-16')
+        self._as('sess-B', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+
+        code, out = self._as('sess-B', rc.cmd_consume, ['demo-skill'])
+
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self._names(), [])
+
+    def test_precheck_recaptures_a_tz_aware_baseline_instead_of_crashing(self):
+        with unittest.mock.patch.dict(os.environ, {'CLAUDE_CODE_SESSION_ID': 'sess-A'}):
+            _write(rc._baseline_path('demo-skill'),
+                   json.dumps({'skill': 'demo-skill',
+                               'creation_time': '2026-09-23T12:00:00+00:00'}))
+            note = rc._refresh_stale_baseline('demo-skill')
+
+        self.assertIn('stale', note)
+
+    def test_a_claim_another_consumer_moved_on_is_theirs_not_a_failure(self):
+        # Race F2: a rename is not exclusive on Windows -- two can both "succeed", the
+        # second moving the first's claim. The loser must skip it, not exit 1.
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        real_rename = os.rename
+
+        def stolen_after_claim(src, dst):
+            real_rename(src, dst)
+            if Path(dst).name.startswith('.'):              # our claim, taken by B
+                Path(dst).unlink()
+
+        with unittest.mock.patch.object(rc.os, 'rename', stolen_after_claim):
+            code, out = self._as('sess-A', rc.cmd_consume, ['demo-skill'])
+
+        self.assertEqual(code, 0, out)
+        self.assertNotIn('NOT used up', out)
+
+    def test_a_claim_rename_that_finds_the_file_gone_is_skipped(self):
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+
+        with unittest.mock.patch.object(rc.os, 'rename',
+                                        side_effect=FileNotFoundError(2, 'gone')):
+            code, out = self._as('sess-A', rc.cmd_consume, ['demo-skill'])
+
+        self.assertEqual(code, 0, out)
+
+    def _put_back(self, on_put_back):
+        """Consume a post-install (kept) baseline with the put-back rename replaced."""
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        real_rename = os.rename
+
+        def rename(src, dst):
+            if Path(src).name.startswith('.'):              # claim -> path: the put-back
+                on_put_back(Path(src), Path(dst))
+            else:
+                real_rename(src, dst)
+
+        with unittest.mock.patch.object(rc.os, 'rename', rename):
+            return self._as('sess-A', rc.cmd_consume, ['demo-skill'])
+
+    def test_a_newer_baseline_that_lands_before_the_put_back_wins(self):
+        def newer_lands(src, dst):
+            dst.write_text('{"skill": "demo-skill", "creation_time": "NEWER"}',
+                           encoding='utf-8')
+            raise FileExistsError(17, 'exists', str(dst))
+
+        code, out = self._put_back(newer_lands)
+
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self._names(), ['sess-A.json'])
+        self.assertIn('NEWER', (self.baselines / 'demo-skill' / 'sess-A.json')
+                      .read_text(encoding='utf-8'))
+
+    def test_a_claim_taken_before_the_put_back_is_theirs_not_a_failure(self):
+        def taken(src, dst):
+            src.unlink()
+            raise FileNotFoundError(2, 'gone', str(src))
+
+        code, out = self._put_back(taken)
+
+        self.assertEqual(code, 0, out)
+        self.assertNotIn('NOT used up', out)
+
+
+class RoundFiveGateFindings(_SessionFixture):
+    """Merge-gate round 5 MEDIUM: the put-back of a kept baseline was the one rename
+    in consume_baseline with no retry, so a brief lock (an indexer or AV handle)
+    stranded it as a hidden claim file -- and the message said the opposite."""
+
+    def _names(self):
+        return sorted(p.name for p in (self.baselines / 'demo-skill').iterdir())
+
+    def _locked_put_back(self, failures):
+        """Patch os.rename so the put-back (claim -> path) hits `failures` locks."""
+        real_rename = os.rename
+        left = [failures]
+
+        def rename(src, dst):
+            if Path(src).name.startswith('.') and left[0] > 0:
+                left[0] -= 1
+                raise PermissionError(32, 'in use by another process', str(src))
+            real_rename(src, dst)
+        return unittest.mock.patch.object(rc.os, 'rename', rename)
+
+    def _kept_and_predating(self):
+        self._as('sess-B', rc.cmd_baseline, ['demo-skill'])          # predates: used up
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])          # post-install: kept
+
+    def test_a_brief_lock_on_the_put_back_is_retried(self):
+        self._kept_and_predating()
+
+        with self._locked_put_back(2):
+            code, out = self._as('sess-A', rc.cmd_consume, ['demo-skill'])
+
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self._names(), ['sess-A.json'])
+
+    def test_a_put_back_that_stays_locked_says_the_kept_baseline_is_stranded(self):
+        self._kept_and_predating()
+
+        with self._locked_put_back(99):
+            code, out = self._as('sess-A', rc.cmd_consume, ['demo-skill'])
+
+        self.assertEqual(code, 1, out)
+        self.assertIn('could not be put back', out)
+        self.assertNotIn('CONFIRM this install again', out)
+        names = self._names()
+        self.assertNotIn('sess-B.json', names)                       # the sweep went on
+        stranded = [n for n in names if n.startswith('.sess-A.json.claim-')]
+        self.assertEqual(len(stranded), 1, names)
+        self.assertIn(stranded[0], out)
+
+    def test_postclick_reports_a_stranded_baseline_not_an_unused_one(self):
+        self._as('sess-B', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        self._as('sess-C', rc.cmd_baseline, ['demo-skill'])          # post-install: kept
+
+        with self._locked_put_back(99):
+            code, out = self._as('sess-B', rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+
+        self.assertEqual(code, 1, out)
+        self.assertIn('could not be put back', out)
+        self.assertNotIn('baseline NOT used up', out)
 
 
 class CycleCloseUsesTheBaselineUp(unittest.TestCase):
@@ -661,13 +971,14 @@ class CycleCloseUsesTheBaselineUp(unittest.TestCase):
                 code = cyc.cmd_close(['demo-skill'], None, False, False, baseline)
         return code, calls
 
-    def test_consume_is_bounded_by_the_time_postclick_started(self):
+    def test_consume_after_the_append_needs_no_time_bound(self):
+        # What gets used up is decided by each baseline's recorded CreationTime
+        # against the install, not by a wall-clock bound (round 3: mtime granularity).
         code, calls = self._close(0)
 
         consume = next(c for c in calls if 'consume' in c)
         self.assertEqual(code, 0)
-        self.assertIn('--not-after', consume)
-        float(consume[consume.index('--not-after') + 1])
+        self.assertNotIn('--not-after', consume)
 
     def test_a_failed_consume_fails_close(self):
         with redirect_stdout(io.StringIO()) as out:
