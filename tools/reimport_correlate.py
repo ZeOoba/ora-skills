@@ -53,7 +53,9 @@ Usage
         repo-root shared dep) -- raw, then EOL-normalized; only a normalized
         mismatch fails. Repo files absent from the package are WARNed (some are
         intentional, e.g. PACKAGING-NOTE.md). Also captures the CreationTime
-        baseline UNLESS one already exists (never overwritten). Exit 1 on FAIL.
+        baseline UNLESS this session already has one, which it keeps -- unless
+        an install since has made it stale, then it recaptures. Run it BEFORE
+        the Save-skill click. Exit 1 on FAIL.
 
     python tools/reimport_correlate.py postclick <skill> [--version X.Y]
                                         [--no-append] [--clear-ledger]
@@ -66,14 +68,16 @@ Usage
         `version:` frontmatter token if present. --clear-ledger runs
         `pending_reimport.py clear <skill>` only AFTER the append exited 0.
         --no-append verifies only (safe to re-run). After a successful append
-        this session's baseline is used up (see `consume`).
+        the baselines that predate this install are used up (see `consume`); if
+        that fails it warns and exits 1 even though the append succeeded.
 
-    python tools/reimport_correlate.py consume <skill> [<skill> ...] [--not-after EPOCH]
-        Use this session's baseline up once the install is recorded, so the next
-        reimport of that skill captures a fresh one (precheck never overwrites an
-        existing baseline). --not-after keeps a baseline written after that time
-        (a subagent sharing this session re-captured it). Exit 1 if a baseline
-        could not be removed. postclick does this itself after its append;
+    python tools/reimport_correlate.py consume <skill> [<skill> ...]
+        Once an install is recorded, use up EVERY session's baseline for the skill
+        whose recorded CreationTime predates the current cache dir (kept, it would
+        CONFIRM this same install again); a baseline recorded at the current
+        CreationTime (captured after the install) is kept. precheck likewise
+        recaptures its own baseline if an install has made it stale. Exit 1 if a
+        baseline could not be removed. postclick does this itself after its append;
         reimport_cycle.py close calls it after its own combined append.
 
     A skill with no cache dir at baseline time (never installed) gets an
@@ -101,7 +105,7 @@ import re
 import struct
 import subprocess
 import sys
-import time
+import uuid
 import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -159,12 +163,12 @@ def _legacy_hint(skill: str) -> None:
     legacy = BASELINE_DIR / f'{skill}.json'
     if not legacy.is_file():
         return
-    try:
+    try:                                  # a hint must never break the verdict it annotates
         stored = json.loads(_read_text_retry(legacy))['creation_time']
-    except (OSError, ValueError, KeyError):
+        when = datetime.fromisoformat(stored).strftime('%Y-%m-%d %H:%M:%S') if stored else None
+    except (OSError, ValueError, KeyError, TypeError):
         return
     if stored:
-        when = datetime.fromisoformat(stored).strftime('%Y-%m-%d %H:%M:%S')
         print(f'  a pre-#79 unscoped baseline exists ({legacy}, {stored}); if it is YOUR '
               f'pre-click baseline, re-run with --baseline "{when}"')
     else:
@@ -183,38 +187,120 @@ def _read_baseline(path: Path) -> str | None:
         return None
 
 
-def consume_baseline(skill: str, not_after: float | None = None) -> bool:
-    """Use this session's baseline up once its install is recorded, so a later
-    reimport of the same skill captures a fresh one instead of keeping it.
-    `not_after` (epoch seconds, taken before the verify) keeps a baseline written
-    AFTER it -- subagents share the parent's session id, and one can re-capture
-    while the parent's postclick is still appending. Raises OSError if the file is
-    locked past the bounded retry; callers must report that, never swallow it."""
-    path = _baseline_path(skill)
+def _recorded(text: str | None):
+    """(parsed, ok): a baseline's recorded CreationTime (None = ABSENT); ok=False if
+    the file is unreadable as a baseline -- including a timezone-aware time, which this
+    tool never writes and which cannot be compared with the naive CreationTime."""
     try:
-        if not_after is not None and path.stat().st_mtime > not_after:
-            return False
-    except FileNotFoundError:
-        return False
-    if not path.is_file():
-        return False
-    _retry_locked(lambda: path.unlink(missing_ok=True))
-    return True
+        stored = json.loads(text)['creation_time']
+        parsed = datetime.fromisoformat(stored) if stored else None
+    except (TypeError, ValueError, KeyError):
+        return None, False
+    if parsed is not None and parsed.tzinfo is not None:
+        return None, False
+    return parsed, True
 
 
-def cmd_consume(skills: list[str], not_after: float | None = None) -> int:
+def _predates(recorded, installed) -> bool:
+    """A baseline predates the install now in the cache unless it recorded that same
+    CreationTime (to the second). Such a baseline can never tell its own future
+    install from this one, so keeping it can only produce a false CONFIRMED."""
+    return recorded is None or abs((installed - recorded).total_seconds()) >= 1
+
+
+def consume_baseline(skill: str) -> int:
+    """Once an install is recorded, use up EVERY session's baseline for the skill that
+    predates it (the --baseline path verifies from another session, so "this
+    session's" is not enough), and keep any captured after it (a subagent sharing
+    this session re-capturing while the parent appends). Each file is claimed by
+    rename before it is judged, so a baseline written concurrently is never deleted
+    unseen. A rename is not exclusive on Windows -- two consumers can both "succeed",
+    the second moving the first's claim on -- so a claim that vanishes belongs to the
+    other consumer and is skipped. A file that is not a readable baseline (foreign,
+    UTF-16, timezone-aware) is used up. Returns how many were used up; raises OSError
+    if a file stays locked past the bounded retry -- callers must report that, never
+    swallow it. A kept baseline whose put-back stays locked does not stop the sweep:
+    it raises BaselineStranded (an OSError) at the end, naming the claim file."""
+    installed = _creation_time(skill)
+    skill_dir = BASELINE_DIR / skill
+    if installed is None or not skill_dir.is_dir():
+        return 0
+    used, stranded = 0, []
+    for path in sorted(skill_dir.glob('*.json')):
+        claim = path.with_name(f'.{path.name}.claim-{os.getpid()}-{uuid.uuid4().hex[:8]}')
+        try:
+            _retry_locked(lambda: os.rename(path, claim))
+            text = _read_text_retry(claim)
+        except FileNotFoundError:                 # another consumer has it
+            continue
+        except UnicodeDecodeError:
+            text = None
+        recorded, ok = _recorded(text)
+        if ok and not _predates(recorded, installed):
+            try:                                  # post-install: put it back
+                _retry_locked(lambda: os.rename(claim, path))
+            except FileExistsError:               # a newer one landed meanwhile; it wins
+                claim.unlink(missing_ok=True)
+            except FileNotFoundError:             # another consumer moved it on
+                pass
+            except PermissionError:               # still locked: keep sweeping, report it
+                stranded.append((claim, path))
+            continue
+        _retry_locked(lambda: claim.unlink(missing_ok=True))
+        used += 1
+    if stranded:
+        raise BaselineStranded(stranded)
+    return used
+
+
+class BaselineStranded(OSError):
+    """Every baseline predating the install was used up, but one captured after it
+    stayed locked and could not be renamed back -- it sits hidden as a claim file."""
+
+    def __init__(self, stranded):
+        self.stranded = stranded
+        super().__init__('; '.join(f'{c} -> {p.name}' for c, p in stranded))
+
+    def advice(self, skill: str) -> str:
+        return (f'{skill}: every baseline predating the install was used up, but '
+                f'{len(self.stranded)} kept one(s) could not be put back ({self}) -- rename '
+                f'it back by hand, or that session\'s next verify says NO-BASELINE')
+
+
+def cmd_consume(skills: list[str]) -> int:
     rc = 0
     for skill in skills:
         try:
-            used = consume_baseline(skill, not_after)
+            used = consume_baseline(skill)
+        except BaselineStranded as exc:
+            print(exc.advice(skill))
+            rc = 1
+            continue
         except OSError as exc:
             print(f'{skill}: baseline NOT used up ({exc}) -- re-run `consume {skill}` '
                   f'before the next reimport, or it will CONFIRM this install again')
             rc = 1
             continue
-        state = 'used up' if used else 'none to use up (absent, or newer than --not-after)'
-        print(f'{skill}: baseline {state} ({_baseline_path(skill)})')
+        print(f'{skill}: {used} baseline(s) predating the current install used up '
+              f'({BASELINE_DIR / skill})')
     return rc
+
+
+def _refresh_stale_baseline(skill: str) -> str | None:
+    """precheck keeps an existing baseline (it may be the step-2 capture) -- unless an
+    install has happened since it was taken, which makes it stale: kept, it would
+    CONFIRM that install again. Returns the precheck note, or None if there is no
+    baseline for this session."""
+    text = _read_baseline(_baseline_path(skill))
+    if text is None:
+        return None
+    recorded, ok = _recorded(text)
+    current = _creation_time(skill)
+    if current is not None and (not ok or _predates(recorded, current)):
+        with contextlib.redirect_stdout(io.StringIO()):
+            cmd_baseline([skill])
+        return 'baseline was stale (an install since) -- recaptured'
+    return f'baseline kept ({recorded.isoformat() if recorded else None})'
 
 
 def cmd_baseline(skills: list[str]) -> int:
@@ -465,9 +551,9 @@ def cmd_precheck(pkgs: list[str]) -> int:
                             warns.append(f'{rel}: in repo, not in package')
             else:
                 fails.append(f'repo skill dir not found: {sd}')
-        kept = _read_baseline(_baseline_path(skill))
-        if kept is not None:
-            base_note = f'baseline kept ({json.loads(kept)["creation_time"]})'
+        note = _refresh_stale_baseline(skill)
+        if note is not None:
+            base_note = note
         else:
             with contextlib.redirect_stdout(io.StringIO()):
                 cmd_baseline([skill])
@@ -509,7 +595,6 @@ def _log_report(tail: int) -> None:
 
 def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger: bool,
                   baseline_override: str | None = None) -> int:
-    verified_at = time.time()             # consume keeps any baseline written after this
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         cmd_verify([skill], baseline_override)
@@ -542,7 +627,10 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
     print('event log appended (exit 0).')
     consume_failed = 0
     try:
-        consume_baseline(skill, not_after=verified_at)
+        consume_baseline(skill)
+    except BaselineStranded as exc:
+        print(f'WARNING: {exc.advice(skill)}')
+        consume_failed = 1
     except OSError as exc:
         # A kept baseline would CONFIRM this same install again on the next reimport.
         print(f'WARNING: baseline NOT used up ({exc}) -- run '
@@ -575,14 +663,13 @@ def main() -> int:
     version, rest = _pop(rest, '--version', True)
     no_append, rest = _pop(rest, '--no-append', False)
     clear_ledger, rest = _pop(rest, '--clear-ledger', False)
-    not_after, rest = _pop(rest, '--not-after', True)
     if not rest:
         print('no skill name(s) given', file=sys.stderr)
         return 2
     if cmd == 'baseline':
         return cmd_baseline(rest)
     if cmd == 'consume':
-        return cmd_consume(rest, float(not_after) if not_after else None)
+        return cmd_consume(rest)
     if cmd == 'precheck':
         return cmd_precheck(rest)
     if cmd == 'postclick':
