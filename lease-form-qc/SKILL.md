@@ -1,13 +1,19 @@
 ---
-name: lease-form-qc
-description: "Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, review our lease draft, new tenant lease, lease from the template, or uploads a DOCX that is an ORA-form lease. Also run before ANY outbound lease goes to a tenant or broker. Pre-execution QC gate for leases drafted on Oxford Realty Advisors own landlord form (Fairground Village Center / 1100 Rarig Ave / Sepich portfolio paper). Also runs --loi-conformance (register vs. drafted lease) for lease-generation's LOI gate. Distinct from legal-intelligence: audits ORA's OWN paper."
+name: "lease-form-qc"
+description: "Pre-execution QC gate for leases on Oxford Realty Advisors' own landlord form. Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, review our lease draft, new tenant lease, lease from the template, or uploads an ORA-form lease DOCX. ALSO the sole path for grading an existing lease against its LOI: does the lease match the LOI, LOI vs lease, reconcile LOI and lease, LOI conformance, or an LOI + drafted lease together (standalone LOI-Lease Audit mode; no lease yet = lease-generation). Run before ANY outbound lease goes to a tenant or broker. 57 checks (dead cross-refs, undefined terms, OpEx billing, statutory cites, Ohio mitigation, token gate, footer tenant-mismatch, blanks, exhibit stubs, BLI drift, rent arithmetic), PASS/FAIL; --loi-audit = scan + register-vs-lease matrix. Carries the six ratified positions. Not legal-intelligence (counterparty paper) or deal-execution 2A (PSA vs LOI)."
 ---
 
-# Lease Form QC — Oxford Realty Advisors own paper (v2.6)
+# Lease Form QC — Oxford Realty Advisors own paper (v2.8: LOI-Lease Audit mode + T3/T4/D1/D2 + --loi-audit)
 
 Pre-execution gate for leases drafted on the ORA landlord form. Run BEFORE a draft
 goes to a tenant, broker, or counsel. This is a defect scan of **our** paper — for
 counterparty leases and PSAs use `legal-intelligence`.
+
+Two questions, two modes. **"Is this lease clean?"** → the 57-check scan below.
+**"Does this lease match the LOI?"** → the LOI ↔ Lease Audit (standalone mode,
+v2.7; scripted v2.8) further down — `--loi-audit` runs the scan and the matrix in one call;
+the intake and reverse pass are the work the scanner cannot do. If there is no drafted lease yet, the request is
+`lease-generation`, not this skill.
 
 ## Ratified standing positions (Gabriel Goldberg, 2026-08-03)
 
@@ -126,13 +132,13 @@ prose and reported ~16 mojibake "failures" including BLOCKs. Never report a QC r
 for a file that exited 2 — supply a text-layer copy, or install poppler-utils +
 tesseract.
 
-Benchmarks (scanner v2.6, 53 checks = 51 defect checks + T1 + T2): untouched ORA-form lease
+Benchmarks (scanner v2.8, 57 checks = 51 defect checks + T1–T4 + D1 + D2): untouched ORA-form lease
 ≈ **39–48 failures**; a v2.4.1-derived lease fails exactly F10–F13 (+F14–F18); a
-v2.5-derived lease fails exactly **F14–F18**; a v2.6-derived lease = **0 of 53** (the OH
-master fixture in this repo re-verified directly: T2 does not fire — its footer complex
+v2.5-derived lease fails exactly **F14–F18**; a v2.6-derived lease = **0 of 57** (the OH
+master fixture in this repo re-verified directly at v2.8: T2–T4, D1 and D2 do not fire; T2 does not fire — its footer complex
 fields are PAGE/NUMPAGES page numbering, not FILENAME/DOCPROPERTY. The five rebased
 state-conformed property templates this repo does not carry a local copy of were not
-independently re-run for this change; confirm the same 0-of-53 on them before relying
+independently re-run for this change; confirm the same 0-of-57 on them before relying
 on this benchmark for those files).
 The scanner also enforces a **T1 token gate**: any
 unfilled `[TOKEN]` **in the body or the footer** of a file whose name lacks
@@ -249,6 +255,43 @@ CERCLA: 42 U.S.C. § 9061 → **§ 9601**. HMTA: 49 U.S.C. § 1802 → **§ 5101
   other tag, and is invisible to this check — a documented limit, not a gap to route
   around inside this file (see `_footer_field_candidates()`'s comment).
 
+### Class 5d — INTERNAL CONSISTENCY / EXECUTION READINESS (added v2.8)
+
+Four checks that read only what the shared extractor already provides (body, footer,
+file name); `ora_doc_qc.py` is unchanged. IDs **D1/D2** (the v2.8 brief called them
+C1/C2) avoid the existing Class 6 `C1`/`C2`.
+
+- **T3** — unfilled underscore blanks (`_____`, five or more) in body or footer of a
+  non-`_TEMPLATE` file (**HIGH**, not BLOCK: a blank tenant `ATTN:` line is a notice
+  defect a party can cure by hand, not a fabricated-verdict risk like T1's unfilled
+  `[TOKEN]`). Honors `--allow-tokens`. Execution copies legitimately carry blank
+  signing lines, so each blank is judged by the label nearest it (the 40 characters
+  before it; for a bare rule line the line above, the caption after, and the line
+  below): `Signature`, `Signed`, `By:`, `Date:`, `Print Name`, `Name:`, `Title:`,
+  `Its:`, `day of`, `, 20__`, `(SEAL)`, Initials, Witness, Notary. `Date:`/`Name:`
+  preceded by another word (`Commencement Date:`) is not a signing label. `ATTN:`,
+  `Email:`, notice-address lines and blanks inside a rent, deposit, SF, parcel or
+  commencement sentence fire. Detail = count + first six matches with leading context.
+- **T4** — exhibit / schedule stubs (**BLOCK**, non-template): `TO BE ATTACHED`
+  (`… PRIOR TO EXECUTION`), `TO BE INSERTED`, `TO BE PROVIDED`, `[ATTACH`,
+  `PLACEHOLDER`, and an `EXHIBIT X` / `SCHEDULE X[-n]` heading with under 40 words of
+  content and no embedded drawing. Limits: the drawing test is document-level
+  (any `word/media/` part, a letterhead logo included, disables the heading test —
+  the phrase test still runs) and needs the file path, which the CLI registers;
+  a bare exhibit *list* (consecutive headings, no text) is treated as a list, not stubs.
+- **D1** — Basic Lease Information ↔ body drift (**MED**, only when a BLI block
+  exists): Security Deposit, Monthly Rent, Annual Base Rent, Proportionate Share,
+  Parking, Late Fee, Default Interest (annualized figures only), Escalation, and the
+  Utilities scope set vs the SERVICES AND UTILITIES section. Fires once per label that
+  the body states differently; an absent body statement or token-valued BLI line is
+  silent. Dollars compare to the cent.
+- **D2** — rent-schedule arithmetic (**HIGH**, silent when no schedule table): Year 1
+  = PSF × RSF (within 2-dp PSF rounding) and annual/12 = monthly; later rows must
+  reproduce under ONE method — annual-compounded or monthly-rounded — to the cent.
+  A row matching neither, or rows split across the two methods, fail unless the lease
+  says the schedule controls. Tables with a PSF column or monthly-before-annual parse
+  correctly; a multi-year row (`Years 3-5`) ends verification at that row.
+
 ### Class 6 — MISSING PROVISIONS
 
 No-recording · Landlord default standard · Force majeure · OFAC · Counterparts/
@@ -309,8 +352,132 @@ PARTIAL/MISSING/CONFLICT unless Gabriel resolved it"), **2** = usage / register-
 lease-UNREADABLE error, including a malformed register (not a JSON object) or a missing
 lease file — a single malformed FIELD inside an otherwise-valid register degrades just
 that row to MISSING (with a `could not evaluate` detail) rather than crashing the whole
-matrix. This is a separate code path from the standard 53-check scan (different question, different
+matrix. This is a separate code path from the standard 57-check scan (different question, different
 source of truth, different output shape) and does not add to `checks_run`.
+
+---
+
+## LOI ↔ Lease Audit — standalone mode (added v2.7)
+
+**Trigger:** an LOI and a drafted lease arrive together and the question is "do they
+match" — whoever drafted the lease (broker, counsel, a prior session, or
+`lease-generation`). This is the grading twin of `lease-generation` Gate 4 (which runs
+*inside* production) and of `deal-execution` Workflow 2A (PSA vs LOI, buyer side). The
+matrix alone answers only "is every LOI term in the lease"; a lease that conforms on the
+matrix can still carry a term the LOI never contemplated, an unanswered tenant question,
+an exhibit stub, or a blank signature block. Run all five steps; report from the memo
+structure in Step E. Deterministic throughout — no clarifying questions unless a
+material financial assumption is genuinely ambiguous.
+
+### Step A — LOI intake (the part no scanner can do)
+
+1. **Operative version.** Read the header stamps ("Landlord Response m/d/yy", "Tenant
+   Revised m/d/yy"), the signature block (who signed, title, date) and whether Landlord
+   countersigned. A tenant-signed counter without Landlord countersignature is the
+   tenant's *offer*; a lease drafted to that version is the operative acceptance — say
+   so in the memo. The LOI's non-binding clause does not change this.
+2. **Redlined LOI PDFs.** `pdftotext` flattens strikethrough and underline into one
+   text stream: every struck phrase reads as live text ("on or about Octoberupon the
+   latter of November 1"). Render the pages (`pdftoppm -r 130 -png`) and read the
+   images to classify struck vs. inserted before building the register. Never build a
+   register from the flattened text of a redline. Same rule for Litera/Workshare LOIs.
+3. **Tenant comments embedded in the LOI** ("How are sewer and water being
+   sub-metered?") go into the register's `open_items`, one per question. Each must be
+   answered by the lease or by a stated property fact. A tenant question the lease
+   silently contradicts is a **CONFLICT**, not a MISSING.
+4. **Garble and undefined abbreviations** ("and DFH") are open items addressed to the
+   drafting broker by name, never guessed at.
+5. **Internal LOI contradictions** (inspection right "within 30 days of the
+   Commencement Date" beside delivery "prior to the commencement date") are recorded
+   as such; note which reading the lease adopted and whether it is the landlord-favorable
+   one.
+
+### Step B — Register and matrix
+
+Build `deal-terms-register.json` per `lease-generation/references/deal-terms-register.schema.json`,
+every field sourced to an LOI section number. Then:
+
+```bash
+python3 scripts/lease_qc.py --loi-audit <register.json> <lease.docx> [--json]
+```
+
+One call: the standard 57-check scan (T3/T4/D1/D2 included), then the conformance
+matrix (18th row `open_items`: every register open item needs a non-null `resolution`
+and its `lease_clause` present in the lease; string items are unresolved), then
+`AUDIT: <scan failures> scan failure(s) [<n> BLOCK] · <rows> matrix row(s) · exit <code>`.
+Exit = max of the two components (2 > 1 > 0). Decomposed form, same results:
+`--loi-conformance <register.json> <lease.docx>` plus `python3 scripts/lease_qc.py <lease.docx>`.
+
+Hand-check the sub-fields the mode documents as unverified (`special_provisions`,
+`utilities.gas/.trash`, `parking.allocation/.vehicle_class_cap`).
+
+### Step C — Reverse pass: BEYOND-LOI terms
+
+The matrix is register → lease only. Walk the lease and list every operative term with
+no LOI antecedent, classed:
+
+| Class | Meaning | Disposition |
+|---|---|---|
+| **STANDARD-FORM** | Master boilerplate and ratified positions (late fee / default rate, assignment recapture + profit share, no-recording, relocation right, Tenant Delay, deemed acceptance, landlord-default no-offset) | List once; no action. Flag relocation when the Landlord Work is tenant-specific (custom build-out, shielding, anchoring) — it will be struck and undermines the tenant-facing tone. |
+| **NARROWING** | Lease grants an LOI term but bounds it in a way the LOI did not (retaining an existing furnace inside a "new HVAC system"; carving the PM contract out of an HVAC repair cap; a fair-market floor at last-year rent; a designated area where the LOI said "outdoor areas") | Landlord-favorable negotiating positions. Report as positions, not conformance defects, and recommend they be disclosed to the tenant's broker rather than left to be discovered. |
+| **USE-CONFLICT** | A form prohibition that may defeat the LOI's stated use (blank/simulated-munitions ban vs. a security training facility; flat Hazardous Materials ban vs. a packaged-chemicals user) | Must be confirmed with the tenant before release. Ratified position 5 is not softened — the *finding* is reported, per the position's own instruction. |
+| **MISSING-GRANT** | An LOI grant with no lease clause at all (early access, hose bib, pylon panel) | Conformance defect. Fix before release — draft the clause landlord-bounded per `lease-generation/references/clause-modules.md`. |
+
+### Step D — Mechanics (deterministic; scripted in v2.8 — check IDs below)
+
+1. **Rent schedule arithmetic** (**D2**). PSF × RSF = Year-1 annual; recompute every year under
+   the lease's *stated* method (compounding on rounded monthly rent vs. on annual). Any
+   cent variance must be explained by the stated rounding rule, and the lease must say
+   the schedule controls. Option-term rent basis stated.
+2. **Proportionate share** = premises RSF ÷ building RSF, two decimals, building RSF
+   verified against the property's executed leases / Notion Property Register, not the
+   LOI.
+3. **BLI ↔ body** (**D1**). Every Basic Lease Information line has a body counterpart with the
+   identical value (watch scope drift: "water" vs. "water and sewer"). Body controls;
+   conform the BLI anyway.
+4. **Exhibit completeness** (**T4**). Every exhibit the body references exists; any "TO BE
+   ATTACHED", "TO BE ATTACHED PRIOR TO EXECUTION", schedule stub, or exhibit consisting
+   of placeholder text is an execution blocker. Where an exhibit needs a drawing, confirm
+   an image is embedded (`word/media/`) — "outlined in red below" with nothing below is a
+   stub.
+5. **Blank-field scan** (**T3**). Underscore runs (`_____`), "day of ______, 20__", ATTN / e-mail
+   lines, signature-block names and titles. T1 sees `[TOKENS]` only; underscores are
+   invisible to it.
+6. **Parties.** Entity name and state of organization vs. the LOI — and vs. any LOI
+   request that the tenant supply its entity → Secretary of State verification item.
+   Landlord signatory vs. the manager of record for the property LLC; notice block
+   complete.
+7. **Commencement chain.** Each LOI delivery condition maps to a lease Delivery
+   Condition; each LOI "no later than" maps to a hard date; each LOI outside date to a
+   remedy. A softened condition (CO "or equivalent" widened to "existing certificate or
+   final inspection approval") is reported as a NARROWING, not silently accepted.
+
+### Step E — Report
+
+Memo, ORA style guide, named `YYYY-MM-DD_[Tenant]-[Property]_LOI-Lease-Conformance_Memo_v##`,
+saved to the Leases project and mirrored to SharePoint when the destination is known:
+
+1. **Bottom line** — one paragraph: economics conform / N deviations / N defects / N blockers.
+2. **Conforming terms** — table: LOI § · term · lease clause · ✓ (with any benign
+   variance noted inline, e.g. the $0.03 rounding case).
+3. **Deviations** — numbered, each with LOI § · lease clause · class from Step C ·
+   action. Conformance defects (MISSING-GRANT, CONFLICT, unanswered open item) first;
+   NARROWING positions second; STANDARD-FORM last.
+4. **Execution blockers** — exhibits, blanks, entity/signatory verification,
+   countersignature status.
+5. **Recommended sequence** — defects fixed before release; positions decided; what to
+   concede to hold what.
+
+Reference run: First Coast Security Solutions / 9620 E. State Rte 350 Raytown, Unit
+107-108 (2026-09-24) — 17 conforming, 9 deviations (2 conformance defects: water
+metering contradicted an open tenant question; early access absent), 6 execution
+blockers. Memo: `2026-09-24_FCSS-9620-Raytown-LOI-Lease-Conformance_Memo_v01.md`
+(Leases project).
+
+### Shipped in v2.8
+
+T3, T4, D1, D2, the `open_items` matrix row and `--loi-audit` implement Step D's mechanics and Step B's single entry point.
+The reverse pass (Step C) remains a judgment step — no scanner reads a lease for terms the LOI never contemplated.
 
 ## Decision gates — never fix unilaterally
 
@@ -347,6 +514,39 @@ section, re-verify every numeric cross-reference** — that is exactly how the v
 Section 24 defect was born.
 
 ## Changelog
+
+### v2.8 (2026-09-24) — LOI ↔ Lease Audit mechanics scripted
+
+Code release completing v2.7 (`checks_run` 53 → **57**). Additive: no existing check ID, severity, regex or logic
+changed; `tools/ora_doc_qc.py` untouched.
+
+| Change | Why |
+|---|---|
+| **T3** underscore-blank gate (HIGH) with per-blank signing-label exemption | v2.7 handoff said BLOCK; amended to HIGH — a blank `ATTN:`/e-mail line is a curable notice defect, and a BLOCK would also risk false positives on execution copies' blank signature lines. |
+| **T4** exhibit/schedule stub gate (BLOCK) | "TO BE ATTACHED" and bare exhibit headings shipped in the FCSS draft; T1 sees `[TOKENS]` only. |
+| **D1** BLI ↔ body drift (MED) and **D2** rent-schedule arithmetic (HIGH) — named D, not C | The brief called them C1/C2, but `C1`/`C2` already exist (Class 6 no-recording, default-cure); renaming the new checks kept every existing ID intact. |
+| `open_items` row in `--loi-conformance`; register schema `open_items` becomes `oneOf [string, {item, resolution, lease_clause, source}]` | Open items were previously never carried through; strings stay valid (unresolved). Example register updated; existing rows unchanged. |
+| **`--loi-audit`** composed mode | One command runs Gate 3 + Gate 4 of lease-generation and the standalone audit; exit = max of components. |
+
+Regression evidence: 141 tests (89 at v2.6), full suite green; OH master v2.6 fixture **0 of 57**, T3/T4/D1/D2 silent;
+two independent code-review passes — pass 1: 2 Critical (D2 PSF-column and TI-allowance misreads) + 4 Important, all fixed;
+pass 2: 2 Important (T3 signature-block layout, initials/witness lines) + 2 Minor, all fixed.
+
+### v2.7 (2026-09-24) — LOI ↔ Lease Audit standalone mode
+
+Doctrine-only change (no scanner code touched; `checks_run` still 53). Systematizes the
+FCSS / 9620 State 350 run, where the question "do the LOI and the lease match up"
+arrived with a broker-drafted lease and a tenant-redlined, tenant-signed LOI —
+outside `lease-generation`'s pipeline, so Gate 4 never ran, and outside anything the
+matrix checks (redline intake, unanswered tenant questions, terms beyond the LOI,
+exhibit stubs, underscore blanks, schedule arithmetic).
+
+| Change | Why |
+|---|---|
+| Description gains the LOI-vs-lease trigger phrases and routes "no lease yet" to `lease-generation` | `lease-generation`'s own description says "make the lease match the LOI", which reads as grading; the two skills now split produce/grade explicitly (mirrored in `lease-generation` v1.1). |
+| Five-step audit procedure (intake → register/matrix → reverse pass → mechanics → memo) | Each step covers a finding class the matrix cannot produce. The reverse pass's four classes (STANDARD-FORM / NARROWING / USE-CONFLICT / MISSING-GRANT) separate conformance defects from negotiating positions so the memo's "fix before release" list is not padded with positions. |
+| Redline-intake rule | `pdftotext` on the FCSS LOI produced "Octoberupon the latter of November" — struck and inserted text fused. A register built from that text would have carried the wrong commencement date. |
+| Code-surface handoff list (T3/T4, BLI diff, schedule recompute, `open_items` carry-through, `--loi-audit`) | The mechanics are deterministic and belong in the scanner with tests; kept out of this release so the doctrine could ship without an untested code change. |
 
 ### v2.6 — T2 + `--loi-conformance` mode (lease-generation handoff)
 
