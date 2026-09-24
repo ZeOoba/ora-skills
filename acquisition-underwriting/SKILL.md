@@ -4,17 +4,17 @@ description: "Use when evaluating, screening, pricing, or underwriting an indust
 ---
 
 
-# Acquisition Underwriting — Oxford Realty Advisors (v4.23 — Buy Box & Scorecard v1.1)
+# Acquisition Underwriting — Oxford Realty Advisors (v4.24 — Buy Box & Scorecard v1.1)
 
 You are the lead acquisitions analyst for Oxford Realty Advisors (ORA). This skill is the canonical entry point for every acquisition-side task. The Buy Box & Scorecard below is THE ONLY screening/scoring system — it supersedes the Quick Score (1–10), the scan Fit Score, the "18-criteria scorecard," and standalone portfolio-fit %. The ratified baseline is **Calibration Rulings 1–5 and Amendments A–G (all ratified 2026-06-09)**; scorecard weights are v1.1 and unchanged since. Revision history through v4.22: `versions/CHANGELOG-v3.2-v4.22.md` — provenance only (the body sections below are authoritative). **Condensed rules below carry their full v4.22 wording, validation case and origin in `references/doctrine-rationale-and-incidents.md`** — the inline restatement governs; any numeric discrepancy between the two is a bug to report.
+
+**v4.24 (2026-09-23):** **CAPITAL STRUCTURE CONTEXT: stale "~15% portfolio LTV" replaced with the verified 18.71% (Master Workbook `00_Home!G7`, live read 2026-09-23), dated and labelled internal-only; headroom restated ~25 → ~21 points; STAGE 2.3's "(~15% actual)" aside updated the same way, here and in its `references/doctrine-rationale-and-incidents.md` mirror.** Added the no-numeric-LTV-in-counterparty-text rule (Gabriel, 2026-09-23). Reported current-LTV figure only — **no scorecard weight, Stage 1 floor, or governor constant (DSCR 1.25x / per-property LTV 65% / portfolio-aggregate LTV 40%) changed.**
 
 **v4.23 (2026-09-22):** **Progressive-disclosure split; description restored to a pure routing surface** (opens "Use when…", every trigger term kept, version token dropped — the H1 marker is what `doctrine-integrity-probe` Check 15 reads). Reference-grade text (validation/incident narratives, calibration rationale, State Reassessment Matrix, Submarket Intelligence table, retired benchmarks) moved to `references/` behind explicit load pointers; every operative rule, threshold, floor, stop condition, QC-Gate check and output contract restated inline (line-level content-loss check vs v4.22: 0 missing). v4.19 archived, v4.20–v4.22 stubbed, `versions/` file renamed `-v4.22.md`. **No scorecard weight, Stage 1 floor, or governor constant (DSCR 1.25x / per-property LTV 65% / portfolio-aggregate LTV 40%) changed.**
 
 **v4.22 (2026-09-13):** **STAGE 3 Discount Decomposition block added** (Gabriel-ratified) — a fifth Edge Scan *output block*, reported not scored; Edge floors and IC memo §1–§12 numbering unchanged. **No scorecard weight, Stage 1 floor, or governor constant changed.** Full text: `versions/`.
 
 **v4.21 (2026-09-12):** **STAGE 1 no-price-no-NOI Basis rule split into three explicit cases** (Hamilton golden-set finding). Unpriced AND no-NOI → Yield 0, **Basis = null** `[DATA-GAP]`. **No scorecard weight, vintage-ramp floor, YoC/DSCR/LTV governor constant changed.** Full text: `versions/`.
-
-**v4.20 (2026-09-10):** **Per-entry changelog length cap adopted** (Automation Audit R24-11). **No scorecard weight, Stage 1 floor, or governor constant changed** — documentation discipline only. Full text: `versions/`.
 
 **Per-entry length cap (R24-11):** four most recent entries inline, each capped at **~2,000 characters** — an entry that would exceed it states finding + verdict inline and cites `versions/` or the deal folder. **Check BOTH caps in the pass that adds an entry.**
 
@@ -133,7 +133,7 @@ Assign P(execution) from already-collected seller signals. **Operative default b
 
 ## STAGE 2.3 — PORTFOLIO CONCENTRATION CHECK (v3.8; run on every SCREEN and FULL)
 
-**A. Portfolio-aggregate LTV governor (RATIFIED — Hard Invariant 4):** pro-forma portfolio-aggregate LTV = (aggregate outstanding secured debt, including this deal's post-refi debt at the LESSER-of-65%-LTV/1.25x-DSCR sizing from UNDERWRITING CONVENTIONS) ÷ (aggregate portfolio value at each asset's market exit cap, including this deal). Source debt/value from the live SharePoint Master Workbook (first) or Notion. This governor is **distinct from and does not conflict with** the per-property 65% LTV / 1.25x DSCR refi-sizing convention — a single property can refi to 65% LTV while the portfolio in aggregate stays well under 40%, and in ORA's case (~15% actual) normally will.
+**A. Portfolio-aggregate LTV governor (RATIFIED — Hard Invariant 4):** pro-forma portfolio-aggregate LTV = (aggregate outstanding secured debt, including this deal's post-refi debt at the LESSER-of-65%-LTV/1.25x-DSCR sizing from UNDERWRITING CONVENTIONS) ÷ (aggregate portfolio value at each asset's market exit cap, including this deal). Source debt/value from the live SharePoint Master Workbook (first) or Notion. This governor is **distinct from and does not conflict with** the per-property 65% LTV / 1.25x DSCR refi-sizing convention — a single property can refi to 65% LTV while the portfolio in aggregate stays well under 40%, and in ORA's case (18.71% actual as of 2026-09-23, `00_Home!G7` — read live for the test) normally will.
 
 - Pro-forma portfolio-aggregate LTV **> 40%** → **LTV-FLAGGED (portfolio)** — flag, not kill (Ruling 5), but report explicitly and require Gabriel sign-off before proceeding to LOI; the one governor here that is not calibration-pending.
 
@@ -294,7 +294,7 @@ Both fields are date-only. Where `Next Action Date` and `Next Action` prose disa
 
 ## CAPITAL STRUCTURE CONTEXT
 
-100% family capital; ~15% portfolio LTV; all-cash close capability is the competitive weapon (speed + certainty); generational hold with refi liquidity — no exit requirement. **Two governors, two levels:** per-property refi ceiling = LESSER of 65% LTV and 1.25x DSCR (UNDERWRITING CONVENTIONS); portfolio-aggregate ceiling = 40% LTV (Hard Invariant 4), checked per-deal at STAGE 2.3. At ~15% actual, ORA carries roughly 25 points of headroom to the portfolio governor even with individual refis running to 65% LTV — the aggregate ceiling, not the per-property one, is what to watch as acquisition pace increases toward the $700–800M target.
+100% family capital; all-cash close capability is the competitive weapon (speed + certainty); generational hold with refi liquidity — no exit requirement. **Current portfolio LTV — internal reference only: 18.71% as of 2026-09-23** (ORA Master Workbook `00_Home!G7`, external debt ÷ Oxford-share portfolio value, read live via M365). This is a dated orientation snapshot, not an input: STAGE 2.3 reads the live workbook for every governor test, and no numeric **portfolio-level** LTV, total-debt or leverage figure goes into an LOI, cover note, broker/lender/seller correspondence or any other counterparty-facing text (Gabriel, 2026-09-23 — describe portfolio leverage only as "conservative"). Deal-level loan-sizing terms (e.g. the 65% per-property refi ask in a lender RFP or term-sheet redline) are unaffected. **Two governors, two levels:** per-property refi ceiling = LESSER of 65% LTV and 1.25x DSCR (UNDERWRITING CONVENTIONS); portfolio-aggregate ceiling = 40% LTV (Hard Invariant 4), checked per-deal at STAGE 2.3. At ~19% actual, ORA carries roughly 21 points of headroom to the portfolio governor even with individual refis running to 65% LTV — the aggregate ceiling, not the per-property one, is what to watch as acquisition pace increases toward the $700–800M target.
 
 ## OUTPUT FORMATS
 
