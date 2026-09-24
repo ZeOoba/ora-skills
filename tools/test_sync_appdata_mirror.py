@@ -9,7 +9,9 @@ mirror-sync hiccup must never block a commit).
 
 Stdlib only — run with `python tools/test_sync_appdata_mirror.py`.
 """
+import os
 import shutil
+import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,10 +20,24 @@ from unittest.mock import patch
 from sync_appdata_mirror import check_staged, discover_mirror_dirs, sync_changed_range, sync_skill
 
 
+def _rmtree(path) -> None:
+    """git writes object files read-only, which rmtree cannot unlink on Windows --
+    with ignore_errors=True every git-backed fixture here leaked silently into %TEMP%.
+    Clear the bit and retry; still best-effort, so a locked file never fails a test.
+    (Same helper as PR #79 adds to tools/test_pending_reimport.py.)"""
+    def _retry(func, p, _exc):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except Exception:  # onexc can also hand over os.open/os.close
+            pass
+    shutil.rmtree(path, onexc=_retry)
+
+
 class DiscoverMirrorDirsTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.addCleanup(_rmtree, self.tmp)
 
     def test_no_appdata_root_returns_empty(self):
         self.assertEqual(discover_mirror_dirs('some-skill', appdata=None), [])
@@ -50,7 +66,7 @@ class DiscoverMirrorDirsTests(unittest.TestCase):
 class SyncSkillTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.addCleanup(_rmtree, self.tmp)
         self.repo_root = self.tmp / 'repo'
         self.skill_dir = self.repo_root / 'my-skill'
         (self.skill_dir / 'references').mkdir(parents=True)
@@ -125,7 +141,7 @@ class SyncSkillTests(unittest.TestCase):
 class CheckStagedNeverBlocksTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.addCleanup(_rmtree, self.tmp)
         self.skill_dir = self.tmp / 'my-skill'
         self.skill_dir.mkdir()
         (self.skill_dir / 'SKILL.md').write_text('---\nname: my-skill\ndescription: x\n---\nbody', encoding='utf-8')
@@ -152,7 +168,7 @@ class WriteGateTests(unittest.TestCase):
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.addCleanup(_rmtree, self.tmp)
         self.skill_dir = self.tmp / 'repo' / 'my-skill'
         self.skill_dir.mkdir(parents=True)
         (self.skill_dir / 'SKILL.md').write_text('repo body', encoding='utf-8')
@@ -193,7 +209,7 @@ class WriteGateTests(unittest.TestCase):
 class CanonicalCheckoutGateTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.addCleanup(_rmtree, self.tmp)
         self.skill_dir = self.tmp / 'my-skill'
         self.skill_dir.mkdir()
 
@@ -240,7 +256,7 @@ class RealClassifierIntegrationTests(unittest.TestCase):
     def setUp(self):
         import subprocess
         self.tmp = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.addCleanup(_rmtree, self.tmp)
         self.repo = self.tmp / 'repo'
         self.skill = self.repo / 'my-skill'
         (self.skill / 'scripts').mkdir(parents=True)
@@ -291,6 +307,18 @@ class RealClassifierIntegrationTests(unittest.TestCase):
         lines = sync_skill(self.skill, appdata=self.appdata)
         self.assertIn('NOT written', lines[0], lines)
         self.assertIn('PLATFORM EDIT', self._mirror_skill_md())
+
+
+class FixtureCleanupRemovesGitRepos(unittest.TestCase):
+    """git writes object files read-only; rmtree(ignore_errors=True) skipped them on
+    Windows and every RealClassifierIntegrationTests fixture leaked into %TEMP%."""
+
+    def test_cleanup_removes_the_committed_fixture_repo(self):
+        fx = RealClassifierIntegrationTests('test_ordinary_edit_is_written')
+        fx.setUp()
+        fx.doCleanups()
+
+        self.assertFalse(fx.tmp.exists())
 
 
 if __name__ == '__main__':

@@ -27,8 +27,10 @@ was silently disabled on them. See DescriptionParsingOnRealShapes below.
 These tests SKIP rather than fail when the repo is unavailable, so they stay
 runnable from a packaged checkout. Run: python tools/test_skill_drift_report_realdata.py
 """
+import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -58,6 +60,20 @@ BLOCK_SCALAR_SKILL = 'ratify-hurdle-rate'
 # description collapsed to 203 chars. These ARE the routing surface.
 LOST_TRIGGERS = ['UNSCREENABLE rows', 'DATA-GAP rows', 'CAMA extract',
                  'county GIS pull', 'Wyandotte KS']
+
+
+def _rmtree(path) -> None:
+    """git writes object files read-only, which rmtree cannot unlink on Windows --
+    with ignore_errors=True every git-backed fixture here leaked silently into %TEMP%.
+    Clear the bit and retry; still best-effort, so a locked file never fails a test.
+    (Same helper as PR #79 adds to tools/test_pending_reimport.py.)"""
+    def _retry(func, p, _exc):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except Exception:  # onexc can also hand over os.open/os.close
+            pass
+    shutil.rmtree(path, onexc=_retry)
 
 
 def _real_parts(skill: str):
@@ -90,7 +106,7 @@ class GitFixture(unittest.TestCase):
             subprocess.run(['git', '-C', str(self.repo), *a], capture_output=True)
 
     def tearDown(self):
-        shutil.rmtree(self.tmp, ignore_errors=True)
+        _rmtree(self.tmp)
 
     def _write(self, root: Path, text: str):
         (root / 'demo' / 'SKILL.md').write_text(text, encoding='utf-8', newline='')
@@ -303,6 +319,20 @@ class SectionReorderIsManualMergeByDesign(GitFixture):
         self._commit_repo()
         self._write(self.cache, f'---\n{fm}---\n\n{rev}\n## GENUINELY NEW\nnew line\n')
         self.assertEqual(self._verdict()['verdict'], sdr.MANUAL_MERGE)
+
+
+class FixtureTeardownRemovesGitRepos(unittest.TestCase):
+    """git writes object files read-only; rmtree(ignore_errors=True) skipped them on
+    Windows and every git-backed fixture in this file leaked into %TEMP%."""
+
+    def test_teardown_removes_a_committed_fixture_repo(self):
+        fx = GitFixture()
+        fx.setUp()
+        subprocess.run(['git', '-C', str(fx.repo), 'commit', '-q', '--allow-empty', '-m', 'init'],
+                       capture_output=True, check=True)
+        fx.tearDown()
+
+        self.assertFalse(fx.tmp.exists())
 
 
 if __name__ == '__main__':
