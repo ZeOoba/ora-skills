@@ -21,6 +21,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -965,6 +966,16 @@ class LogBeforeClearGuard(unittest.TestCase):
     2026-09-07: county-parcel-screen was cleared against an entry whose own text
     said "publish stopped ... no action taken on this skill"."""
 
+    def setUp(self):
+        # read/write_entries are mocked per test, but cmd_clear still takes LEDGER's
+        # lock -- point LEDGER at a temp dir so its sidecar never lands in the real
+        # _staging/.
+        tmp = Path(tempfile.mkdtemp(prefix='pending_reimport_clear_'))
+        self.addCleanup(_rmtree, tmp)
+        patch = unittest.mock.patch.object(pr, 'LEDGER', tmp / 'PENDING_REIMPORT.md')
+        patch.start()
+        self.addCleanup(patch.stop)
+
     def _clear(self, skills, block, header='## 2026-09-07 -- x', known=None):
         """`known` overrides the repo's real skill roster, which _sole_subject()
         consults to decide whether a scope is a verdict about ONE skill or prose
@@ -1108,6 +1119,8 @@ class CmdRecordDeliberatelyUnpublishedWarning(unittest.TestCase):
             unittest.mock.patch.object(pr, 'write_entries',
                                         lambda entries, *a, **k: self.fake_ledger.clear() or self.fake_ledger.update(entries)),
             unittest.mock.patch.object(pr, 'plugin_of', lambda skill: None),
+            # record_hits takes LEDGER's lock -- keep its sidecar out of the real _staging/.
+            unittest.mock.patch.object(pr, 'LEDGER', self.tmp / '_staging' / 'PENDING_REIMPORT.md'),
         ]
         for p in self.patches:
             p.start()
@@ -1313,6 +1326,266 @@ class WriteEntriesIsAtomic(FixtureTestCase):
 
         self.assertEqual(list(pr.read_entries(self.ledger)), ['new-skill'])
         self.assertEqual([p.name for p in self.ledger.parent.iterdir()], ['LEDGER.md'])
+
+
+# A worker process for the multi-process tests below: waits for the go-file so every
+# worker starts contending at once, then runs `cycles` real ledger read-modify-writes.
+# Stdlib subprocess (not multiprocessing) so the worker imports pending_reimport
+# fresh, exactly as tools/hooks/post-commit does.
+_WORKER = r"""
+import sys, time
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import pending_reimport as pr
+ledger, go, wid, cycles, mode = Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4], int(sys.argv[5]), sys.argv[6]
+while not go.exists():
+    time.sleep(0.001)
+for j in range(cycles):
+    if mode == 'record':
+        pr.record_hits({f'w{wid}-{j}': {f'w{wid}-{j}/SKILL.md'}}, 'abc1234', 'subject',
+                       ledger_path=ledger, timeout=600)
+    else:
+        pr.clear_entries([f'seed-{wid}-{j}'], ledger_path=ledger, timeout=600)
+"""
+
+_HOLDER = r"""
+import sys, time
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import pending_reimport as pr
+ledger, held, release = Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4])
+with pr.ledger_lock(ledger):
+    held.write_text('held')
+    while not release.exists():
+        time.sleep(0.005)
+"""
+
+
+class LedgerReadModifyWriteIsSerialized(FixtureTestCase):
+    """PR #79's adversarial merge gate (2026-09-23, race-hunter finding F2): three
+    processes x 200 concurrent read-modify-write cycles on the cmd_record path lost
+    91.8% of updates on base and 21.7-40.2% after #79's atomic write, because
+    nothing serialized read_entries -> mutate -> write_entries across processes.
+    The ledgers live in the PRIMARY checkout's _staging/, shared by every worktree's
+    post-commit hook, so concurrent writers are the normal case. These tests count
+    lost updates (must be zero), never elapsed time."""
+
+    PROCS = 3
+    CYCLES = 200          # F2's harness shape: 3 processes x 200 cycles
+    MIXED_CYCLES = 100    # 6 processes; each ledger write costs ~10ms+ under AV here
+
+    def setUp(self):
+        super().setUp()
+        self.ledger = self.tmp / '_staging' / 'PENDING_REIMPORT.md'
+        self.go = self.tmp / 'go'
+
+    def _spawn(self, script, *args):
+        return subprocess.Popen(
+            [sys.executable, '-c', script, str(Path(pr.__file__).parent), *map(str, args)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    def _run_workers(self, specs, cycles):
+        procs = []
+        try:
+            for wid, mode in specs:
+                procs.append(self._spawn(_WORKER, self.ledger, self.go, wid, cycles, mode))
+        finally:
+            self.go.write_text('go')     # never leave a spawned worker polling forever
+        errors = []
+        for p in procs:
+            try:
+                _out, err = p.communicate(timeout=900)   # a hang bound, not an assertion
+            except subprocess.TimeoutExpired:
+                p.kill()
+                _out, err = p.communicate()
+                err = f'worker hung: {err}'
+            if p.returncode != 0:
+                errors.append(err.strip().splitlines()[-1] if err.strip() else p.returncode)
+        return errors
+
+    def test_concurrent_records_lose_no_update(self):
+        errors = self._run_workers([(w, 'record') for w in range(self.PROCS)], self.CYCLES)
+
+        entries = set(pr.read_entries(self.ledger))
+        expected = {f'w{w}-{j}' for w in range(self.PROCS) for j in range(self.CYCLES)}
+        lost = expected - entries
+        self.assertEqual(len(lost), 0, f'{len(lost)} of {len(expected)} updates lost; '
+                                       f'worker errors: {errors}')
+        self.assertEqual(errors, [])
+
+    def test_concurrent_records_and_clears_lose_no_update(self):
+        n = self.MIXED_CYCLES
+        seeded = {f'seed-{w}-{j}': f'- seed-{w}-{j} | pending'
+                  for w in range(self.PROCS) for j in range(n)}
+        pr.write_entries(seeded, self.ledger)
+
+        errors = self._run_workers([(w, 'record') for w in range(self.PROCS)]
+                                   + [(w, 'clear') for w in range(self.PROCS)], n)
+
+        entries = set(pr.read_entries(self.ledger))
+        recorded = {f'w{w}-{j}' for w in range(self.PROCS) for j in range(n)}
+        self.assertEqual(len(recorded - entries), 0,
+                         f'{len(recorded - entries)} recorded entries lost; worker errors: {errors}')
+        self.assertEqual(len(entries & set(seeded)), 0,
+                         f'{len(entries & set(seeded))} cleared entries came back')
+        self.assertEqual(errors, [])
+
+    def test_backfill_keeps_an_entry_recorded_while_its_sweep_ran(self):
+        # backfill's sweep hashes every skill and takes seconds; a commit's record that
+        # lands meanwhile must survive backfill's write. The sweep runs outside the
+        # lock and the ledger is re-read under it.
+        def sweep_with_a_concurrent_commit(*_a, **_k):
+            pr.record_hits({'committed-meanwhile': {'x/SKILL.md'}}, 'abc1234', 's',
+                           ledger_path=self.ledger)
+            return {'drifted-skill': 'drift'}
+
+        with unittest.mock.patch.object(pr, 'sweep_drift', sweep_with_a_concurrent_commit):
+            seeded = pr.backfill(repo_root=self.repo, cache_root=self.cache,
+                                 ledger_path=self.ledger)
+
+        self.assertEqual(seeded, ['drifted-skill'])
+        self.assertEqual(set(pr.read_entries(self.ledger)),
+                         {'committed-meanwhile', 'drifted-skill'})
+
+
+class LedgerLockTimeoutFailsOpen(FixtureTestCase):
+    """A lock that cannot be taken within its bound must be reported loudly and leave
+    the ledger exactly as it was -- never block, never write unlocked, never corrupt."""
+
+    def setUp(self):
+        super().setUp()
+        self.ledger = self.tmp / '_staging' / 'PENDING_REIMPORT.md'
+        pr.write_entries({'kept-skill': '- kept-skill | pending'}, self.ledger)
+        self.before = self.ledger.read_bytes()
+        held, self.release = self.tmp / 'held', self.tmp / 'release'
+        self.holder = subprocess.Popen(
+            [sys.executable, '-c', _HOLDER, str(Path(pr.__file__).parent),
+             str(self.ledger), str(held), str(self.release)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        while not held.exists():
+            if self.holder.poll() is not None:
+                err = self.holder.stderr.read()
+                super().tearDown()       # a failing setUp skips tearDown
+                self.fail(f'lock holder died: {err}')
+            time.sleep(0.01)
+
+    def tearDown(self):
+        # Before super().tearDown() removes the temp dir the release file lives in
+        # (addCleanup would run after it); an already-dead holder just returns.
+        self.release.write_text('release')
+        self.holder.communicate()
+        super().tearDown()
+
+    def test_update_raises_lock_timeout_and_leaves_ledger_intact(self):
+        with self.assertRaises(pr.LedgerLockTimeout):
+            pr.record_hits({'new-skill': {'new-skill/SKILL.md'}}, 'abc1234', 's',
+                           ledger_path=self.ledger, timeout=0)
+
+        self.assertEqual(self.ledger.read_bytes(), self.before)
+
+    def test_lock_timeout_is_an_oserror_so_repo_first_check_degrades_it(self):
+        # repo_first_check.run() already turns an OSError from record_ledger into a
+        # "ledger write failed" warning and exit 0.
+        self.assertTrue(issubclass(pr.LedgerLockTimeout, OSError))
+
+    def test_cmd_record_reports_on_stdout_and_exits_nonzero(self):
+        # post-commit discards stderr (2>/dev/null); stdout is the commit's console.
+        out = io.StringIO()
+        with unittest.mock.patch.object(pr, 'LEDGER', self.ledger), \
+                unittest.mock.patch.object(pr, 'LOCK_TIMEOUT_S', 0), \
+                unittest.mock.patch.object(pr, 'changed_files', return_value=['s/SKILL.md']), \
+                unittest.mock.patch.object(pr, 'affected_skills',
+                                           return_value={'new-skill': {'new-skill/SKILL.md'}}), \
+                unittest.mock.patch.object(pr, '_git', return_value='abc1234\n'), \
+                contextlib.redirect_stdout(out), \
+                self.assertRaises(SystemExit) as exit_:
+            pr.cmd_record('HEAD')
+
+        self.assertNotEqual(exit_.exception.code, 0)
+        self.assertIn('LOCK TIMEOUT', out.getvalue())
+        self.assertIn('new-skill', out.getvalue())
+        # backfill would not reproduce the row (no cache dir, OI-157, plugin tag,
+        # commit provenance); re-running record for the same commit does.
+        self.assertIn('pending_reimport.py record abc1234', out.getvalue())
+        self.assertEqual(self.ledger.read_bytes(), self.before)
+
+    def _record_failing(self, hits, exc):
+        out = io.StringIO()
+        with unittest.mock.patch.object(pr, 'changed_files', return_value=['s/SKILL.md']), \
+                unittest.mock.patch.object(pr, 'affected_skills', return_value=hits), \
+                unittest.mock.patch.object(pr, '_git', return_value='abc1234\n'), \
+                unittest.mock.patch.object(pr, 'record_hits', side_effect=exc), \
+                contextlib.redirect_stdout(out), \
+                self.assertRaises(SystemExit) as exit_:
+            pr.cmd_record('HEAD')
+        self.assertNotEqual(exit_.exception.code, 0)
+        return out.getvalue()
+
+    def test_cmd_record_reports_any_ledger_oserror_on_stdout(self):
+        # e.g. os.replace still locked by an unlocked `list` reader after its retry,
+        # or flock unsupported on a mounted filesystem. main()'s blanket except would
+        # send these to stderr, which post-commit discards.
+        out = self._record_failing({'new-skill': {'new-skill/SKILL.md'}},
+                                   PermissionError(13, 'being used by another process'))
+
+        self.assertIn('LEDGER WRITE FAILED', out)
+        self.assertIn('pending_reimport.py record abc1234', out)
+
+    def test_cmd_record_still_warns_about_a_suppressed_skill_on_failure(self):
+        # The OI-157 flag is about what the commit touched, not about the ledger write.
+        suppressed = sorted(pr.DELIBERATELY_UNPUBLISHED)[0]
+        out = self._record_failing({suppressed: {f'{suppressed}/SKILL.md'}},
+                                   pr.LedgerLockTimeout('held'))
+
+        self.assertIn('DELIBERATELY_UNPUBLISHED', out)
+        self.assertIn(suppressed, out)
+
+    def test_cmd_clear_reports_on_stderr_and_exits_nonzero(self):
+        err = io.StringIO()
+        with unittest.mock.patch.object(pr, 'LEDGER', self.ledger), \
+                unittest.mock.patch.object(pr, 'LOCK_TIMEOUT_S', 0), \
+                contextlib.redirect_stderr(err), \
+                contextlib.redirect_stdout(io.StringIO()), \
+                self.assertRaises(SystemExit) as exit_:
+            pr.cmd_clear(['kept-skill'], force=True)
+
+        self.assertNotEqual(exit_.exception.code, 0)
+        self.assertIn('LOCK TIMEOUT', err.getvalue())
+        self.assertEqual(self.ledger.read_bytes(), self.before)
+
+    def test_cmd_backfill_reports_on_stderr_and_exits_nonzero(self):
+        # The doctrine guard treats any stderr or non-zero exit from backfill as ERROR.
+        err = io.StringIO()
+        with unittest.mock.patch.object(pr, 'LEDGER', self.ledger), \
+                unittest.mock.patch.object(pr, 'LOCK_TIMEOUT_S', 0), \
+                unittest.mock.patch.object(pr, 'sweep_drift', return_value={'d': 'x'}), \
+                contextlib.redirect_stderr(err), \
+                contextlib.redirect_stdout(io.StringIO()), \
+                self.assertRaises(SystemExit) as exit_:
+            pr.cmd_backfill()
+
+        self.assertNotEqual(exit_.exception.code, 0)
+        self.assertIn('LOCK TIMEOUT', err.getvalue())
+        self.assertEqual(self.ledger.read_bytes(), self.before)
+
+    def test_backfill_with_no_drift_never_takes_the_lock(self):
+        # A clean sweep stays lock-free, so the lock can't fail the daily guard's run.
+        with unittest.mock.patch.object(pr, 'sweep_drift', return_value={}):
+            seeded = pr.backfill(repo_root=self.repo, cache_root=self.cache,
+                                 ledger_path=self.ledger, timeout=0)
+
+        self.assertEqual(seeded, [])
+        self.assertEqual(self.ledger.read_bytes(), self.before)
+
+    def test_lock_is_released_when_its_holder_dies(self):
+        # The kernel owns the lock, so a crashed holder can never leave a stale one.
+        self.holder.kill()
+        self.holder.communicate()
+
+        pr.record_hits({'new-skill': {'new-skill/SKILL.md'}}, 'abc1234', 's',
+                       ledger_path=self.ledger, timeout=60)
+
+        self.assertEqual(set(pr.read_entries(self.ledger)), {'kept-skill', 'new-skill'})
 
 
 class FixtureTeardownRemovesGitRepos(unittest.TestCase):
