@@ -409,12 +409,8 @@ class BaselineDirResolvesToPrimaryCheckout(unittest.TestCase):
         self.assertEqual(rc.REPO, self.wt)
 
 
-class SessionScopedBaselines(FixtureTestCase):
-    """Since #79 every checkout shares ONE baseline dir (the primary's). A baseline
-    must therefore belong to the session that took it and be used up once its
-    install is recorded -- otherwise a session reads another session's install (or
-    its own previous run's) as its own CONFIRMED, and postclick logs an install that
-    never happened (merge-gate race finding F1)."""
+class _SessionFixture(FixtureTestCase):
+    """Controlled CreationTime + fake append + per-session runner. No tests of its own."""
 
     def setUp(self):
         super().setUp()
@@ -445,6 +441,14 @@ class SessionScopedBaselines(FixtureTestCase):
         with open(self.local_log, 'a', encoding='utf-8') as f:
             f.write(f'{ts} [info] [SkillsPlugin] Delta: 1 to download\n'
                     f'{ts} [info] [SkillsPlugin] Sync complete: 1 downloaded, 0 failed\n')
+
+
+class SessionScopedBaselines(_SessionFixture):
+    """Since #79 every checkout shares ONE baseline dir (the primary's). A baseline
+    must therefore belong to the session that took it and be used up once its
+    install is recorded -- otherwise a session reads another session's install (or
+    its own previous run's) as its own CONFIRMED, and postclick logs an install that
+    never happened (merge-gate race finding F1)."""
 
     def test_another_sessions_install_is_not_confirmed_for_this_session(self):
         self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
@@ -521,25 +525,162 @@ class SessionScopedBaselines(FixtureTestCase):
         self.assertIn('demo-skill: CONFIRMED', out)
 
 
+class PostclickRoundTwoGateFindings(_SessionFixture):
+    """Merge-gate round 2: postclick from a worktree with no _staging/ of its own,
+    --baseline across sessions, and the hint for a legacy flat baseline."""
+
+    def test_postclick_works_where_the_checkout_has_no_staging_dir(self):
+        # Baselines now live in the primary, so nothing creates a worktree's own
+        # _staging/ any more -- postclick's entry file must not assume it exists.
+        bare = self.tmp / 'fresh-worktree'
+        bare.mkdir()
+        with unittest.mock.patch.object(rc, 'REPO', bare):
+            self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+            self._install(datetime(2026, 9, 23, 12, 5, 0))
+            code, out = self._as('sess-A', rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+
+        self.assertEqual(code, 0, out)
+        self.assertIn('event log appended', out)
+
+    def test_postclick_honours_baseline_across_sessions(self):
+        # e.g. baseline taken in Code (real session id), click verified via the
+        # Desktop Commander bridge (no session id) -- the documented escape hatch.
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+
+        code, out = self._as('sess-B', rc.cmd_postclick, 'demo-skill', '1.0', True, False,
+                             '2026-09-23 12:00:00')
+
+        self.assertEqual(code, 0, out)
+        self.assertIn('demo-skill: CONFIRMED', out)
+
+    def test_no_baseline_points_at_a_legacy_flat_baseline(self):
+        _write(self.baselines / 'demo-skill.json',
+               json.dumps({'skill': 'demo-skill', 'creation_time': '2026-09-23T11:57:00'}))
+
+        _, out = self._as('sess-A', rc.cmd_verify, ['demo-skill'], None)
+
+        self.assertIn('NO-BASELINE', out)
+        self.assertIn('pre-#79', out)
+        self.assertIn('--baseline "2026-09-23 11:57:00"', out)
+
+
+class ConsumeRaceFindings(_SessionFixture):
+    """Merge-gate round 2, race F1/F3/F4: a baseline that vanishes mid-read, a
+    consume that fails, and a consume that would delete a baseline captured after
+    the verify it is meant to follow."""
+
+    def test_a_baseline_that_vanishes_before_the_read_is_no_baseline(self):
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        real_read = Path.read_text
+
+        def vanished(path, *a, **kw):
+            if self.baselines in path.parents:
+                raise FileNotFoundError(2, 'No such file or directory', str(path))
+            return real_read(path, *a, **kw)
+
+        with unittest.mock.patch.object(Path, 'read_text', vanished):
+            code, out = self._as('sess-A', rc.cmd_verify, ['demo-skill'], None)
+
+        self.assertEqual(code, 1)
+        self.assertIn('NO-BASELINE', out)
+
+    def test_consume_keeps_a_baseline_captured_after_the_verify(self):
+        # Subagents share the parent's session id: one can re-capture a baseline
+        # while the parent's postclick is still appending.
+        with unittest.mock.patch.dict(os.environ, {'CLAUDE_CODE_SESSION_ID': 'sess-A'}):
+            self._run(rc.cmd_baseline, ['demo-skill'])
+            verified_at = rc._baseline_path('demo-skill').stat().st_mtime - 10
+            used = rc.consume_baseline('demo-skill', not_after=verified_at)
+            self.assertFalse(used)
+            self.assertTrue(rc._baseline_path('demo-skill').is_file())
+
+    def test_postclick_only_consumes_a_baseline_no_newer_than_its_verify(self):
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        seen = {}
+        real = rc.consume_baseline
+
+        def spy(skill, not_after=None):
+            seen['not_after'] = not_after
+            return real(skill, not_after=not_after)
+
+        with unittest.mock.patch.object(rc, 'consume_baseline', spy):
+            code, out = self._as('sess-A', rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+
+        self.assertEqual(code, 0, out)
+        self.assertIsNotNone(seen.get('not_after'))
+
+    def test_postclick_reports_a_consume_that_failed(self):
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+
+        with unittest.mock.patch.object(rc, 'consume_baseline',
+                                        side_effect=PermissionError(32, 'in use')):
+            code, out = self._as('sess-A', rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+
+        self.assertEqual(code, 1)
+        self.assertIn('event log appended', out)
+        self.assertIn('baseline NOT used up', out)
+
+    def test_consume_cli_reports_a_failure(self):
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
+        with unittest.mock.patch.object(rc, 'consume_baseline',
+                                        side_effect=PermissionError(32, 'in use')):
+            code, out = self._as('sess-A', rc.cmd_consume, ['demo-skill'])
+
+        self.assertEqual(code, 1)
+        self.assertIn('NOT used up', out)
+
+
 class CycleCloseUsesTheBaselineUp(unittest.TestCase):
     """reimport_cycle close does its own combined event-log append (postclick runs
     with --no-append), so it must use the baselines up itself -- and only once that
     append exited 0."""
 
-    def _close(self, append_rc):
+    def _close(self, append_rc, baseline=None, consume_rc=0):
         calls = []
 
         def fake_run(args, echo=True):
             calls.append([str(a) for a in args])
-            rc_ = append_rc if str(args[0]) == str(cyc.APPEND) else 0
+            if str(args[0]) == str(cyc.APPEND):
+                rc_ = append_rc
+            elif 'consume' in [str(a) for a in args]:
+                rc_ = consume_rc
+            else:
+                rc_ = 0
             return subprocess.CompletedProcess(args, rc_, stdout='', stderr='')
 
         with unittest.mock.patch.object(cyc, '_run', fake_run), \
                 unittest.mock.patch.object(cyc, 'REPO', Path(tempfile.mkdtemp(
                     prefix='reimport_correlate_test_'))) as repo, redirect_stdout(io.StringIO()):
             self.addCleanup(_rmtree, repo)
-            code = cyc.cmd_close(['demo-skill'], None, False, False)
+            if baseline is None:
+                code = cyc.cmd_close(['demo-skill'], None, False, False)
+            else:
+                code = cyc.cmd_close(['demo-skill'], None, False, False, baseline)
         return code, calls
+
+    def test_consume_is_bounded_by_the_time_postclick_started(self):
+        code, calls = self._close(0)
+
+        consume = next(c for c in calls if 'consume' in c)
+        self.assertEqual(code, 0)
+        self.assertIn('--not-after', consume)
+        float(consume[consume.index('--not-after') + 1])
+
+    def test_a_failed_consume_fails_close(self):
+        with redirect_stdout(io.StringIO()) as out:
+            code, _ = self._close(0, consume_rc=1)
+
+        self.assertEqual(code, 1)
+
+    def test_baseline_is_passed_through_to_postclick(self):
+        code, calls = self._close(0, baseline='2026-09-23 12:00:00')
+
+        postclick = next(c for c in calls if 'postclick' in c)
+        self.assertEqual(code, 0)
+        self.assertEqual(postclick[postclick.index('--baseline') + 1], '2026-09-23 12:00:00')
 
     def test_consumes_after_a_successful_append(self):
         code, calls = self._close(0)

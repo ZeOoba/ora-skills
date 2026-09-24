@@ -396,7 +396,9 @@ class RunIntegration(FixtureTestCase):
         self.assertEqual(code, 0)
         entries = read_entries(self.ledger)
         self.assertIn('demo-skill', entries)
-        rescued = rfc._newest_rescue(self.rescue_dir / 'demo-skill') / 'scripts' / 'run.py'
+        run_dir = rfc._newest_rescue(self.rescue_dir / 'demo-skill')
+        self.assertTrue(run_dir.name.endswith('-' + self.repo.resolve().name))
+        rescued = run_dir / 'scripts' / 'run.py'
         self.assertTrue(rescued.is_file())
         self.assertEqual(rescued.read_text(encoding='utf-8'), 'v2-never-committed\n')
         self.assertIn('Rescued the cache copy', stderr)
@@ -448,6 +450,39 @@ class RescueNeverOverwrites(FixtureTestCase):
         self.assertEqual((first / 'SKILL.md').read_text(encoding='utf-8'), 'X: platform edit\n')
         self.assertEqual((second / 'SKILL.md').read_text(encoding='utf-8'), 'Z: another build\n')
         self.assertFalse((second / 'references' / 'notes.md').exists())
+
+    def test_a_rescue_that_fails_mid_copy_is_never_visible(self):
+        # A missing source fails before any dir exists; this fails AFTER the first file
+        # is written, so only the temp-dir-then-rename step keeps the half-copy out of
+        # sight (merge-gate round 2, test-validity F1).
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'X\n')
+        _write(self.cache / 'demo-skill' / 'references' / 'notes.md', 'X-notes\n')
+        real_write = Path.write_bytes
+        writes = []
+
+        def disk_full_on_second(path, data):
+            writes.append(path)
+            if len(writes) == 2:
+                raise OSError(28, 'No space left on device')
+            return real_write(path, data)
+
+        with mock.patch.object(Path, 'write_bytes', disk_full_on_second):
+            self.assertIsNone(self._rescue(['SKILL.md', 'references/notes.md']))
+
+        self.assertEqual([p.name for p in (self.rescue_dir / 'demo-skill').iterdir()
+                          if not p.name.startswith('.')], [])
+        self.assertIsNone(rfc._newest_rescue(self.rescue_dir / 'demo-skill'))
+
+    def test_a_rescue_keeps_the_cache_files_mtime(self):
+        # The rescue is the only surviving copy, and its mtime records when the
+        # platform-side edit happened (merge-gate round 2, scope auditor F-1).
+        src = self.cache / 'demo-skill' / 'SKILL.md'
+        _write(src, 'X: platform edit\n')
+        os.utime(src, (1577836800, 1577836800))
+
+        dest = self._rescue(['SKILL.md'])
+
+        self.assertEqual(int((dest / 'SKILL.md').stat().st_mtime), 1577836800)
 
     def test_an_identical_rescue_is_not_duplicated(self):
         _write(self.cache / 'demo-skill' / 'SKILL.md', 'X: platform edit\n')
