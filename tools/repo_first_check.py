@@ -82,8 +82,7 @@ from pending_reimport import (  # noqa: E402
     _win_long,
     all_skill_dirs,
     classify_shared_copy,
-    read_entries,
-    write_entries,
+    update_entries,
 )
 
 # Untracked durable state lives in the PRIMARY checkout's _staging/, never a
@@ -395,9 +394,26 @@ def record_ledger(findings, ledger_path: Path = LEDGER) -> list[str]:
     silently wipe every real entry (2026-08-04 review finding). main() guards this
     by checking cache reachability before calling _sweep_findings()/record_ledger()
     at all; any other caller must do the same.
+
+    Runs under the ledger's cross-process lock (update_entries), so a concurrent
+    sweep can't interleave its read and write with this one's. Raises
+    LedgerLockTimeout -- an OSError, which run() already degrades to a warning --
+    when the lock isn't free within its bound; the ledger is then untouched.
     """
-    existing = read_entries(ledger_path)
     now = _now()
+    cleared: list[str] = []
+
+    def replace(entries):
+        existing = dict(entries)
+        entries.clear()
+        entries.update(_ledger_lines(findings, existing, now))
+        cleared[:] = sorted(set(existing) - set(entries))
+
+    update_entries(replace, ledger_path, LEDGER_HEADER)
+    return cleared
+
+
+def _ledger_lines(findings, existing: dict[str, str], now: str) -> dict[str, str]:
     entries = {}
     for skill, verdict, per_file in findings:
         bad = [rel for rel, v in per_file if v in BAD_VERDICTS]
@@ -411,8 +427,7 @@ def record_ledger(findings, ledger_path: Path = LEDGER) -> list[str]:
             f'remedy: commit to the repo first -- the mirror sync (pre-commit Check 4) '
             f'will otherwise clobber this on the next commit that touches this skill'
         )
-    write_entries(entries, ledger_path, LEDGER_HEADER)
-    return sorted(set(existing) - set(entries))
+    return entries
 
 
 _RESCUE_RUN = re.compile(r'^\d{8}T\d{12}Z-')
@@ -578,7 +593,8 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
         try:
             cleared = record_ledger(findings, ledger_path)
         except OSError as exc:
-            # Never blocks: write_entries re-raises a lock that outlasts its retry.
+            # Never blocks: a ledger lock held past its bound (LedgerLockTimeout) or a
+            # file lock outlasting write_entries' retry both land here, ledger untouched.
             print(f'repo_first_check: ledger write failed ({exc}) -- {ledger_path.name} '
                   f'left untouched; findings above still stand', file=sys.stderr)
         else:
