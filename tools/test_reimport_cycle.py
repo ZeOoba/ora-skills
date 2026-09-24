@@ -46,8 +46,9 @@ class GateFailures(unittest.TestCase):
         self.assertEqual(rc.gate_failures(SKILL, no_plugin, clean, {SKILL}, rep), [])
 
     def test_every_bad_label_stops(self):
-        self.assertTrue(rc.BAD_DEP_LABELS)
-        for lbl in rc.BAD_DEP_LABELS:
+        # Pinned labels, not just rc.BAD_DEP_LABELS: dropping one from the tuple
+        # must fail here rather than silently shrink the loop.
+        for lbl in sorted({"CACHE-AHEAD", "DIVERGENT", "UNKNOWN"} | set(rc.BAD_DEP_LABELS)):
             with self.subTest(label=lbl):
                 self.assertTrue(
                     rc.gate_failures(SKILL, no_plugin, clean, {SKILL}, f"dep: {lbl} {SKILL}"))
