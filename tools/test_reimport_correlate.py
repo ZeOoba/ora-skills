@@ -881,6 +881,68 @@ class RoundFourGateFindings(_SessionFixture):
         self.assertNotIn('NOT used up', out)
 
 
+class RoundFiveGateFindings(_SessionFixture):
+    """Merge-gate round 5 MEDIUM: the put-back of a kept baseline was the one rename
+    in consume_baseline with no retry, so a brief lock (an indexer or AV handle)
+    stranded it as a hidden claim file -- and the message said the opposite."""
+
+    def _names(self):
+        return sorted(p.name for p in (self.baselines / 'demo-skill').iterdir())
+
+    def _locked_put_back(self, failures):
+        """Patch os.rename so the put-back (claim -> path) hits `failures` locks."""
+        real_rename = os.rename
+        left = [failures]
+
+        def rename(src, dst):
+            if Path(src).name.startswith('.') and left[0] > 0:
+                left[0] -= 1
+                raise PermissionError(32, 'in use by another process', str(src))
+            real_rename(src, dst)
+        return unittest.mock.patch.object(rc.os, 'rename', rename)
+
+    def _kept_and_predating(self):
+        self._as('sess-B', rc.cmd_baseline, ['demo-skill'])          # predates: used up
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        self._as('sess-A', rc.cmd_baseline, ['demo-skill'])          # post-install: kept
+
+    def test_a_brief_lock_on_the_put_back_is_retried(self):
+        self._kept_and_predating()
+
+        with self._locked_put_back(2):
+            code, out = self._as('sess-A', rc.cmd_consume, ['demo-skill'])
+
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self._names(), ['sess-A.json'])
+
+    def test_a_put_back_that_stays_locked_says_the_kept_baseline_is_stranded(self):
+        self._kept_and_predating()
+
+        with self._locked_put_back(99):
+            code, out = self._as('sess-A', rc.cmd_consume, ['demo-skill'])
+
+        self.assertEqual(code, 1, out)
+        self.assertIn('could not be put back', out)
+        self.assertNotIn('CONFIRM this install again', out)
+        names = self._names()
+        self.assertNotIn('sess-B.json', names)                       # the sweep went on
+        stranded = [n for n in names if n.startswith('.sess-A.json.claim-')]
+        self.assertEqual(len(stranded), 1, names)
+        self.assertIn(stranded[0], out)
+
+    def test_postclick_reports_a_stranded_baseline_not_an_unused_one(self):
+        self._as('sess-B', rc.cmd_baseline, ['demo-skill'])
+        self._install(datetime(2026, 9, 23, 12, 5, 0))
+        self._as('sess-C', rc.cmd_baseline, ['demo-skill'])          # post-install: kept
+
+        with self._locked_put_back(99):
+            code, out = self._as('sess-B', rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+
+        self.assertEqual(code, 1, out)
+        self.assertIn('could not be put back', out)
+        self.assertNotIn('baseline NOT used up', out)
+
+
 class CycleCloseUsesTheBaselineUp(unittest.TestCase):
     """reimport_cycle close does its own combined event-log append (postclick runs
     with --no-append), so it must use the baselines up itself -- and only once that

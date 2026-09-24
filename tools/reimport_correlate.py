@@ -219,12 +219,13 @@ def consume_baseline(skill: str) -> int:
     other consumer and is skipped. A file that is not a readable baseline (foreign,
     UTF-16, timezone-aware) is used up. Returns how many were used up; raises OSError
     if a file stays locked past the bounded retry -- callers must report that, never
-    swallow it."""
+    swallow it. A kept baseline whose put-back stays locked does not stop the sweep:
+    it raises BaselineStranded (an OSError) at the end, naming the claim file."""
     installed = _creation_time(skill)
     skill_dir = BASELINE_DIR / skill
     if installed is None or not skill_dir.is_dir():
         return 0
-    used = 0
+    used, stranded = 0, []
     for path in sorted(skill_dir.glob('*.json')):
         claim = path.with_name(f'.{path.name}.claim-{os.getpid()}-{uuid.uuid4().hex[:8]}')
         try:
@@ -236,16 +237,34 @@ def consume_baseline(skill: str) -> int:
             text = None
         recorded, ok = _recorded(text)
         if ok and not _predates(recorded, installed):
-            try:
-                os.rename(claim, path)            # post-install: put it back
+            try:                                  # post-install: put it back
+                _retry_locked(lambda: os.rename(claim, path))
             except FileExistsError:               # a newer one landed meanwhile; it wins
                 claim.unlink(missing_ok=True)
             except FileNotFoundError:             # another consumer moved it on
                 pass
+            except PermissionError:               # still locked: keep sweeping, report it
+                stranded.append((claim, path))
             continue
         _retry_locked(lambda: claim.unlink(missing_ok=True))
         used += 1
+    if stranded:
+        raise BaselineStranded(stranded)
     return used
+
+
+class BaselineStranded(OSError):
+    """Every baseline predating the install was used up, but one captured after it
+    stayed locked and could not be renamed back -- it sits hidden as a claim file."""
+
+    def __init__(self, stranded):
+        self.stranded = stranded
+        super().__init__('; '.join(f'{c} -> {p.name}' for c, p in stranded))
+
+    def advice(self, skill: str) -> str:
+        return (f'{skill}: every baseline predating the install was used up, but '
+                f'{len(self.stranded)} kept one(s) could not be put back ({self}) -- rename '
+                f'it back by hand, or that session\'s next verify says NO-BASELINE')
 
 
 def cmd_consume(skills: list[str]) -> int:
@@ -253,6 +272,10 @@ def cmd_consume(skills: list[str]) -> int:
     for skill in skills:
         try:
             used = consume_baseline(skill)
+        except BaselineStranded as exc:
+            print(exc.advice(skill))
+            rc = 1
+            continue
         except OSError as exc:
             print(f'{skill}: baseline NOT used up ({exc}) -- re-run `consume {skill}` '
                   f'before the next reimport, or it will CONFIRM this install again')
@@ -605,6 +628,9 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
     consume_failed = 0
     try:
         consume_baseline(skill)
+    except BaselineStranded as exc:
+        print(f'WARNING: {exc.advice(skill)}')
+        consume_failed = 1
     except OSError as exc:
         # A kept baseline would CONFIRM this same install again on the next reimport.
         print(f'WARNING: baseline NOT used up ({exc}) -- run '
