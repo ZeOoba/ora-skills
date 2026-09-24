@@ -42,8 +42,9 @@ remote-tracking refs only -- never the working tree or local main -- and any fet
 failure is ignored (the sweep then classifies against whatever origin/main it has).
 
 On a BAD_VERDICTS finding it (a) prints a loud warning and (b) RESCUES the cache
-copy to `_staging/repo-first-rescue/<skill>/` so the about-to-be-clobbered content
-survives for review. A FULL-SWEEP run (no `--check-staged`) also persists findings
+copy to `_staging/repo-first-rescue/<skill>/<UTC timestamp>-<checkout>/` so the
+about-to-be-clobbered content survives for review (each rescue its own dir; the newest
+is the one to reconcile; flat files directly under `<skill>/` are pre-#79 legacy). A FULL-SWEEP run (no `--check-staged`) also persists findings
 to the durable `_staging/STORE_AHEAD_OF_REPO.md` ledger. Both live in the PRIMARY
 checkout's `_staging/` even when run from a git worktree (see STAGING); a worktree's
 full sweep prints its findings but leaves that shared ledger to the primary's sweep.
@@ -130,7 +131,8 @@ LEDGER_HEADER = (
     '# committed here. This is the REVERSE of _staging/PENDING_REIMPORT.md (repo-ahead-of-\n'
     '# cache, pending a Save-skill reimport). Companion rescue copies of the about-to-be-\n'
     '# clobbered cache content (if a commit has since touched the skill) live under\n'
-    '# _staging/repo-first-rescue/<skill>/.\n'
+    '# _staging/repo-first-rescue/<skill>/<UTC timestamp>-<checkout>/ -- reconcile from\n'
+    '# the newest; flat files directly under <skill>/ are pre-#79 legacy rescues.\n'
     '#\n'
     '# THIS LEDGER IS DERIVED, NOT AN EVENT LOG -- unlike PENDING_REIMPORT.md, no line here\n'
     '# is ever hand-cleared. It reflects live state as of the last full-sweep run: commit the\n'
@@ -448,6 +450,8 @@ def rescue(skill: str, rels: list[str], cache_root: Path = CACHE_ROOT,
             tgt = tmp / rel
             tgt.parent.mkdir(parents=True, exist_ok=True)
             tgt.write_bytes(b)
+            # Keep the cache file's mtime: it records when the platform-side edit happened.
+            shutil.copystat(_win_long(Path(cache_root) / skill / rel), tgt)
         final = skill_dir / name
         os.rename(tmp, final)
         return final
