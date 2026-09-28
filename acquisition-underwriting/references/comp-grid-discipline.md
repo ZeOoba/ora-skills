@@ -1,6 +1,6 @@
 # Comp Grid Discipline
 
-Extracted verbatim from `acquisition-underwriting/SKILL.md` (2026-08-13, progressive-disclosure split) — no content changed, only relocated. Referenced by MODES/COMPS, STAGE 2.6 item 4, and STAGE 2.9 item 3.
+Extracted verbatim from `acquisition-underwriting/SKILL.md` (2026-08-13, progressive-disclosure split) — no content changed, only relocated; the executed-lease rent-basis rule and template columns were added 2026-09-28 (Rent comp grid steps 3, 4 and 6). Referenced by MODES/COMPS, STAGE 2.6 item 4, and STAGE 2.9 item 3.
 
 ## COMP GRID DISCIPLINE (v4.11 — absorbed from the retired `rent-comp` skill, 2026-08-12)
 
@@ -11,9 +11,17 @@ Extracted verbatim from `acquisition-underwriting/SKILL.md` (2026-08-13, progres
 ### Rent comp grid
 1. **Multi-source search** — `"[submarket] industrial warehouse lease rate per SF [year]"` · `"[submarket] flex space asking rent [year]"` · `site:loopnet.com` / `site:crexi.com industrial for lease [city] [state]` · `"[submarket] industrial market report [year]"` (CBRE/JLL/Cushman/Colliers/NAI) · `"[city] [state] shallow bay industrial available"`.
 2. **Extract per listing:** address · total & available SF · asking rent ($/SF/yr **and** lease type: NNN / MG / Gross) · clear height · year built · loading (dock + drive-in) · listing broker & date · source URL.
-3. **Assemble:** | Address | SF | Rent/SF | Lease Type | Clear Height | Year Built | Dock | Drive-In | ASK or EXECUTED | Source | Date |
-4. **Statistics:** median rent/SF (**preferred over mean for small samples**) · mean ± SD · range · interquartile range · trend direction (YoY where available) · **sample size and a data-quality note**. A grid of fewer than 3 comps is reported as directional, never as a market rent conclusion.
+3. **Assemble** (columns in this order): | Address | Suite/Block SF | Rent type (Ask / Executed) | Reported rent $/SF | Basis tag (NNN / MG / FS / Gross / +UTIL / Unstated) | NNN-equivalent $/SF [est] | OpEx proxy used and source | Date | Distance to subject (geocoded) | Small-suite flag (<1/3 of subject block) | Clear Height | Year Built | Dock | Drive-In | Source |
+4. **Statistics:** median rent/SF (**preferred over mean for small samples**) · mean ± SD · range · interquartile range · trend direction (YoY where available) · **sample size and a data-quality note**. Statistics (median, range) are computed only on the NNN-equivalent column, separately for Ask and Executed. A grid of fewer than 3 comps is reported as directional, never as a market rent conclusion.
 5. **Normalize before comparing:** convert all rents to **NNN-equivalent** (subtract estimated CAM/insurance/tax from Gross/MG quotes) · clear-height premium (16'+ over 12–14') · vintage adjustment (post-2000 vs pre-1990) · size adjustment (larger spaces typically lower $/SF). State every adjustment applied; an unnormalized grid is not a comp set.
+6. **Executed lease rents must be tagged before they enter a comp grid** (rent-basis rule, added 2026-09-28; companion to `submarket-spatial-analysis` CoStar Report Ingest step 2):
+   1. Tag each executed rent NNN / modified gross / full-service (FS) / gross / +UTIL / unstated.
+   2. An FS, gross or modified-gross rent is never entered into an NNN grid unconverted. Show the NNN-equivalent beside the reported rent, state the OpEx proxy and its source, and tag it [est].
+   3. Asking rents and executed rents sit in separate columns; never average across bases or across ask/executed.
+   4. Unstated basis: exclude from the grid or carry as "unstated" outside the statistics until confirmed.
+   5. Report suite size for every comp; comps below one-third of the subject's block size are labeled "small-suite".
+
+   *Origin.* 4100 Perimeter Dr (Columbus): NNN asks ($10–$12) were compared with executed starting rents of $8.95 and $9.00 that were full-service (about $6.20–$6.25 NNN-equivalent [est] at $2.75/SF OpEx). The rent gap and a ~$560K uplift extrapolation were overstated; withdrawn in IC Memo v03 / Location Analysis v03.
 
 ### Sale comp grid
 1. **Search:** `"[submarket] industrial property sold [year]"` (+ prior year) · `site:rebusinessonline.com` / `site:connectcre.com industrial sale [city]` · `"[city] [state] warehouse sold price per square foot"` · `"[submarket] industrial investment sale cap rate"`.
