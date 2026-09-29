@@ -1,0 +1,272 @@
+{
+ "ATLANTA": {
+  "small24": 152.2,
+  "small25": 124.52,
+  "med25": 71.31,
+  "large25": 64.42
+ },
+ "BALTIMORE": {
+  "small24": 126.77,
+  "small25": 133.7,
+  "med25": 79.93,
+  "large25": 73.68
+ },
+ "CENTRAL VALLEY, CA": {
+  "small24": 149.63,
+  "small25": 169.92,
+  "med25": 99.44,
+  "large25": 87.41
+ },
+ "CHARLOTTE": {
+  "small24": 158.87,
+  "small25": 132.39,
+  "med25": 72.88,
+  "large25": 64.42
+ },
+ "CHICAGO": {
+  "small24": 124.31,
+  "small25": 127.79,
+  "med25": 74.95,
+  "large25": 56.85
+ },
+ "CINCINNATI": {
+  "small24": 161.72,
+  "small25": 143.15,
+  "med25": 84.57,
+  "large25": 77.24
+ },
+ "CLEVELAND": {
+  "small24": 169.8,
+  "small25": 145.44,
+  "med25": 81.5,
+  "large25": 63.21
+ },
+ "COLUMBUS": {
+  "small24": 141.43,
+  "small25": 130.51,
+  "med25": 76.91,
+  "large25": 70.43
+ },
+ "DALLAS": {
+  "small24": 108.22,
+  "small25": 103.83,
+  "med25": 78.12,
+  "large25": 72.51
+ },
+ "DENVER": {
+  "small24": 155.35,
+  "small25": 161.58,
+  "med25": 111.5,
+  "large25": 106.41
+ },
+ "DETROIT": {
+  "small24": 154.27,
+  "small25": 143.64,
+  "med25": 84.47,
+  "large25": 77.26
+ },
+ "GREENSBORO": {
+  "small24": 139.2,
+  "small25": 120.59,
+  "med25": 73.66,
+  "large25": 70.21
+ },
+ "GREENVILLE": {
+  "small24": 139.2,
+  "small25": 117.97,
+  "med25": 66.61,
+  "large25": 56.46
+ },
+ "HOUSTON": {
+  "small24": 117.62,
+  "small25": 115.04,
+  "med25": 83.12,
+  "large25": 77.05
+ },
+ "INDIANAPOLIS": {
+  "small24": 136.29,
+  "small25": 143.46,
+  "med25": 83.86,
+  "large25": 76.46
+ },
+ "INLAND EMPIRE": {
+  "small24": 149.39,
+  "small25": 158.0,
+  "med25": 90.94,
+  "large25": 79.59
+ },
+ "KANSAS CITY": {
+  "small24": 136.86,
+  "small25": 129.94,
+  "med25": 76.94,
+  "large25": 69.52
+ },
+ "LAS VEGAS": {
+  "small24": 153.47,
+  "small25": 173.77,
+  "med25": 102.19,
+  "large25": 89.91
+ },
+ "LOS ANGELES": {
+  "small24": 158.8,
+  "small25": 159.21,
+  "med25": 92.03,
+  "large25": 80.64
+ },
+ "LOUISVILLE": {
+  "small24": 137.68,
+  "small25": 135.28,
+  "med25": 80.2,
+  "large25": 73.18
+ },
+ "MEMPHIS": {
+  "small24": 131.63,
+  "small25": 114.04,
+  "med25": 68.18,
+  "large25": 62.97
+ },
+ "MIAMI": {
+  "small24": 167.89,
+  "small25": 137.57,
+  "med25": 77.55,
+  "large25": 73.07
+ },
+ "MILWAUKEE": {
+  "small24": 136.21,
+  "small25": 130.05,
+  "med25": 76.52,
+  "large25": 69.86
+ },
+ "MINNEAPOLIS": {
+  "small24": 136.84,
+  "small25": 131.46,
+  "med25": 77.3,
+  "large25": 70.71
+ },
+ "NASHVILLE": {
+  "small24": 149.79,
+  "small25": 133.7,
+  "med25": 79.54,
+  "large25": 73.47
+ },
+ "NEW JERSEY": {
+  "small24": 137.28,
+  "small25": 136.32,
+  "med25": 81.26,
+  "large25": 74.48
+ },
+ "OAKLAND": {
+  "small24": 162.04,
+  "small25": 171.33,
+  "med25": 100.53,
+  "large25": 88.48
+ },
+ "ORANGE COUNTY, CA": {
+  "small24": 154.37,
+  "small25": 148.12,
+  "med25": 87.77,
+  "large25": 80.34
+ },
+ "PENN CORRIDOR": {
+  "small24": 129.07,
+  "small25": 133.7,
+  "med25": 79.93,
+  "large25": 73.83
+ },
+ "PHILADELPHIA": {
+  "small24": 132.02,
+  "small25": 116.66,
+  "med25": 69.74,
+  "large25": 64.42
+ },
+ "PHOENIX": {
+  "small24": 128.47,
+  "small25": 148.77,
+  "med25": 93.87,
+  "large25": 77.95
+ },
+ "PITTSBURGH": {
+  "small24": 128.79,
+  "small25": 128.79,
+  "med25": 73.68,
+  "large25": 65.46
+ },
+ "PORTLAND": {
+  "small24": 141.38,
+  "small25": 147.03,
+  "med25": 107.08,
+  "large25": 104.82
+ },
+ "RENO": {
+  "small24": 128.47,
+  "small25": 145.8,
+  "med25": 91.4,
+  "large25": 84.19
+ },
+ "SAN DIEGO": {
+  "small24": 156.9,
+  "small25": 161.18,
+  "med25": 93.06,
+  "large25": 81.25
+ },
+ "SEATTLE": {
+  "small24": 181.56,
+  "small25": 151.02,
+  "med25": 110.11,
+  "large25": 107.88
+ },
+ "ST. LOUIS": {
+  "small24": 136.86,
+  "small25": 131.08,
+  "med25": 78.36,
+  "large25": 72.38
+ },
+ "TORONTO": {
+  "small24": 170.21,
+  "small25": 170.4,
+  "med25": 90.12,
+  "large25": 79.62
+ },
+ "VANCOUVER": {
+  "small24": 171.73,
+  "small25": 176.96,
+  "med25": 93.25,
+  "large25": 81.07
+ },
+ "CALGARY": {
+  "small24": 175.51,
+  "small25": 183.51,
+  "med25": 103.44,
+  "large25": 88.3
+ },
+ "MONTREAL": {
+  "small24": 164.92,
+  "small25": 167.78,
+  "med25": 93.25,
+  "large25": 79.26
+ },
+ "MONTERREY": {
+  "small24": 101.47,
+  "small25": 85.72,
+  "med25": 72.39,
+  "large25": 69.55
+ },
+ "GUADALAJARA": {
+  "small24": 86.39,
+  "small25": 97.09,
+  "med25": 77.31,
+  "large25": 72.7
+ },
+ "MEXICO CITY": {
+  "small24": 88.99,
+  "small25": 110.94,
+  "med25": 84.01,
+  "large25": 83.56
+ },
+ "COSTA RICA": {
+  "small24": 102.2,
+  "small25": 86.89,
+  "med25": 67.99,
+  "large25": 67.61
+ }
+}
