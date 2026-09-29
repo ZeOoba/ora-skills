@@ -3,7 +3,7 @@ name: deal-comparison
 description: "Use when comparing 2+ acquisition candidates side by side, scoring deals against Oxford Realty Advisors portfolio fit, or benchmarking against historical Oxford deals. Triggers: compare deals, side by side, which deal is better, deal comparison, portfolio fit, score deal, rank acquisitions, compare to historical, deal matrix."
 ---
 
-# Deal Comparison (v1.2)
+# Deal Comparison (v1.3)
 
 You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side-by-side analysis of 2+ acquisition candidates scored on financial merit and portfolio fit. Pull deal data from Notion Acquisition Pipeline Tracker when available. For deals not in Notion, ask Gabriel to provide key inputs.
 
@@ -91,7 +91,7 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 
 **Market Cluster Fit — designated target markets (canonical source: `target-markets.json` v1.0+ (bundled into this skill's own package as of 2026-07-09 — master copy at repo root `ora-skills/target-markets.json`); narrative twin: memory "ORA Target Markets / Primary Clusters", updated 2026-05-30):**
 - Established clusters (score 6) = Columbus OH, Kansas City MO/KS, Indianapolis IN, Maryland, Cincinnati OH, Madison WI.
-- Entry/beachhead clusters (score **4 — "new target market," NOT "isolated=1"**) = Grand Rapids MI, Richmond VA, Des Moines IA, Louisville KY (added 2026-08-05). These are designated targets with no existing ORA exposure; a deal here earns the new-target-market credit and graduates to "existing cluster = 6" once a beachhead property closes. Operational Leverage will score "New platform=1" until a PM platform is established locally.
+- Entry/beachhead clusters (score **4 — "new target market," NOT "isolated=1"**) = Grand Rapids MI, Richmond VA, Des Moines IA, Louisville KY (added 2026-08-05), Chicago–Greater Cook County IL (added 2026-09-29; all of Cook County — City of Chicago + suburban Cook; collar counties are not in scope until a first Cook close). These are designated targets with no existing ORA exposure; a deal here earns the new-target-market credit and graduates to "existing cluster = 6" once a beachhead property closes. Operational Leverage will score "New platform=1" until a PM platform is established locally.
 
 ---
 
@@ -152,5 +152,6 @@ Save output as `ORA_DealComparison_[Deal1]_vs_[Deal2]_[YYYY-MM-DD].xlsx` or HTML
 
 ## Changelog
 
+- v1.3 (2026-09-29): Parity update. Added Chicago–Greater Cook County IL to the entry/beachhead Market Cluster Fit list (score 4, "new target market"), ratified by Gabriel 2026-09-29 as ORA's 11th canonical cluster (target-markets.json v1.11; acquisition-underwriting v4.25). No scoring weight, threshold, or point value changed.
 - v1.2 (2026-08-21): HIGH fix (cc-audit-army findings M02-deal-comparison-dscr-wrong-ltv-and-kills, M13-deal-comparison-basis-band-ignores-vintage-ramp), Gabriel-approved. Two defects that made this skill disagree with acquisition-underwriting on the firm's two hardest acquisition gates: (1) DSCR was tested at 40% LTV — the portfolio-aggregate governor, not per-property refi sizing — inflating computed DSCR ~1.6x and letting deals that would floor-flag in acquisition-underwriting score clean here; corrected to the LESSER-of-65%-LTV/1.25x-DSCR basis. (2) A breach was labeled "immediate disqualification"/"DISQUALIFIED", contradicting Ruling 5 (floors flag, never kill); corrected to FLOOR-FLAGGED throughout (HARD FILTER line, scoring table, recommendation thresholds, output template). (3) The Basis band hardcoded a flat >40%-of-RCT-LOW cutoff — only the loosest (≥2005-vintage) endpoint of the vintage ramp — so a pre-1995 building (ORA's dominant vintage) could score points at a basis acquisition-underwriting Stage 1 would already floor-flag; corrected to the same linear vintage-ramp floor (65% discount at ≤1995 → 60% at ≥2005) acquisition-underwriting uses. No governor constants changed — this only restates deal-comparison to apply the already-ratified 1.25x DSCR / RCT v03 vintage ramp correctly. Follow-up code-review pass (same day, still v1.2): the Basis row's own "FAILS THE BASIS HARD FLOOR" language was left as a kill-framing inconsistent with the DSCR row two lines above it -- acquisition-underwriting Stage 1 states the SAME "flags, not kills" doctrine for Basis as for DSCR -- corrected to "FLOOR-FLAGGED (Ruling 5, not disqualified)" for consistency.
 - v1.1 (2026-08-15): HIGH fix (Skill Text Audit finding F5). Added Louisville KY to the entry/beachhead Market Cluster Fit list (score 4, "new target market") — ratified in `target-markets.json` 2026-08-05 as the 10th canonical cluster but never reflected here. No scoring weight, threshold, or point value changed; Louisville simply joins the existing score-4 bucket alongside Grand Rapids/Richmond/Des Moines.
