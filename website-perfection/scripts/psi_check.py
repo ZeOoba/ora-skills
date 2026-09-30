@@ -58,20 +58,27 @@ def call(url, strategy, key):
             with urllib.request.urlopen(API + "?" + urllib.parse.urlencode(params), timeout=120) as r:
                 return json.loads(r.read(8_000_000))
         except urllib.error.HTTPError as e:
-            body = e.read(400).decode("utf-8", "replace")
-            err = scrub(f"HTTP {e.code}: {body[:200]}", key)
+            try:
+                body = e.read(4000).decode("utf-8", "replace")
+            except Exception:
+                body = ""
+            # scrub the whole body BEFORE truncating: slicing first can leave a key fragment
+            err = " ".join(scrub(f"HTTP {e.code}: {body}", key).split())[:200]
             if e.code < 500:  # quota/auth/bad request will not fix itself by retrying
                 break
         except Exception as e:
-            err = scrub(str(e), key)
+            err = " ".join(scrub(str(e), key).split())[:200]
         time.sleep(8 * (i + 1))
     return {"_error": err}
 
 
 def summarise(d):
     lh = d["lighthouseResult"]; a = lh["audits"]
-    cats = {k: round(v["score"] * 100) for k, v in lh["categories"].items()}
-    m = {k: a[k]["displayValue"] for k in METRICS if k in a}
+    # Lighthouse returns score null for a category/audit that errored (e.g. NO_FCP): keep the
+    # row, mark it n/a, never crash the whole run
+    cats = {k: (round(v["score"] * 100) if v.get("score") is not None else "n/a")
+            for k, v in lh["categories"].items()}
+    m = {k: a[k].get("displayValue", "n/a") for k in METRICS if k in a}
     opps = sorted(((v.get("details", {}).get("overallSavingsMs", 0), k, v.get("title"))
                    for k, v in a.items() if v.get("details", {}).get("type") == "opportunity"
                    and v.get("details", {}).get("overallSavingsMs", 0) > 100), reverse=True)[:5]
@@ -98,8 +105,8 @@ def main():
     results, rows, failed = {}, [], 0
     for p in a.pages:
         # Git Bash (MSYS) rewrites a leading-slash arg into a Windows path: "/" -> "C:/Program Files/Git/"
-        if p[1:3] == ":/" and "/Git/" in p:
-            p = "/" + p.split("/Git/", 1)[1]
+        if p[1:3] == ":/" and "/git/" in p.lower():
+            p = "/" + p[p.lower().index("/git/") + 5:]
         url = p if p.startswith("http") else BASE + p
         for s in a.strategies:
             d = call(url, s, key)
@@ -107,7 +114,12 @@ def main():
             if "_error" in d:
                 results[name] = d; failed += 1
                 rows.append(f"| {name} | ERROR | {d['_error'][:90]} |"); continue
-            r = summarise(d); results[name] = r
+            try:
+                r = summarise(d)
+            except Exception as e:  # an unexpected response shape costs one row, not the run
+                results[name] = {"_error": f"unparseable PSI response: {type(e).__name__}"}; failed += 1
+                rows.append(f"| {name} | ERROR | unparseable PSI response: {type(e).__name__} |"); continue
+            results[name] = r
             c = r["cats"]
             rows.append(f"| {name} | P{c.get('performance')} A{c.get('accessibility')} "
                         f"BP{c.get('best-practices')} SEO{c.get('seo')} | "

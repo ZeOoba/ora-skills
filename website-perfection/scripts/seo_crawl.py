@@ -52,7 +52,7 @@ def fetch(url, method="GET", retries=3):
 class Page(HTMLParser):
     def __init__(self):
         super().__init__()
-        self.title = ""; self.in_title = False; self.in_head = False; self.title_done = False
+        self.title = ""; self.in_title = False; self.in_body = False; self.title_done = False
         self.meta = {}; self.links = []; self.h1 = []; self.h2 = 0; self.h3 = 0
         self.cur = None; self.buf = ""; self.imgs = []; self.ld = []; self.in_ld = False
         self.ldbuf = ""; self.lang = None; self.text = []; self.skip = 0; self.hrefs = []
@@ -61,10 +61,11 @@ class Page(HTMLParser):
     def handle_starttag(self, tag, at):
         a = dict(at)
         if tag == "html": self.lang = a.get("lang")
-        if tag == "head": self.in_head = True
-        # only the <head> title counts: inline SVG <title> elements later in the body
-        # would otherwise be appended to it (false 207-char title on /markets/)
-        if tag == "title" and self.in_head and not self.title_done: self.in_title = True
+        if tag == "body": self.in_body = True
+        # only a title before <body> counts (the optional <head> tag may be omitted in HTML5):
+        # inline SVG <title> elements in the body would otherwise be appended to it
+        # (false 207-char title on /markets/)
+        if tag == "title" and not self.in_body and not self.title_done: self.in_title = True
         if tag == "meta":
             k = a.get("name") or a.get("property") or a.get("http-equiv")
             if k: self.meta[k.lower()] = a.get("content", "")
@@ -79,7 +80,6 @@ class Page(HTMLParser):
         if tag == "style": self.skip += 1
 
     def handle_endtag(self, tag):
-        if tag == "head": self.in_head = False
         if tag == "title" and self.in_title: self.in_title = False; self.title_done = True
         if tag == self.cur:
             if tag == "h1": self.h1.append(self.buf.strip())
@@ -88,8 +88,8 @@ class Page(HTMLParser):
             self.cur = None
         if tag == "script":
             if self.in_ld: self.ld.append(self.ldbuf); self.in_ld = False
-            self.skip -= 1
-        if tag == "style": self.skip -= 1
+            self.skip = max(0, self.skip - 1)  # a stray close tag must not drop later text
+        if tag == "style": self.skip = max(0, self.skip - 1)
 
     def handle_data(self, d):
         if self.in_title: self.title += d
@@ -101,8 +101,7 @@ class Page(HTMLParser):
 def analyse(url):
     st, hdr, body = fetch(url)
     p = Page(); p.feed(body)
-    canon = [l.get("href") for l in p.links if "canonical" in (l.get("rel") or [])
-             or l.get("rel") == "canonical"]
+    canon = [l.get("href") for l in p.links if "canonical" in (l.get("rel") or "").lower().split()]
     types, bad_ld = [], 0
     for blob in p.ld:
         try:
@@ -149,6 +148,27 @@ def findings_for(pg, sitemap_urls):
     return f
 
 
+_TAG = r"<(?:\w+:)?%s>\s*(?:<!\[CDATA\[)?\s*(.*?)\s*(?:\]\]>)?\s*</(?:\w+:)?%s>"
+
+
+def parse_sitemap(xml):
+    """[(loc, lastmod|None)] from <url> blocks; tolerates CDATA, prefixed tags, any child order."""
+    out = []
+    for blk in re.findall(r"<(?:\w+:)?url>(.*?)</(?:\w+:)?url>", xml, re.S):
+        loc = re.search(_TAG % ("loc", "loc"), blk, re.S)
+        lm = re.search(_TAG % ("lastmod", "lastmod"), blk, re.S)
+        if loc:
+            out.append((loc.group(1), lm.group(1) if lm else None))
+    return out
+
+
+def same_host(url, base):
+    """True only for the exact scheme+host of base (a text-prefix test also passes
+    oxfordra.net.evil.example and oxfordra.net@evil.example)."""
+    u, b = urllib.parse.urlparse(url), urllib.parse.urlparse(base)
+    return u.scheme in ("http", "https") and u.hostname == b.hostname and u.port == b.port
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="https://oxfordra.net")
@@ -159,8 +179,12 @@ def main():
     st, _, sm = fetch(base + "/sitemap.xml")
     if st != 200:
         print(f"sitemap.xml unreachable (status {st})"); return 2
-    urls = re.findall(r"<loc>([^<]+)</loc>", sm)[: a.max_pages]
-    lastmod = dict(re.findall(r"<loc>([^<]+)</loc>\s*<lastmod>([^<]+)</lastmod>", sm))
+    entries = [(u, lm) for u, lm in parse_sitemap(sm) if same_host(u, base)][: a.max_pages]
+    if not entries:
+        print("sitemap.xml has no parseable same-host <loc> entries; refusing to report a clean crawl")
+        return 2
+    urls = [u for u, _ in entries]
+    lastmod = {u: lm for u, lm in entries if lm}
     pages = [analyse(u) for u in urls]
 
     out = [f"# SEO crawl: {base}  ({time.strftime('%Y-%m-%d')}, {len(pages)} sitemap pages)\n"]
@@ -192,7 +216,8 @@ def main():
     # stale lastmod: a hub older than its own children
     for u, lm in lastmod.items():
         kids = [v for k, v in lastmod.items() if k != u and k.startswith(u.rstrip("/") + "/")]
-        if kids and lm < max(kids): rows.append(("LOW", u.replace(base, ""), f"lastmod {lm} older than children ({max(kids)})"))
+        if kids and lm[:10] < max(kids)[:10]:  # compare dates only; a datetime vs date same-day is not stale
+            rows.append(("LOW", u.replace(base, ""), f"lastmod {lm} older than children ({max(kids)})"))
 
     # internal links: bounded HEAD sweep, plus linked-but-not-in-sitemap
     sm_norm = {u.rstrip("/") for u in urls}; seen = {}
@@ -200,7 +225,7 @@ def main():
         for h in pg["hrefs"]:
             if h.startswith(("mailto:", "tel:", "#", "javascript:")): continue
             full = urllib.parse.urljoin(pg["url"], h).split("#")[0]
-            if full.startswith(base): seen.setdefault(full, pg["url"])
+            if same_host(full, base): seen.setdefault(full, pg["url"])
     bad, orphans = [], []
     for full, src in list(seen.items())[: a.max_links]:
         if re.search(r"\.(png|jpe?g|avif|webp|svg|css|js|woff2?|pdf|ico|xml|txt|json)(\?|$)", full): continue
