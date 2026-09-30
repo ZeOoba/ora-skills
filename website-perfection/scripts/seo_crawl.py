@@ -16,7 +16,7 @@ Usage:
 Exit: 0 = crawl completed (findings are advisory), 2 = sitemap unreachable or it yields no
 same-host <loc> entries (a crawl that saw nothing never reports "clean").
 """
-import argparse, collections, json, re, sys, time, urllib.error, urllib.parse, urllib.request
+import argparse, collections, html, json, re, sys, time, urllib.error, urllib.parse, urllib.request
 from html.parser import HTMLParser
 
 UA = {"User-Agent": "ORA-seo-crawl/1.0 (read-only)"}
@@ -193,7 +193,7 @@ def parse_sitemap(xml):
             if not closing and not selfclose:
                 field, buf = local, []
             elif closing and field == local:
-                val = "".join(buf).strip()
+                val = html.unescape("".join(buf).strip())  # XML entities: &amp; in a query string
                 if local == "loc": loc = val
                 else: lm = val
                 field = None
@@ -273,18 +273,26 @@ def main():
     rows.extend(stale_lastmods(lastmod, base))
 
     # internal links: bounded HEAD sweep, plus linked-but-not-in-sitemap
-    sm_norm = {u.rstrip("/") for u in urls}; seen = {}
+    # "is this page in the sitemap": every parsed same-host loc (not the --max-pages slice),
+    # compared on host+path so an http:// link to a listed page is not called an orphan
+    def pkey(u):
+        p = urllib.parse.urlparse(u)
+        return (p.hostname, p.path.rstrip("/"))
+    sm_norm = {pkey(u) for u, _ in parsed if same_host(u, base)}; seen = {}
     for pg in pages:
         for h in pg["hrefs"]:
             if h.startswith(("mailto:", "tel:", "#", "javascript:")): continue
-            full = urllib.parse.urljoin(pg["url"], h).split("#")[0]
+            try:
+                full = urllib.parse.urljoin(pg["url"], h).split("#")[0]
+            except ValueError:  # e.g. http://[::1/badbracket
+                continue
             if same_host(full, base): seen.setdefault(full, pg["url"])
     bad, orphans = [], []
     for full, src in list(seen.items())[: a.max_links]:
         if re.search(r"\.(png|jpe?g|avif|webp|svg|css|js|woff2?|pdf|ico|xml|txt|json)(\?|$)", full): continue
         s, h, _ = fetch(full, "HEAD")
         if s >= 400 or s == 0: bad.append((full, s, src))
-        if full.rstrip("/") not in sm_norm: orphans.append((full, s))
+        if pkey(full) not in sm_norm: orphans.append((full, s))
     for full, s, src in bad: rows.append(("HIGH", full.replace(base, ""), f"broken internal link ({s}) from {src.replace(base, '')}"))
     for full, s in orphans:
         if s and s < 400: rows.append(("LOW", full.replace(base, ""), "linked page not in sitemap (confirm noindex is intended)"))
