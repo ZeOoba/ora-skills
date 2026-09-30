@@ -212,6 +212,7 @@ def main():
         if s and s < 400: rows.append(("LOW", full.replace(base, ""), "linked page not in sitemap (confirm noindex is intended)"))
 
     order = {"HIGH": 0, "MED": 1, "LOW": 2}
+    sev = collections.Counter(r[0] for r in rows)  # tally after every check has added rows
     out.append(f"Findings: HIGH {sev['HIGH']} / MED {sev['MED']} / LOW {sev['LOW']}\n")
     out.append("| Sev | Page | Finding |\n|---|---|---|")
     for s, p, m in sorted(rows, key=lambda r: (order[r[0]], r[1])): out.append(f"| {s} | {p} | {m} |")
