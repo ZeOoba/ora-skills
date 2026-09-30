@@ -1,0 +1,39 @@
+# Entry point B — pre-packaged install, full text
+
+Moved verbatim from `SKILL.md` (v1.36 core/reference split, no rule changed). `SKILL.md` keeps each rule's headline as a stub; this file holds the full wording. Read the relevant section BEFORE acting.
+
+## Entry point B (was SKILL.md lines 23–55)
+
+## Entry point B — pre-packaged install (steps 5–8 only)
+
+When handed pre-built `.skill` files, do NOT re-run steps 1–4 and do NOT repackage — but never install on trust alone (packages go stale, or were never built). **The handoff's premise is a claim, not a fact — item 1 tests it, and runs before anything else.**
+
+**Bridge-first freshness screen — ONE cheap check before the per-package pre-check, whenever the Desktop Commander bridge is live.** Cross-check (a) a live `ListSkills` call — does the target skill's description already show the cited version, enabled; and (b) a Desktop-Commander SHA256 compare between the skill's AppData `skills-plugin` cache copy and its current repo copy. Both matching = the click already happened: skip the per-package pre-check, `present_files` and the Save-skill ask for that package; go straight to Step 7's "already in sync" logging. Anything that doesn't clear the screen runs the full pre-check below. Incident: `references/incident-history.md` § Bridge-first freshness screen.
+
+Replace steps 1–4 with this integrity pre-check, per package (for whichever packages the bridge-first screen above didn't already resolve):
+
+1. **Exists — assert it, never assume it.** The `.skill` file is at the stated path. A hard assertion on every named path, run FIRST, never waived on a circumstantial-sounding handoff (real commit SHA, named packaging tool, plausible `_staging` path). If absent, sweep before concluding: the session's uploads dir, `ora-skills\_staging\` (incl. dated subdirs), `Downloads`, `Desktop`, and a filename search across `C:\Users\Owner`.
+
+   **If no package is found anywhere → MISSING, not stale. Different finding, different remedy.**
+   - **Stale** = a package exists but no longer matches the repo → REJECT and route back to Entry point A to *re*build.
+   - **Missing** = no package was ever built → the handoff premise is false, and a "do NOT repackage" instruction does **not** bind. Proceed to Entry point A and build the FIRST package, stating plainly that the premise failed and why; do not stop and ask. Then run steps 0–8 in full — in particular step 0 (`plugin_of`) and step 1 (git-clean + `git log -1`), which Entry point B would otherwise skip.
+   - Either way, **surface the discrepancy explicitly** rather than quietly repairing it. A claimed packaging run that never happened is a write-side reporting failure; an existence check that silently self-heals destroys the only evidence of it.
+
+   Why asserted rather than assumed (the write-side counterpart of step 2's read-side hash rule): `references/incident-history.md` § Existence is asserted.
+2. **Entries.** List zip entries: forward-slash paths, expected file set (`SKILL.md` plus any `references/`/`templates/`/`scripts/` files and, for `SHARED_ROOT_DEPS` consumers, the injected shared dep).
+3. **Freshness.** SHA256 the packaged copy of each shared root dep against the CURRENT repo-root copy (and, where the handoff claims SKILL.md currency, spot-check it against the repo skill dir). EOL rule applies: raw mismatch → CRLF→LF-normalized re-compare → only a normalized mismatch is real. A stale package is REJECTED — route back through Entry point A to rebuild; never install a package that no longer matches the repo (stale ≠ missing — item 1).
+4. **Stage.** Copy the verified `.skill` into the current session's outputs directory (`present_files` needs it there). **Also baseline the target cache directory's CreationTime here, unconditionally** — Entry point B skips step 2, so this is the only place the pre-click baseline step 7's fallback needs gets captured: `python tools/reimport_correlate.py baseline <skill>`.
+
+**One-command pre-check (v1.33).** `python tools/reimport_correlate.py precheck <pkg.skill> [<pkg.skill> ...]` runs items 1–3 plus item 4's baseline in one call: existence (a MISSING package is reported as such, not as stale), forward-slash entries, no directory records, one top-level dir, `name`==dir, `description` ≤1024, `plugin_of` None, and every entry byte-identical to the repo copy (raw, then EOL-normalized; `SHARED_ROOT_DEPS` compared against the repo root). Repo files absent from the package are WARNed, not failed. The CreationTime baseline is captured if this session has none, kept if it has one, and recaptured if an install has made it stale — in the PRIMARY checkout's `_staging/reimport-baselines/<skill>/<session>.json`, same as `baseline` below. Exit 1 on any FAIL; a FAIL means reject and route to Entry point A. It does not stage. **Connect `C:\Users\Owner\ora-skills` as a session folder at session start** — `device_stage_files` needs the grant and grants are per-session, so asking mid-run costs a round trip (2026-09-23). One grant covers the handoff root below (v1.35); the separate `_staging` and `Claude_Workspace\_skill_transfer` grants are retired.
+
+**Expected-hash verify (v1.35) — whenever the handoff states a SHA-256 prefix.** A handoff that names a folder and a digest is a claim about ONE set of bytes; verify exactly those, never a look-alike (2026-09-28, census-v19: a stale same-named `acquisition-underwriting.skill` sat one folder up). `tools/stage_transfer.py` does the hashing on each side of the one call only the session can make:
+- **Use only the named folder.** Do not widen item 1's sweep when a folder and prefix are stated; an absent file is a STOP, not a search.
+- **Hash on the host first.** In the dated handoff folder, `python tools/stage_transfer.py emit .` hashes every `.skill`, checks entries (forward-slash, no directory records, `<skill>/SKILL.md`) and writes `HANDOFF.sha256.json`. Prefixes come from that manifest, never from re-typed digests.
+- **Re-hash the staged and outputs copies.** After ONE `device_stage_files` call: `python tools/stage_transfer.py receive --staged-dir <staged dir> --manifest <staged dir>/HANDOFF.sha256.json` (or `--expect <name>.skill=<16-hex>`, repeatable; `--outputs` defaults to `/mnt/user-data/outputs`). It re-hashes the staged copy, copies to outputs only if EVERY file passes, then re-hashes the outputs copy.
+- **STOP, no substitution.** A mismatch or invisible file exits 1 with nothing copied; report the exact path searched and the stated vs actual digests. Never pick a look-alike, repackage, or install. Unnamed `.skill` files are printed UNUSED.
+- **Post-install content marker.** After the click, confirm a string only the new text contains is in the cache copy; the cache can lag about a minute, so retry once after a minute before calling it failed.
+- **Record.** Step 4 records the full SHA-256 and its 16-char prefix; step 8's hand-off names the prefix and the folder.
+
+**Single handoff root and its limits (v1.35).** The one root is `ora-skills\_staging\handoff\<YYYY-MM-DD_topic>\` (gitignored; `_staging/handoff/README.md`). The limit, stated plainly: `device_stage_files` is callable only by the session, so the chain is **3 calls, not 1** (host `emit` → `device_stage_files` → cloud `receive`). And `stage_transfer.py` does **not** check repo currency — a hash proves the package is the one the sender built, not that it still matches the repo. The precheck above (`tools/entry_b_precheck.py` / `reimport_correlate.py precheck`) still does, and still runs.
+
+Then steps 5–8 unchanged: `present_files`, Cowork Save-skill routing for multi-file skills, post-install cache verify, and the `event_log.md` log of the confirmed click.
