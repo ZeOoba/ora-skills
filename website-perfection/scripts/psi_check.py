@@ -30,6 +30,21 @@ METRICS = ("first-contentful-paint", "largest-contentful-paint", "total-blocking
            "cumulative-layout-shift", "speed-index")
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):  # never follow a redirect with ?key= in the URL
+        return None
+
+
+_opener = urllib.request.build_opener(_NoRedirect)
+
+
+def norm_page(p):
+    """Git Bash (MSYS) rewrites a leading-slash arg into a Windows path: "/" -> "C:/Program Files/Git/"."""
+    if p[1:3] == ":/" and "/git/" in p.lower():
+        return "/" + p[p.lower().index("/git/") + 5:]
+    return p
+
+
 def get_key():
     k = os.environ.get("PSI_API_KEY")
     if k:
@@ -55,7 +70,7 @@ def call(url, strategy, key):
     err = None
     for i in range(3):
         try:
-            with urllib.request.urlopen(API + "?" + urllib.parse.urlencode(params), timeout=120) as r:
+            with _opener.open(API + "?" + urllib.parse.urlencode(params), timeout=120) as r:
                 return json.loads(r.read(8_000_000))
         except urllib.error.HTTPError as e:
             try:
@@ -63,11 +78,13 @@ def call(url, strategy, key):
             except Exception:
                 body = ""
             # scrub the whole body BEFORE truncating: slicing first can leave a key fragment
-            err = " ".join(scrub(f"HTTP {e.code}: {body}", key).split())[:200]
+            # order matters: scrub whole body -> slice -> collapse whitespace. Collapsing
+            # BEFORE the slice pulls a key fragment (cut by the 4000-byte read cap) into view.
+            err = " ".join(scrub(f"HTTP {e.code}: {body}", key)[:200].split())
             if e.code < 500:  # quota/auth/bad request will not fix itself by retrying
                 break
         except Exception as e:
-            err = " ".join(scrub(str(e), key).split())[:200]
+            err = " ".join(scrub(str(e), key)[:200].split())
         time.sleep(8 * (i + 1))
     return {"_error": err}
 
@@ -78,7 +95,7 @@ def summarise(d):
     # row, mark it n/a, never crash the whole run
     cats = {k: (round(v["score"] * 100) if v.get("score") is not None else "n/a")
             for k, v in lh["categories"].items()}
-    m = {k: a[k].get("displayValue", "n/a") for k in METRICS if k in a}
+    m = {k: (a[k].get("displayValue") or "n/a") for k in METRICS if k in a}
     opps = sorted(((v.get("details", {}).get("overallSavingsMs", 0), k, v.get("title"))
                    for k, v in a.items() if v.get("details", {}).get("type") == "opportunity"
                    and v.get("details", {}).get("overallSavingsMs", 0) > 100), reverse=True)[:5]
@@ -104,9 +121,7 @@ def main():
         return 2
     results, rows, failed = {}, [], 0
     for p in a.pages:
-        # Git Bash (MSYS) rewrites a leading-slash arg into a Windows path: "/" -> "C:/Program Files/Git/"
-        if p[1:3] == ":/" and "/git/" in p.lower():
-            p = "/" + p[p.lower().index("/git/") + 5:]
+        p = norm_page(p)
         url = p if p.startswith("http") else BASE + p
         for s in a.strategies:
             d = call(url, s, key)
