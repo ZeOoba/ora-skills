@@ -3,8 +3,9 @@ name: website-perfection
 description: "Use when the user mentions: PageSpeed, Lighthouse, Core Web Vitals, website fixes, site performance, image optimization, SEO audit, meta tags, structured data, JSON-LD, sitemap, redirects, soft 404, duplicate URLs, analytics installation, GA4, LinkedIn pixel, AI search visibility, llms.txt, accessibility, WCAG, Netlify headers, CSP, CLS, LCP, TBT, oxfordra.net improvements, or any task related to auditing, optimizing, or improving the Oxford Realty Advisors website."
 ---
 
-# Website Perfection — Oxford Realty Advisors (v1.1)
+# Website Perfection — Oxford Realty Advisors (v1.2)
 
+**v1.2 (2026-09-30):** Added §4a Phase 0 (`scripts/seo_crawl.py`, a read-only live crawl against the §4.D invariants, plus the monthly off-site data pull from GSC, Bing Webmaster Tools and Ahrefs Webmaster Tools) and a common-mistakes row on summarising fetch tools. Replaces evaluating third-party SEO plugins: SearchFit SEO and Manifold were SUPERSEDED by this skill plus the script. No financial or governor constants involved.
 **v1.1 (2026-09-13):** Rebased on the live site after the 2026-09-13 SEO audit (website-canonical PR #77). Removed stale v1.0 premises: the www host (the site is non-www), Indianapolis as a market (a false claim, removed from the site in PR #56), placeholder GA4/LinkedIn IDs, the "Score Your Deal" CTA, Google Fonts guidance (fonts are self-hosted), and a sample CSP that would have broken reCAPTCHA, the map tiles and SharePoint uploads. Added: repo/build/verify pipeline, the local vs. deploy-preview verification split, a live-state baseline, an AI-search section, and SEO invariants pinned by `tests/site/seo.test.mjs`. No financial or governor constants involved.
 **v1.0:** initial PageSpeed-100 audit prompt.
 
@@ -88,6 +89,16 @@ Catalog pages from `sitemap.xml` plus repo HTML, excluding `dist/`, `node_module
 
 **G. Infrastructure:** `_headers` security set (HSTS, CSP, nosniff, Referrer-Policy, Permissions-Policy); legacy-path 301s; branded 404; favicon suite + manifest; analytics per §3.
 
+## 4a. Phase 0: live crawl and off-site data (run before §5; read-only)
+
+**Live crawl.** `python website-perfection/scripts/seo_crawl.py [--json out.json]` fetches every `sitemap.xml` URL as raw HTML and checks the §4.D invariants (title/description length, canonical = sitemap loc, one H1, OG/Twitter, alt + dimensions, JSON-LD validity, noindex-in-sitemap, stale `lastmod`), then `robots.txt`/`llms.txt`/`manifest.json`/favicon, the unknown-path 404, the http/www 301s, and a bounded internal-link HEAD sweep. Stdlib only, GET/HEAD only, 3 attempts with backoff per request, bodies capped at 3 MB. Baseline 2026-09-30: 0 HIGH, 0 MED, 3 LOW (`/contact` thin, `/resources/` lastmod, `/tenant-application` linked but noindexed by design). A regression from that baseline is a finding. It does **not** measure Core Web Vitals, backlinks, keyword demand, AI visibility, indexing, or client-rendered content.
+
+**Off-site data (monthly, manual, free).** Domain property in Google Search Console (verified by DNS TXT on Netlify DNS, never a meta tag or file, which would need a deploy), imported into Bing Webmaster Tools, plus Ahrefs Webmaster Tools on the same verified domain. Gabriel exports the CSVs (GSC queries/pages, AWT backlinks + Site Audit, Bing keyword research); the session reads them and returns one ranked table of keyword gaps, backlink gaps and audit issues, each with a proposed site change. GSC is the ranking and demand source; web-search spot checks are signals only, never rank evidence. No third-party OAuth intermediaries (hosted GSC MCPs) and no paid data MCPs.
+
+**Off-site consistency.** Directory and listing profiles (LoopNet, Realty.com, Nestfully, Crunchbase, LinkedIn) must match the site's claims of record (SF, markets, tenants, phone). A mismatch is reported to Gabriel; fixing a profile needs no deploy, but which figure is right is his call (§0).
+
+**Kill test.** If two consecutive monthly pulls yield fewer than two actionable site changes, drop the monthly routine and keep only the crawl.
+
 ## 5. Fix workflow
 
 1. **Audit read-only** (repo + live curl). Present ranked findings; ask Gabriel about any claim or content decision with `AskUserQuestion` (recommended option first).
@@ -106,4 +117,5 @@ Catalog pages from `sitemap.xml` plus repo HTML, excluding `dist/`, `node_module
 | Reporting a copy inconsistency as meta-only | Grep visible copy, JSON-LD, `llms.txt` and `scripts/meta.md` too before scoping the fix. |
 | Normalizing a firm claim (markets, close speed, counts) without asking | Claims are Gabriel's call; ask, then pin the answer in `seo.test.mjs`. |
 | Rewriting a file with Python `read_text`/`write_text` | That silently converts CRLF→LF; use the Edit tool or byte-level I/O. |
+| Reading head tags, schema or titles through a summarising web-fetch tool | It reported "no structured data" and "title not visible" on a page with both. Use raw HTML (`seo_crawl.py` or `curl`). |
 | Treating a merged PR as live | Verify the served HTML/headers on oxfordra.net after the confirmed deploy. |
