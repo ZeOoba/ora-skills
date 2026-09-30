@@ -10,3 +10,6 @@ Entries compressed out of `SKILL.md` under the 6-entry retention rule. Open rang
   - **New rule:** a scheduled resume must be ATTENDED. `bypassPermissions` was proven not to help (09-11 session record), and the guard backstop is slow.
   - **Step 4d:** the marker command gains the required `--fleet` and the full interpreter path.
   - **Detection:** `pause-resume-guard.py` gains `find_incomplete_resumes()`.
+
+
+- **v2.24 (2026-09-12, OI-229):** Step 3b now defines "live" by three proofs — workflow on the default branch and active, every referenced secret present by name, and ≥1 successful run with its URL cited — instead of accepting a merged PR. Root incident: ora-pm `monthly-billing-backup.yml` was declared `live since 2026-09-03` on merge while its `ORA_PM_CRON_SECRET` repo secret never existed (zero runs; 2026-10-01 fire would have failed). QC gate item tightened to match; the dated "live declarations" bullet replaced by a pointer to the frontmatter plus `automation-health-monitor` v1.10's weekday re-verification. Stacked on the same-day v2.22 (pause window) and v2.23 (attended resume). Six full inline entries after this edit — v2.18 compressed to `versions/CHANGELOG-v2.17-v2.20.md` in this pass per the retention rule. Doc-only.
