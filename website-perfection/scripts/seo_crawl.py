@@ -13,7 +13,8 @@ Usage:
   python seo_crawl.py                      # report to stdout (markdown)
   python seo_crawl.py --json out.json      # also dump per-page data
   python seo_crawl.py --base https://oxfordra.net --max-pages 60 --max-links 400
-Exit: 0 = crawl completed (findings are advisory), 2 = sitemap unreachable.
+Exit: 0 = crawl completed (findings are advisory), 2 = sitemap unreachable or it yields no
+same-host <loc> entries (a crawl that saw nothing never reports "clean").
 """
 import argparse, collections, json, re, sys, time, urllib.error, urllib.parse, urllib.request
 from html.parser import HTMLParser
@@ -56,16 +57,17 @@ class Page(HTMLParser):
         self.meta = {}; self.links = []; self.h1 = []; self.h2 = 0; self.h3 = 0
         self.cur = None; self.buf = ""; self.imgs = []; self.ld = []; self.in_ld = False
         self.ldbuf = ""; self.lang = None; self.text = []; self.skip = 0; self.hrefs = []
-        self.scripts = []
+        self.scripts = []; self.svg = 0
 
     def handle_starttag(self, tag, at):
         a = dict(at)
         if tag == "html": self.lang = a.get("lang")
+        if tag == "svg": self.svg += 1
         if tag == "body": self.in_body = True
         # only a title before <body> counts (the optional <head> tag may be omitted in HTML5):
         # inline SVG <title> elements in the body would otherwise be appended to it
         # (false 207-char title on /markets/)
-        if tag == "title" and not self.in_body and not self.title_done: self.in_title = True
+        if tag == "title" and not self.in_body and not self.svg and not self.title_done: self.in_title = True
         if tag == "meta":
             k = a.get("name") or a.get("property") or a.get("http-equiv")
             if k: self.meta[k.lower()] = a.get("content", "")
@@ -80,6 +82,7 @@ class Page(HTMLParser):
         if tag == "style": self.skip += 1
 
     def handle_endtag(self, tag):
+        if tag == "svg": self.svg = max(0, self.svg - 1)
         if tag == "title" and self.in_title: self.in_title = False; self.title_done = True
         if tag == self.cur:
             if tag == "h1": self.h1.append(self.buf.strip())
@@ -100,6 +103,10 @@ class Page(HTMLParser):
 
 def analyse(url):
     st, hdr, body = fetch(url)
+    return analyse_html(url, st, hdr, body)
+
+
+def analyse_html(url, st, hdr, body):
     p = Page(); p.feed(body)
     canon = [l.get("href") for l in p.links if "canonical" in (l.get("rel") or "").lower().split()]
     types, bad_ld = [], 0
@@ -148,25 +155,70 @@ def findings_for(pg, sitemap_urls):
     return f
 
 
-_TAG = r"<(?:\w+:)?%s>\s*(?:<!\[CDATA\[)?\s*(.*?)\s*(?:\]\]>)?\s*</(?:\w+:)?%s>"
-
-
 def parse_sitemap(xml):
-    """[(loc, lastmod|None)] from <url> blocks; tolerates CDATA, prefixed tags, any child order."""
-    out = []
-    for blk in re.findall(r"<(?:\w+:)?url>(.*?)</(?:\w+:)?url>", xml, re.S):
-        loc = re.search(_TAG % ("loc", "loc"), blk, re.S)
-        lm = re.search(_TAG % ("lastmod", "lastmod"), blk, re.S)
-        if loc:
-            out.append((loc.group(1), lm.group(1) if lm else None))
+    """[(loc, lastmod|None)] from <url> blocks. One linear pass built on str.find (no
+    backtracking regex, so malformed input cannot hang it). Tolerates CDATA, comments,
+    namespace-prefixed tags and any child order; a <loc> whose prefix differs from its
+    <url>'s (for example <image:loc>) is ignored."""
+    out, i, n = [], 0, len(xml)
+    in_url, prefix, loc, lm, field, buf = False, "", None, None, None, []
+    while i < n:
+        lt = xml.find("<", i)
+        text = xml[i:] if lt == -1 else xml[i:lt]
+        if field: buf.append(text)
+        if lt == -1: break
+        if xml.startswith("<![CDATA[", lt):
+            end = xml.find("]]>", lt + 9)
+            if end == -1: break
+            if field: buf.append(xml[lt + 9:end])
+            i = end + 3; continue
+        if xml.startswith("<!--", lt):
+            end = xml.find("-->", lt + 4)
+            if end == -1: break
+            i = end + 3; continue
+        gt = xml.find(">", lt)
+        if gt == -1: break
+        i = gt + 1
+        tag = xml[lt + 1:gt].strip()
+        closing, selfclose = tag.startswith("/"), tag.endswith("/")
+        parts = tag.strip("/").split(None, 1)
+        if not parts or parts[0].startswith(("?", "!")): continue
+        pfx, _, local = parts[0].rpartition(":")
+        if local == "url" and not closing:
+            in_url, prefix, loc, lm, field = True, pfx, None, None, None
+        elif local == "url" and closing and in_url:
+            if loc: out.append((loc, lm))
+            in_url, field = False, None
+        elif in_url and pfx == prefix and local in ("loc", "lastmod"):
+            if not closing and not selfclose:
+                field, buf = local, []
+            elif closing and field == local:
+                val = "".join(buf).strip()
+                if local == "loc": loc = val
+                else: lm = val
+                field = None
     return out
 
 
 def same_host(url, base):
-    """True only for the exact scheme+host of base (a text-prefix test also passes
-    oxfordra.net.evil.example and oxfordra.net@evil.example)."""
-    u, b = urllib.parse.urlparse(url), urllib.parse.urlparse(base)
-    return u.scheme in ("http", "https") and u.hostname == b.hostname and u.port == b.port
+    """True for an http(s) URL on the same hostname and port as base. Not a text-prefix
+    test (that also passes oxfordra.net.evil.example and oxfordra.net@evil.example). The
+    scheme is deliberately not compared, so an http:// link is still reported, not hidden."""
+    try:
+        u, b = urllib.parse.urlparse(url), urllib.parse.urlparse(base)
+        return u.scheme in ("http", "https") and u.hostname == b.hostname and u.port == b.port
+    except ValueError:  # malformed port (http://host:abc/) or bracketed host
+        return False
+
+
+def stale_lastmods(lastmod, base):
+    """Rows for hub pages whose lastmod is older than a child page's (dates only)."""
+    rows = []
+    for u, lm in lastmod.items():
+        kids = [v for k, v in lastmod.items() if k != u and k.startswith(u.rstrip("/") + "/")]
+        if kids and lm[:10] < max(kids)[:10]:
+            rows.append(("LOW", u.replace(base, ""), f"lastmod {lm} older than children ({max(kids)})"))
+    return rows
 
 
 def main():
@@ -179,7 +231,9 @@ def main():
     st, _, sm = fetch(base + "/sitemap.xml")
     if st != 200:
         print(f"sitemap.xml unreachable (status {st})"); return 2
-    entries = [(u, lm) for u, lm in parse_sitemap(sm) if same_host(u, base)][: a.max_pages]
+    parsed = parse_sitemap(sm)
+    offhost = [u for u, _ in parsed if not same_host(u, base)]  # reported, never fetched
+    entries = [(u, lm) for u, lm in parsed if same_host(u, base)][: a.max_pages]
     if not entries:
         print("sitemap.xml has no parseable same-host <loc> entries; refusing to report a clean crawl")
         return 2
@@ -189,6 +243,8 @@ def main():
 
     out = [f"# SEO crawl: {base}  ({time.strftime('%Y-%m-%d')}, {len(pages)} sitemap pages)\n"]
     rows, sev = [], collections.Counter()
+    for u in offhost:
+        rows.append(("HIGH", u, "sitemap <loc> is on another host than --base (not fetched)"))
     for pg in pages:
         for s, m in findings_for(pg, urls):
             rows.append((s, pg["url"].replace(base, "") or "/", m)); sev[s] += 1
@@ -214,10 +270,7 @@ def main():
         if s != 301: rows.append(("HIGH", probe, f"expected 301, got {s}"))
 
     # stale lastmod: a hub older than its own children
-    for u, lm in lastmod.items():
-        kids = [v for k, v in lastmod.items() if k != u and k.startswith(u.rstrip("/") + "/")]
-        if kids and lm[:10] < max(kids)[:10]:  # compare dates only; a datetime vs date same-day is not stale
-            rows.append(("LOW", u.replace(base, ""), f"lastmod {lm} older than children ({max(kids)})"))
+    rows.extend(stale_lastmods(lastmod, base))
 
     # internal links: bounded HEAD sweep, plus linked-but-not-in-sitemap
     sm_norm = {u.rstrip("/") for u in urls}; seen = {}
@@ -235,6 +288,10 @@ def main():
     for full, s, src in bad: rows.append(("HIGH", full.replace(base, ""), f"broken internal link ({s}) from {src.replace(base, '')}"))
     for full, s in orphans:
         if s and s < 400: rows.append(("LOW", full.replace(base, ""), "linked page not in sitemap (confirm noindex is intended)"))
+    bscheme = urllib.parse.urlparse(base).scheme
+    for full, src in seen.items():
+        if urllib.parse.urlparse(full).scheme != bscheme:
+            rows.append(("LOW", full.replace(base, ""), f"internal link uses {urllib.parse.urlparse(full).scheme}:// (from {src.replace(base, '')})"))
 
     order = {"HIGH": 0, "MED": 1, "LOW": 2}
     sev = collections.Counter(r[0] for r in rows)  # tally after every check has added rows
