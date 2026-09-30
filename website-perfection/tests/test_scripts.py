@@ -32,6 +32,9 @@ class ParserTests(unittest.TestCase):
     def test_svg_title_in_body_ignored(self):
         self.assertEqual(an("<html><head><title>Real</title></head><body><svg><title>Map</title></svg></body></html>")["title"], "Real")
 
+    def test_only_the_first_title_counts(self):
+        self.assertEqual(an("<head><title>One</title><title>Two</title></head><body></body>")["title"], "One")
+
     def test_stray_title_inside_body_is_not_the_page_title(self):
         self.assertEqual(an("<html><head></head><body><p>x</p><title>Late</title></body></html>")["title"], "")
 
@@ -70,6 +73,22 @@ class SitemapTests(unittest.TestCase):
             t = time.time(); crawl.parse_sitemap(bad)
             self.assertLess(time.time() - t, 2.0, bad[:20])
 
+    def test_comment_containing_markup_is_skipped(self):
+        xml = "<urlset><!-- a > <url><loc>https://a.test/commented</loc></url> --><url><loc>https://a.test/real</loc></url></urlset>"
+        self.assertEqual(crawl.parse_sitemap(xml), [("https://a.test/real", None)])
+
+    def test_entities_are_decoded(self):
+        self.assertEqual(crawl.parse_sitemap("<url><loc>https://a.test/q?x=1&amp;y=2</loc></url>"), [("https://a.test/q?x=1&y=2", None)])
+
+    def test_huge_field_text_is_linear(self):
+        t = time.time(); r = crawl.parse_sitemap("<url><loc>" + "a" * 3_000_000 + "</loc></url>")
+        self.assertLess(time.time() - t, 2.0); self.assertEqual(len(r[0][0]), 3_000_000)
+
+    def test_many_text_chunks_in_one_field_is_linear(self):
+        # comments split the loc text into 400k chunks: re-joining the buffer per chunk is O(n^2)
+        t = time.time(); r = crawl.parse_sitemap("<url><loc>" + "a<!---->" * 400_000 + "</loc></url>")
+        self.assertLess(time.time() - t, 2.0); self.assertEqual(len(r[0][0]), 400_000)
+
     def test_sitemapindex_yields_nothing(self):
         self.assertEqual(crawl.parse_sitemap("<sitemapindex><sitemap><loc>https://a.test/s.xml</loc></sitemap></sitemapindex>"), [])
 
@@ -99,7 +118,8 @@ class CrawlMainTests(unittest.TestCase):
             '<meta name="twitter:card" content="c"><meta name="twitter:title" content="t"><meta name="twitter:image" content="i">'
             '<script type="application/ld+json">{"@type":"Organization"}</script></head><body><h1>H</h1>%s</body></html>')
 
-    def run_main(self, sitemap, pages, extra=None):
+    def run_main(self, sitemap, pages, extra=None, argv=()):
+        self.log = []
         desc = "d" * 150
         table = {BASE + "/sitemap.xml": (200, {}, sitemap), BASE + "/robots.txt": (200, {}, "Sitemap: x"),
                  BASE + "/llms.txt": (200, {}, ""), BASE + "/manifest.json": (200, {}, ""),
@@ -109,9 +129,10 @@ class CrawlMainTests(unittest.TestCase):
         table.update(extra or {})
 
         def fake(url, method="GET", retries=3):
+            self.log.append((method, url))
             return table.get(url, (301, {"location": "x"}, "") if "www." in url or url.startswith("http://") else (200, {}, ""))
         out = io.StringIO()
-        with mock.patch.object(crawl, "fetch", fake), mock.patch.object(sys, "argv", ["seo_crawl.py", "--base", BASE]), \
+        with mock.patch.object(crawl, "fetch", fake), mock.patch.object(sys, "argv", ["seo_crawl.py", "--base", BASE, *argv]), \
                 contextlib.redirect_stdout(out):
             rc = crawl.main()
         return rc, out.getvalue()
@@ -128,13 +149,23 @@ class CrawlMainTests(unittest.TestCase):
         sm = "<urlset><url><loc>%s/</loc></url><url><loc>https://www.oxfordra.net/contact</loc></url></urlset>" % BASE
         rc, out = self.run_main(sm, {BASE + "/": []})
         self.assertEqual(rc, 0); self.assertIn("| HIGH | https://www.oxfordra.net/contact | sitemap <loc> is on another host", out)
+        self.assertNotIn("https://www.oxfordra.net/contact", [u for _, u in self.log])  # reported, never fetched
+        self.assertIn("HIGH 1 /", out)  # headline tally includes rows added before the page checks
 
-    def test_http_internal_link_is_reported(self):
-        rc, out = self.run_main("<urlset><url><loc>%s/</loc></url></urlset>" % BASE, {BASE + "/": ["http://oxfordra.net/about"]})
+    def test_http_internal_link_is_reported_and_not_an_orphan(self):
+        sm = "<urlset><url><loc>%s/</loc></url><url><loc>%s/about</loc></url></urlset>" % (BASE, BASE)
+        rc, out = self.run_main(sm, {BASE + "/": ["http://oxfordra.net/about"], BASE + "/about": []})
         self.assertIn("internal link uses http://", out)
+        self.assertNotIn("not in sitemap", out)  # /about IS in the sitemap; only its scheme is wrong
 
-    def test_malformed_port_link_does_not_crash(self):
-        rc, out = self.run_main("<urlset><url><loc>%s/</loc></url></urlset>" % BASE, {BASE + "/": ["http://oxfordra.net:abc/x"]})
+    def test_max_pages_slice_does_not_create_false_orphans(self):
+        sm = "<urlset>" + "".join("<url><loc>%s/%s</loc></url>" % (BASE, n) for n in ("a", "b", "c")) + "</urlset>"
+        rc, out = self.run_main(sm, {BASE + "/a": [BASE + "/c"]}, extra={BASE + "/c": (200, {}, "")}, argv=("--max-pages", "1"))
+        self.assertNotIn("linked page not in sitemap", out)
+
+    def test_malformed_port_and_bracket_links_do_not_crash(self):
+        rc, out = self.run_main("<urlset><url><loc>%s/</loc></url></urlset>" % BASE,
+                                {BASE + "/": ["http://oxfordra.net:abc/x", "http://[::1/badbracket"]})
         self.assertEqual(rc, 0)
 
 
@@ -180,6 +211,32 @@ class PsiTests(unittest.TestCase):
             with mock.patch.object(psi._opener, "open", side_effect=http_error(code, b"{}")) as m, mock.patch.object(psi.time, "sleep"):
                 psi.call("https://oxfordra.net/", "mobile", self.KEY)
             self.assertEqual(m.call_count, calls, code)
+
+    def test_redirect_is_never_followed_with_the_key(self):
+        """Real opener, real local server: a 3xx must not produce a second request (the
+        Location target would receive ?key=)."""
+        import http.server, threading
+        seen = []
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen.append(self.path)
+                if self.path.startswith("/api"):
+                    self.send_response(302); self.send_header("Location", "/elsewhere?" + self.path.split("?", 1)[-1])
+                    self.end_headers()
+                else:
+                    self.send_response(200); self.end_headers(); self.wfile.write(b"{}")
+
+            def log_message(self, *a): pass
+
+        srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+        th = threading.Thread(target=srv.serve_forever, daemon=True); th.start()
+        try:
+            with mock.patch.object(psi, "API", "http://127.0.0.1:%d/api" % srv.server_address[1]), mock.patch.object(psi.time, "sleep"):
+                res = psi.call("https://oxfordra.net/", "mobile", self.KEY)
+        finally:
+            srv.shutdown(); srv.server_close()
+        self.assertEqual(len(seen), 1, seen); self.assertIn("_error", res); self.assertNotIn(self.KEY, res["_error"])
 
     def test_msys_path_normaliser(self):
         for raw, want in (("C:/Program Files/Git/", "/"), ("C:/Program Files/git/contact", "/contact"),
