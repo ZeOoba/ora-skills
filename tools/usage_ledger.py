@@ -50,6 +50,16 @@ def latest_by_session(recs):
             best[k] = r
     return best
 
+def open_ledger_append(path):
+    """Open the ledger for append; first terminate a torn tail line so the next record is not fused onto it."""
+    torn = False
+    if os.path.exists(path) and os.path.getsize(path) > 0:
+        with open(path, "rb") as f:
+            f.seek(-1, os.SEEK_END); torn = f.read(1) != b"\n"
+    out = open(path, "a", encoding="utf-8")
+    if torn: out.write("\n")
+    return out
+
 def parse_audit(path):
     counts = defaultdict(lambda: defaultdict(int)); skills = defaultdict(int)
     with open(path, encoding="utf-8", errors="replace") as f:
@@ -71,7 +81,7 @@ def cmd_scan(a):
     known = latest_by_session(load_ledger(a.ledger))
     os.makedirs(os.path.dirname(os.path.abspath(a.ledger)), exist_ok=True)
     added = 0
-    with open(a.ledger, "a", encoding="utf-8") as out:
+    with open_ledger_append(a.ledger) as out:
         for p in sorted(files):
             sid = os.path.basename(os.path.dirname(p))
             st = os.stat(p)
@@ -121,7 +131,7 @@ def cmd_dc(a):
         snap["delta_since_prev"] = {k: v - p.get(k, 0) for k, v in snap["toolCounts"].items() if v - p.get(k, 0)}
         snap["prev_ts"] = prev[-1]["ts"]
     os.makedirs(os.path.dirname(os.path.abspath(a.ledger)), exist_ok=True)
-    with open(a.ledger, "a", encoding="utf-8") as out:
+    with open_ledger_append(a.ledger) as out:
         out.write(json.dumps(snap, separators=(",", ":")) + "\n")
     print("dc:", {k: snap[k] for k in snap if k not in ("toolCounts",)})
     return 0
@@ -143,13 +153,16 @@ def cmd_summary(a):
             "sessions": n,
             "servers": {s: sum(t.values()) for s, t in sorted(srv.items(), key=lambda x: -sum(x[1].values()))},
             "skills": dict(sorted(sk.items(), key=lambda x: -x[1])[:25])}
-    dcs = [r for r in recs if r.get("kind") == "dc"]
+    dcs = [r for r in recs if r.get("kind") == "dc" and "toolCounts" in r]  # skip error snapshots
     if dcs: out["dc_latest"] = {k: dcs[-1].get(k) for k in ("ts", "totalToolCalls", "history_last7d", "delta_since_prev", "prev_ts")}
     out["span"] = {"earliest_session_mtime": min((r["mtime"] for r in best.values()), default=None)}
     if a.json: print(json.dumps(out, indent=1))
     else:
         for w, v in out["windows"].items():
             print(f"[{w}] sessions={v['sessions']}  " + "  ".join(f"{s}={c}" for s, c in v["servers"].items()))
+        print(f"coverage: earliest_session_mtime={out['span']['earliest_session_mtime']}  sessions_in_ledger={out['sessions_in_ledger']}")
+        if "dc_latest" in out:
+            print("dc_latest: " + "  ".join(f"{k}={v}" for k, v in out["dc_latest"].items()))
     return 0
 
 def main():
