@@ -3,7 +3,7 @@ name: daily-brief
 description: "Use when the user says: daily brief, news, morning brief, CRE news, what's happening today, what should I know — or asks for the Oxford Realty Advisors daily morning intelligence brief covering CRE news, industrial transactions, market rates, portfolio watch, ops tip, reading list, CRE law/regulatory watch, shallow bay case study, and competitive intelligence."
 ---
 
-# Daily Brief (v2.16)
+# Daily Brief (v2.17)
 
 You are generating the Oxford Realty Advisors daily intelligence brief. Execute all 9 sections in sequence and present as a structured report. Target length: concise but complete.
 
@@ -132,6 +132,7 @@ Using the FIXED SOURCE LIST (A), find significant industrial/shallow-bay news da
 - VA (Richmond) — entry/beachhead target, added 2026-05-30
 - IA (Des Moines) — entry/beachhead target, added 2026-05-30
 - KY (Louisville) — entry/beachhead target, added 2026-08-05
+- IL (Chicago–Greater Cook County) — entry/beachhead target, added 2026-09-29
 - TN (pipeline/watch market)
 
 Sources: the FIXED SOURCE LIST (A) only, plus WebSearch to fill the market gaps that list names, each WebSearch item subject to the date-verification rule. GlobeSt, bizjournals.com and CoStar are blocked — an item seen only as a search snippet from them is `[DATE UNVERIFIED]` unless a fetched page shows its date.
@@ -150,7 +151,7 @@ Search for industrial sale transactions matching ORA criteria:
 
 - Sub-$10M total consideration
 - Shallow-bay, flex, office-warehouse product type
-- Target markets: OH, MD, IN, MO, KS, WI (Columbus, Cincinnati, Baltimore/DC, Indianapolis, Kansas City, Madison) + entry-phase MI (Grand Rapids), VA (Richmond), IA (Des Moines), KY (Louisville); TN watch
+- Target markets: OH, MD, IN, MO, KS, WI (Columbus, Cincinnati, Baltimore/DC, Indianapolis, Kansas City, Madison) + entry-phase MI (Grand Rapids), VA (Richmond), IA (Des Moines), KY (Louisville), IL (Chicago–Greater Cook County); TN watch
 - Multi-tenant preferred; sub-50,000 SF per building preferred
 
 Include when available: Price, SF, price/SF, cap rate, buyer, seller, broker. Sources: the FIXED SOURCE LIST (A). LoopNet, CoStar and Crexi return 403 to this host — do not cite them. **This section stays thin by design:** press-release sale items usually state SF and buyer but not price or cap rate. Print only what the fetched item states, mark absent fields `n/d`, and if no in-window sale meets ORA's box print `No qualifying sub-$10M sale in fetched sources for {window}` — never pad, never infer price or cap rate. Flag with ⚠️ any deal that would have passed ORA's investment screen.
@@ -402,6 +403,7 @@ Minimum 3 items; maximum 6. Prioritize items requiring action within 72 hours. I
 
 **Per-entry length cap (same pass):** cap each full inline entry at **~2,000 characters** — the count cap alone bounds how many entries are inline, never how large each is. Measured 2026-09-11: this skill's three entries run 290–944 chars, so the cap fits with headroom. An entry that would exceed it states its finding and verdict inline and cites `versions/` for the detail. This skill was flagged (R25-7) as the #3 realized-cost skill in the environment (146,039 word-loads) with no growth-bound mechanism at all — documentation discipline only, no news-filter, transaction-screen, or workflow logic changed.
 
+- **v2.17 (2026-09-29):** Parity — Chicago–Greater Cook County IL added to Sections 1-2 geographic scope (target-markets.json v1.11; acquisition-underwriting v4.25). No source list, filter, screening or delivery logic changed. (Numbered v2.17 on merge: v2.16 was taken by the 2026-09-30 token pass.)
 - **v2.16 (2026-09-30, ora-setup-audit token pass, Gabriel-directed):** Doc-only. Compressed inline changelog entries v2.9–v2.13 to one-liners (full text in `versions/`), about 600 words of history no run executes. Procedure text unchanged byte for byte. The outage-only mirror fallbacks were deliberately left inline: this skill runs unattended daily and a conditional reference read is a risk the ~7% saving does not justify.
 - **v2.15 (2026-09-22, /insights sweep item 5):** Three output rules. Run date + weekday computed once at run start and reused everywhere (a brief mixed Tuesday/Wednesday). Section 3 FRED CSVs are downloaded with curl and parsed locally, including when the FRED MCP is rate-limited — never a WebFetch summary (mis-summarized values observed); complements v2.13's staleness disclosure. Notion create-pages with no page ID in the response → title search before any retry, never a blind retry (produced a duplicate page). No section content or delivery routing changed.
 - **v2.14 (2026-09-19):** Sections 1, 2, 7 and 9 now FETCH a fixed, live-tested source list instead of relying on WebSearch, which has no last-24-hours filter and returns undated aggregator pages (the 2026-09-19 run came out thin for that reason). New `FIXED SOURCE LIST` block: 11 news URLs across 9 sources via WebFetch (REBusinessOnline, ConnectCRE, Commercial Observer, Bisnow + Bisnow D.C., IBJ, Richmond BizSense, Business Record, BizTimes, Basis Industrial) and 2 law/regulation APIs via curl (Kansas bill-status; Federal Register, 5 fixed terms), a window rule (24 h timestamped / run date + prior day for day-only / 7 d for Section 7), a mandatory `[DATE UNVERIFIED]` tag that is deterministic (tagged leads sit on a closing line and never count toward an item minimum; output-format minimums are now `0-N dated items`), and a `Source status:` line so an unchecked source never reads as "nothing happened". Tested 2026-09-19 (about 60 sources/endpoints, each listed in the record; curl and WebFetch): GlobeSt and every bizjournals.com title are 403-blocked; LoopNet/CoStar/Crexi are blocked, so Section 2 is declared thin by design; six of seven state legislatures (OH, MD, IN, MO, WI, TN) expose no fetchable dated activity surface and stay WebSearch-only. Full results, drop reasons and the per-market coverage table: `references/source-test-2026-09-19.md`. No screening, scoring, dedup, delivery or Section 3/4/5/6/8 logic changed.
