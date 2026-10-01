@@ -3,7 +3,7 @@ name: market-monitor
 description: "Use when researching industrial real estate market conditions across Oxford Realty Advisors target markets, comparing markets, tracking demand drivers, or preparing market intelligence reports. Triggers: market update, market conditions, vacancy rate, industrial market, rent growth, supply pipeline, absorption, market comparison, submarket analysis, cap rate trends."
 ---
 
-# Market Monitor (v1.5)
+# Market Monitor (v1.6)
 
 You are the Oxford Realty Advisors market intelligence engine. You monitor industrial real estate conditions across all ORA target markets, track demand drivers, and produce actionable market intelligence for acquisition decisions.
 
@@ -61,7 +61,7 @@ You are the Oxford Realty Advisors market intelligence engine. You monitor indus
 - Demand drivers: State government, UW-Madison, biotech/health-tech, strong small-business tenant base. NOTE: thin pure-industrial inventory — screen carefully for product fit.
 - Data sources: Madison region CoStar, In Business Madison, Dane County economic data
 
-### Entry/Beachhead Markets (Grand Rapids/Richmond/Des Moines added 2026-05-30, Louisville added 2026-08-05 — designated targets, NO existing ORA exposure; market fundamentals NOT yet validated)
+### Entry/Beachhead Markets (Grand Rapids/Richmond/Des Moines added 2026-05-30, Louisville added 2026-08-05, Chicago–Greater Cook County added 2026-09-29 — designated targets, NO existing ORA exposure; market fundamentals NOT yet validated)
 
 > Baseline metrics for Grand Rapids/Richmond/Des Moines were populated 2026-05-30 from brokerage research (Colliers/CBRE/C&W; sources cited inline) and must be REFRESHED each quarter before relying on them. Cap rates and replacement-cost $/SF remain soft for all three — no firm publishes a sub-$10M multi-tenant/flex cap series for these metros — so confirm those two at the deal level. Graduate-migration is a secondary vitality proxy, not a primary industrial signal: these are entry/beachhead markets and the first underwrite must still validate vacancy, rent, and basis-to-replacement against live CoStar/CBRE data. Louisville's baseline (below) was sourced differently — see its own profile note.
 
@@ -89,13 +89,19 @@ You are the Oxford Realty Advisors market intelligence engine. You monitor indus
 - Data sources: Business Record (Des Moines), CoStar Des Moines, Colliers Des Moines, CBRE/JLL Iowa
 - Market metrics (refresh quarterly): Vacancy 7.5% overall (Colliers, Q4 2025; up from ~6.1% Q1 2025 on new deliveries); NNN asking rent $6.90/SF overall — manufacturing ~$6.40, warehouse/bulk ~$7.00, office-service/flex ~$9.40 (Colliers, Q1/Q4 2025); YTD net absorption +239K SF, ~300K SF under construction, developers favoring pre-leased (Colliers, Q4 2025); sub-$10M multi-tenant/flex cap ~7.0–7.6% [SPECULATIVE — aggregator/Matthews 2025, no metro broker print]; sale $/SF ~$121 (LoopNet, 2025). Replacement/new-construction $/SF: [VALIDATE].
 
-**Louisville, KY** (added 2026-08-05; graduate-migration not yet pulled — not tiered against the other nine clusters on that metric)
+**Louisville, KY** (added 2026-08-05; graduate-migration not yet pulled — not tiered against the other ten clusters on that metric)
 - Product focus: Shallow-bay/flex, multi-tenant light industrial — Midwest Tier-2 distribution comp to Kansas City/Indianapolis
 - Key submarkets (geography only): Riverport
 - ORA current exposure: None — entry/beachhead phase; Kentucky sits outside ORA's preferred-state list (acceptable_states) — target-activity addition, not a current-holdings state (mirrors how MI/VA/IA were added 2026-05-30)
 - Demand drivers: UPS Worldport permanent air-cargo hub (anchor tenant/employer); GE Appliances $490M reshoring investment (announced June 2025); adjacent to the Indiana established cluster
 - Data sources: acquisition-underwriting SKILL.md STAGE 0 Gate 3 rationale (June 2026 sourcing pass). Unlike Grand Rapids/Richmond/Des Moines (dedicated Colliers/CBRE/C&W brokerage research, 2026-05-30), no dedicated brokerage-research pass has been run for Louisville yet — treat below as directional until refreshed.
 - Market metrics (as of 2026-06-22): Sale asking NNN $3.90–5.00/SF, ~40% below MSA average; 13–14 active Riverport listings; metro grade B+ (all per the acquisition-underwriting sourcing pass above). **Vacancy rate, net absorption, and under-construction SF: not sourced yet — no figure exists, do not guess or estimate one.** Replacement/new-construction $/SF: [VALIDATE — no credible metro source located]. Exit cap 7.75% ratified within `acquisition-underwriting` v3.4 (2026-06-22) as a Midwest Tier-2 comp to Kansas City/Richmond — carried here for parity, not independently re-derived by this skill.
+
+**Chicago–Greater Cook County, IL** (added 2026-09-29; scope = all of Cook County; collar counties excluded under Ruling 3)
+- Demand drivers: largest Midwest industrial market; I-80/94, I-294, I-57, I-55; Port of Chicago; rail intermodal density.
+- Baseline (CoStar Near South Cook, 2026-09-29 — all-industrial, BLENDED): vacancy 6.2% (−70 bps YoY; 5-yr avg 4.9%), quoted rent $10.40/SF (+4.2% YoY), T12 net absorption +350K SF, 0 SF under construction, market cap 7.8%, pricing $73/SF (flex $77).
+- Live-print pull order: C&W MarketBeat Chicago Industrial PDF (submarket table) → CBRE Chicago Industrial Figures → Colliers. Pull North, West, Southwest and South Cook submarkets separately; segment shallow-bay where available.
+- Standing caution: Cook property tax (effective 8.6–20.2% of value on south-suburban parcels) is the market's defining risk; report the municipal fiscal-distress watch (Harvey, Dolton) with every south-suburb print.
 
 ### Watch / Adjacent Markets (monitor only — not target clusters)
 
@@ -178,14 +184,14 @@ WATCH: [Any upcoming supply delivery, major tenant departure, or policy change]
 ```
 
 ### Market Comparison Table
-Compare across the ten target clusters (one column per market; established first, entry-phase last). Established: Columbus, Kansas City, Indianapolis, Maryland/DC, Cincinnati, Madison. Entry-phase (mark inputs `[VALIDATE]` until live-sourced): Grand Rapids, Richmond, Des Moines, Louisville.
+Compare across the eleven target clusters (one column per market; established first, entry-phase last). Established: Columbus, Kansas City, Indianapolis, Maryland/DC, Cincinnati, Madison. Entry-phase (mark inputs `[VALIDATE]` until live-sourced): Grand Rapids, Richmond, Des Moines, Louisville, Chicago–Greater Cook County.
 ```
 MARKET COMPARISON — [Date]
-                     Columbus  KC MO   Indy IN  MD/DC   Cincy   Madison | GrandRapids  Richmond  DesMoines  Louisville
-Vacancy Rate          X.X%     X.X%    X.X%     X.X%    X.X%    X.X%    |  [VAL]       [VAL]     [VAL]      [VAL]
-Avg Rent ($/SF NNN)   $X.XX    $X.XX   $X.XX    $X.XX   $X.XX   $X.XX   |  [VAL]       [VAL]     [VAL]      [VAL]
-Cap Rate Range        X-X%     X-X%    X-X%     X-X%    X-X%    X-X%    |  [VAL]       [VAL]     [VAL]      [VAL]
-Replacement Cost      $XX/SF   $XX/SF  $XX/SF   $XX/SF  $XX/SF  $XX/SF  |  [VAL]       [VAL]     [VAL]      [VAL]
+                     Columbus  KC MO   Indy IN  MD/DC   Cincy   Madison | GrandRapids  Richmond  DesMoines  Louisville  Chicago-Cook
+Vacancy Rate          X.X%     X.X%    X.X%     X.X%    X.X%    X.X%    |  [VAL]       [VAL]     [VAL]      [VAL]      [VAL]
+Avg Rent ($/SF NNN)   $X.XX    $X.XX   $X.XX    $X.XX   $X.XX   $X.XX   |  [VAL]       [VAL]     [VAL]      [VAL]      [VAL]
+Cap Rate Range        X-X%     X-X%    X-X%     X-X%    X-X%    X-X%    |  [VAL]       [VAL]     [VAL]      [VAL]      [VAL]
+Replacement Cost      $XX/SF   $XX/SF  $XX/SF   $XX/SF  $XX/SF  $XX/SF  |  [VAL]       [VAL]     [VAL]      [VAL]      [VAL]
 Conditions           [🟢/🟡/🔴] ...
 ORA Deployment Priority: [rank all active markets]
 ```
@@ -206,10 +212,11 @@ On every full market run, diff the live print against the corresponding standing
 
 **Sourcing discipline unchanged:** the Stage 2.1 vendor/operator-report rule governs here too — a self-published operator or brokerage lead-gen "state of the market" report is never a valid drift input.
 
-**Residual gap (decision, Gabriel 2026-08-22):** no new scheduled task — drift reports on every full `market-monitor` run, zero new substrate. A market nobody runs between now and December drifts unseen regardless; `acquisition-underwriting`'s OUTCOME FEEDBACK carries a back-test-opening sweep across all ten canonical markets to close that gap without adding a fleet member.
+**Residual gap (decision, Gabriel 2026-08-22):** no new scheduled task — drift reports on every full `market-monitor` run, zero new substrate. A market nobody runs between now and December drifts unseen regardless; `acquisition-underwriting`'s OUTCOME FEEDBACK carries a back-test-opening sweep across all eleven canonical markets to close that gap without adding a fleet member.
 
 ## Changelog
 
+- v1.6 (2026-09-29): parity — Chicago–Greater Cook County IL entry-phase profile added (11th canonical cluster; target-markets.json v1.11, acquisition-underwriting v4.25). Baseline from CoStar Near South Cook (BLENDED; comparison-table cells marked [VAL] like the other entry markets); "ten" → "eleven" in the Market Comparison Table lead-in, the comparison table gained a Chicago-Cook column, and the drift-sweep residual-gap note. No scoring weight, cap-rate assumption or workflow changed.
 - v1.5 (2026-08-22): Added the DOCTRINE-DRIFT REPORT section above — run-triggered (never scheduled) reconciliation of this skill's live market prints against `acquisition-underwriting`'s standing exit-cap/rent/sale-price/RCT constants, reporting-only. Origin: a single Madison WI deal (3700 REDACTED-158 Blvd, 2026-08-22) surfaced three stale constants simultaneously — exit cap doctrine 7.25% vs. verified Q2 2026 8.90% (165 bps, widening), RCT v03 all-in $229–280/SF vs. bottom-up $180–235/SF (~20% overstated), and the Submarket Reference's $148–176/SF owner-user pricing band refuted against $76–102/SF for ORA's 20–75K SF size band — none caught by the existing annual-only cadence. No target-market data, scoring weight, or governor changed.
 - v1.4 (2026-08-16): Two errors found and fixed while sourcing Columbus asking-rent comps for a Notion Tenant Database backfill. (1) The Columbus "ORA current exposure" list had never assigned properties to submarkets at all — a live C&W submarket geolocation check (verifying zip/street data per address, not trusting the flat list) found several properties assumed "Southeast, near the airport" are actually Northeast/Gahanna (392 Morrison Rd is in Whitehall 43213, John Glenn Columbus International's side — a different airport than Rickenbacker, which anchors the real Southeast/Groveport submarket where Zettler/Banwick x2/Livingston actually sit). Added a verified per-property submarket mapping. (2) "Northwood" had been listed as a Columbus property in the same line — it's actually 2203-2207 Northwood Dr, ORA's Salisbury MD (Eastern Shore) asset, mislabeled into the Columbus exposure list at some unknown point. Removed. No target-market scoring, cluster classification, or governor changed — this is a submarket/property-list correction within the existing Columbus primary-market entry.
 - v1.3 (2026-08-15): HIGH fix (Skill Text Audit finding F4) + LOW fix (finding F9). Added the Louisville KY entry/beachhead profile — ratified in `target-markets.json` 2026-08-05 (10th canonical cluster, entry-phase, market_cluster_fit_score 4) but never added here, leaving this skill out of parity for 10 days. Sourced strictly from `target-markets.json`'s Louisville cluster entry (acquisition-underwriting STAGE 0 Gate 3 rationale, June 2026 sourcing pass); vacancy/absorption/construction-pipeline figures are explicitly marked "not sourced yet" rather than estimated, since the JSON carries them as null. "Nine target clusters" corrected to "ten" in the Market Comparison Table lead-in; ASCII table template gained a Louisville column. Also moved the v1.2/v1.1 changelog prose that had accumulated in the frontmatter `description` field down here (it duplicated this section); description now carries a single trailing version tag. No scoring weight, cap-rate assumption, or workflow changed.
