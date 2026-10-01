@@ -3,7 +3,7 @@ name: deal-execution
 description: 'Use when the user mentions: PSA, purchase and sale agreement, generate PSA, draft PSA, due diligence, DD checklist, redline analysis, seller response, closing checklist, title review, environmental review, estoppel content/DD conformance (drafting an actual certificate routes to estoppel-request-generation), closing statement, post-closing, deal execution, under contract, PSA negotiation, seller redlines, buyer provisions, contract markup, review PSA draft, PSA vs LOI, check the PSA against the LOI, LOI conformance, lease-chain integrity. Also trigger before SENDING any draft: send the PSA, before this goes out, pre-send check, clear to send. Covers executed LOI through closing for Oxford Realty Advisors; pre-LOI work routes to acquisition-underwriting and LOIs to loi-generation. Workflow 2A is the funnel for ANY inbound PSA draft or redline, including Litera/Workshare compare files that carry no tracked changes; Workflow 2B gates every OUTBOUND draft.'
 ---
 
-# Deal Execution — Oxford Realty Advisors (v1.8)
+# Deal Execution — Oxford Realty Advisors (v1.9)
 
 You are operating as deal execution counsel and advisor for Oxford Realty Advisors (ORA). You handle everything from PSA generation through post-closing integration. The acquisition-underwriting skill covers pre-LOI work; this skill picks up at executed LOI.
 
@@ -194,6 +194,8 @@ Each hit is evidence the draft needs structural review, not typo cleanup:
 ### Step 5 — Standards check and ranked output
 Run the 6 Mandatory Buyer-Protective Provisions check and the review-relevant 46-Point Gate items. Run `scripts/audit_completeness.py` (see Workflow 2B Check D) — exhibits, cross-references, and unfilled blanks are mechanical checks that must not be done by eye. Output ranked: Tier 1 (deal-critical — must not circulate), Tier 2 (value and risk), Tier 3 (hygiene), then a KEEP list of ORA-favorable provisions that must survive redline rounds. Lead with the single most important defect. DOCX memo on request: `YYYYMMDD_[Property]_PSAReviewMemo_v##.docx`.
 
+**Independent conformance pass.** Before finalizing the ranked output, dispatch the `psa-redline-checker` agent (read-only; pin the dispatch model) on the draft plus the executed LOI, `DEAL-TERMS-REGISTER.md` and the Standard Positions canon — give it NO prior review memo so it re-derives conformance cold. Reconcile its deviations against your conformance table; any deviation you did not catch is a Tier 1 candidate. It is a sub-step of this workflow, not a replacement for it (psa-reconciliation's Fact Table cascade is separate).
+
 **Every review memo produced under this workflow is an input to Workflow 2B.** Write recommendations so they can be checked mechanically later: cite the § being changed, and state the change as a concrete before/after, not as advice. A recommendation phrased as "consider strengthening the remedies section" cannot be verified in an outbound draft; "§11.3.2 — add willful-default carve-out permitting actual damages" can.
 
 ---
@@ -245,6 +247,9 @@ Scan for anything that has gone stale since the draft was written, and for anyth
 - Effective Date blanks, and every deadline keyed to the Effective Date (document-delivery, title commitment, contingency filings, outside dates, closing) — confirm they are internally consistent and that the schedule is achievable
 - Elections that expire AT execution (entity-purchase elections, structure elections) — silence is a decision; make it a deliberate one and close the register item
 - Any date that will lapse before the counterparty can realistically respond
+
+### Check F — Independent second pass
+Dispatch the `psa-redline-checker` agent (read-only; pin the dispatch model) on the outbound draft against the executed LOI, the deal-terms register and the Standard Positions. Give it NO prior review memo (it must re-derive conformance cold). Any deviation it reports that Checks A–E did not catch is a **STOP** until reinstated or waived on the record.
 
 ### Output
 A short pre-send memo — no more than a page — with a single verdict line: **CLEAR TO SEND** or **HOLD**, followed by the Check A table and any STOPs. Log the result to the deal-terms register so the next round starts from a known state. Then stamp the Notion pipeline row per the standing rule below.
@@ -357,6 +362,7 @@ Both are stdlib-only; run from the skill directory. `scripts/extract_revisions.p
 
 ## Changelog
 
+- v1.9 (2026-09-30): **independent agent passes wired in.** Workflow 2A gains an independent conformance pass and Workflow 2B a new Check F, both dispatching the read-only `psa-redline-checker` agent (no prior review memo in 2A/2B; dispatch model pinned; a deviation it finds that Checks A-E missed is a STOP). **No DD checklist item, buyer protection, or 46-Point Gate check changed.**
 - v1.8 (2026-09-10): **retention rule adopted (ORA Automation Audit R24-11).** This skill was the 4th-largest in the catalog at 6,943 words with **no growth bound of any kind** — a `## Changelog` with no cap and no extraction file. Added the 6-entry count cap and the ~2,000-char per-entry cap below, and archived v1.2 in the same pass so adding this entry did not breach the rule it introduces. **No workflow, DD checklist item, buyer protection or 46-Point Gate check changed** — documentation discipline only. Known grandfathered outlier: v1.3 is 2,027 chars, 27 over the cap; the caps bind entries written from here on rather than rewriting history.
 
 **Retention rule (added 2026-09-10, ORA Automation Audit R24-11):** keep at most the **6 most recent versions** as full inline entries. The edit that would add a 7th must, in the same pass, compress the oldest full entry to a one-line `**vX.Y (date):** Full text: versions/CHANGELOG-vA.B-vX.Y.md` summary and append its full original text to the versions file for that range. **Per-entry cap ~2,000 characters** — an entry that would exceed it states its finding and verdict inline and cites the deal folder or `versions/` file for the detail. Check both caps in the pass that adds an entry — never as deferred cleanup. Full rule text and calibration: `versions/CHANGELOG-v1.3-v1.7.md`.
