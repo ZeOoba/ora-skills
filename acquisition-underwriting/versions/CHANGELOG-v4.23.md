@@ -1,0 +1,5 @@
+# acquisition-underwriting changelog - v4.23 (archived 2026-10-01 under the R24-11 four-entry cap)
+
+Full original text of the v4.23 entry, moved out of SKILL.md when v4.27 was added.
+
+**v4.23 (2026-09-22):** **Progressive-disclosure split; description restored to a pure routing surface** (opens "Use when…", every trigger term kept, version token dropped — the H1 marker is what `doctrine-integrity-probe` Check 15 reads). Reference-grade text (validation/incident narratives, calibration rationale, State Reassessment Matrix, Submarket Intelligence table, retired benchmarks) moved to `references/` behind explicit load pointers; every operative rule, threshold, floor, stop condition, QC-Gate check and output contract restated inline (line-level content-loss check vs v4.22: 0 missing). v4.19 archived, v4.20–v4.22 stubbed, `versions/` file renamed `-v4.22.md`. **No scorecard weight, Stage 1 floor, or governor constant (DSCR 1.25x / per-property LTV 65% / portfolio-aggregate LTV 40%) changed.**
