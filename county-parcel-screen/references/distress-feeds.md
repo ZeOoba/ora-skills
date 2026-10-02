@@ -117,11 +117,20 @@ land 35,286 SF, improvements $592.6K, owner L & M Real Estate LLC, $106.5K due).
 
 Worked example, 2026-10-02: the record card for 6104 Arlington Ave shows structure 398 warehouse, one building,
 Total Under Roof 12,000 SF, built 1978 (effective 1990), grade C, improvement name "Progressive Electronics"
-(possible occupant; verify). Confirmed under the 50K SF cap. Assessed market value $707,500 (2024) is about
-$59/SF on the building, an ASSESSMENT in a non-disclosure state, not a price. The never-call/affiliate guard
-(`data/pipeline-guard.local.json`, last modified 2026-06-11), institutional-owner screen, Notion, HubSpot and
-Outlook all returned no hit by name and address; those are name-based checks only. Valuation and sales-history
-tabs of the card were not read.
+(possible occupant; verify). Confirmed under the 50K SF cap.
+- Values tab: 2026 market $813,624 (income approach; land $121,284, building $692,340), assessed $260,360;
+  history 2025 $813,624, 2024/2023 $707,500, 2022 $566,000. Total market value is about $68/SF over the 12,000 SF
+  building (building component alone about $58/SF). These are county ASSESSMENTS in a non-disclosure state, not
+  prices; the 2024 CAMA figure used earlier ($707,500, about $59/SF total) is superseded.
+- Sales tab: one recorded sale, 2004-03-31, $350,000, trustee's deed, land and building, valid sale (certificate
+  of value), from a trust (Meyers trustees) to L & M Real Estate LLC. About a 22.5-year hold at 2026-10-02.
+- Checks: the never-call/affiliate guard (`data/pipeline-guard.local.json`, last modified 2026-06-11),
+  institutional-owner screen, Notion, HubSpot and Outlook all returned no hit by name and address; those are
+  name-based checks only.
+- Reading: long-hold, trust-sourced owner with a delinquency, which is the capacity-and-motivation profile the
+  screen targets; it still measures capacity, not willingness (F10). The county doubts its 2022 bill
+  calculations, so the amount due may be restated.
+
 KCMO Dangerous Buildings: 375 cases, 277 address-matched, 4 industrial-coded.
 
 Wyandotte KS: layer 1 'Tax Sale Eligible' re-pulled 2026-10-02 = 2,668 parcels (county-endpoints.md recorded 2,819
