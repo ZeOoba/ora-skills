@@ -225,10 +225,11 @@
   cleanly — only 1 nominal <$25K transfer in the universe (far fewer $0 re-titlings than Ohio).
 - **CONVEY1 code (found via county-sales-monitor pilot, 2026-08-15):** a `CONVEY1` conveyance-type field exists
   on the layer and correlates strongly with null CONSIDR1 — in a 50-parcel industrial pull, `CONVEY1=4` accounted
-  for 23 of 25 no-consideration "transfers." The code's meaning is genuinely undocumented anywhere public found
-  so far (likely deeds of trust / corrective deeds / distributions / foreclosure-related, not sham sales — true
-  $0/<$25K nominal sales stayed rare, 0 of 50). Treat CONVEY1=4 as a strong null-consideration correlate, not a
-  confirmed non-sale-type classification, until the code is actually decoded.
+  for 23 of 25 no-consideration "transfers." **DECODED 2026-10-02:** the Socrata copy of SDAT
+  (opendata.maryland.gov `ed4q-f8tm`) ships the same field as text — code 4 = "Private non-arms-length transfer
+  such as a foreclosure, gift or auction (4)". It lumps gifts and intra-family transfers with foreclosures, so
+  treat it as a "transferred under non-market terms" screen, NOT a foreclosure flag. (Original finding kept:
+  true $0/<$25K nominal sales stayed rare, 0 of 50.)
 - **Seller/grantor name gap:** neither the state MdProperty layer nor the county `Property/MapServer/1` join
   exposes prior-owner/grantor — both are current-owner-only. Grantor-based nominal-transfer tests (shared
   surname) cannot run for Baltimore Co on this data; don't assume they can.
@@ -238,6 +239,10 @@
   the pull window running current. This is far worse than Franklin OH's ~1-month bulk-file lag. Treat this
   as the statewide MdProperty layer's normal behavior, not a one-off: **a windowed pull against this county
   will structurally read as "quiet" for the most recent 3-4 months even when real sales are happening.**
+  **RE-CHECK 2026-10-02 (conflicting, unresolved):** the newest transfer date per county in the SDAT Socrata copy
+  was Baltimore City 2026-08-20, Baltimore Co 08-18, Anne Arundel 08-18, Dorchester 08-12, Talbot 07-28, Wicomico
+  06-25, Howard 06-16 - about 6 weeks behind, not 4+ months. Either the lag has shortened or the Aug read was a
+  sampling artifact [UNVERIFIED which]. Keep the guard (judge freshness by newest date per pull), not the number.
   Do not read a string of low/zero recent-month counts here as a coverage regression on its own — check the
   distribution shape (a gradual multi-month taper, consistent with lag) against a genuine cutoff (a source
   that previously had current data and now returns nothing at all, which IS a real regression) before
@@ -289,7 +294,11 @@ Columbus/Cincinnati estate lists for the same contamination on next pass.
   Table has duplicate rows per parcel (identical) — dedupe on parcel_number (3,182 rows -> 2,420).
 - Delinquency: DLT (Delinquent Land Tax) judicial sale lists = seasonal PDFs at jacksongov.org
   Court Administration; site WAF-blocks plain urllib (works w/ full browser headers but pages move).
-  Manual pull each Aug/Sep. KCMO Socrata (data.kcmo.org): Dangerous Buildings ax3m-jhxx +
+  Manual pull each Aug/Sep. **UPDATE 2026-10-02:** the annual petition PDF is also published as a public notice
+  (molawyersmedia.com/files/2026/06/2026-Jackson-County-Delinquent-Tax-Petition.pdf, 579 suits, free, one GET);
+  the Aug 2026 sale was CANCELED by county executive order on 2026-07-13 (tax-bill re-verification), no new date.
+  DLT is a 16th Circuit court-run suit-based sale of 3+ yr delinquent parcels, not a Collector certificate sale.
+  Jackson has NO bulk building SF (`total_sqft` = land SF). Full source table: references/distress-feeds.md. KCMO Socrata (data.kcmo.org): Dangerous Buildings ax3m-jhxx +
   Property Violations tezm-fh2e (live, PIN-keyed) = secondary distress; Parcels 6g4y-sh3m
   (2023, assessed values, landusecode) covers KCMO city limits incl. Clay/Platte slivers.
 
@@ -313,7 +322,7 @@ Columbus/Cincinnati estate lists for the same contamination on next pass.
   DELQ_CODE (P/Y/2/3/S/SD/V/O — meanings unpublished, any non-null = distress-adjacent),
   VACANT (Y/null), LAND_USE (verbose text ~200 values), ACRE, ORIONID. maxRec 2000.
 - Layer 1 of SAME service = 'Tax Sale Eligible' (identical schema) — judicial tax-sale pipeline,
-  2,819 parcels, LIVE motivated-seller list. AGOL mirror of parcels (geometry only):
+  2,819 parcels (re-pulled 2026-10-02: 2,668; 30 industrial/warehouse use), LIVE motivated-seller list. AGOL mirror of parcels (geometry only):
   services1.arcgis.com/Qo2HHQp8vgPs2wg3/.../parcel_py. Landbank layer also on AGOL.
 - LAND_USE industrial core: 'Warehouse distribution / storage facility', 'Warehouse-office
   combination'/'strip / complex', 'Cold storage warehouse', 'Transit warehouse / truck terminal',
