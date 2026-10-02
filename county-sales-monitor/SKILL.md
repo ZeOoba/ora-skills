@@ -14,7 +14,7 @@ description: >
   route to acquisition-underwriting COMPS mode.
 ---
 
-# county-sales-monitor (v0.5)
+# county-sales-monitor (v0.6)
 
 Produce a recurring digest of recently recorded industrial sales and transfers
 across ORA's target-market counties, so Gabriel sees what actually traded — at
@@ -73,7 +73,8 @@ county verified individually before it's trusted in a real digest.
   not a coverage regression, and Step 8's regression check must not conflate
   the two (see Step 8 below).
 - **Polk IA** (Des Moines) — `POLKCOUNTY.csv` commercial sales export, 1987 to
-  current, refreshed continuously: `sale_date`, `price`, `instrument`
+  current, but lagging (newest `initial_entry_date` 2026-07-30 as of
+  2026-10-01): `sale_date`, `price`, `instrument`
   (Deed | Contract), `seller`, `buyer`, book/pg, plus the CAMA snapshot
   (`gross_area` = building SF, occupancy). The best assessor source found to
   date and the only one with clean grantor/grantee back three decades.
@@ -133,7 +134,7 @@ the digest header — a digest without its window is uninterpretable later.
 **Recording lag is real and it is the main correctness trap.** County data drops
 lag the actual deed recording by days to weeks, and different counties refresh
 on different cadences (Franklin's tax-accounting files are periodic bulk drops;
-Polk's sales CSV is continuous; Ottawa's is annual). A strict `sale_date IN
+Polk's sales CSV lags: newest `initial_entry_date` was 2026-07-30 as of 2026-10-01, so judge freshness by it, not by assumption; Ottawa's is annual). A strict `sale_date IN
 window` query will permanently miss every deed that posted late. So: query the
 window, **and also** diff the full recent-sales key set against the prior run's
 persisted key set, and surface late arrivals in a separate `LATE-POSTED` block
@@ -219,7 +220,7 @@ transaction with:
 | `price_psf` | blank if not derivable |
 | `buyer` / `seller` | where public; `not published` where the county scrubs names (Anne Arundel, Howard) or publishes grantee only |
 | `use_code` + `use_description` | native code and its meaning |
-| `flags` | NONARMS / CONTRACT-SALE / MULTI-PARCEL(n) / LATE-POSTED / ORA-AFFILIATED / SF-UNPUBLISHED |
+| `flags` | NONARMS / CONTRACT-SALE / MULTI-PARCEL(n) / LATE-POSTED / ORA-AFFILIATED / SF-UNPUBLISHED (Worker rows also carry SF-INCOMPLETE and MULTI-PARCEL-INFERRED) |
 | `source` | county + layer/file the row came from, so any row is re-verifiable |
 
 Then a **per-county coverage block**: rows found, window queried, data source,
@@ -265,8 +266,19 @@ Recorded sales are public record, but the digest is ORA work product — it is n
 an external surface and must not be forwarded outside the firm without review
 (Invariant 3 applies to any row that touches an active confidential deal).
 
-### 9. Recurring execution — NOT part of this skill
-This skill defines pull + filter + format only. Making it recur goes through
+### 9. Recurring execution — digest scheduling is NOT part of this skill
+**As of v0.6 (2026-10-02) pull + filter + format run as a hosted Notion Worker**
+(`county-sales-monitor`, worker id `01a0fa61-6ca4-78f2-895d-5aafe648dbbf`, repo
+`C:\Users\Owner\ora-county-sales-monitor`), refreshing weekly a trailing
+365-day window (the 30-day digest window stays the digest's scope), Tier A
+comps only, writing to the two "(Worker)" databases under References. Worker
+semantics differ from §1/§5 where noted: LATE-POSTED means first seen more
+than 30 days after the sale date on any post-baseline cycle, and `Price PSF`
+is also blank on SF-INCOMPLETE rows. That makes the *store* current
+without the Desktop app or either scheduler fleet. It does not email: the
+monthly digest remains a separate reader of those databases.
+
+This skill defines pull + filter + format only. Making the digest recur goes through
 `register-scheduled-task` (supervised `create_scheduled_task` MCP tool only —
 JSON-splicing a registry is prohibited and has been proven to register-but-
 never-schedule), on the correct fleet, routed to `ggoldberg@oxfordra.net`.
@@ -348,6 +360,24 @@ conveyances post-mid-2023) — parties look missing when only the recent ones ar
   Sale Price, Building SF, SF Source, Price PSF, Buyer, Seller, Use Code, Use
   Description, Flags (multi-select), Source, Run Date. Upsert key = County +
   Parcel ID + Sale Date + Sale Price (match before insert, never blind-append).
+- **Worker-managed databases (LIVE, deployed 2026-10-02; nested under Knowledge
+  Base `3386ecd8`):**
+  - `County Sales Comps (Worker)` — database `3ed6ecd8-9e59-8168-a367-df08b6ff6d3b`,
+    data source `collection://28bae38c-f495-4c9e-9edc-b86c0ae2c413`. One row per
+    transaction; upsert key `County|Parcel|SaleDate|Price`; County options are
+    `Franklin` / `Baltimore County` / `Polk` (the legacy DB uses `Franklin OH` /
+    `Baltimore Co MD` / `Polk IA`). Adds `Comp Key`, `Parcel Count`,
+    `First Seen`, `Days to First Seen`, `Last Synced`, and the `SF-INCOMPLETE`
+    and `MULTI-PARCEL-INFERRED` flags.
+  - `County Sales Coverage (Worker)` — database `3ed6ecd8-9e59-81b1-947b-dff540312cfc`,
+    data source `collection://f26e704a-9191-436b-85cf-fd64258928be`. One row per
+    county per cycle (3 Tier A + 4 Tier C = 7).
+  - Managed databases are read-only to everything but the worker; schema changes
+    go through a worker redeploy and can drop data. Ops: pause with
+    `ntn workers capabilities disable <sync>`; never delete the worker or the
+    databases.
+  - The legacy `County Sales Comps` database (above) is retained, unmodified,
+    pending Gabriel's decision on archiving.
 - `../county-parcel-screen/references/county-endpoints.v1.json` — machine-readable
   service URL / layer id / JURSCODE registry. Consume programmatically. Do not
   copy into this skill.
@@ -368,6 +398,24 @@ valuation input); Baltimore Co assessments run ~64% below recent industrial
 sales, so ratio-based arm's-length tests must be per-county, never global.
 
 ## Changelog
+- **v0.6 (2026-10-02):** Pull, filter and format now run as a hosted Notion
+  Worker (`@notionhq/workers` locked at 0.9.2; two weekly incremental syncs; Tier A comps only;
+  no secrets). First cycle 2026-10-02: 275 comps (Franklin 173 / Baltimore Co 38
+  / Polk 64), 275 distinct keys, 0 LATE-POSTED (baseline cycle), `Price PSF`
+  blank on every NONARMS / CONTRACT-SALE / SF-INCOMPLETE row and never 0;
+  coverage database 7 rows. Clean $/SF medians (coverage rows): Franklin
+  $115.46, Baltimore Co $155.68, Polk $120.08. Parity vs the legacy pilot
+  (strict County+Parcel+Date+Price, 2025-10-01 to 2026-08-15; the worker's own
+  window starts 2025-10-02): 207 matched (Franklin 119 / Baltimore 38 / Polk
+  50); 51 legacy-only, 32 new-only. Legacy-only causes: multi-parcel
+  representation 23 (incl. 3 Franklin parcels the worker rolls into one
+  MULTI-PARCEL-INFERRED row), Franklin rows with SF >= 150K that the legacy
+  kept and the worker's SF gate drops 20, window edge 3, other 5 (4 Franklin
+  last-sale-only `SALEDATE` overwrites, G7; 1 Polk unexplained). Use-code lists and the 25D / 46A Polk
+  exclusions are unchanged from v0.5; the flag set (adds SF-INCOMPLETE and
+  MULTI-PARCEL-INFERRED), PSF blanking on SF-INCOMPLETE, the 365-day re-pull
+  and the First-Seen-based LATE-POSTED rule differ from the v0.5 manual
+  workflow. Polk sales export observation: see `county-endpoints.md`.
 - **v0.5 (2026-08-15):** Post-pilot QC pass on the live Notion data (304 rows
   queried directly, not just re-read from agent reports) confirmed row counts
   and key-uniqueness clean, but surfaced one real finding the original pilot
