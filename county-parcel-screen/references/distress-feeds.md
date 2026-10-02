@@ -97,6 +97,7 @@ Missouri foreclosure is largely non-judicial (trustee's sale), so there is no co
 | Trustee's-sale notices | mopublicnotices.com | MANUAL-ONLY (ToS bars scraping and commercial use) |
 | Court cases | Missouri Case.net | BLOCKED (robots `/cnet/`, scraper prohibition, Cloudflare); adds nothing for non-judicial sales |
 | Collector tax bills | mo-jackson.publicaccessnow.com/Collector/TaxSearch.aspx | MANUAL-ONLY, per-parcel finalist check |
+| Assessor property record card (building SF, year built, grade) | publicaccess.jacksongov.org/search/commonsearch.aspx?mode=realprop (Commercial section of the parcel record) | MANUAL-ONLY, per-parcel finalist check. Search is gated by a disclaimer that waives claims, indemnifies the county and prohibits "applications designed to mine, gather or extract data". Gabriel clicks Agree himself in the shared browser pane (an automated Agree click is not authorized); then read the one parcel's card on screen. No bulk pull. No robots.txt rules, terms silent on scripted access beyond the disclaimer. This is the only public source of Jackson building SF (`Total Under Roof`). |
 | Secondary distress | KCMO Dangerous Buildings (Socrata `ax3m-jhxx`, Crawl-delay 1) | AUTOMATABLE; join to CAMA by address (PIN does not match `property_id`) |
 | Clay / Platte MO | Collector certificate sales (claycountymo.tax/tax-sale; plattecountycollector.com/taxsale7.php) | [UNVERIFIED], search snippets only; both 2026 sales were 2026-08-24 |
 
@@ -108,11 +109,19 @@ jacksongov.org (Delinquent Land Tax Sale page) and 16thcircuit.org for a new dat
 
 Proof pull (2026 petition): 579 suits / 579 parcels / $6.52M due; 566 joined to CAMA, 13 unmatched (suits
 I2026-00362 to -00365, ~$204.8K; likely retired or replatted numbers - check the Collector). Only 56 rows (9.7%)
-commercial/industrial, 2 industrial. Jackson publishes NO building SF (`total_sqft` is land SF), so the <50K SF
-test cannot be run; fit counts use a proxy (industrial 32xx or flex-adjacent 2262/2235/2240/2241 with
-`Comm_Impr` $150K-$7M) and are [UNVERIFIED]. One true industrial passes: I2026-00443, 6104 Arlington Ave,
-Raytown (3216 wholesale trade, land 35,286 SF, improvements $592.6K, owner L & M Real Estate LLC, $106.5K due) -
-verify SF on the assessor card and run the never-call/affiliate check before treating it as a lead.
+commercial/industrial, 2 industrial. The bulk CAMA table carries NO building SF (`total_sqft` is land SF), so
+the <50K SF test cannot run in bulk; fit counts use a proxy (industrial 32xx or flex-adjacent 2262/2235/2240/2241
+with `Comm_Impr` $150K-$7M) and are [UNVERIFIED] until the per-parcel record card is read (see the Assessor
+portal row above). One true industrial passes: I2026-00443, 6104 Arlington Ave, Raytown (3216 wholesale trade,
+land 35,286 SF, improvements $592.6K, owner L & M Real Estate LLC, $106.5K due).
+
+Worked example, 2026-10-02: the record card for 6104 Arlington Ave shows structure 398 warehouse, one building,
+Total Under Roof 12,000 SF, built 1978 (effective 1990), grade C, improvement name "Progressive Electronics"
+(possible occupant; verify). Confirmed under the 50K SF cap. Assessed market value $707,500 (2024) is about
+$59/SF on the building, an ASSESSMENT in a non-disclosure state, not a price. The never-call/affiliate guard
+(`data/pipeline-guard.local.json`, last modified 2026-06-11), institutional-owner screen, Notion, HubSpot and
+Outlook all returned no hit by name and address; those are name-based checks only. Valuation and sales-history
+tabs of the card were not read.
 KCMO Dangerous Buildings: 375 cases, 277 address-matched, 4 industrial-coded.
 
 Wyandotte KS: layer 1 'Tax Sale Eligible' re-pulled 2026-10-02 = 2,668 parcels (county-endpoints.md recorded 2,819
