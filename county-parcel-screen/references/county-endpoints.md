@@ -41,6 +41,25 @@
   Tax Accounting transfer-file drop (e.g. GIS showed sales through 08-14 while the newest Transfer* folder was
   still the 07-15 drop) — a windowed pull against Transfer*.txt alone will miss the most recent weeks' deeds
   until the next monthly folder posts. Not a bug, a recurring gap to diff against on repeat runs.
+- **Transfer files without the 43 MB xlsx (verified live 2026-10-02, county-sales-monitor worker v0.7):** the
+  `Tab-Delimited.zip` (121 MB) in each `YYYY-MM-DD Tax Accounting` folder honours HTTP `Range` (`Accept-Ranges:
+  bytes`, 206 on a ranged GET). Read the last 64 KB for the zip directory, then range-fetch just the entries:
+  `Transfer010.txt`, `Transfer020-277.txt`, `Transfer410-610.txt` (17.9 + 15.3 + 8.3 = 41.5 MB compressed; 83.5 +
+  69.9 + 40.9 MB inflated; deflate, no zip64). Industrial parcels span ALL THREE prefix files, not only 010-.
+  Streaming the three entries and filtering to ~215 parcels runs in ~5 s locally. UTF-8 (a handful of non-ASCII
+  bytes), tab-delimited, quoted strings, `MM/DD/YYYY`.
+  Columns: `Parcel Id, SaleDate, ConveyNumber, SaleAmount, ParcelCount, OwnerName1, OwnerName2, TransferType,
+  InstrumentType, ExemptType, SaleType, IsValid`. **OwnerName1/2 is the GRANTEE; there is no grantor column**, so a
+  seller can only be inferred as the previous grantee on the parcel (and not at all when a different grantee
+  recorded the same day). `SaleAmount` is the DEED total repeated on every parcel row of the deed, `ParcelCount`
+  is the deed's full parcel count and `ConveyNumber` groups the deed: use them to roll multi-parcel sales up for
+  real instead of inferring on (date, price, buyer) — that inference was wrong for at least one pair (one deed that the
+  inference left as two rows; cause not investigated). `InstrumentType` codes seen on industrial parcels: LW, GW, WD, QC, AF, RW, CB, FD, AG,
+  AN, AC; LW appears on both priced sales and $0 re-titlings, so it is NOT an arm's-length gate (nor is
+  `IsValid`, per the 2026-09-18 correction above). Join check on 215 industrial GIS sales: 199 matched on
+  parcel + date + price, every miss dated after the folder's data (the ~1-month lag); same-parcel same-day
+  deeds with identical price exist (chain / corrective deeds), so match on buyer too. The transfer history also
+  holds priced in-window sales the GIS last-sale field hides (G7): two $27-29M sales found on 2026-10-02.
 
 ## Hamilton County OH (Cincinnati) — RICH REST, NO COMMERCIAL SF
 - REST: https://services.arcgis.com/JyZag7oO4NteHGiq/arcgis/rest/services/Open_Data/FeatureServer/51
