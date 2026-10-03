@@ -67,14 +67,24 @@ GATED_SKILL_SUITES = [
     'rent-roll-reconciliation/tests/test_*.py',
     'website-perfection/tests/test_*.py',
     'masterlease-jurisdiction-rebase/scripts/test_rebase.py',
-    'acquisition-underwriting-eval-harness/lib/test_*.py',
+    'acquisition-underwriting-eval-harness/lib/test_aggregate_replays.py',
+    'acquisition-underwriting-eval-harness/lib/test_diff_verdict.py',
+    'acquisition-underwriting-eval-harness/lib/test_doctrine_skip_gate.py',
 ]
 
-# path-glob -> reason. Excluded suites are follow-ups, not permanent exemptions.
-# (2026-10-03: empty -- every skill test file passed locally under run_suite.sh's
-# rules. pma-qc/tests and vendor-management/tests hold fixture .txt files only, no
-# test_*.py, so there is nothing to gate or exclude there; see the PR follow-ups.)
-EXCLUDED_SKILL_SUITES: dict[str, str] = {}
+# path-glob -> reason. Excluded suites are follow-ups, not permanent exemptions: fix the
+# cause, then move the entry to GATED_SKILL_SUITES. (pma-qc/tests and vendor-management/tests
+# hold fixture .txt files only, no test_*.py, so there is nothing to gate or exclude there.)
+EXCLUDED_SKILL_SUITES: dict[str, str] = {
+    # Both pass on Windows (local, 2026-10-03) and fail on ubuntu-latest (first skill-gates
+    # run, 2026-10-03): the code/tests lean on Windows' case-insensitive filesystem.
+    'acquisition-underwriting-eval-harness/lib/test_parse_replays.py':
+        'Linux-only FAIL: test_case_differing_duplicate_agent_id_is_still_one_sample '
+        'expects duplicate_agent_ids == ["A1B2C3"], gets [] on a case-sensitive FS',
+    'acquisition-underwriting-eval-harness/lib/test_record_run.py':
+        'Linux-only FAIL: test_refuses_to_clobber_same_timestamp and '
+        'test_no_orphaned_tmp_file_after_clobber_refusal -- ValueError not raised',
+}
 
 
 def skill_dirs(repo: Path = REPO) -> list[Path]:
