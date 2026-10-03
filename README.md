@@ -33,7 +33,7 @@ flowchart TD
         Root["Repo root"]
         S1["acquisition-underwriting/"]
         S2["loi-generation/"]
-        S3["...70 more skill folders\n(72 total as of 2026-09-21;\ncount: ls */SKILL.md)"]
+        S3["...74 more skill folders\n(76 total as of 2026-10-03;\ncount: ls */SKILL.md)"]
         Shared["target-markets.json\n(shared buy-box market data)"]
         Tools["tools/\npackage_skills.py, build_plugin.py,\npending_reimport.py, hooks/"]
         Plugins["plugins/\nEMPTY by design since 2026-08-05\n(ora-operations-extensions retired;\nmanifest kept in _archive/plugins/)"]
@@ -69,7 +69,7 @@ flowchart TD
 ```
 <!-- diagram-verified: 2026-09-21 -->
 
-**Reading the diagram:** everything lives flat under the repo root — each of the 72
+**Reading the diagram:** everything lives flat under the repo root — each of the 76
 skill folders (`acquisition-underwriting/`, `loi-generation/`, etc.) sits directly under
 `Repo root`, alongside `target-markets.json` (shared buy-box data), `tools/`, `plugins/`,
 `_staging/`, and `_archive/`. Inside a skill folder, only `SKILL.md` is required; the rest
@@ -84,9 +84,50 @@ scans every `SKILL.md`'s frontmatter, matches `name`/`description` against what 
 just asked for, and — once a skill triggers — loads its Markdown body as instructions for
 that turn, optionally pulling from `references/` as it goes).
 
+## How routing works across skills
+
+Skills do not call each other mechanically; the `description` of each `SKILL.md` carries the
+"NOT X, use Y" tie-breaks that steer a session to the narrowest match. The funnels below are
+the ones stated in the frontmatter of the skills involved.
+
+```mermaid
+flowchart TD
+    Req["User request"] --> Desc["Session matches request against\nSKILL.md name + description"]
+    Desc --> Deal["Deal evaluation"]
+    Desc --> Lease["Leases and legal paper"]
+    Desc --> Fleet["Scheduled tasks and fleet"]
+
+    Deal --> AU["acquisition-underwriting\n(single funnel: SCREEN, SNAPSHOT,\nUNDERWRITE, COMPS, FULL)"]
+    Deal --> VDR["verified-deal-recon\n(single-target pre-screen,\nhands off to underwriting)"]
+    Deal --> CPS["county-parcel-screen\n(off-market owner lead lists)"]
+    Deal --> CSM["county-sales-monitor\n(recorded-sales digest)"]
+    VDR --> AU
+    AU --> DC["deal-comparison"]
+    AU --> LOI["loi-generation\n(sole LOI path)"]
+    LOI --> DE["deal-execution\n(PSA to closing)"]
+    DE --> PSAR["psa-reconciliation"]
+    DE --> LI["legal-intelligence\n(redlines)"]
+    DE --> EST["estoppel-request-generation"]
+    AU --> DFI["deal-folder-intake
+(archive package, no underwriting)"]
+    DE --> DR["deal-retirement
+(on close or kill)"]
+
+    Lease --> LG["lease-generation\n(new leases)"]
+    Lease --> LA["lease-addendum\n(sole path for amending a lease in effect)"]
+    LG --> LQ["lease-form-qc\n(pre-execution gate)"]
+    Lease --> MLR["masterlease-jurisdiction-rebase /\nmasterlease-revision-cycle\n(template upkeep)"]
+
+    Fleet --> RST["register-scheduled-task\n(sole registration path)"]
+    Fleet --> AHM["automation-health-monitor"]
+    AHM --> FAR["fleet-advisory-remediation"]
+    FAR --> OTF["orphaned-task-forensics"]
+```
+<!-- diagram-verified: 2026-10-03 against SKILL.md frontmatter -->
+
 ## Directory / skill inventory
 
-**72 git-tracked skill directories** (as of 2026-09-21; recount with `ls */SKILL.md | wc -l` rather than trusting this number) (each contains its own `SKILL.md`), plus four
+**76 git-tracked skill directories** (as of 2026-10-03; recount with `ls */SKILL.md | wc -l` rather than trusting this number) (each contains its own `SKILL.md`), plus four
 non-skill support directories: `tools/` (packaging/build/hook scripts), `plugins/`
 (version-controlled Cowork plugin bundles), `_staging/` (dated pending-reimport batches,
 plus the gitignored `PENDING_REIMPORT.md`/`STORE_AHEAD_OF_REPO.md` drift ledgers), and
@@ -116,6 +157,8 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `title-exam-abstraction` — abstracts title exams, commitments, preliminary reports and recorded instruments, turning every encumbrance into a tracked deal-terms-register item
 - `settlement-basis-extraction` — extracts HUD-1/ALTA settlement statements into a capitalizable-basis register (CHARGE_DETAIL, BASIS_REGISTER, EXCHANGE_1031) at every acquisition/disposition closing
 - `deal-retirement` — retires deal artifacts/tasks on close or kill; appends the decision ledger
+- `verified-deal-recon` — adversarially-verified single-target pre-screen (the default before underwriting); hands off to `acquisition-underwriting`, never underwrites itself
+- `deal-folder-intake` — archives a multi-file acquisition package into a permanent, hash-verified deal folder; does not underwrite or screen
 
 **Portfolio & asset operations**
 - ~~`re-operations`~~ — retired 2026-08-05 (no direct-execution evidence; ops scope covered by `rent-roll-reconciliation`, `lease-renewal-pipeline`, `tenant-intelligence`, `ora-pm-ledger`, `ora-tenant-hubspot-reconciliation`)
@@ -128,7 +171,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `lease-renewal-pipeline` — flags upcoming expirations and drafts renewal templates
 - `lease-generation` — new-lease production: from an LOI, term sheet or deal terms to an execution-ready lease on ORA landlord paper, with a redline and an LOI conformance memo (amendments go to `lease-addendum`)
 - `lease-addendum` — the sole path for amending, extending or modifying a lease already in effect (rent change, tenant substitution, premises change); draft only
-- `lease-form-qc` — pre-execution QC gate for leases on ORA's own landlord form (53-check scan, PASS/FAIL)
+- `lease-form-qc` — pre-execution QC gate for leases on ORA's own landlord form (57-check scan, PASS/FAIL; standalone LOI-Lease Audit mode)
 - `masterlease-jurisdiction-rebase` — rebases jurisdiction-conformed Master Lease property templates onto a new master revision; companion to lease-form-qc
 - `masterlease-revision-cycle` — end-to-end master-lease revision: adjudicates external AI reviews into a new master revision with rebased property templates; chains `lease-form-qc` and `masterlease-jurisdiction-rebase`
 - `legal-intelligence` — lease/contract clause library and legal document analysis
@@ -158,7 +201,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 **Communications & documents**
 - `communication-intelligence` — context-enriched drafting for broker/lender/vendor/attorney mail
 - `tenant-email` — tenant-facing email drafting (renewals, notices, maintenance, rent)
-- `document-assembly` — template-driven document generation from Notion data (11 templates; not LOIs)
+- `document-assembly` — template-driven document generation from Notion data (10 templates; not LOIs, lease addenda or estoppels)
 - `evidence-dossier-drafting` — multi-agent drafting pipeline: a numbered facts dossier, an inline citation on every claim, and an adversarial refuter that kills uncited or mis-cited claims before anything publishes
 - `daily-brief` — daily CRE news/market/portfolio intelligence brief
 - ~~`conversation-archival`~~ — retired 2026-08-05 (its entire Notion footprint was evidence-checked, not merely absent)
@@ -170,7 +213,9 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `register-scheduled-task` — the sole supervised path for registering/updating scheduled tasks
 - `exception-detection` — anomaly/exception scan across financial, tenant, and pipeline data
 - `graph-app-registration` — Azure AD app registration / Microsoft Graph API access runbook
-- `deploy-site` / `website-perfection` — build/deploy and optimize oxfordra.net
+- `deploy-site` / `website-perfection` — build/deploy (`deploy-site`) and audit/optimize (`website-perfection`: PageSpeed, SEO, structured data, headers/CSP, accessibility) oxfordra.net
+- `notion-quota-fallback` — fallback for Notion SQL-mode `Query Data Source` quota errors, and for the Notion UI filter hanging in browser automation
+- `ora-open-decisions` — collects every decision still open in a session and asks them as ranked multiple choice, recommended option first
 - ~~`code-debugging-optimizations`~~ — retired 2026-08-05 (zero use; redundant with `website-perfection`)
 - ~~`oxford-cc-strategic-audit`~~ — retired 2026-08-05 (hygiene commits exist, but no evidence a full audit run/report was produced or consumed)
 - `package-and-stage-skill` — packaging/staging helper for this repo itself
@@ -185,8 +230,71 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `cowork-settings` — version/diff/publish the Cowork Global Settings document
 
 **Shared data:** `target-markets.json` (repo root) — canonical buy-box market list,
-consumed by `acquisition-underwriting`, `daily-brief`, `deal-comparison`, and
-`market-monitor`. Not duplicated into any skill folder — see "Conventions" below.
+injected at package time into `acquisition-underwriting`, `daily-brief`, `deal-comparison`, and
+`market-monitor` (`SHARED_ROOT_DEPS` in `tools/package_skills.py`). Not duplicated into any skill folder — see "Conventions" below.
+`tools/ora_doc_qc.py` is likewise a shared dependency: packaged into `lease-form-qc`, `lease-addendum`,
+`listing-agreement-qc`, `pma-qc`, and `vendor-management` as `scripts/ora_doc_qc.py`.
+
+## Sync, packaging and CI flow
+
+Git hooks live in `tools/hooks/` (`core.hooksPath=tools/hooks`, set locally per clone). They
+keep the two local stores (the Code-surface `~/.claude/skills/<skill>` mirror and the Cowork
+AppData runtime cache) aligned with this repo, which stays canonical. Cowork itself only
+re-imports when a `.skill` is manually imported via "Save skill".
+
+```mermaid
+flowchart LR
+    Edit["Edit SKILL.md / bundled files\nin a git checkout"] --> PC["pre-commit\n1 target-markets.json version bump\n2 frontmatter gate\n3 no stray .skill/.plugin in skill dirs\n5 cache-ahead-of-repo check\n4 sync to AppData cache"]
+    PC --> Commit["git commit"]
+    Commit --> POST["post-commit\npending_reimport.py record\nsync_local_skills_mirror.py HEAD"]
+    Merge["merge / pull / rebase"] --> PM["post-merge / post-rewrite\nsync_local_skills_mirror.py --all\nsync_appdata_mirror.py --changed-range"]
+    POST --> Code["Code surface\n~/.claude/skills/skill"]
+    PM --> Code
+    PC --> Cache["AppData runtime cache\n(Cowork)"]
+    PM --> Cache
+    POST --> Ledger["_staging/PENDING_REIMPORT.md\n(gitignored ledger)"]
+    Ledger --> Pkg["package_skills.py outdir skill\n.skill zip, forward-slash entries"]
+    Pkg --> Import["Manual Save skill import\nCowork / Settings, Capabilities"]
+    Import --> Cache
+    Commit --> Push["push"]
+    Push --> CI["GitHub Actions\ntools-tests.yml: tools/run_suite.sh\nclaude-ci-fix.yml: auto-fix on CI failure / review"]
+```
+<!-- diagram-verified: 2026-10-03 against tools/hooks/*, tools/*.py, .github/workflows/* -->
+
+**Surfaces.** Code sessions resolve skills from the local `~/.claude/skills/<skill>` mirror; Cowork
+sessions resolve from the AppData runtime cache. Nothing in this repo wires Chat to it, so that
+path is not documented here.
+
+**Hooks (`tools/hooks/`).**
+- `pre-commit`: Check 1 requires a `version` bump on any `target-markets.json` change; Check 2 runs
+  the same frontmatter gate as packaging (`name` equals directory, `description` present and
+  at most 1024 characters, named-count headers); Check 3 (`package_skills.py --check-tree-hygiene`)
+  blocks stray `.skill`/`.plugin` artifacts inside skill directories; Check 5
+  (`repo_first_check.py --check-staged`) is advisory and rescues a cache copy that is ahead of
+  the repo; Check 4 (`sync_appdata_mirror.py --check-staged`) copies staged skills into the cache.
+- `post-commit`: records skills left cache-stale (`pending_reimport.py`) and re-syncs existing
+  local mirrors (`sync_local_skills_mirror.py`).
+- `post-merge` / `post-rewrite`: sweep all local mirrors and sync the runtime cache for the
+  changed range (main only; skipped on amend).
+- Emergency bypass is `git commit --no-verify`.
+
+**`tools/` scripts (non-test).** Packaging: `package_skills.py`, `build_plugin.py`,
+`release_plugin.py` (plugin tooling is dormant, no bundles exist). Drift and reimport:
+`pending_reimport.py`, `repo_first_check.py`, `skill_drift_report.py`, `skill_md_normalize.py`,
+`reimport_cycle.py`, `reimport_correlate.py`, `stage_transfer.py`, `entry_b_precheck.py`,
+`verify_install.ps1`, `verify_installed_cache.py`, `sync_appdata_mirror.py`,
+`sync_local_skills_mirror.py`, `catch_up_main.py` (safe forward-merge of `origin/main` into the
+long-lived local `main`). Frontmatter and lint: `description_budget.py`, `desc_lengths.py`,
+`frontmatter_sweep.py`, `script_resource_lint.py`. Other: `ora_doc_qc.py` (shared QC harness),
+`pause_resume.py` (bounded-pause resume generator), `notion_fetch_digest.py`, `usage_ledger.py`.
+
+**Tests and CI.** Every `tools/test_*.py` is a stdlib `unittest` file (one plain-assert script,
+`test_description_budget.py`, is exempt). `bash tools/run_suite.sh` runs them all and fails on any
+failure, skip (except the allow-listed `test_package_census.py=1` off Windows), zero-test run, or
+bare module-level `def test_*`. `.github/workflows/tools-tests.yml` runs it on every push
+(ubuntu, Python 3.13, PyMuPDF installed). `.github/workflows/claude-ci-fix.yml` runs
+`anthropics/claude-code-action` on a failed PR check suite, a changes-requested review, or an
+`@claude`/CodeRabbit comment (human-authored triggers gated to OWNER/MEMBER/COLLABORATOR).
 
 ## Conventions
 
