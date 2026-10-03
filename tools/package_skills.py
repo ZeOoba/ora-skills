@@ -469,14 +469,22 @@ def resolve_outdir_collision(outdir: Path, repo: Path = REPO) -> str | None:
 
 # Repo-root files a skill's own directory doesn't contain but declares as its canonical
 # data source (2026-07-09 — target-markets.json was never reaching the Cowork cache because
-# package() only ever walked the skill's own folder; these 5 cite it as authoritative).
-# Bundled fresh from this single source on every package() call, so there's one file to
-# maintain, not N drifting copies.
+# package() only ever walked the skill's own folder). Bundled fresh from this single source
+# on every package() call, so there's one file to maintain, not N drifting copies.
+# No hardcoded consumer count here: the old "these 5 cite it" comment was wrong (4 entries)
+# the day it was written. tools/skill_ci_gates.py undeclared_shared_deps() is the check
+# instead -- a skill whose SKILL.md cites target-markets.json, or whose scripts import
+# ora_doc_qc, fails CI unless it is declared below (or exempted there with a reason).
 SHARED_ROOT_DEPS = {
     'daily-brief': ['target-markets.json'],
     'deal-comparison': ['target-markets.json'],
     'market-monitor': ['target-markets.json'],
     'acquisition-underwriting': ['target-markets.json'],
+    # 2026-10-03: SKILL.md resolves each cluster's representative county from
+    # target-markets.json at run time ("Pull the cluster's current submarket/property
+    # list from target-markets.json (preferred)") and treats it as the fixed comparison
+    # universe -- it shipped without the file until now.
+    'insurance-climate-risk-comparison': ['target-markets.json'],
     'pma-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
     'listing-agreement-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
     'lease-form-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
