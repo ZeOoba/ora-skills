@@ -1,0 +1,80 @@
+name: skill gates
+
+# Server-side re-run of the skill gates that previously existed only at commit time
+# (tools/hooks/pre-commit, set per clone, skippable with --no-verify) or packaging time,
+# plus the skill-level test suites that never ran in CI at all (2026-10-03).
+#
+#   skill-gates  validate_skill_frontmatter over EVERY skill dir (the hook only checks
+#                staged dirs), --check-tree-hygiene, the SHARED_ROOT_DEPS declaration check,
+#                and the target-markets.json version-bump rule against the PR base
+#                (fork point with origin/main; on main, the pre-push tip).
+#   skill-tests  every gated skill test suite under tools/run_suite.sh's zero-fail /
+#                zero-skip / zero-empty / no-bare-test rules, plus the packaged-layout check
+#                that stages tools/ora_doc_qc.py through package_skills.package().
+#
+# Gate logic lives in tools/skill_ci_gates.py and tools/run_skill_suites.sh so a local run
+# and CI are the same command. Note: a red check on this repo can be a GitHub Actions
+# billing block (steps [], log 404) rather than a test failure -- read the check-run
+# annotation first and verify locally.
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: skill-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  skill-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # target-markets base diff needs origin/main history
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Frontmatter (all skills) + tree hygiene + shared-dep declarations
+        run: python tools/skill_ci_gates.py frontmatter
+
+      - name: target-markets.json version bump vs base
+        env:
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+        run: python tools/skill_ci_gates.py target-markets --base auto
+
+  skill-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # lease-form-qc tests `git show 5a8a98f:...` (frozen-original checks)
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      # poppler-utils provides pdftotext (the QC unreadable-PDF tests expect it, as locally).
+      # tesseract is deliberately NOT installed: with no OCR toolchain the no-text-layer
+      # fixture must report UNREADABLE, matching the local baseline.
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils
+          python -m pip install --disable-pip-version-check pymupdf python-docx reportlab lxml openpyxl
+          echo "pdftotext: $(command -v pdftotext || echo missing)  tesseract: $(command -v tesseract || echo absent)"
+
+      - name: Configure git identity for fixture repos
+        run: |
+          git config --global user.name ci
+          git config --global user.email ci@example.invalid
+
+      - name: Run skill test suites
+        run: bash tools/run_skill_suites.sh
