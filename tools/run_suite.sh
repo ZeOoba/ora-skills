@@ -27,7 +27,12 @@
 # `path=1` entry -- keep entries for per-test skipUnless cases only (like the census
 # long-path test).
 #
-# Usage: bash tools/run_suite.sh   (from the repo root; needs `pip install pymupdf`)
+# Usage: bash tools/run_suite.sh [GLOB ...]   (needs `pip install pymupdf`)
+#   No args = tools/test_*.py (README step 7 / tools-tests.yml). With args, each GLOB is a
+#   repo-root-relative test-file glob expanded AFTER the cd below, so the caller's cwd does
+#   not matter -- used by tools/run_skill_suites.sh to gate skill-level suites
+#   (2026-10-03) under these exact same FAIL/BARE/EMPTY/SKIP rules. A GLOB matching no
+#   file fails as NOMATCH: a renamed or deleted suite must not silently drop out of the gate.
 # Writes a markdown table to $GITHUB_STEP_SUMMARY when set (CI).
 
 cd "$(dirname "$0")/.." || exit 2
@@ -47,12 +52,32 @@ summary_file=${GITHUB_STEP_SUMMARY:-/dev/null}
 failed=()
 skipped=()
 empty=()
+nomatch=()
 {
   echo '| Test file | Result |'
   echo '|---|---|'
 } >> "$summary_file"
 
-for f in tools/test_*.py; do
+[ "$#" -eq 0 ] && set -- 'tools/test_*.py'
+files=()
+shopt -s nullglob
+for pat in "$@"; do
+  # shellcheck disable=SC2206  # intentional glob expansion of a repo-relative pattern
+  expanded=( $pat )
+  matches=()
+  # a glob-free pattern survives nullglob as a literal word; keep only real files
+  for m in "${expanded[@]}"; do [ -f "$m" ] && matches+=("$m"); done
+  if [ "${#matches[@]}" -eq 0 ]; then
+    nomatch+=("$pat")
+    echo "NOMATCH $pat -- glob matched no test file"
+    [ -n "${GITHUB_ACTIONS:-}" ] && echo "::error::run_suite.sh glob '$pat' matched no test file"
+    echo "| \`$pat\` | NOMATCH (no file) |" >> "$summary_file"
+  fi
+  files+=("${matches[@]}")
+done
+shopt -u nullglob
+
+for f in "${files[@]}"; do
   [ -n "${GITHUB_ACTIONS:-}" ] && echo "::group::$f"
   out=$(python "$f" 2>&1)
   rc=$?
@@ -92,5 +117,5 @@ for f in tools/test_*.py; do
   fi
 done
 
-echo "failed: ${#failed[@]}  unallowed skips: ${#skipped[@]}  ran no/bare tests: ${#empty[@]}"
-[ "${#failed[@]}" -eq 0 ] && [ "${#skipped[@]}" -eq 0 ] && [ "${#empty[@]}" -eq 0 ]
+echo "files: ${#files[@]}  failed: ${#failed[@]}  unallowed skips: ${#skipped[@]}  ran no/bare tests: ${#empty[@]}  unmatched globs: ${#nomatch[@]}"
+[ "${#failed[@]}" -eq 0 ] && [ "${#skipped[@]}" -eq 0 ] && [ "${#empty[@]}" -eq 0 ] && [ "${#nomatch[@]}" -eq 0 ] && [ "${#files[@]}" -gt 0 ]
