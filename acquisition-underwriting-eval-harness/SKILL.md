@@ -253,6 +253,8 @@ This test perturbs an INPUT, not doctrine — by design: the freezing discipline
 
 ## Limitations / follow-ups
 
+- **Baseline model (2026-10-05):** the golden baselines are means of Fable replays; replays now run on Opus 5.5. Expect model-driven drift against those baselines; before trusting a FLAG, re-baseline once on opus (3 replays per deal) rather than reading it as a doctrine regression.
+
 Standing limitations, each in force today. **Read `references/findings-and-limitations.md` for the four REFUTE passes (2026-08-14/15, 2026-09-12) behind them before changing any of them.**
 
 - **Concurrency hazard (observed live):** a golden rebaselined mid-run diffs stale replays against a new golden and produces a pure-artifact FLAG. Re-check `git log`/mtimes on `golden_set/` immediately before Step 4 and discard any deal whose golden moved mid-run — do not record or alert on it. `ora-skills` is a single-writer checkout; prefer an isolated worktree for any harness edit.
