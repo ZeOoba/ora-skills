@@ -70,8 +70,8 @@ git -C <ora-skills repo root> log -1 --format=%H -- acquisition-underwriting/SKI
 ```
 
 **Step 1 — for each `golden_set/*.json` file**, spawn **3 independent subagents** (Agent tool,
-`model: "fable"` — this replays scored/financial logic and must never run below the Fable
-floor), each with the SAME prompt built from the template below. Three, not one: a single replay
+`model: "opus"` (Opus 5.5) — this replays scored/financial logic and must never run below the
+Opus 5.5 floor (Fable retired from dispatch 2026-10-05)), each with the SAME prompt built from the template below. Three, not one: a single replay
 is not a stable measurement (n=6 finding — REDACTED-119's single-draw range was 7.0 pts at the
 time against a 5.0-pt tolerance, since partly attributable to leakage now fixed — see
 Limitations), and the gate compares the mean of the 3 in Step 3.
