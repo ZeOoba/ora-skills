@@ -13,7 +13,7 @@ tools/hooks/* text eol=lf
 # checkout filter was wrong, so no re-normalization is needed.
 *.pdf binary
 
-# _archive/ is retired/superseded doctrine: 488 of 758 tracked files (64%). Marking it
+# _archive/ is retired/superseded doctrine: the majority of tracked files (count: git ls-files _archive | wc -l). Marking it
 # linguist-generated collapses it in GitHub PR diffs and drops it from GitHub code search
 # and language stats, so a search for live doctrine stops returning retired skills.
 # Display/search only -- git itself, the tools/ suite (which asserts on _archive/ contents)
