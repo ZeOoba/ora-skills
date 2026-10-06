@@ -1,15 +1,15 @@
 ---
 name: "lease-form-qc"
-description: "Pre-execution QC gate for leases on Oxford Realty Advisors' own landlord form. Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, review our lease draft, new tenant lease, lease from the template, or uploads an ORA-form lease DOCX. ALSO the sole path for grading an existing lease against its LOI: does the lease match the LOI, LOI vs lease, reconcile LOI and lease, LOI conformance, or an LOI + drafted lease together (standalone LOI-Lease Audit mode; no lease yet = lease-generation). Run before ANY outbound lease goes to a tenant or broker. 57 checks (dead cross-refs, undefined terms, OpEx billing, statutory cites, Ohio mitigation, token gate, footer tenant-mismatch, blanks, exhibit stubs, BLI drift, rent arithmetic), PASS/FAIL; --loi-audit = scan + register-vs-lease matrix. Carries the six ratified positions. Not legal-intelligence (counterparty paper) or deal-execution 2A (PSA vs LOI)."
+description: "Pre-execution QC gate for leases on Oxford Realty Advisors' own landlord form. Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, review our lease draft, new tenant lease, lease from the template, or uploads an ORA-form lease DOCX. ALSO the sole path for grading an existing lease against its LOI: does the lease match the LOI, LOI vs lease, reconcile LOI and lease, LOI conformance, or an LOI + drafted lease together (standalone LOI-Lease Audit mode; no lease yet = lease-generation). Run before ANY outbound lease goes to a tenant or broker. 60 checks (dead cross-refs, undefined terms, OpEx billing, statutory cites, Ohio mitigation, token gate, footer tenant-mismatch, blanks, exhibit stubs, BLI drift, rent arithmetic), PASS/FAIL; --loi-audit = scan + register-vs-lease matrix. Carries the six ratified positions. Not legal-intelligence (counterparty paper) or deal-execution 2A (PSA vs LOI)."
 ---
 
-# Lease Form QC — Oxford Realty Advisors own paper (v2.8: LOI-Lease Audit mode + T3/T4/D1/D2 + --loi-audit)
+# Lease Form QC — Oxford Realty Advisors own paper (v2.9: v2.7-standard checks F19–F21; v2.8 LOI-Lease Audit mode + T3/T4/D1/D2 + --loi-audit)
 
 Pre-execution gate for leases drafted on the ORA landlord form. Run BEFORE a draft
 goes to a tenant, broker, or counsel. This is a defect scan of **our** paper — for
 counterparty leases and PSAs use `legal-intelligence`.
 
-Two questions, two modes. **"Is this lease clean?"** → the 57-check scan below.
+Two questions, two modes. **"Is this lease clean?"** → the 60-check scan below.
 **"Does this lease match the LOI?"** → the LOI ↔ Lease Audit (standalone mode,
 v2.7; scripted v2.8) further down — `--loi-audit` runs the scan and the matrix in one call;
 the intake and reverse pass are the work the scanner cannot do. If there is no drafted lease yet, the request is
@@ -132,9 +132,13 @@ prose and reported ~16 mojibake "failures" including BLOCKs. Never report a QC r
 for a file that exited 2 — supply a text-layer copy, or install poppler-utils +
 tesseract.
 
-Benchmarks (scanner v2.8, 57 checks = 51 defect checks + T1–T4 + D1 + D2): untouched ORA-form lease
-≈ **39–48 failures**; a v2.4.1-derived lease fails exactly F10–F13 (+F14–F18); a
-v2.5-derived lease fails exactly **F14–F18**; a v2.6-derived lease = **0 of 57** (the OH
+Benchmarks (scanner v2.9, 60 checks = 54 defect checks + T1–T4 + D1 + D2): untouched ORA-form lease
+fails the v2.8 count **+3** (F19–F21; measured 2026-10-06: 2016 Zettler 4.6.2026 lease 50→**53**, 2824 Banwick
+12-25 lease 52→**55** — the older ≈39–48 range predates T3/T4/D1/D2 and is no longer a benchmark); a v2.4.1-derived lease fails exactly F10–F13 (+F14–F21); a
+v2.5-derived lease fails exactly **F14–F21**; a v2.6-derived lease fails exactly **F19–F21**;
+a v2.7-derived lease = **0 of 60** (v2.9, 2026-10-06: the v2.7 master and all six rebased
+property templates — MD-Columbia, MD-Easton, MD-Salisbury, MO-Raytown, OH-Columbus Morrison,
+OH-SingleTenant-NNN — re-run directly, all 0 of 60). v2.8 note on the v2.6 master (the OH
 master fixture in this repo re-verified directly at v2.8: T2–T4, D1 and D2 do not fire; T2 does not fire — its footer complex
 fields are PAGE/NUMPAGES page numbering, not FILENAME/DOCPROPERTY. The five rebased
 state-conformed property templates this repo does not carry a local copy of were not
@@ -292,6 +296,22 @@ C1/C2) avoid the existing Class 6 `C1`/`C2`.
   says the schedule controls. Tables with a PSF column or monthly-before-annual parse
   correctly; a multi-year row (`Years 3-5`) ends verification at that row.
 
+### Class 5e — v2.7 STANDARD PROVISIONS (added v2.9)
+
+Lessons from the FCSS / 9620 State 350 negotiation, applied to the master on 2026-10-06.
+
+- **F19** (HIGH) — NOTICES (B) still reads "if to Tenant, at the Demised Premises." **B7 cannot see
+  this**: B7 passes as soon as any Tenant notice-address paragraph exists, while clause (B) keeps
+  routing every Tenant notice to the premises only — useless before occupancy and after abandonment.
+  v2.7 wording: notice address set forth below and, from the Commencement Date, also the premises.
+- **F20** (MED) — escalating rent ("second Lease Year") with no controlling rent schedule, or the
+  v2.6 `[OPTIONAL: ATTACH RENT SCHEDULE …]` bracket left in. The schedule is mandatory from v2.7
+  and controls over the escalation sentence; D2 then verifies its arithmetic.
+- **F21** (MED) — no late-signing commencement clause. v2.7 shifts the Commencement Date to the
+  first full month after full execution when the lease is not signed by the 15th of the preceding
+  month (expiration, Lease Years, schedule and base year shift with it). In the standing counsel
+  scope. Expected to fire on vintage-form deal leases (e.g. FCSS v5) — informational there.
+
 ### Class 6 — MISSING PROVISIONS
 
 No-recording · Landlord default standard · Force majeure · OFAC · Counterparts/
@@ -352,7 +372,7 @@ PARTIAL/MISSING/CONFLICT unless Gabriel resolved it"), **2** = usage / register-
 lease-UNREADABLE error, including a malformed register (not a JSON object) or a missing
 lease file — a single malformed FIELD inside an otherwise-valid register degrades just
 that row to MISSING (with a `could not evaluate` detail) rather than crashing the whole
-matrix. This is a separate code path from the standard 57-check scan (different question, different
+matrix. This is a separate code path from the standard 60-check scan (different question, different
 source of truth, different output shape) and does not add to `checks_run`.
 
 ---
@@ -401,7 +421,7 @@ every field sourced to an LOI section number. Then:
 python3 scripts/lease_qc.py --loi-audit <register.json> <lease.docx> [--json]
 ```
 
-One call: the standard 57-check scan (T3/T4/D1/D2 included), then the conformance
+One call: the standard 60-check scan (T3/T4/D1/D2/F19–F21 included), then the conformance
 matrix (18th row `open_items`: every register open item needs a non-null `resolution`
 and its `lease_clause` present in the lease; string items are unresolved), then
 `AUDIT: <scan failures> scan failure(s) [<n> BLOCK] · <rows> matrix row(s) · exit <code>`.
@@ -514,6 +534,16 @@ section, re-verify every numeric cross-reference** — that is exactly how the v
 Section 24 defect was born.
 
 ## Changelog
+
+### v2.9 (2026-10-06) — v2.7-standard checks F19–F21
+
+`checks_run` 57 → **60**. Additive: no existing ID, severity, title, regex or logic changed; `tools/ora_doc_qc.py`
+untouched. **F19** NOTICES (B) premises-only (HIGH — B7 blind spot), **F20** mandatory controlling rent schedule
+(MED), **F21** late-signing commencement clause (MED). Clean benchmark moves to the v2.7 master fixture
+(`masterlease-jurisdiction-rebase/scripts/fixtures/…v2.7_TEMPLATE.docx`); the v2.6 fixture is kept and now fails
+exactly F19–F21 (asserted). New `TestV27Standards` (fire/silent pair per check); parity helpers exclude F19–F21
+like T1–D2. Re-benchmarked: v2.7 master + six property templates 0/60; v2.6 master, MD-Columbia v2.6 and
+OH-ST-NNN v2.6 each exactly F19–F21; FCSS CLEAN v5 fires F21 only among the three (vintage form, expected).
 
 ### v2.8 (2026-09-24) — LOI ↔ Lease Audit mechanics scripted
 
