@@ -33,7 +33,7 @@ flowchart TD
         Root["Repo root"]
         S1["acquisition-underwriting/"]
         S2["loi-generation/"]
-        S3["...74 more skill folders\n(76 total as of 2026-10-03;\ncount: ls */SKILL.md)"]
+        S3["...75 more skill folders\n(77 total as of 2026-10-06;\ncount: ls */SKILL.md)"]
         Shared["target-markets.json\n(shared buy-box market data)"]
         Tools["tools/\npackage_skills.py, build_plugin.py,\npending_reimport.py, hooks/"]
         Plugins["plugins/\nEMPTY by design since 2026-08-05\n(ora-operations-extensions retired;\nmanifest kept in _archive/plugins/)"]
@@ -69,7 +69,7 @@ flowchart TD
 ```
 <!-- diagram-verified: 2026-09-21 -->
 
-**Reading the diagram:** everything lives flat under the repo root — each of the 76
+**Reading the diagram:** everything lives flat under the repo root — each of the 77
 skill folders (`acquisition-underwriting/`, `loi-generation/`, etc.) sits directly under
 `Repo root`, alongside `target-markets.json` (shared buy-box data), `tools/`, `plugins/`,
 `_staging/`, and `_archive/`. Inside a skill folder, only `SKILL.md` is required; the rest
@@ -127,7 +127,7 @@ flowchart TD
 
 ## Directory / skill inventory
 
-**76 git-tracked skill directories** (as of 2026-10-03; recount with `ls */SKILL.md | wc -l` rather than trusting this number) (each contains its own `SKILL.md`), plus four
+**77 git-tracked skill directories** (as of 2026-10-06; recount with `ls */SKILL.md | wc -l` rather than trusting this number) (each contains its own `SKILL.md`), plus four
 non-skill support directories: `tools/` (packaging/build/hook scripts), `plugins/`
 (version-controlled Cowork plugin bundles), `_staging/` (dated pending-reimport batches,
 plus the gitignored `PENDING_REIMPORT.md`/`STORE_AHEAD_OF_REPO.md` drift ledgers), and
@@ -202,6 +202,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `communication-intelligence` — context-enriched drafting for broker/lender/vendor/attorney mail
 - `tenant-email` — tenant-facing email drafting (renewals, notices, maintenance, rent)
 - `document-assembly` — template-driven document generation from Notion data (10 templates; not LOIs, lease addenda or estoppels)
+- `artifact-to-docx-report` — turns a published Claude artifact (dashboard/review page with embedded data) into an ORA-styled Word report with charts, KPI tiles and a 90-day action plan; bundles the extract, chart, docx-build and render-check scripts
 - `evidence-dossier-drafting` — multi-agent drafting pipeline: a numbered facts dossier, an inline citation on every claim, and an adversarial refuter that kills uncited or mis-cited claims before anything publishes
 - `daily-brief` — daily CRE news/market/portfolio intelligence brief
 - ~~`conversation-archival`~~ — retired 2026-08-05 (its entire Notion footprint was evidence-checked, not merely absent)
