@@ -587,6 +587,18 @@ CHECKS = [
     # F18 is ctx-aware: it reads meta["footer"], not body text. See _f18.
     ("F18", "LOW", "Footer lacks the ORA Master Lease form-version tag — v2.6 standard",
      None, _f18),
+    # v2.7 standards (2026-10-06). B7 passes as soon as ANY Tenant notice-address
+    # paragraph exists, so it never saw the NOTICES (B) clause still routing
+    # Tenant notices to the Demised Premises only — F19 closes that gap.
+    bool_check("F19", "HIGH", "NOTICES (B) sends Tenant notices to the Demised Premises only, overriding the Tenant notice address — v2.7 standard",
+               lambda t: bool(re.search(r'if to Tenant,\s+at the Demised Premises\s*[.;]', t, re.I))),
+    bool_check("F20", "MED", "Escalating rent with no controlling rent schedule — v2.7 standard (schedule mandatory)",
+               lambda t: bool(re.search(r'second Lease Year', t, re.I))
+               and (('[OPTIONAL: ATTACH RENT SCHEDULE' in t)
+                    or not re.search(r'set forth in the following schedule|RENT SCHEDULE', t, re.I))),
+    bool_check("F21", "MED", "No late-signing commencement clause (Commencement Date fixed regardless of execution date) — v2.7 standard",
+               lambda t: 'Commencement Date' in t
+               and not re.search(r'has not been fully executed and delivered by Landlord and Tenant on or before', t, re.I)),
 ]
 
 # This skill's own token pattern, deliberately NOT the shared module's default
