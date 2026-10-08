@@ -1,6 +1,6 @@
 ---
 name: deal-execution
-description: 'Use when the user mentions: PSA, purchase and sale agreement, draft PSA, due diligence, DD checklist, seller redlines, closing checklist, title review, review PSA draft, PSA vs LOI, LOI conformance, lease-chain integrity, estoppel DD conformance (drafting a certificate routes to estoppel-request-generation). Also before SENDING any draft: send the PSA, pre-send check, clear to send. Covers executed LOI through closing; pre-LOI work routes to acquisition-underwriting, LOIs to loi-generation. Workflow 2A is the funnel for ANY inbound PSA draft or redline, incl. Litera/Workshare compares; Workflow 2B gates every OUTBOUND draft.'
+description: 'Use when the user mentions: PSA, purchase and sale agreement, generate PSA, draft PSA, due diligence, DD checklist, redline analysis, seller response, seller redlines, closing checklist, title review, under contract, closing statement, post-closing, review PSA draft, PSA vs LOI, LOI conformance, lease-chain integrity, estoppel DD conformance (drafting a certificate routes to estoppel-request-generation). Also before SENDING any draft: send the PSA, pre-send check, clear to send. Covers executed LOI through closing; pre-LOI work routes to acquisition-underwriting, LOIs to loi-generation. Workflow 2A is the funnel for ANY inbound PSA draft or redline, incl. Litera/Workshare compares; Workflow 2B gates every OUTBOUND draft.'
 ---
 
 # Deal Execution — Oxford Realty Advisors (v1.9)
