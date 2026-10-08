@@ -1,6 +1,6 @@
 ---
 name: "debt-management"
-description: "Use when the user mentions: refinance, refi, term sheet, lender selection, loan negotiation, DSCR, LTV, debt covenant, prepayment, defeasance, rate cap, balloon, maturity, lender package, capital stack, mezzanine, preferred equity — ORA debt and capital-markets skill. Also on an uploaded term sheet, commitment letter, lender proposal or amortization schedule. SOLE path for PAYOFF STATEMENTS in either direction: payoff letter or figure, per diem, title company payoff request or authorization, seller-financed note payoff or release, auditing a payoff quoted TO us. Strategic hold/refi/1031/sell decisions route to disposition-analysis first."
+description: "Use when the user mentions: refinance, refi, term sheet, lender selection, loan negotiation, DSCR, debt yield, LTV, debt covenant, lender call, prepayment, defeasance, swap, rate cap, hedge, balloon, maturity, loan reserves, lender package, capital stack, recap, mezzanine, preferred equity — ORA debt and capital-markets skill. Also on an uploaded term sheet, commitment letter, lender proposal or amortization schedule. SOLE path for PAYOFF STATEMENTS in either direction: payoff letter or figure, per diem, title company payoff request or authorization, seller-financed note payoff or release, auditing a payoff quoted TO us. Strategic hold/refi/1031/sell decisions route to disposition-analysis first."
 ---
 
 # Debt Management (v1.4)
