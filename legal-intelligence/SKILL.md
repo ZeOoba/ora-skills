@@ -1,6 +1,6 @@
 ---
 name: legal-intelligence
-description: "Use when the user mentions: lease review, PSA review, contract analysis, redline, clause comparison, compare two versions, blackline, Litera, Workshare, indemnification, default provisions, personal guaranty, estoppel clause / SNDA analysis (NOT certificate drafting — that's estoppel-request-generation), CAM clause, assignment and subletting, loan document, solar lease, vendor contract, or any request to analyze, compare, draft or negotiate a legal document, or an uploaded lease, contract, PSA or loan agreement. Oxford Realty Advisors legal analysis, clause library and contract intelligence."
+description: "Use when the user mentions: lease review, PSA review, contract analysis, redline, clause comparison, compare two versions, blackline, Litera, Workshare, indemnification, default provisions, personal guaranty, estoppel clause / SNDA analysis (NOT certificate drafting — that's estoppel-request-generation), CAM clause, assignment and subletting, loan document, solar lease, vendor contract, or any request to analyze, compare, draft or negotiate a legal document, or an uploaded lease, contract, PSA or loan agreement. PSA drafts and redlines enter via deal-execution Workflow 2A; this skill is its redline sub-step. Oxford Realty Advisors legal analysis, clause library and contract intelligence."
 ---
 
 # Legal Intelligence — Oxford Realty Advisors (v1.3)
