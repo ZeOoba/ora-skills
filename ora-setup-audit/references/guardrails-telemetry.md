@@ -12,7 +12,7 @@ Full text of the `SKILL.md` Guardrails bullet; content from the 2026-09-30 audit
 
 Two Code-side errors on 2026-09-30 came from treating `skillUsage` and CC transcripts as usage evidence for MCP servers: Desktop Commander read as unused while it had ~19,300 recorded calls and 23 live specs. Before any delete or disable verdict on an MCP connector, plugin or Extension, run all five and state each result, including empty:
 
-1. `usage_ledger.py summary` windows for the server (state `earliest_session_mtime`; LAMS logs cover ~2 weeks, so an empty window is weak evidence).
+1. `usage_ledger.py summary` windows for the server (state `earliest_session_mtime`; state the earliest date you can see; Cowork logs reached back about 6 weeks on 2026-10-08, and an empty window is still weak evidence).
 2. Server-own counters where they exist (DC `config.json#usageStats`; `tool-history.jsonl` covers ~7 days only, so the ledger's `dc` snapshots are the durable record).
 3. Spec references: grep `mcp__<Server>__` and the server name across BOTH fleets' SKILL.md folders, plus registry enabled state. A reference in a disabled task implies nothing (1 of 29 LAMS tasks was enabled on 2026-09-30).
 4. Non-replaceability: can native Cowork tools, `device_bash` or another connector do the job? (DC is the only Cowork path to Windows paths and the local network.)
