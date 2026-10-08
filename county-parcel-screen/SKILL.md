@@ -1,18 +1,15 @@
 ---
 name: county-parcel-screen
 description: >
-  Use when the user mentions: parcel screen, county screen, off-market sourcing,
-  direct-to-owner, owner outreach list, cold call list, delinquent tax leads,
-  motivated sellers, estate owners, sellers in motion, long-hold owners, sibling
-  parcels, ring screen, county auditor data, assessor data, parcel data, or asks
-  to find off-market industrial acquisition candidates in ANY target market
-  (Columbus, Cincinnati, Kansas City, Indianapolis, Maryland, Madison, Grand
-  Rapids, Richmond, Des Moines, or a new county). Also trigger for "next market",
-  "run the screen on X", or any request to build owner-level lead lists from
-  public property records. Recorded-sales tracking routes to county-sales-monitor; a
-  single already-identified target routes to verified-deal-recon (the deal-recon agent
-  for a first look only); an inbound broker batch
-  routes to deal-flow-triage.
+  Use when the user mentions: parcel screen, county screen, ring screen,
+  off-market sourcing, owner outreach list, cold call list, delinquent tax
+  leads, motivated sellers, estate owners, long-hold owners, assessor or auditor
+  parcel data, or off-market industrial candidates in ANY target market or new
+  county. Also "next market", "run the screen on X", or owner-level lead lists
+  from public property records. Recorded-sales tracking routes to
+  county-sales-monitor; a single already-identified target routes to
+  verified-deal-recon (deal-recon agent for a first look only); an inbound
+  broker batch routes to deal-flow-triage.
 ---
 
 # county-parcel-screen (v1.4)
