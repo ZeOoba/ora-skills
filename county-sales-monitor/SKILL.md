@@ -2,16 +2,14 @@
 name: county-sales-monitor
 description: >
   Use when Gabriel wants a recurring digest of recently RECORDED industrial
-  sales and transfers (bldg SF <150,000) across ORA target-market counties, or
-  new comps for the Notion comps database. Trigger on: recent industrial
-  sales, county sales tracker, sales digest, transaction monitor, comp
-  tracking, recent county transfers, industrial sales this month, what traded,
-  who's buying or selling industrial in a market, new comps since [date], set
-  up a sales feed — Franklin OH / Baltimore Co MD / Polk IA at launch, other
-  ORA markets are a documented next phase. MARKET INTELLIGENCE, not sourcing:
-  does NOT replace county-parcel-screen (off-market owner call lists,
-  motivated sellers, delinquent-tax/estate leads). Single-property comp grids
-  route to acquisition-underwriting COMPS mode.
+  sales and transfers (bldg SF under 150,000) across ORA target-market counties,
+  or new comps for the Notion comps database. Trigger on: recent industrial
+  sales, county sales tracker, sales digest, recent county transfers, what
+  traded, who's buying or selling industrial in a market, new comps since
+  [date], set up a sales feed. MARKET INTELLIGENCE, not sourcing: does NOT
+  replace county-parcel-screen (off-market owner call lists, motivated sellers,
+  delinquent-tax/estate leads). Single-property comp grids route to
+  acquisition-underwriting COMPS mode.
 ---
 
 # county-sales-monitor (v0.7)
