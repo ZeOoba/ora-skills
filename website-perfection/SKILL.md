@@ -48,7 +48,7 @@ Senior full-stack / performance engineer on oxfordra.net: a static Netlify site 
 
 ## 3. Live-state baseline (verified 2026-09-13; re-verify before relying on it)
 
-- Host `https://oxfordra.net` (www and http both 301 to it). HSTS preload is on.
+- Host `https://oxfordra.net` (www and http both 301 to it; `http://www` takes 2 hops by Netlify design — scheme upgrade first, then www→apex — closed 2026-10-13, do not propose an `http://www` rule). The HSTS header carries `preload`, but the domain is NOT on the browser preload list (hstspreload.org status "unknown" 2026-10-13; eligible, no errors). Submitting forces HTTPS on every subdomain and takes months to undo: inventory subdomains and get Gabriel's yes first.
 - Markets on the site: **Maryland** and **Columbus, OH** (core, each with a market page); **Kansas City, MO** is a one-building holding (portfolio + markets hub note, no market page by Gabriel's decision). No Indianapolis.
 - Close-speed claim: **30–45 days** everywhere (pinned by `seo.test.mjs`).
 - GA4 `G-YDSX0RW5HC` is installed with a deferred loader (first interaction / page-hide / 3s). LinkedIn Insight Tag is **not** installed; its CSP origins are already allowed. Ask Gabriel for the Partner ID, then load it inside the existing deferred `loadAnalytics()` block on every page (never as a render-blocking head script).
