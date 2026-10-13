@@ -1,7 +1,7 @@
 ---
 name: vendor-management
 license: ORA Internal
-description: "Use when the work concerns ORA's vendor relationships, in either mode. MANAGE (default): prequalification, scoring, RFP issuance, contract intake, performance review — trigger on vendor, contractor, RFP, prequalify, vendor score/performance, 1099, W-9, COI, MSA, concentration, rebid, onboarding/offboarding, vendor audit. QC: pre-execution defect scan of a SINGLE repeat-trade proposal or service agreement (paving, roofing, snow, HVAC, landscaping, fire/life-safety, janitorial) where an ORA property entity is/should be Owner — trigger on QC this vendor contract, review this proposal before I sign, contractor proposal, service agreement, should we sign this bid, wrong Purchaser entity, warranty terms, insurance or lien-waiver language, or an uploaded proposal/bid. Run QC before ANY proposal is signed. Multi-bid leveling routes to capital-bid-comparison. Distinct from pma-qc, listing-agreement-qc, legal-intelligence."
+description: "Use for ORA vendor relationships, in two modes. MANAGE (default): prequalification, scoring, RFP issuance, contract intake, performance review — trigger on vendor, contractor, prequalify, vendor score, 1099, W-9, COI, MSA, concentration, rebid, onboarding, offboarding, vendor audit. QC: pre-execution defect scan of a SINGLE proposal or service agreement (paving, roofing, snow, HVAC) where an ORA property entity is Owner — trigger on QC this vendor contract, review this proposal before I sign, should we sign this bid, wrong Purchaser entity. Run QC before ANY proposal is signed. Multi-bid leveling routes to capital-bid-comparison. Distinct from pma-qc, listing-agreement-qc, legal-intelligence."
 ---
 
 # Vendor Management (v2.2)
