@@ -29,48 +29,32 @@ statements that should never enter a repo).
 
 ```mermaid
 flowchart TD
-    subgraph Repo["ora-skills/ (this repo)"]
-        Root["Repo root"]
-        S1["acquisition-underwriting/"]
-        S2["loi-generation/"]
-        S3["...75 more skill folders\n(77 total as of 2026-10-06;\ncount: ls */SKILL.md)"]
-        Shared["target-markets.json\n(shared buy-box market data)"]
-        Tools["tools/\npackage_skills.py, build_plugin.py,\npending_reimport.py, hooks/"]
-        Plugins["plugins/\nEMPTY by design since 2026-08-05\n(ora-operations-extensions retired;\nmanifest kept in _archive/plugins/)"]
-        Staging["_staging/\ndated import batches +\nPENDING_REIMPORT.md (repo-ahead)\n+ STORE_AHEAD_OF_REPO.md (cache-ahead)"]
-        Archive["_archive/\nretired/superseded skills\n(e.g. deal-screen, cap-rate-snapshot)\nskipped by default searches (.rgignore);\ncollapsed on GitHub (linguist-generated)"]
+    subgraph Repo["ora-skills/ (git, origin github.com/ZeOoba/ora-skills)"]
+        S["skill dirs (count: ls */SKILL.md)\nSKILL.md + references/ scripts/ templates/ assets/ tests/"]
+        TM["target-markets.json\nshared data, version-gated"]
+        T["tools/ packaging, drift, mirror sync, tests\n+ hooks/ + skill_ci_gates.py + run_suite.sh + run_skill_suites.sh"]
+        GH[".github/workflows\ntools-tests, skill-gates, claude-ci-fix"]
+        P["plugins/ (README only, empty by design)"]
+        A["_archive/ retired skills (majority of tracked files)\n.rgignore + linguist-generated"]
+        K["README.md, KNOWN_ISSUES.md"]
     end
-
-    Root --> S1
-    Root --> S2
-    Root --> S3
-    Root --> Shared
-    Root --> Tools
-    Root --> Plugins
-    Root --> Staging
-    Root --> Archive
-
-    S1 --> F1["SKILL.md\n(frontmatter: name, description,\noptional user-invocable, allowed-tools)"]
-    S1 --> P1["PACKAGING-NOTE.md\n(shared-dep / exclusion notes)"]
-    S2 --> F2["SKILL.md"]
-    S2 --> R2["references/"]
-    S2 --> T2["templates/"]
-
-    Tools -- "package_skills.py <outdir>" --> Skillzip[".skill zip\n(forward-slash entries only)"]
-    Tools -. "build_plugin.py <plugin>\n(dormant: no bundle exists today)" .-> Pluginzip[".plugin zip"]
-    Skillzip --> Cowork["Cowork 'Save skill' import /\nSettings -> Capabilities"]
-    Pluginzip --> Cowork
-    Root -. "dual-write mirror" .-> AppData["AppData runtime cache\n(read-only mirror; repo wins on divergence)"]
-
-    Session["Claude Code / Cowork session"] -- "1. scan every SKILL.md frontmatter" --> F1
-    Session -- "2. name+description match user request" --> Trigger["Skill triggers"]
-    Trigger -- "3. load SKILL.md body as instructions" --> Exec["Skill executes this turn"]
-    Exec -- "4. optionally reads/runs" --> R2
+    subgraph Untracked["On disk, not in git"]
+        ST["_staging/ (gitignored)\nPENDING_REIMPORT.md, STORE_AHEAD_OF_REPO.md, dated batches"]
+        PK["_pk_stage/ built .skill zips (untracked; *.skill ignored)"]
+        WT[".worktrees .claude-worktrees .superpowers"]
+    end
+    TM -- "SHARED_ROOT_DEPS inject at package time (5 skills)" --> Pkg
+    T --> Pkg["package_skills.py -> .skill zip"]
+    S --> Pkg
+    Pkg --> PK
+    PK --> Import["Manual Cowork Save skill import"]
+    Import --> Cache["AppData runtime cache"]
+    Pkg -. "ora_doc_qc.py injected into 5 QC skills" .-> S
 ```
-<!-- diagram-verified: 2026-09-21 -->
+<!-- diagram-verified: 2026-10-06 against .gitignore, tools/package_skills.py SHARED_ROOT_DEPS -->
 
-**Reading the diagram:** everything lives flat under the repo root — each of the 77
-skill folders (`acquisition-underwriting/`, `loi-generation/`, etc.) sits directly under
+**Reading the diagram:** everything lives flat under the repo root — each
+skill folder (`acquisition-underwriting/`, `loi-generation/`, etc.) sits directly under
 `Repo root`, alongside `target-markets.json` (shared buy-box data), `tools/`, `plugins/`,
 `_staging/`, and `_archive/`. Inside a skill folder, only `SKILL.md` is required; the rest
 (`references/`, `templates/`, `PACKAGING-NOTE.md`, and so on) exists only where that skill
@@ -92,42 +76,38 @@ the ones stated in the frontmatter of the skills involved.
 
 ```mermaid
 flowchart TD
-    Req["User request"] --> Desc["Session matches request against\nSKILL.md name + description"]
-    Desc --> Deal["Deal evaluation"]
-    Desc --> Lease["Leases and legal paper"]
-    Desc --> Fleet["Scheduled tasks and fleet"]
-
-    Deal --> AU["acquisition-underwriting\n(single funnel: SCREEN, SNAPSHOT,\nUNDERWRITE, COMPS, FULL)"]
-    Deal --> VDR["verified-deal-recon\n(single-target pre-screen,\nhands off to underwriting)"]
-    Deal --> CPS["county-parcel-screen\n(off-market owner lead lists)"]
-    Deal --> CSM["county-sales-monitor\n(recorded-sales digest)"]
-    VDR --> AU
+    Req["User request"] --> Match["Session matches SKILL.md name+description (advisory; no code path)"]
+    Match --> Deal & Lease & Fleet & Ops
+    Deal --> VDR["verified-deal-recon"] --> AU
+    Deal --> AU["acquisition-underwriting\nSCREEN/SNAPSHOT/UNDERWRITE/COMPS/FULL"]
+    Deal --> CPS["county-parcel-screen"] --> PDR["parcel-data-recovery"] --> OO["owner-outreach (draft only)"]
+    Deal --> CSM["county-sales-monitor"]
     AU --> DC["deal-comparison"]
-    AU --> LOI["loi-generation\n(sole LOI path)"]
-    LOI --> DE["deal-execution\n(PSA to closing)"]
+    AU --> LOI["loi-generation (sole)"] --> DE["deal-execution 2A/2B"]
+    AU --> APG["acquisition-proposal-generation"]
     DE --> PSAR["psa-reconciliation"]
-    DE --> LI["legal-intelligence\n(redlines)"]
+    DE --> LI["legal-intelligence"]
     DE --> EST["estoppel-request-generation"]
-    AU --> DFI["deal-folder-intake
-(archive package, no underwriting)"]
-    DE --> DR["deal-retirement
-(on close or kill)"]
-
-    Lease --> LG["lease-generation\n(new leases)"]
-    Lease --> LA["lease-addendum\n(sole path for amending a lease in effect)"]
-    LG --> LQ["lease-form-qc\n(pre-execution gate)"]
-    Lease --> MLR["masterlease-jurisdiction-rebase /\nmasterlease-revision-cycle\n(template upkeep)"]
-
-    Fleet --> RST["register-scheduled-task\n(sole registration path)"]
-    Fleet --> AHM["automation-health-monitor"]
-    AHM --> FAR["fleet-advisory-remediation"]
-    FAR --> OTF["orphaned-task-forensics"]
+    DE --> TEA["title-exam-abstraction"]
+    DE --> SBE["settlement-basis-extraction"]
+    DE --> DR["deal-retirement"]
+    AU --> DFI["deal-folder-intake"]
+    Lease --> LG["lease-generation"] --> LQ["lease-form-qc gate"]
+    Lease --> LA["lease-addendum (sole for amendments)"]
+    Lease --> MLR["masterlease-jurisdiction-rebase / revision-cycle"]
+    Lease --> LAP["lease-abstraction-pipeline"] --> EST
+    Fleet --> RST["register-scheduled-task (sole)"]
+    Fleet --> AHM["automation-health-monitor"] --> FAR["fleet-advisory-remediation"] --> OTF["orphaned-task-forensics"]
+    Ops --> VM["vendor-management"]
+    Ops --> CBC["capital-bid-comparison"] --> VM
+    Ops --> DB["daily-brief"]
+    Ops --> RR["rent-roll-qc / rent-roll-reconciliation"]
 ```
-<!-- diagram-verified: 2026-10-03 against SKILL.md frontmatter -->
+<!-- diagram-verified: 2026-10-06 (advisory routing; node names checked against skill dirs, edges per SKILL.md descriptions spot-checked only) -->
 
 ## Directory / skill inventory
 
-**77 git-tracked skill directories** (as of 2026-10-06; recount with `ls */SKILL.md | wc -l` rather than trusting this number) (each contains its own `SKILL.md`), plus four
+**Git-tracked skill directories** (count them with `ls */SKILL.md | wc -l`; no number is hardcoded here because it drifts) (each contains its own `SKILL.md`), plus four
 non-skill support directories: `tools/` (packaging/build/hook scripts), `plugins/`
 (version-controlled Cowork plugin bundles), `_staging/` (dated pending-reimport batches,
 plus the gitignored `PENDING_REIMPORT.md`/`STORE_AHEAD_OF_REPO.md` drift ledgers), and
@@ -231,8 +211,9 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `cowork-settings` — version/diff/publish the Cowork Global Settings document
 
 **Shared data:** `target-markets.json` (repo root) — canonical buy-box market list,
-injected at package time into `acquisition-underwriting`, `daily-brief`, `deal-comparison`, and
-`market-monitor` (`SHARED_ROOT_DEPS` in `tools/package_skills.py`). Not duplicated into any skill folder — see "Conventions" below.
+injected at package time into `acquisition-underwriting`, `daily-brief`, `deal-comparison`,
+`market-monitor`, and `insurance-climate-risk-comparison` (`SHARED_ROOT_DEPS` in
+`tools/package_skills.py`). Not duplicated into any skill folder — see "Conventions" below.
 `tools/ora_doc_qc.py` is likewise a shared dependency: packaged into `lease-form-qc`, `lease-addendum`,
 `listing-agreement-qc`, `pma-qc`, and `vendor-management` as `scripts/ora_doc_qc.py`.
 
@@ -245,22 +226,49 @@ re-imports when a `.skill` is manually imported via "Save skill".
 
 ```mermaid
 flowchart LR
-    Edit["Edit SKILL.md / bundled files\nin a git checkout"] --> PC["pre-commit\n1 target-markets.json version bump\n2 frontmatter gate\n3 no stray .skill/.plugin in skill dirs\n5 cache-ahead-of-repo check\n4 sync to AppData cache"]
-    PC --> Commit["git commit"]
-    Commit --> POST["post-commit\npending_reimport.py record\nsync_local_skills_mirror.py HEAD"]
-    Merge["merge / pull / rebase"] --> PM["post-merge / post-rewrite\nsync_local_skills_mirror.py --all\nsync_appdata_mirror.py --changed-range"]
-    POST --> Code["Code surface\n~/.claude/skills/skill"]
-    PM --> Code
-    PC --> Cache["AppData runtime cache\n(Cowork)"]
+    Edit["Edit in checkout (shared, multi-session)"] --> c1
+    subgraph PC["pre-commit (local; bypass: --no-verify)"]
+        c1["1 target-markets version bump (blocks)"] --> c2["2 frontmatter gate (blocks)"] --> c3["3 tree hygiene (blocks)"] --> c5["5 repo_first_check cache-ahead rescue (advisory, exit 0)"] --> c4["4 sync_appdata_mirror (additive, exit 0)"]
+    end
+    c4 --> Commit
+    Commit --> POST["post-commit: pending_reimport record + sync_local_skills_mirror HEAD (fail-open)"]
+    Merge["merge/pull/rebase"] --> PM["post-merge/post-rewrite: sync mirrors --all (main only)"]
+    c4 --> Cache["AppData Cowork cache"]
     PM --> Cache
-    POST --> Ledger["_staging/PENDING_REIMPORT.md\n(gitignored ledger)"]
-    Ledger --> Pkg["package_skills.py outdir skill\n.skill zip, forward-slash entries"]
-    Pkg --> Import["Manual Save skill import\nCowork / Settings, Capabilities"]
-    Import --> Cache
-    Commit --> Push["push"]
-    Push --> CI["GitHub Actions\ntools-tests.yml: tools/run_suite.sh\nclaude-ci-fix.yml: auto-fix on CI failure / review"]
+    PM --> Code["~/.claude/skills mirror"]
+    POST --> Code
+    POST --> Ledger["_staging/PENDING_REIMPORT.md (gitignored)"]
+    Ledger --> Pkg["package_skills.py -> .skill"] --> Import["manual Save skill"] --> Cache
+    Commit --> Push --> TT
+    subgraph CI["GitHub Actions (every push)"]
+        TT["tools-tests: run_suite.sh (zero fail/skip/empty/bare)"]
+        SG["skill-gates: frontmatter ALL skills, hygiene, shared-dep decl, target-markets vs base"]
+        SK["skill-tests: run_skill_suites.sh + packaged-layout"]
+    end
+    Push --> SG
+    Push --> SK
+    CI -- "PR check-suite failed / changes-requested / @claude" --> FIX["claude-ci-fix: claude-code-action (human triggers gated OWNER/MEMBER/COLLABORATOR)"]
+    TT -. "Actions-created suites do NOT trigger claude-ci-fix" .-> FIX
 ```
-<!-- diagram-verified: 2026-10-03 against tools/hooks/*, tools/*.py, .github/workflows/* -->
+<!-- diagram-verified: 2026-10-06 against tools/hooks/*, tools/*.py, .github/workflows/* -->
+
+**Data flow and sources of truth.** The repo is canonical; the Code mirror and the Cowork cache are derived copies, and Cowork-side edits leave no git trace until `repo_first_check` finds them.
+
+```mermaid
+flowchart TD
+    Repo["git repo (canonical)"] -->|"pre-commit Check 4 copy (additive)"| AppData["AppData skills-plugin cache (Cowork)"]
+    Repo -->|"post-commit / post-merge"| Local["~/.claude/skills mirror (Code)"]
+    CoworkEdit["Cowork create-skill / save_skill / cache edit"] -->|"no git trace"| AppData
+    AppData -->|"repo_first_check: hash vs repo + git ancestry"| Rescue["_staging/repo-first-rescue + STORE_AHEAD_OF_REPO.md"]
+    Rescue -->|"manual reconcile"| Repo
+    Repo -->|"pending_reimport record"| Pend["_staging/PENDING_REIMPORT.md"]
+    Pend --> Pkg["package_skills.py"] --> Zip[".skill"] --> Import["manual Cowork import"] --> AppData
+    Logs["Claude main.log (Local + Roaming)"] -->|"reimport_correlate"| Pend
+    Pend -->|"append-event-log.py"| EL["~/.claude memory event_log.md"]
+    TM["target-markets.json"] -->|"inject"| Zip
+    Repo -->|"push"| CI["GitHub Actions"]
+```
+<!-- diagram-verified: 2026-10-06 against tools/pending_reimport.py, sync_local_skills_mirror.py, reimport_correlate.py -->
 
 **Surfaces.** Code sessions resolve skills from the local `~/.claude/skills/<skill>` mirror; Cowork
 sessions resolve from the AppData runtime cache. Nothing in this repo wires Chat to it, so that
@@ -279,7 +287,7 @@ path is not documented here.
   changed range (main only; skipped on amend).
 - Emergency bypass is `git commit --no-verify`.
 
-**`tools/` scripts (non-test).** Packaging: `package_skills.py`, `build_plugin.py`,
+**`tools/` scripts (non-test).** CI gates: `skill_ci_gates.py`, `run_skill_suites.sh`. Packaging: `package_skills.py`, `build_plugin.py`,
 `release_plugin.py` (plugin tooling is dormant, no bundles exist). Drift and reimport:
 `pending_reimport.py`, `repo_first_check.py`, `skill_drift_report.py`, `skill_md_normalize.py`,
 `reimport_cycle.py`, `reimport_correlate.py`, `stage_transfer.py`, `entry_b_precheck.py`,
@@ -295,7 +303,21 @@ failure, skip (except the allow-listed `test_package_census.py=1` off Windows), 
 bare module-level `def test_*`. `.github/workflows/tools-tests.yml` runs it on every push
 (ubuntu, Python 3.13, PyMuPDF installed). `.github/workflows/claude-ci-fix.yml` runs
 `anthropics/claude-code-action` on a failed PR check suite, a changes-requested review, or an
-`@claude`/CodeRabbit comment (human-authored triggers gated to OWNER/MEMBER/COLLABORATOR).
+`@claude`/CodeRabbit comment (human-authored triggers gated to OWNER/MEMBER/COLLABORATOR); it does not
+fire on failures of suites that Actions itself created (GitHub does not trigger workflows from those).
+
+`.github/workflows/skill-gates.yml` (every push, plus manual dispatch) is the server-side re-run of the
+commit-time gates, so `--no-verify` or a clone without `core.hooksPath` cannot skip them. Job
+`skill-gates` runs `python tools/skill_ci_gates.py frontmatter` (the packaging frontmatter validator over
+**every** skill dir, `--check-tree-hygiene`, and the `SHARED_ROOT_DEPS` declaration check) and
+`python tools/skill_ci_gates.py target-markets --base auto` (the pre-commit Check 1 version-bump rule
+against the PR base). Job `skill-tests` runs `bash tools/run_skill_suites.sh`: it first runs
+`skill_ci_gates.py packaged-layout` (packages each skill that declares a shared `.py` dependency into a
+temp dir outside the repo and confirms its scripts resolve the packaged copy), then runs the skill-level
+test suites listed in `GATED_SKILL_SUITES` in `tools/skill_ci_gates.py` through `tools/run_suite.sh`
+(same zero-fail / zero-skip / zero-empty / no-bare-test rules). `skill_ci_gates.py suites` refuses to
+list suites if any `test_*.py` under a skill dir is neither gated nor in `EXCLUDED_SKILL_SUITES`, so a new
+suite cannot silently go ungated. Run locally with `bash tools/run_skill_suites.sh`.
 
 ## Conventions
 

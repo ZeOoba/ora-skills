@@ -317,6 +317,39 @@ def build_rules(P, L):
     return rules
 
 
+
+def build_rules_home(P):
+    """Home-state (Ohio) property: master text is already Ohio-conformed, so only
+    property facts are filled -- no state overlay. Added 2026-10-06 (OH-MOR)."""
+    es = P.get("entity_state")
+    if not es:
+        sys.exit(f"{P['entity']}: missing 'entity_state' (fail-closed).")
+    parcel = f"(Franklin County Auditor Parcel No. {P['parcel']})"
+    rules = [
+        ("[LANDLORD ENTITY]", P["entity"], 4),
+        ("a [STATE] limited liability company", f"{article(es)} {es} limited liability company", 3),
+        ("the building situated at [PREMISES ADDRESS] (such rentable area",
+         f"the building situated at {P['premises']} (such rentable area", 1),
+        ("the building known as [BUILDING ADDRESS], containing [BUILDING RSF] square feet of rentable area",
+         P["building_def"], 1),
+        ("bears to the total rentable square footage of the Building, being [BUILDING RSF] square feet ",
+         P["share_denominator"], 1),
+        ("(Franklin County Auditor Parcel No. [PARCEL NO])", parcel, 1),
+        ("COPY TO:[PROPERTY MANAGER]", P["pm_block"][0], 1),
+        ("[MANAGER STREET ADDRESS]", P["pm_block"][1], 1),
+        ("[MANAGER CITY, STATE ZIP]", P["pm_block"][2], 1),
+        ("ATTN: [MANAGER CONTACT]", P["pm_block"][3], 1),
+        (" [PREMISES ADDRESS] — approximately", f" {P['premises']} — approximately", 1),
+    ]
+    m_bd = re.match(r"the building known as (.+), containing (.+) square feet of rentable area", P["building_def"])
+    rules.append(("[BUILDING ADDRESS] — [BUILDING RSF] rentable square feet (Parcel No. [PARCEL NO])",
+                  f"{m_bd.group(1)} — {m_bd.group(2)} rentable square feet {parcel}", 1))
+    if P.get("payment_direction"):
+        rules.append(("to [PROPERTY MANAGER], at [MANAGER ADDRESS] through the tenant online portal, payable to Landlord,",
+                      P["payment_direction"], 1))
+    return rules
+
+
 def post_check(path, P, L):
     full = "\n".join(p.text for p in Document(str(path)).paragraphs)
     errs = []
@@ -345,7 +378,7 @@ def post_check(path, P, L):
         if errs:
             sys.exit(f"POST-CHECK FAILED for {path.name}: {errs}")
         return
-    if ANCHOR_STATE in full:
+    if ANCHOR_STATE in full and not P.get("home_state"):
         errs.append(f"{ANCHOR_STATE} residue present")
     for tok in ("[STATE]", "[LANDLORD ENTITY]", "[PREMISES ADDRESS]"):
         if tok in full:
@@ -378,13 +411,18 @@ def rebase_one(master_path, P, L):
             convert_to_nnn(doc)
         insert_savings_clause(doc)
         return doc
-    apply(doc, build_rules(P, L))
+    apply(doc, build_rules_home(P) if P.get("home_state") else build_rules(P, L))
     if P.get("lease_structure") == "NNN":
         convert_to_nnn(doc)
     insert_savings_clause(doc)
-    for sec in doc.sections:  # v2.5: fill footer lease identifier
-        for fp in sec.footer.paragraphs:
-            replace_in_paragraph(fp, "[PREMISES ADDRESS]", P["premises"])
+    # v2.5: fill footer lease identifier. 2026-10-06 fix: walk EVERY footer part
+    # (default, even, first) -- sec.footer reached only the default footer, so
+    # even-page footers (and, on MD-COL, all footers) kept [PREMISES ADDRESS].
+    from docx.text.paragraph import Paragraph
+    for rel in doc.part.rels.values():
+        if rel.reltype.endswith("/footer"):
+            for p_el in rel.target_part.element.iter(qn("w:p")):
+                replace_in_paragraph(Paragraph(p_el, None), "[PREMISES ADDRESS]", P["premises"])
     return doc
 
 
@@ -416,6 +454,8 @@ def main():
         L = states.get(P["state_code"])
         if P.get("variant") == "single-tenant":
             L = L or {}
+        elif P.get("home_state"):
+            L = {"state": "Ohio"}
         elif not L or L.get("RESEARCH_REQUIRED"):
             sys.exit(f"{k}: state overlay {P['state_code']} is RESEARCH-REQUIRED — complete "
                      "config/state_overlays.json with fresh statutory research first (fail-closed by design).")

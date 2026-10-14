@@ -70,8 +70,8 @@ git -C <ora-skills repo root> log -1 --format=%H -- acquisition-underwriting/SKI
 ```
 
 **Step 1 — for each `golden_set/*.json` file**, spawn **3 independent subagents** (Agent tool,
-`model: "fable"` — this replays scored/financial logic and must never run below the Fable
-floor), each with the SAME prompt built from the template below. Three, not one: a single replay
+`model: "opus"` (Opus 5.5) — this replays scored/financial logic and must never run below the
+Opus 5.5 floor (Fable retired from dispatch 2026-10-05)), each with the SAME prompt built from the template below. Three, not one: a single replay
 is not a stable measurement (n=6 finding — Port Sheldon's single-draw range was 7.0 pts at the
 time against a 5.0-pt tolerance, since partly attributable to leakage now fixed — see
 Limitations), and the gate compares the mean of the 3 in Step 3.
@@ -252,6 +252,8 @@ To reproduce the full self-test from scratch (e.g. after changing `diff_verdict.
 This test perturbs an INPUT, not doctrine — by design: the freezing discipline (the same `golden_set/*.json` fed every time) is what isolates skill-logic drift from external-data drift; the diff engine only needs to catch an output delta given an identical input, which is exactly what a real doctrine edit produces. The real bug this self-test caught in the original build (a silently stale `verdict_tier` key) and the regression test that guards it: `references/findings-and-limitations.md`.
 
 ## Limitations / follow-ups
+
+- **Baseline model (2026-10-05):** the golden baselines are means of Fable replays; replays now run on Opus 5.5. Expect model-driven drift against those baselines; before trusting a FLAG, re-baseline once on opus (3 replays per deal) rather than reading it as a doctrine regression.
 
 Standing limitations, each in force today. **Read `references/findings-and-limitations.md` for the four REFUTE passes (2026-08-14/15, 2026-09-12) behind them before changing any of them.**
 
