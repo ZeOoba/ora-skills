@@ -60,7 +60,7 @@ Mode B: 2+ file paths (or a folder containing the suspected-conflicting copies) 
 ## Dependencies
 
 - `excel` MCP (Mode B, XLSX conflicts)
-- `conversation-archival` / `event_log.md` (logging business-file resolutions)
+- `event_log.md` in the memory folder (logging business-file resolutions)
 
 ## Changelog
 
