@@ -1,4 +1,4 @@
-#!/usr/bin/env python3 -I
+#!/usr/bin/env python3
 """Extract the embedded JSON dataset from a saved artifact page and print its schema.
 Usage: extract_artifact_data.py <index.html> <out.json> [script_id=data]
 Dashboards embed data as <script type="application/json" id="data">...</script>.
