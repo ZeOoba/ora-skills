@@ -3,7 +3,7 @@ name: masterlease-jurisdiction-rebase
 description: "Use when the user mentions: new master lease version, rebase the lease templates, regenerate the MD/MO templates, jurisdiction overlay, conform the lease to a state, state-conformed lease template, update property lease forms, lease template for Easton / Salisbury / Northwood / Raytown / Columbia, or uploads a new ORA_MasterLease_ShallowBayIndustrial_v*.docx. Also use when adding a NEW property or state overlay, or converting a property to NNN. Rebases Oxford Realty Advisors jurisdiction-conformed Master Lease property templates onto a new master revision in one command, and generates state-conformed (MD/MO) property templates from the OH-anchored master. Companion to lease-form-qc (which QCs drafted leases); this skill produces the templates leases are drafted FROM."
 ---
 
-# Master Lease Jurisdiction Rebase — Oxford Realty Advisors (v1.7)
+# Master Lease Jurisdiction Rebase — Oxford Realty Advisors (v1.8)
 
 One-command regeneration of state-conformed property lease templates whenever the
 controlled master (`ORA_MasterLease_ShallowBayIndustrial_v*.docx`) revs. Built from the
@@ -34,8 +34,9 @@ happened twice on 2026-08-03 (a v2.1 cache was used while v2.4 was canonical).
   If the connected SharePoint search tool doesn't index that path on a given surface
   (observed 2026-08-04 — the connector resolved the folder to 9050 Red Branch Road's own
   lease archive, not the portfolio master), fall back to this skill's bundled
-  `scripts/fixtures/ORA_MasterLease_ShallowBayIndustrial_v2.6_TEMPLATE.docx`, which the
-  test suite validates against canonical v2.6 — but say so explicitly in the output and
+  `scripts/fixtures/ORA_MasterLease_ShallowBayIndustrial_v2.7_TEMPLATE.docx`, which the
+  test suite validates against canonical v2.7 (the v2.6 fixture is retained for the
+  lease-form-qc v2.6→v2.7 regression assertion) — but say so explicitly in the output and
   flag that production use should be confirmed against the live copy first.
 - Freshness check before any run: compare the version string in the supplied master's
   filename (`v2.5` etc.) against the newest version mentioned anywhere in the session
@@ -167,13 +168,35 @@ and re-run. Never loosen an assertion to "0 or 1" to make a run pass.
   proviso is the model, keyed by the `extra_no_recording` field). Do not copy another
   state's citations as scaffolding; an empty field fails closed.
 
+## Home-state properties (added v1.8)
+
+An Ohio property on the OH-anchored master takes no state overlay: set `"home_state": true`
+in its `config/properties.json` entry (first user: `OH-MOR`, 384–420 Morrison Road). The
+engine then uses `build_rules_home()` — property facts only (entity ×4, formation-state
+article ×3, premises, building, share denominator, Franklin County parcel, PM block, BLI
+premises/building, payment direction) — with `L = {"state": "Ohio"}`, and the post-check
+skips the Ohio-residue assertion. All six ratified positions stay untouched. Required
+fields: `entity`, `entity_state`, `premises`, `building_def`, `share_denominator`, `parcel`,
+`pm_block`. Facts must be county-verified (Franklin County Auditor GIS `ParcelFeatures`
+layer: PARCELID, SITEADDRESS, ZIPCD, BLDGAREA, OWNERNME1).
+
+**Footer fill walks every footer part.** The v2.5 fill iterated `section.footer` only —
+the *default* footer — so even-page and first-page footers kept `[PREMISES ADDRESS]`
+(MD-Columbia printed the raw token on every page through v2.6). From v1.8 the engine walks
+every `/footer` relationship part; `TestFooterFillAllParts` asserts no footer part of any
+rebased multi-tenant template keeps the token (fails on the v1.7 engine for MD-COL/OH-MOR).
+
 ## Facts provenance (do not re-derive from leases)
 
 Entity names (29000 INFORMATION LANE, LLC · 2203 NORTHWOOD, LLC · 9620 STATE 350, LLC ·
 Muirkirk Properties, LLC) were sourced from executed leases / the ORA Entity Structure DB.
 Building SF (48,000 / 53,700 / 34,560 / 90,000) from the Portfolio Basis workbook / ORA
-Property Register. Salisbury ZIP 21801 from an executed lease — county verification still
-open. 9050 Red Branch Road's Howard County SDAT Tax Account No. is unresolved — direct
+Property Register. Salisbury: **MD SDAT verified 2026-10-06** — three accounts, 2203 **Marvel Road** (09-053646,
+Map 102 P110), 2205 Northwood Dr (09-053654, P111), 2207 Northwood Dr (09-053662, P113), 18,000 SF
+each per SDAT (54,000 vs the 53,700 RSF denominator — denominator unchanged pending Gabriel), ZIP
+21801. "2203 Northwood Drive" was never a valid address; the entity name 2203 NORTHWOOD, LLC is
+unchanged (legal name). Easton: SDAT 01-088645 (27,000 SF) + 01-088742 (21,000 SF) = 48,000 SF,
+ZIP 21601 confirmed. Morrison (OH-MOR): Franklin County parcel 010-208204, 31,200 SF, ZIP 43213. 9050 Red Branch Road's Howard County SDAT Tax Account No. is unresolved — direct
 SDAT query did not return content programmatically as of 2026-08-04; left tokenized.
 ZIPs, suites, parcel/tax-account numbers, per-building Northwood RSF, and the Raytown PM
 block are deliberately tokenized: fill at drafting time from the county record or PM
@@ -206,6 +229,15 @@ v2.5 and v2.6 builds before extraction). Anchors must sit inside one `<w:t>` (ru
 `rebase.py`.
 
 ## Changelog
+
+- v1.8 (2026-10-06): v2.7 revision cycle. (1) **Home-state path** — `build_rules_home()` +
+  `home_state` config flag; post-check and test branches skip Ohio residue; first property
+  OH-MOR (384–420 Morrison Rd, Fairground Village Center, LLC, parcel 010-208204). (2) **Footer
+  fill fix** — walk every footer part, not `section.footer`; new `TestFooterFillAllParts`
+  (red on v1.7 for MD-COL/OH-MOR, green on v1.8). (3) **Config** — MD-EAS ZIP 21601, MO-RAY ZIP
+  64133, MD-SBY premises/building/project rebuilt on the SDAT-verified 2203 Marvel Road /
+  2205–2207 Northwood Drive addresses with tax map/parcels; SDAT provenance notes. (4) **Parity
+  fixture** swapped v2.6 → v2.7 (accepted master; v2.6 retained). Suite: 7 passed / 23 subtests.
 
 - v1.7 (2026-08-24): Description trimmed to restore headroom (was 1003/1024,
   headroom 21 -- close-out work-order item 4). Dropped the dated

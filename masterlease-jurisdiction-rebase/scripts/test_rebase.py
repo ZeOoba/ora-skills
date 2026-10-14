@@ -17,7 +17,7 @@ import unittest
 
 HERE = pathlib.Path(__file__).resolve().parent
 CONFIG = HERE.parent / "config"
-FIXTURE_MASTER = HERE / "fixtures" / "ORA_MasterLease_ShallowBayIndustrial_v2.6_TEMPLATE.docx"
+FIXTURE_MASTER = HERE / "fixtures" / "ORA_MasterLease_ShallowBayIndustrial_v2.7_TEMPLATE.docx"  # swapped from v2.6, 2026-10-06
 
 sys.path.insert(0, str(HERE))
 import rebase  # noqa: E402
@@ -114,8 +114,12 @@ class ParityAgainstKnownMasterTests(unittest.TestCase):
         P = self.properties[key]
         # Single-tenant variants are anchored to the master's own state and take
         # no overlay (mirrors main()); everything else requires a ratified overlay.
-        L = self.states.get(P["state_code"], {}) if P.get("variant") == "single-tenant" \
-            else self.states[P["state_code"]]
+        if P.get("variant") == "single-tenant":
+            L = self.states.get(P["state_code"], {})
+        elif P.get("home_state"):  # 2026-10-06: OH home-state property (OH-MOR), no overlay
+            L = {"state": "Ohio"}
+        else:
+            L = self.states[P["state_code"]]
         # Routes through rebase.rebase_one() -- the same pipeline main() uses -- so a
         # step added there (e.g. the NNN override) can't drift out of sync with its
         # own test again the way it did the first time this override was added
@@ -144,7 +148,8 @@ class ParityAgainstKnownMasterTests(unittest.TestCase):
                         self.assertIn("the entire building situated at [PREMISES ADDRESS]", full)
                         self.assertIn(rebase.SAVINGS_TITLE, full)
                         continue
-                    self.assertNotIn("Ohio", full)
+                    if not P.get("home_state"):
+                        self.assertNotIn("Ohio", full)
                     self.assertIn(P["entity"], full)
                     self.assertIn(L["state"], full)
                     self.assertIn(rebase.SAVINGS_TITLE, full)
@@ -161,3 +166,30 @@ class ParityAgainstKnownMasterTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFooterFillAllParts(unittest.TestCase):
+    """2026-10-06: the footer fill walked only sec.footer (default footer), leaving
+    [PREMISES ADDRESS] in even/first-page footers (MD-COL printed it on every page).
+    Every footer part of every rebased multi-tenant template must be filled."""
+
+    def test_no_footer_part_keeps_the_premises_token(self):
+        import json, tempfile, zipfile, re as _re
+        if not FIXTURE_MASTER.exists():
+            raise unittest.SkipTest(f"fixture master not found: {FIXTURE_MASTER}")
+        cfg = HERE.parent / "config"
+        props = json.loads((cfg / "properties.json").read_text(encoding="utf-8"))
+        states = json.loads((cfg / "state_overlays.json").read_text(encoding="utf-8"))
+        for key, P in props.items():
+            if key.startswith("_") or not isinstance(P, dict) or P.get("variant") == "single-tenant":
+                continue
+            L = {"state": "Ohio"} if P.get("home_state") else states.get(P["state_code"])
+            if not L or L.get("RESEARCH_REQUIRED"):
+                continue
+            with self.subTest(property=key), tempfile.TemporaryDirectory() as td:
+                out = pathlib.Path(td) / "t.docx"
+                rebase.rebase_one(FIXTURE_MASTER, P, L).save(str(out))
+                with zipfile.ZipFile(out) as z:
+                    for n in z.namelist():
+                        if _re.match(r"word/footer\d*\.xml$", n):
+                            self.assertNotIn("[PREMISES ADDRESS]", z.read(n).decode("utf-8"), n)
