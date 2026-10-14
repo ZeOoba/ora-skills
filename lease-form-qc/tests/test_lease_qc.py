@@ -70,6 +70,11 @@ LEASE_QC = SCRIPTS / "lease_qc.py"
 PDF_FIXTURE = HERE / "no_text_layer_fixture.pdf"
 MASTER_V26 = (REPO / "masterlease-jurisdiction-rebase" / "scripts" / "fixtures"
               / "ORA_MasterLease_ShallowBayIndustrial_v2.6_TEMPLATE.docx")
+# v2.7 (2026-10-06) is the clean-benchmark master: v2.6 now fails exactly the
+# three v2.7-standard checks F19-F21 by design (TestV27Standards below).
+MASTER_V27 = (REPO / "masterlease-jurisdiction-rebase" / "scripts" / "fixtures"
+              / "ORA_MasterLease_ShallowBayIndustrial_v2.7_TEMPLATE.docx")
+V27_IDS = {"F19", "F20", "F21"}
 
 sys.path.insert(0, str(SCRIPTS))
 
@@ -209,7 +214,7 @@ def _new_verdicts(path):
            "is_template": "_TEMPLATE" in os.path.basename(path).upper()}
     out = {}
     for cid, _sev, _title, _pos, fn in lease_qc.CHECKS:
-        if cid in ("T1", "T2", "T3", "T4", "D1", "D2"):   # not among the 51 originals
+        if cid in ("T1", "T2", "T3", "T4", "D1", "D2") or cid in V27_IDS:   # not among the 51 originals
             continue
         out[cid] = fn(ctx) not in (None, False)
     return out
@@ -668,9 +673,9 @@ class TestTokenGate(TempDirCase):
         self.assertNotIn("Unfilled template tokens", out, out)
 
     def test_master_template_is_clean_including_t1(self):
-        rc, out = run_cli(str(MASTER_V26))
+        rc, out = run_cli(str(MASTER_V27))
         self.assertEqual(rc, 0, out)
-        self.assertIn("0 of 57 checks FAILED", out)
+        self.assertIn("0 of 60 checks FAILED", out)
 
     # ---- T1 must scan the FOOTER, not only the body -----------------------
     #
@@ -789,9 +794,9 @@ class TestRegistryAndCli(TempDirCase):
 
     def test_registry_holds_the_51_original_checks_plus_t1_t2_and_v28_additions(self):
         ids = [c[0] for c in lease_qc.CHECKS]
-        self.assertEqual(len(ids), 57)
-        self.assertEqual(len(set(ids)), 57, "duplicate check IDs")
-        self.assertEqual(set(ids), set(_ORIGINAL_IDS) | {"T1", "T2", "T3", "T4", "D1", "D2"})
+        self.assertEqual(len(ids), 60)
+        self.assertEqual(len(set(ids)), 60, "duplicate check IDs")
+        self.assertEqual(set(ids), set(_ORIGINAL_IDS) | {"T1", "T2", "T3", "T4", "D1", "D2"} | V27_IDS)
 
     def test_every_entry_is_a_valid_five_tuple(self):
         for entry in lease_qc.CHECKS:
@@ -826,7 +831,7 @@ class TestRegistryAndCli(TempDirCase):
             self.assertEqual(new_titles.get(cid), title, f"{cid} label changed")
 
     def test_clean_document_exits_0(self):
-        rc, out = run_cli(str(MASTER_V26))
+        rc, out = run_cli(str(MASTER_V27))
         self.assertEqual(rc, 0, out)
 
     def test_failing_document_exits_1(self):
@@ -840,10 +845,10 @@ class TestRegistryAndCli(TempDirCase):
 
     def test_json_mode_emits_parsable_output(self):
         import json
-        rc, out = run_cli(str(MASTER_V26), "--json")
+        rc, out = run_cli(str(MASTER_V27), "--json")
         payload = json.loads(out)
         self.assertEqual(len(payload), 1)
-        self.assertEqual(payload[0]["checks_run"], 57)
+        self.assertEqual(payload[0]["checks_run"], 60)
         self.assertFalse(payload[0]["unreadable"])
         self.assertEqual(payload[0]["failures"], [])
 
@@ -1860,7 +1865,7 @@ class TestLoiAuditMode(TempDirCase):
         payload = json.loads(out)
         self.assertEqual(set(payload), {"scan", "matrix", "exit"})
         self.assertEqual(payload["exit"], rc)
-        self.assertEqual(payload["scan"][0]["checks_run"], 57)
+        self.assertEqual(payload["scan"][0]["checks_run"], 60)
         self.assertEqual(payload["matrix"]["lease_file"], "test_lease.docx")
 
     def test_exit_2_wins_over_1(self):
@@ -1952,8 +1957,47 @@ class TestV28MasterBenchmark(TempDirCase):
         if not MASTER_V26.exists():
             self.skipTest("master fixture absent")
         r = _scan(MASTER_V26)
+        # v2.8 checks (T3/T4/D1/D2) stay silent on v2.6; only the v2.7 standards fire.
+        self.assertEqual({f[0] if isinstance(f, (list, tuple)) else f.get("id") for f in r["failures"]}, V27_IDS, r["failures"])
+        self.assertEqual(r["checks_run"], 60)
+
+
+class TestV27Standards(TempDirCase):
+    """F19-F21 (v2.7 standards, 2026-10-06): v2.7 master clean; v2.6 master fails
+    exactly these three; each check fires on its own defect and is silent on the fix."""
+
+    def test_v27_master_is_clean(self):
+        if not MASTER_V27.exists():
+            self.skipTest("v2.7 fixture absent")
+        r = _scan(MASTER_V27)
         self.assertEqual(r["failures"], [], r["failures"])
-        self.assertEqual(r["checks_run"], 57)
+        self.assertEqual(r["checks_run"], 60)
+
+    def _v(self, cid, paras):
+        p = make_docx(self.tmp / f"{cid}.docx", paras + ["Filler sentence for the extraction floor."] * 40)
+        return _new_verdict_any(p, cid)
+
+    def test_f19_fires_on_premises_only_notice_and_not_on_v27_wording(self):
+        self.assertTrue(self._v("F19", ["(A) if to Landlord, at the addresses set forth below; and (B) if to Tenant, at the Demised Premises.  The party to receive notices may be changed."]))
+        self.assertFalse(self._v("F19", ["(B) if to Tenant, at the Tenant notice address set forth below and, from and after the Commencement Date, also at the Demised Premises."]))
+
+    def test_f20_fires_without_schedule_and_on_optional_bracket(self):
+        base = "Commencing on the first day of the second Lease Year the Annual Base Rent shall increase by 3%."
+        self.assertTrue(self._v("F20", [base]))
+        self.assertTrue(self._v("F20", [base + " [OPTIONAL: ATTACH RENT SCHEDULE TABLE — IF ATTACHED, THE SCHEDULE CONTROLS]"]))
+        self.assertFalse(self._v("F20", [base + " The Annual Base Rent and Monthly Rent for each Lease Year are set forth in the following schedule."]))
+
+    def test_f21_fires_without_late_signing_clause(self):
+        self.assertTrue(self._v("F21", ["The Commencement Date shall be June 1, 2026."]))
+        self.assertFalse(self._v("F21", ["The Commencement Date shall be June 1, 2026.  If this Lease has not been fully executed and delivered by Landlord and Tenant on or before the fifteenth (15th) day of the calendar month preceding the month in which the Commencement Date occurs, then the Commencement Date shall instead be the first day of the first full calendar month."]))
+
+
+def _new_verdict_any(path, cid):
+    body, meta = extract(path, want_footer=True)
+    ctx = {"t": norm(body), "raw": body, "meta": meta, "name": os.path.basename(path),
+           "allow_tokens": False, "is_template": False}
+    fn = {c[0]: c[4] for c in lease_qc.CHECKS}[cid]
+    return fn(ctx) not in (None, False)
 
 
 if __name__ == "__main__":
