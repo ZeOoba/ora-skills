@@ -299,7 +299,7 @@ Compute and state:
 | Counterparty lease, PSA, loan doc | `legal-intelligence` |
 | A trade contract the manager procured (paving, roofing, snow, HVAC) | `vendor-management` |
 | Amending a lease already in effect | `lease-addendum` |
-| Whether to self-manage vs. third-party manage | `re-operations` / `portfolio-growth` |
+| Whether to self-manage vs. third-party manage | `portfolio-growth` |
 | Drafting the manager engagement or termination email | `communication-intelligence` |
 
 ## Hard rules
