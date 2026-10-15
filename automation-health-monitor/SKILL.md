@@ -1,9 +1,9 @@
 ---
 name: automation-health-monitor
-description: 'Use when checking whether the scheduled Oxford Realty Advisors Cowork automations ran — the weekday 11:00 AM scheduled health check of every enabled task across the dual-fleet scheduled-task registries (CC/MCP + LAMS/Cowork) plus the off-fleet substrates read-only (live Windows Task Scheduler ORA* tasks; GitHub Actions cron workflows in ora-cowork-watchdog and ora-pm). Trigger phrases: automation health, task health, fleet health check, scheduled task status, automation monitor, did my tasks run. Posts the status report to the Notion Operations Hub and drafts a failure notification email to ggoldberg@oxfordra.net ONLY (no cc) if any task missed.'
+description: 'Use when checking whether the scheduled Oxford Realty Advisors Cowork automations ran — the weekday 11:00 AM scheduled health check of every enabled task across the dual-fleet scheduled-task registries (CC/MCP + LAMS/Cowork) plus the off-fleet substrates read-only (live Windows Task Scheduler ORA* tasks; GitHub Actions cron workflows in ora-cowork-watchdog and ora-pm; and the Notion Worker county-sales-monitor run health). Trigger phrases: automation health, task health, fleet health check, scheduled task status, automation monitor, did my tasks run. Posts the status report to the Notion Operations Hub and drafts a failure notification email to ggoldberg@oxfordra.net ONLY (no cc) if any task missed.'
 ---
 
-# Automation Health Monitor (v1.13)
+# Automation Health Monitor (v1.14)
 
 You are the automation health monitor for Oxford Realty Advisors. Your job is to verify that all scheduled Cowork tasks ran as expected and alert Gabriel immediately if any failed silently.
 
@@ -115,6 +115,38 @@ Match the annotation against `/spending limit|payments have failed|Billing & pla
 Optional early warning, best effort: `gh api users/ZeOoba/settings/billing/actions`. **[UNVERIFIED endpoint; needs a billing-scoped token — confirm on first use.]** A 403/404 is expected in some sessions: write "quota readout unavailable", not a finding. If it answers: ⚠️ at ≥80% of included minutes, ❌ at 100%. The annotation check is the reliable signal; the readout is advisory only.
 
 Report as **one fleet-level line** in the off-fleet subsection, not per PR/branch/run: `Actions: BILLING-BLOCKED since <createdAt of the earliest consecutive zero-step failure> (seen on N repos; latest <run url>). ora-pm backups and the ora-cowork-watchdog crons cannot fire. Gabriel-only fix: GitHub → Settings → Billing & plans.` Step 4 then applies: ❌ goes through the same alert path (email to ggoldberg@oxfordra.net only; subject `⚠️ GitHub Actions blocked — billing / spending limit`; ask before sending). **De-dupe:** if the previous status page already reports the same block, annotate "day N" in Notion and do NOT re-email. Never re-run failed jobs, touch billing, or open any write control; this step only reports. *Known positive for validating the step:* run `36366317389` on `ZeOoba/oxford-command-center` (head `88e35ea`, 2026-09-28): both jobs have zero steps, and job `108753343525` carries the annotation "The job was not started because recent account payments have failed or your spending limit needs to be increased…".
+
+**Notion Workers — `county-sales-monitor` run health (added v1.14, 2026-10-15; report-only).** A third off-fleet substrate: a hosted Notion Worker (`county-sales-monitor`, id `01a0fa61-6ca4-78f2-895d-5aafe648dbbf`) runs two weekly syncs inside Notion, on neither fleet and not in Task Scheduler or Actions. Its comps pull is log-only with no retry, and the coverage sync re-pulls independently and can read OK while the comps sync failed. So the Coverage status alone cannot confirm the comps actually refreshed. Root incident: 2026-10-15, Baltimore Co Coverage read OK while all 37 in-window comps still carried `Last Synced` 2026-10-10. Nothing flagged it. **Read-only: never run `ntn`, trigger a sync, or touch either database. Never register a task for this.** Use the Notion MCP only (`notion-query-data-sources`); a Cowork session cannot run `ntn`.
+
+Sources of record (read the live schema; do not recite): Comps `collection://28bae38c-f495-4c9e-9edc-b86c0ae2c413`, Coverage `collection://f26e704a-9191-436b-85cf-fd64258928be`. If either id no longer resolves, report `WORKER-DB-UNREADABLE` (⚠️) and stop this check. Do not search for a replacement.
+
+```sql
+-- 1. newest Coverage row per county (Run Date, Status, Window Start, Transactions)
+SELECT "County","Status","date:Run Date:start" AS run_date,"date:Window Start:start" AS win_start,
+       "date:Newest Sale Date:start" AS newest_sale,"date:Newest Entry Date:start" AS newest_entry,"Transactions"
+FROM "collection://f26e704a-9191-436b-85cf-fd64258928be"
+ORDER BY run_date DESC, "County" LIMIT 14;
+
+-- 2. comps freshness: rows per county by Last Synced and Sale Date range
+SELECT "County","date:Last Synced:start" AS last_synced,COUNT(*) AS n,
+       MIN("date:Sale Date:start") AS min_sale,MAX("date:Sale Date:start") AS max_sale
+FROM "collection://28bae38c-f495-4c9e-9edc-b86c0ae2c413"
+GROUP BY "County","date:Last Synced:start" ORDER BY "County",last_synced;
+```
+
+For each county with a Coverage row at the newest `Run Date` (Tier A = Franklin, Baltimore County, Polk; the four Tier C counties read `NO PUBLIC SALE PRICE` every cycle by design, so skip them):
+
+- **`WORKER-STALE` (❌):** the newest Coverage `Run Date` is more than 9 days before today (7-day schedule plus jitter). The syncs stopped; every reader of these databases is silently on old data. This is a Worker or Notion-side stop, not the Actions billing block (a Worker runs inside Notion). Fix path for Gabriel: `ntn workers sync status` from `C:\Users\Owner\ora-county-sales-monitor` (where `workers.json` lives; `ntn workers deploy` from anywhere else creates a duplicate Worker).
+- **`COVERAGE-ERROR` (❌):** Status `ERROR`. Quote the Coverage `Notes` text verbatim. **`COVERAGE-WARN` (⚠️):** Status `WARN`. Franklin WARN means a degraded pull that deliberately emitted no comps that cycle, so do **not** also raise `COMPS-LAG` for Franklin when it is WARN.
+- **`COMPS-LAG` (⚠️):** Status is `OK`, but of the in-window comps (`Sale Date` >= the Coverage `Window Start`), at least 50% have `Last Synced` earlier than `Run Date` minus 2 days. Report `N of M in-window comps last synced <date> vs Coverage Run Date <date>`. Likely a transient comps-pull failure (log-only, no retry); it self-heals on the next 7-day tick if transient. Gabriel-only follow-up: `ntn workers runs list`, then `ntn workers runs logs <runId>`, look for `[<County>] pull failed`, and re-trigger `countySalesSync` once.
+  - The 50% floor is deliberate. Rows legitimately stop updating when a sale leaves the trailing window, when the Franklin government filter excludes a deed (4 pre-filter orphans, left in place by decision 2026-10-15), or when a deed regroups. Those are a few rows, never half a county.
+- **`COUNTY-EMPTY` (⚠️):** Status `OK` with `Transactions` of 0 or null for a Tier A county.
+
+**Never flag as failures (source behaviour, not Worker faults):** Baltimore `Newest Sale Date` months behind (`TRADATE` lags 4+ months, judge Baltimore by Last Synced, not by sale recency); Polk `Newest Entry Date` unchanged week to week (the assessor CSV has been stale since `initial_entry_date` 2026-07-30; report as ℹ️ `SOURCE-STALE` with the date only); `LATE-POSTED` counts (a data signal, not a run fault).
+
+Report as one subsection line per Tier A county plus a single roll-up, e.g. `Notion Worker county-sales-monitor: Franklin OK (Run 2026-10-15, comps 160/160 fresh) · Polk OK · Baltimore Co COMPS-LAG (37 of 37 in-window comps last synced 2026-10-10, Run Date 2026-10-15)`. Step 4 routing: ❌ goes through the normal alert path; ⚠️ is Notion-report-only. **De-dupe:** if the previous status page already carries the same finding for the same county, annotate `day N` and do not re-email.
+
+*Known positive for validating the step (read 2026-10-15):* Baltimore Co: 37 comps at `Last Synced` 2026-10-10 against Coverage `Run Date` 2026-10-15, `Window Start` 2025-10-15, Status OK, `Transactions` 37 -> 37 of 37 stale -> `COMPS-LAG`. One further Baltimore comp (sale 2025-10-06, Last Synced 2026-10-03) is outside the window and correctly ignored. *Known negative:* Franklin same day: 160 comps at 2026-10-15; at most 8 older-synced rows (the filter orphans and other no-longer-updating rows), well under 50% -> no finding. Polk: 62 at 2026-10-15 -> no finding.
 
 Report both substrates in the same Notion status page as Step 3, under their own subsection — do not fold their results into the fleet task-status table, since they aren't fleet tasks and a reader needs to know which substrate a row came from.
 
@@ -228,6 +260,8 @@ If any task shows ⚠️ or ❌ (and Step 3.5 didn't already fold it into a sing
 
 **`ACTIONS-BILLING-BLOCKED`:** Local `npm run gate` stays authoritative for commits, but CI checks (`gate`, `refute-required`) cannot turn green and any PR that requires them stays unmergeable; the `ora-pm` off-host backups and the `ora-cowork-watchdog` crons are dark until it clears. After Gabriel fixes Billing & plans, re-run each affected PR's failed jobs (`gh run rerun <runId> --failed`), oldest PR of a stack first. That re-run is his action, not this monitor's.
 
+**`COMPS-LAG` / `WORKER-STALE` / `COVERAGE-ERROR` (Notion Worker `county-sales-monitor`):** From `C:\Users\Owner\ora-county-sales-monitor`: `ntn workers sync status`, `ntn workers runs list`, `ntn workers runs logs <runId>`. A single `COMPS-LAG` on one county is usually a transient county-endpoint failure: re-trigger `ntn workers sync trigger countySalesSync` once and re-check next cycle. Rollback is `ntn workers capabilities disable <syncName>`; never delete the Worker or either database. This monitor reports only; the re-trigger is Gabriel's action.
+
 **General:** for any task not covered above, read its own `SKILL.md`/`SCHEDULED_TASK.md` (path returned by `list_scheduled_tasks`) for task-specific expected output and failure modes rather than guessing from this list.
 
 ---
@@ -242,6 +276,7 @@ If any task shows ⚠️ or ❌ (and Step 3.5 didn't already fold it into a sing
 
 ## Changelog
 
+- **v1.14 (2026-10-15, Gabriel-directed):** Step 1.75 gains the Notion Workers substrate check for `county-sales-monitor`: per Tier A county, newest Coverage row (Run Date within 9 days, Status) cross-checked against the Comps `Last Synced` of in-window rows. New findings `WORKER-STALE`, `COVERAGE-ERROR`, `COVERAGE-WARN`, `COMPS-LAG`, `COUNTY-EMPTY`, `WORKER-DB-UNREADABLE`. Root incident: 2026-10-15 the Baltimore Co Coverage row read OK while 37 of 37 in-window comps were still last synced 2026-10-10, because the Worker's comps pull is log-only with no retry and the coverage sync re-pulls independently. Explicit non-findings: Baltimore sale-date lag, Polk assessor staleness, `LATE-POSTED`. Read-only via Notion MCP, no new scheduled task. Applies to this skill source only; the live LAMS task file has no off-fleet step and is a separate gap (same as v1.13).
 - **v1.13 (2026-09-28, Gabriel-directed):** Step 1.75 gains the GitHub Actions capacity paragraph: a failed run whose jobs ran zero steps and whose check-run annotation names a billing or spending limit is `ACTIONS-BILLING-BLOCKED` (❌, one fleet-level line, de-duped daily), not a broken watchdog or a `BACKUP-FAILED`. The two lines that interpret a `failure` (watchdog, `ora-pm` backups) now carve out the zero-step case, and REMEDIATION GUIDANCE gains an entry. Root incident: 2026-09-28, every PR and `main` in `ZeOoba/oxford-command-center` went red for hours with no step run. Billing-quota readout is best-effort and marked unverified. Applies to this skill source only; the live LAMS task file has no off-fleet step and is a separate gap.
 - **v1.12 (2026-09-13, Fable re-review follow-up):** Step 2a rule item 6 now states that the flag-age line is excluded from FAIL-aging tracking, like the EMAIL-ONLY row. The same review lowered three `min_bytes` floors and tightened one `must_not_match` in the state file (not in this file). Rule block stays byte-identical to `ora-health-guard` v1.15 B.2(C.0c).
 - **v1.11 (2026-09-13, OI-281/OI-288):** New Step 2a, the Notion-publishing-degraded → email-only rule. It reads `~/.claude/maintenance/_state/notion-publish-degraded.json`, the single source of truth. That file holds the flag, `review_by`, the matching rules, a 51-entry producers roster (48 tasks) and `dark_producers`.
