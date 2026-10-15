@@ -182,6 +182,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `communication-intelligence` — context-enriched drafting for broker/lender/vendor/attorney mail
 - `tenant-email` — tenant-facing email drafting (renewals, notices, maintenance, rent)
 - `document-assembly` — template-driven document generation from Notion data (10 templates; not LOIs, lease addenda or estoppels)
+- `artifact-to-docx-report` — turns a published Claude artifact (dashboard/review page with embedded data) into an ORA-styled Word report with charts, KPI tiles and a 90-day action plan; bundles the extract, chart, docx-build and render-check scripts
 - `evidence-dossier-drafting` — multi-agent drafting pipeline: a numbered facts dossier, an inline citation on every claim, and an adversarial refuter that kills uncited or mis-cited claims before anything publishes
 - `daily-brief` — daily CRE news/market/portfolio intelligence brief
 - ~~`conversation-archival`~~ — retired 2026-08-05 (its entire Notion footprint was evidence-checked, not merely absent)
