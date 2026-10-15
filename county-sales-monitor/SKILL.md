@@ -12,7 +12,7 @@ description: >
   acquisition-underwriting COMPS mode.
 ---
 
-# county-sales-monitor (v0.7)
+# county-sales-monitor (v0.8)
 
 Produce a recurring digest of recently recorded industrial sales and transfers
 across ORA's target-market counties, so Gabriel sees what actually traded — at
@@ -449,6 +449,37 @@ valuation input); Baltimore Co assessments run ~64% below recent industrial
 sales, so ratio-based arm's-length tests must be per-county, never global.
 
 ## Changelog
+- **v0.8 (2026-10-15):** Post-deploy verification of the Worker databases and a
+  fresh parity run against the legacy pilot (read-only; no Worker or database
+  change). Worker DB state 2026-10-15: 273 comps (Franklin 171 / Baltimore Co 38
+  / Polk 64), 273 distinct Comp Keys, 0 duplicates, `Price PSF` never 0 and blank
+  on all 147 NONARMS / CONTRACT-SALE / SF-INCOMPLETE rows, 0 LATE-POSTED; Coverage
+  holds 7 rows per cycle (cycles 2026-10-02, 10-03, 10-10). Parity, window
+  2025-10-01 to 2026-08-15, strict County+Parcel+Date+Price: 189 matched of 258
+  legacy rows; 227 equivalent at transaction level. Strict misses are 17 Baltimore
+  Co rows with a NULL price in both databases (SQL NULL never equals NULL; 38 of
+  38 match once NULL-safe), 14 Polk rows where the legacy ID is the 14-digit `dp`
+  and the Worker lists the member `gp` PINs, and 7 Franklin legacy rows vs 14
+  Worker rows from multi-parcel deed granularity (priced deeds roll up in the
+  Worker; $0 NONARMS deeds emit one row per parcel and now carry SF). The 31
+  remaining legacy-only rows resolve to: 20 with SF >= 150K (Worker SF gate), 2
+  Franklin deeds legacy marked SF-UNPUBLISHED that are over the cap ($15.4M
+  Action Group parcel 010-000782 at 153,412 SF; $137.8M NLF Columbus parcel
+  495-286103 at 1,600,052 SF), 3 Franklin sales dated 2025-10-01 before the
+  Worker's first window start, 4 Franklin parcels (Westerville Rd, $0 on
+  2026-07-29) whose GIS `SALEDATE` was overwritten by a 2026-08-18 $13,005,000
+  resale (G7, verified against the live layer), and 2 Polk sales whose DOR
+  `quality` is "Government or Exempt" (a church and a nonprofit; verified in the
+  live CSV), which the Worker excludes by design. This closes the "1 Polk
+  unexplained" row in v0.6. The Coverage `Transactions` count runs below the
+  Comps row count by design: the Comps DB never deletes, so rows whose sale date
+  has aged past the rolling 365-day window stay (10-10: 167 / 37 / 62 vs 171 /
+  38 / 64; 4 / 1 / 2 rows dated before 2025-10-10). **Open defect (Worker, not
+  fixed here):** Step 3's government/exempt exclusion is implemented for Baltimore
+  (`EXCLASS`) and Polk (DOR quality) but NOT for Franklin; two $0 NONARMS rows
+  with government buyers (State of Ohio, City of Columbus) are in the Franklin
+  set. Ruled a Worker defect by Gabriel 2026-10-15; fix is a Worker change
+  (src/counties/franklin.ts) and needs a separate approved redeploy.
 - **v0.7 (2026-10-02):** Worker follow-ups ratified by Gabriel the same day.
   (1) `RATIO-REVIEW` splits ratio-only trips out of `NONARMS` (Franklin 20 rows,
   Baltimore Co 1, Polk 0 on the first run; coverage medians unchanged by design).
