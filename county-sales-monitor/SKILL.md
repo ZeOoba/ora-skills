@@ -12,7 +12,7 @@ description: >
   acquisition-underwriting COMPS mode.
 ---
 
-# county-sales-monitor (v0.8)
+# county-sales-monitor (v0.9)
 
 Produce a recurring digest of recently recorded industrial sales and transfers
 across ORA's target-market counties, so Gabriel sees what actually traded — at
@@ -449,6 +449,74 @@ valuation input); Baltimore Co assessments run ~64% below recent industrial
 sales, so ratio-based arm's-length tests must be per-county, never global.
 
 ## Changelog
+- **v0.9 (2026-10-15):**
+  Closes the open Worker defect recorded in v0.8. Step 3's government/exempt
+  exclusion was implemented for Baltimore (`EXCLASS`) and Polk (DOR quality) but
+  not for Franklin, whose parcel layer carries no exempt field (`EXPLUC` empty on
+  all 219 industrial-class parcels sold since 2025-10-02; `TOTVALUEEXP` reflects partial exemptions; `PCLASS` is
+  "I" throughout). The fix is a current-owner (buyer) name test in the Worker's
+  Franklin adapter (`ZeOoba/ora-county-sales-monitor` PR #5, commit `fe32c9f`,
+  merged to `main` as `32abe0b`; `src/counties/exempt.ts`). Decisions (Gabriel,
+  2026-10-15): (A) scope is government plus PUBLIC institutions (state, city, county, authorities, public
+  colleges and schools); churches, other nonprofits and private institutions are
+  KEPT, so this is narrower than Polk's "Government or Exempt" class, which also
+  removed a church and a nonprofit; (B) rows already written are left in place,
+  not deleted; (C) a numbered deed with any government parcel is dropped whole.
+  Seller is never tested (Franklin Seller is inferred, and an inferred seller
+  never drives a flag). The filter runs after deed enrichment so exclusions cannot
+  trip the degraded-pull WARN, and an excluded sale is never reported as a
+  dropped group, so `planRegroup` cannot retire its existing rows. Coverage Notes
+  gain the line `N government/public-institution sale(s) excluded.` No change to
+  `rules.ts`, the schema, county labels or the key format. Pre-deploy evidence:
+  typecheck, lint and 57 of 57 tests clean; a read-only live pull of the Franklin
+  layer (window start 2025-10-15) went from 208 raw to 204 kept with 4 sales
+  excluded; the name test run on 91 distinct live Franklin owner names flagged 21,
+  all public bodies, and kept private owners such as OHIOHEALTH CORPORATION and
+  OHIO POWER COMPANY. The `simulate` comps cycle moved Franklin from 164 to 160
+  rows and the harness's own median from $117.77 to $113.14 (Columbus State
+  Community College, $236.05/SF, was the only excluded sale with a $/SF; see the
+  post-deploy note below for the Coverage-basis figures). **Orphaned rows:** the four existing
+  Franklin comps below were written before the filter and are now excluded, so
+  they stay in the Comps DB with a frozen `Last Synced` and no longer update.
+  Treat them as excluded when reading the database; do not count them toward
+  Franklin medians or volumes:
+  `Franklin|130-011588|2026-02-09|0` (State of Ohio),
+  `Franklin|520-165723|2026-05-19|0` (City of Columbus),
+  `Franklin|010-282683|2026-01-29|0` (Columbus Regional Airport Authority),
+  `Franklin|010-005337|2025-12-23|1950000` (Columbus State Community College,
+  the only one with a $/SF). Known limits (best effort, also in the Worker
+  README): a public body whose name contains a church-type word is kept; a
+  public body ending in the abbreviation "CO" is missed; a private college is
+  not recognised as public; a suffix-less private name that reads like a public
+  body (for example "STATE OF THE ART STORAGE") would be dropped. Known
+  unrelated issues: the Worker's `npm run simulate` fails a date-dependent
+  assertion in its own harness (`test/simulate.ts:73`), identically on unmodified
+  `main`; and GitHub Actions jobs die in about 3 seconds with no logs on every
+  run in both the Worker repo and ora-skills, so CI status is not evidence about
+  these changes. **Deployed 2026-10-15** from `main` at `32abe0b` with no schema
+  change; the existing Worker was updated, not duplicated (the same two managed
+  databases received the new cycle; no new databases appeared). **First
+  post-deploy cycle, run date 2026-10-15 (window start 2025-10-15), read from
+  Notion:** the Franklin Coverage row is OK and its Notes read "4
+  government/public-institution sale(s) excluded", as predicted. Franklin
+  Transactions 160 (167 on 2026-10-10), clean $/SF rows 40, NONARMS rows 90,
+  median $100.68. That median reproduces exactly from the Comps DB: the 40 clean
+  rows have a median of (100.64 + 100.71) / 2. The filter's own effect on it is
+  about $0.04 (removing the $236.05/SF college row moves the median from 100.71
+  to 100.68), so the filter is not what moved it from $117.77 on 2026-10-10. That
+  fall coincides with the window rolling forward five days and new sales posting
+  (the Comps DB now holds a $35.73/SF sale dated 2026-10-09), on a distribution
+  with a gap around the middle (100.71, 113.14, 117.77), where a few rows
+  crossing the window edge move the median this far; the exact rows that left the
+  window were not diffed. The `simulate` figures above (a $113.14
+  median) are on the harness basis, which includes RATIO-REVIEW rows and takes
+  the upper middle value, so they do not compare to the Coverage median. Comps DB
+  after the cycle: Franklin 172 rows / 172 distinct Comp Keys (160 upserted this
+  cycle, equal to the Coverage Transactions), Polk 64 / 64, Baltimore Co 38 / 38;
+  0 duplicate Comp Keys; 0 LATE-POSTED; `Price PSF` never 0 and blank on every
+  NONARMS, CONTRACT-SALE and SF-INCOMPLETE row. The four orphaned keys above are
+  present and unchanged (Last Synced 2026-10-10, same flags, the college row
+  still carrying its $236.05/SF).
 - **v0.8 (2026-10-15):** Post-deploy verification of the Worker databases and a
   fresh parity run against the legacy pilot (read-only; no Worker or database
   change). Worker DB state 2026-10-15: 273 comps (Franklin 171 / Baltimore Co 38
