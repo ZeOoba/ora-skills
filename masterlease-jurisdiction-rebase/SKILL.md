@@ -3,7 +3,7 @@ name: masterlease-jurisdiction-rebase
 description: "Use when the user mentions: new master lease version, rebase the lease templates, regenerate the MD/MO templates, jurisdiction overlay, conform the lease to a state, state-conformed lease template, update property lease forms, lease template for Easton / Salisbury / Northwood / Raytown / Columbia, or uploads a new ORA_MasterLease_ShallowBayIndustrial_v*.docx or ORA_MasterLease_ShallowBay_MultiTenantMG_v*.docx (v2.x NNN / v3.x MG lines, read from the footer tag). Also use when adding a NEW property or state overlay, or converting a property to NNN. Rebases Oxford Realty Advisors jurisdiction-conformed Master Lease property templates onto a new master revision in one command, and generates state-conformed (MD/MO) property templates from the OH-anchored master. Companion to lease-form-qc (which QCs drafted leases); this skill produces the templates leases are drafted FROM."
 ---
 
-# Master Lease Jurisdiction Rebase — Oxford Realty Advisors (v1.9)
+# Master Lease Jurisdiction Rebase — Oxford Realty Advisors (v1.10)
 
 One-command regeneration of state-conformed property lease templates whenever the
 controlled master (`ORA_MasterLease_ShallowBayIndustrial_v*.docx`) revs. Built from the
@@ -274,19 +274,45 @@ recovered 2026-08-04 by paragraph diff of the v2.4.1 variant against its v2.4.1
 base; engine output verified text-identical to the hand-built v2.6 canonical.
 Relocation clause (h) is retained as an inert option by ratified judgment call.
 
-## Shared tracked-change editor (added v1.5)
+## Shared tracked-change editor (added v1.5; v2 ops added v1.10)
 
-`scripts/ora_docx_redline.py` — the reusable asserted-count tracked-change editor
-(`replace` / `insert_after` / `insert_paragraphs_after` ops from a JSON spec, real
-`<w:ins>`/`<w:del>` with author+date). Use it for every master revision instead of
-rebuilding the machinery ad hoc (it was reimplemented three times across the v2.3,
-v2.5 and v2.6 builds before extraction). Anchors must sit inside one `<w:t>` (run
-`merge_runs.py` first); always validate output with the docx skill's `validate.py
---original --author`. ANCHOR DRIFT failures follow the same never-loosen rule as
-`rebase.py`.
+`scripts/ora_docx_redline.py` — the reusable asserted-count tracked-change editor. Use it for
+every master revision instead of rebuilding the machinery ad hoc (it was reimplemented three
+times across the v2.3, v2.5 and v2.6 builds before extraction, and the 2026-10-15 Phase-1
+power-rights build still needed a wrapper script for four missing ops — now built in):
+
+| Op | What it does |
+|---|---|
+| `replace` / `insert_after` | in-run tracked substitution / insertion (v1) |
+| `delete` | tracked deletion of `target` inside each run holding `context` (count asserted) |
+| `insert_paragraph_after` | tracked NEW paragraph after each paragraph whose text contains `anchor_text` (count asserted, default 1); pPr — style **and numbering** (`numPr`) — copied from the anchor (`"ppr_from": "anchor"`), from a reference paragraph named by a unique text snippet, or given explicitly (`"ppr"`); paragraph mark + every run tracked; runs carry an `rpr` (named or raw) or `bold`/`underline`/`italic` |
+| `insert_paragraphs_after` | v1 BodyText bold-label rows after an exact XML anchor |
+| any op + `"part"` | target any XML part, e.g. `"word/footer*.xml"` for the footer form tag; the count is asserted **across all matching parts**; each part gets its own `w:id` range |
+| `accept` / `--accept-out` | **XML-level accept-all-changes** (drop `w:del`, unwrap `w:ins`, drop paragraph-mark revisions) — the clean `_TEMPLATE` keeps every other byte of every package part and the source run structure, so it rebases cleanly. Refuses formatting changes, moves and deleted paragraph marks rather than guess. Use this, **not** a LibreOffice `accept_changes.py` round-trip, for the clean template (LibreOffice re-serialises the whole package and drops unused header/footer parts). |
+
+Spec = JSON: a v1 list of ops, or `{"author", "date", "start_id", "rpr": {...}, "ppr": {...}, "ops": [...]}`.
+CLI: `python3 -I scripts/ora_docx_redline.py --in <master> --out <REDLINE> --spec <spec.json> --accept-out <TEMPLATE>`;
+`... accept --in <REDLINE> --out <TEMPLATE>`. Python API: `apply_spec()`, `accept_docx()`,
+`tracked_change_count()`, `Redliner`. Committed build specs live in **`specs/`** —
+`power-rights_v2.7-to-v2.8.json` and `power-rights_v3.0-to-v3.1.json` are the Phase-1 build,
+and re-running them reproduces the committed v2.8 / v3.1 masters byte-for-byte in every
+package part (29 / 28 tracked changes; lease_qc 0 of 68 / 0 of 73 — `test_ora_docx_redline.py`
+`Phase1EquivalenceTests`). In-run anchors must sit inside one `<w:t>` (run `merge_runs.py`
+first); always validate output with the docx skill's `validate.py --original --author`.
+ANCHOR DRIFT failures follow the same never-loosen rule as `rebase.py`.
 
 ## Changelog
 
+- v1.10 (2026-10-15): (1) **`ora_docx_redline.py` v2** — the Phase-1 power-rights build's four
+  wrapper-script workarounds are first-class ops: `insert_paragraph_after` (styled/numbered tracked
+  paragraph, pPr copied from the anchor or a reference paragraph), `delete`, `"part"` targeting
+  (footer/header globs, count asserted across parts, per-part `w:id` ranges) and XML-level
+  `accept` / `--accept-out`; v1 ops and list specs unchanged except that a count mismatch now
+  exits with `ANCHOR DRIFT ...` instead of a bare `AssertionError`; output keeps the source's
+  zip member order. New `specs/power-rights_v2.7-to-v2.8.json` and `..._v3.0-to-v3.1.json` (the
+  Phase-1 `build.py` edit list, ported verbatim) reproduce the Phase-1 masters byte-for-byte;
+  `fixtures/` gains the v2.8 / v3.1 masters. New `scripts/test_ora_docx_redline.py` (18 tests);
+  the CI gate now runs `masterlease-jurisdiction-rebase/scripts/test_*.py`.
 - v1.9 (2026-10-15): v3.0 short-form multi-tenant MG master support. (1) **Form detection** —
   `master_form()`/`is_v3()` read the footer tag; `rebase_one()`, `post_check()` and `main()`
   dispatch on it; filename/footer version mismatch and mixed footer tags abort. (2) **v3.0
