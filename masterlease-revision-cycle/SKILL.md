@@ -66,7 +66,11 @@ prior-version templates to `/archive/` (never delete); write the run memo.
 
 **Phase 3 — Systematize**:
 extend `lease_qc.py` with a check per new standard provision (new F-class,
-"vX.Y standard"); re-benchmark (prior-version-derived lease fails exactly the new
+"vX.Y standard"). **Every new check ships with a mutation entry** in
+`lease-form-qc/tests/test_lease_qc_mutations.py` for every master fixture where it is active
+(add the new master to its `FIXTURES` / `ACTIVE_COUNT` too), and **the mutation suite must be
+green before a master is parked** — a check that cannot fail on the new paper is an empty pass
+(the 2026-10-08 v3.0 "0/60" had eleven). Re-benchmark (prior-version-derived lease fails exactly the new
 checks; new-version-derived = 0); swap the rebase parity fixture to the new master
 and run its test suite green; update `MASTER-LEASE-TEMPLATE-POINTER.md`; bump and
 repackage both skills as `.skill` installers (present for Save-skill click);
@@ -95,7 +99,8 @@ deals draft from the new master only.
 
 ## Changelog
 
-- **v1.1 (2026-10-15):** Phase 1 builds from a committed spec with `ora_docx_redline.py` v2's
+- **v1.1 (2026-10-15):** Phase 3 rule — every new check ships with a mutation-suite entry
+  and the suite must be green before a master is parked. Phase 1 builds from a committed spec with `ora_docx_redline.py` v2's
   built-in ops (styled/numbered paragraph insertion, tracked delete, footer-part edits) and
   produces the clean TEMPLATE by XML-level accept-all instead of a LibreOffice round-trip
   (proven: the Phase-1 power-rights specs reproduce the v2.8 / v3.1 masters byte-for-byte).
