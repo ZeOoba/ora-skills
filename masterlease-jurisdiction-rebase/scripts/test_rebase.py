@@ -7,8 +7,10 @@ Three cases required by the 2026-08-03 Master Lease conformance session close-ou
 2. article() unit cases, including the "an Ohio" / "a Utah" fix that motivated v1.1.
 3. Fail-closed on a missing entity_state field and on a RESEARCH-REQUIRED state.
 """
+import copy
 import json
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -90,7 +92,7 @@ class FailClosedTests(unittest.TestCase):
 
             out_dir = td / "out"
             result = subprocess.run(
-                [sys.executable, str(scripts_dir / "rebase.py"),
+                [sys.executable, "-I", "-B", str(scripts_dir / "rebase.py"),
                  "--master", str(FIXTURE_MASTER), "--property", "TEST-IN", "--out", str(out_dir)],
                 capture_output=True, text=True,
             )
@@ -164,9 +166,6 @@ class ParityAgainstKnownMasterTests(unittest.TestCase):
             self.assertNotIn("an Maryland", full)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class TestFooterFillAllParts(unittest.TestCase):
     """2026-10-06: the footer fill walked only sec.footer (default footer), leaving
@@ -193,3 +192,214 @@ class TestFooterFillAllParts(unittest.TestCase):
                     for n in z.namelist():
                         if _re.match(r"word/footer\d*\.xml$", n):
                             self.assertNotIn("[PREMISES ADDRESS]", z.read(n).decode("utf-8"), n)
+
+
+# ---------------------------------------------------------------------------
+# v3.0 short-form multi-tenant MG master (added 2026-10-15, skill v1.9)
+# ---------------------------------------------------------------------------
+FIXTURE_V30 = HERE / "fixtures" / "ORA_MasterLease_ShallowBay_MultiTenantMG_v3.0_TEMPLATE.docx"
+EXPECTED_V30 = HERE / "fixtures" / "v3.0_expected"   # the 2026-10-08 property templates, unmodified copies
+V30_KEYS = ("OH-MOR", "MD-EAS", "MD-SBY", "MO-RAY")
+# Salisbury values BEFORE the 2026-10-08 payee direction (properties.json as of v1.8).
+SBY_PRE_FIX = {
+    "payment_direction": "to 2203 Northwood, LLC through the tenant online portal, payable to Landlord,",
+    "pm_block": ["COPY TO:Sperry Van Ness — Miller Commercial", "[MANAGER STREET ADDRESS]",
+                 "Salisbury, MD 21801", "ATTN: Brady Smith"],
+}
+
+
+def _norm(s):
+    return re.sub(r"[ \t]+", " ", s.replace("\xa0", " ")).strip()
+
+
+def doc_text(path_or_doc):
+    """Body paragraphs + every footer part's paragraphs, whitespace-normalized."""
+    d = Document(str(path_or_doc)) if isinstance(path_or_doc, (str, pathlib.Path)) else path_or_doc
+    body = [_norm(p.text) for p in d.paragraphs]
+    foot = [_norm(p.text) for p in rebase._footer_paragraphs(d)]
+    return body, foot
+
+
+def format_signature(path):
+    """Per paragraph: (pPr xml, [(rPr xml, text)...]) with runs of identical
+    formatting merged -- equal signatures mean identical text AND identical
+    character formatting, whatever the run segmentation."""
+    from docx.oxml.ns import qn
+    from lxml import etree
+    out = []
+    for p in Document(str(path)).paragraphs:
+        ppr = p._p.find(qn("w:pPr"))
+        segs = []
+        for r in p.runs:
+            rpr = r._r.find(qn("w:rPr"))
+            key = etree.tostring(rpr) if rpr is not None else b""
+            if not r.text:
+                continue
+            if segs and segs[-1][0] == key:
+                segs[-1][1] += r.text
+            else:
+                segs.append([key, r.text])
+        out.append((etree.tostring(ppr) if ppr is not None else b"", [tuple(s) for s in segs]))
+    return out
+
+
+def expected_path(P):
+    return EXPECTED_V30 / f"ORA_MasterLease_ShallowBay_{P['label']}_v3.0_TEMPLATE.docx"
+
+
+class V30ParityTests(unittest.TestCase):
+    """Rebasing the v3.0 master must reproduce each stored v3.0 property template."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not FIXTURE_V30.exists():
+            raise unittest.SkipTest(f"v3.0 fixture master not found: {FIXTURE_V30}")
+        cls.props = json.loads((CONFIG / "properties.json").read_text(encoding="utf-8"))
+        cls.states = json.loads((CONFIG / "state_overlays.json").read_text(encoding="utf-8"))
+        cls.td = tempfile.TemporaryDirectory()
+        cls.out = pathlib.Path(cls.td.name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.td.cleanup()
+
+    def L_for(self, P):
+        return {"state": "Ohio"} if P.get("home_state") else self.states[P["state_code"]]
+
+    def build(self, key, P=None, master=FIXTURE_V30):
+        P = P or self.props[key]
+        L = self.L_for(P)
+        doc = rebase.rebase_one(master, P, L)
+        out = self.out / f"{key}-{id(P)}.docx"
+        doc.save(str(out))
+        rebase.post_check(out, P, L)
+        return out
+
+    def test_master_form_detection(self):
+        self.assertEqual(rebase.master_form(Document(str(FIXTURE_V30))), (3, 0))
+        self.assertTrue(rebase.is_v3(FIXTURE_V30))
+        self.assertEqual(rebase.master_form(Document(str(FIXTURE_MASTER))), (2, 7))
+        self.assertFalse(rebase.is_v3(FIXTURE_MASTER))
+
+    def test_v30_keys_in_config(self):
+        self.assertEqual(sorted(k for k, P in self.props.items() if isinstance(P, dict) and "v3_0" in P),
+                         sorted(V30_KEYS))
+
+    def test_parity_text_equal(self):
+        for key in V30_KEYS:
+            with self.subTest(property=key):
+                exp = expected_path(self.props[key])
+                if not exp.exists():
+                    self.skipTest(f"expected template missing: {exp}")
+                got_body, got_foot = doc_text(self.build(key))
+                exp_body, exp_foot = doc_text(exp)
+                self.assertEqual(got_body, exp_body)
+                self.assertEqual(got_foot, exp_foot)
+
+    def test_parity_character_formatting_equal(self):
+        # Stronger than text: bold labels / defined terms keep their formatting
+        # (an anchor spanning a bold run silently un-bolded "Building" and
+        # "Hazardous Materials" before the 2026-10-15 anchor narrowing).
+        for key in V30_KEYS:
+            with self.subTest(property=key):
+                self.assertEqual(format_signature(self.build(key)),
+                                 format_signature(expected_path(self.props[key])))
+
+    def test_salisbury_payee_fix_is_what_the_stored_template_carries(self):
+        """The stored Salisbury v3.0 template already carries Gabriel's 2026-10-08
+        payee direction (rent to SVN Miller Commercial Real Estate). The pre-fix
+        config must produce EXACTLY the payee/PM differences and nothing else --
+        proving the config fix, not a forced pass, is what closes parity."""
+        P = copy.deepcopy(self.props["MD-SBY"])
+        self.assertIn("SVN Miller Commercial Real Estate, 206 East Main Street, Salisbury, MD 21801",
+                      P["payment_direction"])
+        self.assertEqual(P["pm_block"][:3], ["COPY TO:SVN Miller Commercial Real Estate",
+                                              "206 East Main Street", "Salisbury, MD 21801"])
+        P.update(copy.deepcopy(SBY_PRE_FIX))
+        got, _ = doc_text(self.build("MD-SBY", P))
+        exp, _ = doc_text(expected_path(P))
+        diff = [(i, g, e) for i, (g, e) in enumerate(zip(got, exp)) if g != e]
+        self.assertEqual(len(got), len(exp))
+        changed = {i for i, _g, _e in diff}
+        rent = next(i for i, e in enumerate(exp) if e.startswith("Tenant shall pay the sums due at signing"))
+        ins = next(i for i, e in enumerate(exp) if e.startswith("Tenant’s insurers must be licensed"))
+        copy_to = next(i for i, e in enumerate(exp) if e.startswith("COPY TO:"))
+        self.assertEqual(changed, {rent, ins, copy_to, copy_to + 1})
+        self.assertIn("to 2203 Northwood, LLC through the tenant online portal", got[rent])
+        self.assertIn("SVN Miller Commercial Real Estate", exp[rent])
+        self.assertEqual(got[copy_to + 1], "[MANAGER STREET ADDRESS]")
+        self.assertEqual(exp[copy_to + 1], "206 East Main Street")
+
+    def test_cli_all_emits_only_v30_properties(self):
+        with tempfile.TemporaryDirectory() as td:
+            res = subprocess.run([sys.executable, "-I", "-B", str(HERE / "rebase.py"), "--master",
+                                  str(FIXTURE_V30), "--all", "--out", td],
+                                 capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+            names = sorted(p.name for p in pathlib.Path(td).iterdir())
+            self.assertEqual(names, sorted(expected_path(self.props[k]).name for k in V30_KEYS))
+
+    def test_cli_v30_master_refuses_nnn_property(self):
+        with tempfile.TemporaryDirectory() as td:
+            res = subprocess.run([sys.executable, "-I", "-B", str(HERE / "rebase.py"), "--master",
+                                  str(FIXTURE_V30), "--property", "MD-COL", "--out", td],
+                                 capture_output=True, text=True)
+            self.assertNotEqual(res.returncode, 0)
+            self.assertIn("v3_0", res.stdout + res.stderr)
+            self.assertFalse(any(pathlib.Path(td).iterdir()))
+
+    def test_anchor_drift_fails_loudly(self):
+        # Never-loosen rule: a v3.0 master whose anchor text moved must abort
+        # naming the anchor, not emit a half-conformed template.
+        d = Document(str(FIXTURE_V30))
+        for p in d.paragraphs:
+            if "bank holiday in Ohio;" in p.text:
+                rebase.replace_in_paragraph(p, "bank holiday in Ohio;", "legal holiday in Ohio;")
+        drifted = self.out / "drifted_v3.0.docx"
+        d.save(str(drifted))
+        with self.assertRaises(SystemExit) as ctx:
+            rebase.rebase_one(drifted, self.props["MD-EAS"], self.states["MD"])
+        self.assertIn("ANCHOR DRIFT", str(ctx.exception))
+        self.assertIn("bank holiday in Ohio;", str(ctx.exception))
+
+    def test_duplicated_anchor_fails_loudly(self):
+        d = Document(str(FIXTURE_V30))
+        tgt = next(p for p in d.paragraphs if p.text.startswith("Severability."))
+        tgt.add_run("  This Lease is governed by the laws of the State of Ohio.")
+        dup = self.out / "dup_v3.0.docx"
+        d.save(str(dup))
+        with self.assertRaises(SystemExit) as ctx:
+            rebase.rebase_one(dup, self.props["MO-RAY"], self.states["MO"])
+        self.assertIn("expected 1 match(es), found 2", str(ctx.exception))
+
+    def test_missing_v3_signature_note_fails_closed(self):
+        L = {k: v for k, v in self.states["MD"].items() if k != "v3_signature_note"}
+        with self.assertRaises(SystemExit) as ctx:
+            rebase.rebase_one(FIXTURE_V30, self.props["MD-EAS"], L)
+        self.assertIn("v3_signature_note", str(ctx.exception))
+
+    def test_property_without_v3_entry_fails_closed(self):
+        P = {k: v for k, v in self.props["MD-EAS"].items() if k != "v3_0"}
+        with self.assertRaises(SystemExit) as ctx:
+            rebase.rebase_one(FIXTURE_V30, P, self.states["MD"])
+        self.assertIn("v3_0", str(ctx.exception))
+
+    def test_v27_line_untouched_by_v30_config(self):
+        # The v3_0 keys and the Salisbury payee fix must not disturb the v2.7
+        # long-form path: every property still rebases the v2.7 fixture.
+        for key, P in self.props.items():
+            if key.startswith("_"):
+                continue
+            with self.subTest(property=key):
+                if P.get("variant") == "single-tenant":
+                    L = self.states.get(P["state_code"], {})
+                else:
+                    L = self.L_for(P)
+                doc = rebase.rebase_one(FIXTURE_MASTER, P, L)
+                out = self.out / f"v27-{key}.docx"
+                doc.save(str(out))
+                rebase.post_check(out, P, L)
+
+
+if __name__ == "__main__":
+    unittest.main()
