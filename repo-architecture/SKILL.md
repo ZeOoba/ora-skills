@@ -1,6 +1,6 @@
 ---
-name: repo-architecture
-description: Use when working in, or asking how to navigate, any of Gabriel's 7 most-active GitHub repos (ora-skills, ~/.claude/ora-claude-config, oxford-command-center, Website/website-canonical, AAOS, ora-county-sales-monitor, ora-pm) - purpose, layout, data flow, deploy path, gotchas, and which files to read first. Point-in-time snapshot; verify counts and paths against the repo.
+name: "repo-architecture"
+description: "Use when working in, or asking how to navigate, any of Gabriel's 7 most-active GitHub repos (ora-skills, ~/.claude/ora-claude-config, oxford-command-center, Website/website-canonical, AAOS, ora-county-sales-monitor, ora-pm) - purpose, layout, data flow, deploy path, gotchas, and which files to read first. Point-in-time snapshot; verify counts and paths against the repo."
 ---
 
 # Repo architecture map (v1.0)
