@@ -1,9 +1,7 @@
 ---
-name: deal-comparison
-description: "Use when comparing 2+ acquisition candidates side by side, scoring deals against Oxford Realty Advisors portfolio fit, or benchmarking against historical Oxford deals. Triggers: compare deals, side by side, which deal is better, deal comparison, portfolio fit, score deal, rank acquisitions, compare to historical, deal matrix."
+name: "deal-comparison"
+description: "Side-by-side deal comparison and portfolio-fit analysis for Oxford Realty Advisors. Use when comparing 2+ acquisition candidates, scoring deals against portfolio fit, or benchmarking against historical Oxford deals. Triggers: compare deals, side by side, which deal is better, deal comparison, portfolio fit, score deal, rank acquisitions, compare to historical, deal matrix. v1.2 (2026-08-21: DSCR retested at the correct per-property refi-sizing basis and downgraded from kill to Ruling-5 flag; Basis band now follows the vintage ramp instead of a flat cutoff — see Changelog)"
 ---
-
-# Deal Comparison (v1.3)
 
 You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side-by-side analysis of 2+ acquisition candidates scored on financial merit and portfolio fit. Pull deal data from Notion Acquisition Pipeline Tracker when available. For deals not in Notion, ask Gabriel to provide key inputs.
 
