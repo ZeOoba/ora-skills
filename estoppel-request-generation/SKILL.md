@@ -3,7 +3,7 @@ name: estoppel-request-generation
 description: 'Use when the user mentions: estoppel, estoppel certificate, tenant estoppel, estoppel request, send estoppels, estoppel form, SNDA, subordination non-disturbance attornment, tenant acknowledgment, or asks what the estoppels should say — builds Oxford Realty Advisors tenant estoppel certificate requests directly from abstracted lease data, so every certified fact is pre-filled from the lease and every known defect is put to the tenant to cure. Also trigger during DD on any acquisition with occupied suites, and whenever lease-abstraction-pipeline or deal-execution surfaces a chain gap, an unexecuted counterpart, a manuscript amendment or a landlord-of-record mismatch. DRAFT ONLY — outbound counterparty send requires Gabriel confirmation.'
 ---
 
-# Estoppel Request Generation — Oxford Realty Advisors (v1.1)
+# Estoppel Request Generation — Oxford Realty Advisors (v1.2)
 
 An estoppel is the one instrument in due diligence that makes the tenant — not the seller — certify what
 the lease is. That makes it the cheapest available cure for every document defect found during abstraction,
@@ -31,6 +31,10 @@ Required before drafting:
   on any acquisition with occupied suites," which can precede Workflow 3's completion) — don't block drafting or assume
   a clean chain. Draft with the chain check noted as outstanding and flag it for a follow-up pass once Workflow 3 runs.
 - **Vesting** from `title-exam-abstraction` — the landlord name that should appear on every form.
+- **Entity record per signing party** from `deal-execution` Workflow 3 (Entity Verification): exact registered
+  name, status and formation state for each tenant entity and trade name. Captions and signature blocks are typed from
+  that record, never from the lease's spelling; where the lease uses a variant, recite both and have the tenant certify
+  they are the same entity.
 - The **PSA estoppel article** — threshold SF, delivery deadline, condition-precedent status, and the
   agreed form if one is attached as an exhibit.
 - The **deal thesis**, from the IC memo: what must be true for the underwriting to hold.
@@ -89,6 +93,10 @@ This is the step that distinguishes this skill from a template. Map every abstra
 amendment (`lease-addendum`) or a re-leasing objective, and mixing the two invites a tenant to refuse the
 whole form.
 
+Where the deal needs the tenant's agreement to something the lease does not already give (a parking reconfiguration, a
+relocation right), put it in a separate one-paragraph consent signed at the same sitting, stating that neither instrument
+is conditioned on the other (754C Tenant Parking Consent, 2026-10-15).
+
 ---
 
 ## STEP 4 — SIGNATURE BLOCK
@@ -111,6 +119,9 @@ relied upon by buyer, its lender, and their successors and assigns.
   following `communication-intelligence` voice register for counterparty mail.
 - A **tracking table**: tenant, SF, threshold status, sent date, due date, PSA condition-precedent status,
   and the specific defect each form is curing.
+- A **Combined PDF** for signature — the certificate plus an Exhibit A reproducing every instrument in the chain
+  complete — built with `exhibit-package-builder`, regenerated from the current .docx every time (a stale front page
+  carried superseded wording into the 754B package on 2026-10-15).
 - A **returned-form review checklist**: what a non-conforming response looks like for each pre-filled field,
   and which corrections are material enough to reopen underwriting or trigger a price adjustment.
 
@@ -125,12 +136,17 @@ Then hold for Gabriel's confirmation before anything leaves ORA.
 - `title-exam-abstraction` — supplies vesting and any SNDA/subordination requirement.
 - `communication-intelligence` — drafts the counterparty cover letter.
 - `lease-addendum` — the correct path for anything that amends rather than certifies.
+- `exhibit-package-builder` — assembles and verifies the Combined PDF (certificate + Exhibit A).
 - `legal-intelligence` — counsel review of any non-standard certification.
 - `document-assembly` — its former Template 7 (Estoppel Certificate) is tombstoned in favor of this skill (2026-08-21);
   do not draft estoppels from that generic template library.
 
 ## Changelog
 
+- v1.2 (2026-10-16): STEP 1 takes the per-party **entity record** from `deal-execution` v1.10 Entity Verification
+  (captions and signature blocks typed from the registry record). STEP 3 adds the separate-consent rule for tenant
+  agreements beyond the lease. STEP 5 and Cross-Skill route the Combined PDF to `exhibit-package-builder`. Origin: 754 Old
+  State estoppel V3, 2026-10-15.
 - v1.1 (2026-08-21, adversarial review): added the `document-assembly` cross-reference (its Template 7 is now
   tombstoned in favor of this skill — the two templates were left live with no tie-break, risking a "create estoppel"
   request routing to the wrong one). Added a fallback to STEP 1 for when `deal-execution` Workflow 3's Lease-Chain
