@@ -1,15 +1,16 @@
 ---
 name: "lease-form-qc"
-description: "Pre-execution QC gate for leases on Oxford Realty Advisors' own landlord form. Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, review our lease draft, or uploads an ORA-form lease DOCX. Run before ANY outbound lease goes to a tenant or broker: 60 checks (cross-refs, undefined terms, OpEx, statutory cites, rent arithmetic), PASS/FAIL. ALSO the sole path for grading an existing lease against its LOI: does the lease match the LOI, LOI vs lease, LOI conformance (LOI-Lease Audit mode; no lease yet = lease-generation). Not legal-intelligence (counterparty paper) or deal-execution 2A (PSA vs LOI)."
+description: "Pre-execution QC gate for leases on Oxford Realty Advisors' own landlord form. Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, review our lease draft, or uploads an ORA-form lease DOCX. Run before ANY outbound lease goes to a tenant or broker: 60-73 checks by form line (v2.x NNN long form or v3.x MG short form, auto-detected; --form to force), incl. cross-refs, undefined terms, OpEx, statutory cites, rent arithmetic and the roof/energy/EV power-rights checks, PASS/FAIL. ALSO the sole path for grading an existing lease against its LOI: does the lease match the LOI, LOI vs lease, LOI conformance (LOI-Lease Audit mode; no lease yet = lease-generation). Not legal-intelligence (counterparty paper) or deal-execution 2A (PSA vs LOI)."
 ---
 
-# Lease Form QC — Oxford Realty Advisors own paper (v2.9: v2.7-standard checks F19–F21; v2.8 LOI-Lease Audit mode + T3/T4/D1/D2 + --loi-audit)
+# Lease Form QC — Oxford Realty Advisors own paper (v2.10: v3.0 short-form mode + `--form` + power-rights standard FP1–FP8; v2.9 F19–F21; v2.8 LOI-Lease Audit + --loi-audit)
 
 Pre-execution gate for leases drafted on the ORA landlord form. Run BEFORE a draft
 goes to a tenant, broker, or counsel. This is a defect scan of **our** paper — for
 counterparty leases and PSAs use `legal-intelligence`.
 
-Two questions, two modes. **"Is this lease clean?"** → the 60-check scan below.
+Two questions, two modes. **"Is this lease clean?"** → the scan below (60 checks on the
+v2.7 long-form NNN line, 65 on the v3.0 short-form MG line — form auto-detected, see Step 1).
 **"Does this lease match the LOI?"** → the LOI ↔ Lease Audit (standalone mode,
 v2.7; scripted v2.8) further down — `--loi-audit` runs the scan and the matrix in one call;
 the intake and reverse pass are the work the scanner cannot do. If there is no drafted lease yet, the request is
@@ -109,9 +110,25 @@ made on. The template now cites the county parcel number in the building descrip
 ### Step 1 — Automated scan
 
 ```bash
-python3 scripts/lease_qc.py <lease.docx|pdf|txt> [more ...] [--allow-tokens]
-                            [--no-ocr] [--json]
+python3 -I scripts/lease_qc.py <lease.docx|pdf|txt> [more ...] [--allow-tokens]
+                               [--no-ocr] [--json] [--form v2.7|v3.0] [--power-rights]
 ```
+
+**Form mode (v2.10).** Every file is resolved to a form line before it is scanned:
+the footer tag (`ORA Master Lease vX.Y`) first, then the section structure (v3.0:
+ENTRY AND LANDLORD'S RIGHTS / SUBORDINATION, ATTORNMENT AND ESTOPPEL / embedded
+EXHIBIT B / "Definitions. In this Lease:"; v2.7: RIGHTS RESERVED BY LANDLORD /
+FINANCIAL STATEMENTS / ESTOPPEL CERTIFICATES / ENTRY FOR INSPECTIONS), then the
+legacy v2.7 default. A v2.x document with no conflict is scanned with exactly the
+v2.9 registry (60 checks, unchanged). A v3.x document gets the **v3.0 registry**
+(65 checks — Class 5f). `--form v2.7|v3.0` forces a line; if the footer tag or the
+structure contradicts it, or neither confirms it, **F0 BLOCK fails the scan** (exit 1)
+with a `FORM MISMATCH` banner — a wrong-mode scan never silently passes. In auto mode
+F0 also fires when footer and structure disagree (a footer carried onto another form).
+Each report ends with a `FORM` line, `[N/A]` lines for checks deliberately not run on
+that form, and the `PENDING` power-rights block (Class 5g); the same keys (`form`,
+`na`, `pending`) are in `--json`. Run with `python3 -I` (isolated mode); the script
+puts its own directory on `sys.path` so the co-located `ora_doc_qc.py` imports.
 
 Extraction, the OCR fallback, the UNREADABLE gate, and the report/CLI harness come
 from the shared `ora_doc_qc.py` (also used by `pma-qc` and `listing-agreement-qc`). The
@@ -144,6 +161,18 @@ fields are PAGE/NUMPAGES page numbering, not FILENAME/DOCPROPERTY. The five reba
 state-conformed property templates this repo does not carry a local copy of were not
 independently re-run for this change; confirm the same 0-of-57 on them before relying
 on this benchmark for those files).
+
+Benchmarks (scanner v2.10, measured 2026-10-15, `python3 -I`): auto mode — v2.7 master,
+MD-Columbia v2.7, OH-SingleTenant-NNN v2.7 = **0 of 60** (identical to the unmodified v2.9
+run); v3.0 master + OH-Columbus Morrison, MD-Easton, MD-Salisbury, MO-Raytown v3.0 =
+**0 of 65** (F16 N/A). `--form v2.7` on v2.7 files = 0 of 61 (F0 registered, passes);
+`--form v3.0` on the v3.0 files = 0 of 65. Cross-mode: every v3.0 file with `--form v2.7`
+= F0 only (1 of 61); every v2.7 file with `--form v3.0` = F0 + 8–9 v3.0 re-anchors/standards
+(9–10 of 65). Exhibit B v1.3 (not a lease) = 19 of 60, unchanged. **Why the old "0/60" on
+v3.0 was not a benchmark:** the 2026-10-08 v3.0 run memo's "lease_qc 0/60" is the
+unmodified v2.7 scanner run on v3.0 paper (reproduced 2026-10-15) — eleven of those
+passes were vacuous (A7, B2, B3, B8, F6, F13, F14, F15, F16, F17, F20: the v2.7 trigger
+phrase never occurs in v3.0 wording, so the check never looked). v3.0 mode re-anchors them.
 The scanner also enforces a **T1 token gate**: any
 unfilled `[TOKEN]` **in the body or the footer** of a file whose name lacks
 `_TEMPLATE` is a BLOCK failure (drafted leases must be fully filled; pass
@@ -311,6 +340,71 @@ Lessons from the FCSS / 9620 State 350 negotiation, applied to the master on 202
   first full month after full execution when the lease is not signed by the 15th of the preceding
   month (expiration, Lease Years, schedule and base year shift with it). In the standing counsel
   scope. Expected to fire on vintage-form deal leases (e.g. FCSS v5) — informational there.
+
+### Class 5f — v3.0 SHORT-FORM MODE (added v2.10)
+
+The v3.0 multi-tenant modified-gross master (`ORA_MasterLease_ShallowBay_MultiTenantMG_v3.0`,
+~6,500 words, embedded one-page Exhibit B, optional SPECIALIZED EQUIPMENT module) is a
+rewrite, not an edit of v2.7. The v3.0 registry = the v2.9 registry with:
+
+**Unchanged (wording-agnostic, or defect-presence checks that can only add failures):**
+A1, A2, A2b, A3, A4a, A4b, A5a–A5c, A6, A8, A9, A10, A11, B5, B6a–B6c, B7, B11, C1–C8, F1–F5,
+F7–F12, F18, F21, T1–T4, D1, D2. (A2/A2b/A3/A9 test v2.7 section titles that v3.0 does not
+use; kept active, and F22 now covers v3.0's name-based cross-references.)
+
+**Re-anchored to v3.0 wording** (same ID, label suffix "— v3.0 anchor"; each pinned by a
+mutation test proving it fires when the v3.0 provision is broken and that the v2.7 check
+was blind to the same mutation):
+
+| ID | v3.0 anchor |
+|---|---|
+| A7 | base-year stop ("exceed those for the Base Year") must exist, and no "net"/NNN label |
+| B2 | "no duty to relet" must carry "except to the extent required by law" in the same sentence |
+| B3 | every "Rent for the rest of the Lease Term" remedy clause credits net reletting proceeds / fair rental value |
+| B4 | holdover multiplier on arrears, any percentage ("N% of the amount of (a)") |
+| B8 | Landlord-provided water needs invoice reimbursement + sub-meter / Proportionate Share / equitable allocation |
+| F6 | "(5) Business Days after it is due / late" with "Business Day" undefined |
+| F13 | Operating Costs "excluding costs billed directly to any tenant" |
+| F14 | property insurance "all risks of physical loss (special form)" |
+| F15 | "only out of Landlord's interest in the Project" + member/manager/officer/employee/agent enumeration |
+| F17 | HVAC "preventive-maintenance contract" (either spelling) |
+| F19 | no premises-only Tenant notice routing; TENANT NOTICE ADDRESS block present |
+| F20 | escalation → "set out in the following schedule" + "the Rent Schedule controls" |
+
+**N/A on v3.0 (reported, never failed or passed):** **F16** excess-rent/profit capture —
+v3.0 deliberately has none (sole-discretion consent, cost reimbursement only; ratified v3.0
+position, 2026-10-08 run memo).
+
+**New v3.0 standards:** **F0** (BLOCK) form/mode mismatch · **F22** (HIGH) dead
+"the <Name> section" cross-reference (must resolve to a caps heading or run-in sub-heading —
+catches a Specialized Equipment module deleted without its references) · **F23** (HIGH)
+relocation right present (v3.0 position: none) · **F24** (MED) financial-statements demand
+present (v3.0 position: none) · **F25** (MED) Exhibit B Rules and Regulations not embedded ·
+**F26** (HIGH) Specialized Equipment module half-deleted, or its `[OPTIONAL MODULE …]`
+instruction left in an execution copy.
+
+### Class 5g — POWER-RIGHTS STANDARD FP1–FP8 (added v2.10; PENDING until v2.8 NNN / v3.1 MG)
+
+Provisions coming in the next builds. **Off by default:** on a v2.7 or v3.0 form each is
+evaluated and printed as `PENDING` with present/absent status — never a failure, never in
+the exit code. **Enforced** (normal failures) when the footer declares ≥ v2.8 (NNN line) or
+≥ v3.1 (MG line), or when `--power-rights` forces it on (pre-release drafting). A
+contradicted `--form` cannot switch it on. Anchors are keyword co-occurrence within one
+sentence or one section window, not exact sentences.
+
+| ID | Sev | Requires |
+|---|---|---|
+| FP1 | HIGH | Landlord reservation of roof/exterior rights for solar, storage, EV, telecom; revenue belongs to Landlord; no abatement; on v3.x **no relocation right** |
+| FP2 | HIGH | utility/interconnection easements; planned electrical shutdowns on ≥ twenty-four (24) hours' notice |
+| FP3 | HIGH | no tenant application to a utility for new/upgraded service or interconnection without consent; added capacity is part of the Project; carved out of tenant removal |
+| FP4 | MED | Operating Costs exclude BOTH costs and revenues of Landlord energy equipment; roof repair/replacement not excluded merely because equipment is on the roof |
+| FP5 | MED | tenant utility-data authorization within ten (10) days |
+| FP6 | MED | estoppel/acknowledgment to energy-provider lessees/licensees and their financing parties |
+| FP7 | MED | Landlord may install EV charging; designated charging spaces excluded from Tenant's parking allocation; Tenant keeps reasonable access for operations |
+| FP8 | HIGH | optional TENANT BACKUP POWER AND ENERGY STORAGE module — if present: bracketed include-only-if instruction, counsel-review note, UL 9540 + UL 9540A, NFPA 855, NFPA 37 + 110, transfer switch, no back-feed. Absent = nothing to verify |
+
+Tested on synthetic v3.1/v2.8 builds of the real masters (`tests/test_lease_qc_v30.py`):
+bare v3.1 fails FP1–FP7; full provisions pass; dropping any one element fails its check.
 
 ### Class 6 — MISSING PROVISIONS
 
@@ -534,6 +628,37 @@ section, re-verify every numeric cross-reference** — that is exactly how the v
 Section 24 defect was born.
 
 ## Changelog
+
+### v2.10.1 (2026-10-15, Phase 1 build) — FP anchors widened on real v2.8/v3.1 wording
+
+FP1, FP4 and FP7 failed on the approved v2.8/v3.1 text although the provisions were present
+verbatim; their patterns were widened to accept the hyphenated "electric-vehicle" (FP1, FP7),
+"not be an eviction or entitle Tenant to any abatement" (FP1) and "energy generation" (FP4).
+No other check changed. Every FP check still fails when its own provision is removed (mutation
+test on both v2.8 and v3.1). Repo reconcile (2026-10-15): the real v2.8 / v3.1
+masters are committed as fixtures and `test_phase1_power_rights_masters_pass_enforced` pins the
+hyphenated wording (0 of 68 / 0 of 73, power-rights ENFORCED); `tests/test_lease_qc.py` (145
+tests) passes unchanged on the new `_run_scan_cli()` runner (its `run_cli` is a subprocess
+helper, not a pin on `ora_doc_qc.run_cli()`).
+
+### v2.10 (2026-10-15) — v3.0 short-form mode, `--form`, power-rights standard
+
+v2.7 registry (`CHECKS`, 60) untouched — no ID, severity, title, regex or logic changed; a v2.x
+document with no form conflict is scanned with the identical list object. `tools/ora_doc_qc.py`
+untouched. Added: form resolution (footer tag → structure → legacy default) and
+`--form v2.7|v3.0` (also on `--loi-audit`); **F0** form-mismatch BLOCK; v3.0 registry (65) =
+12 re-anchors (A7, B2, B3, B4, B8, F6, F13, F14, F15, F17, F19, F20), F16 N/A, F22–F26 (Class
+5f); power-rights standard **FP1–FP8** with PENDING reporting and `--power-rights` (Class 5g).
+`main()` now runs `_run_scan_cli()` (same flags, report block and exit codes as
+`ora_doc_qc.run_cli()`, plus FORM / N/A / PENDING lines and `form`/`na`/`pending` JSON keys).
+`python3 -I` fix: the unmodified v2.9 script could not import `ora_doc_qc` under isolated mode;
+the script dir is now put on `sys.path` first. New `tests/test_lease_qc_v30.py` (22 tests:
+registry identity, 9-document benchmarks, cross-mode F0, CLI exit codes, 12 mutation tests,
+F22/F25/F26, power-rights thresholds/pending/enforced/each-element/FP8/relocation/v2.8).
+Finding: the v3.0 run memo's "lease_qc 0/60" was the v2.7 scanner on v3.0 paper with eleven
+vacuous passes. Repo reconcile: the corpus is committed
+(`lease-form-qc/tests/fixtures/` + `masterlease-jurisdiction-rebase/scripts/fixtures/`) so the
+suite runs in CI with zero skips; a missing fixture fails, never skips.
 
 ### v2.9 (2026-10-06) — v2.7-standard checks F19–F21
 

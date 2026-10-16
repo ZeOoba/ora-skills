@@ -1,9 +1,9 @@
 ---
 name: masterlease-jurisdiction-rebase
-description: "Use when the user mentions: new master lease version, rebase the lease templates, regenerate the MD/MO templates, jurisdiction overlay, conform the lease to a state, state-conformed lease template, update property lease forms, lease template for Easton / Salisbury / Northwood / Raytown / Columbia, or uploads a new ORA_MasterLease_ShallowBayIndustrial_v*.docx. Also use when adding a NEW property or state overlay, or converting a property to NNN. Rebases Oxford Realty Advisors jurisdiction-conformed Master Lease property templates onto a new master revision in one command, and generates state-conformed (MD/MO) property templates from the OH-anchored master. Companion to lease-form-qc (which QCs drafted leases); this skill produces the templates leases are drafted FROM."
+description: "Use when the user mentions: new master lease version, rebase the lease templates, regenerate the MD/MO templates, jurisdiction overlay, conform the lease to a state, state-conformed lease template, update property lease forms, lease template for Easton / Salisbury / Northwood / Raytown / Columbia, or uploads a new ORA_MasterLease_ShallowBayIndustrial_v*.docx or ORA_MasterLease_ShallowBay_MultiTenantMG_v*.docx (v2.x NNN / v3.x MG lines, read from the footer tag). Also use when adding a NEW property or state overlay, or converting a property to NNN. Rebases Oxford Realty Advisors jurisdiction-conformed Master Lease property templates onto a new master revision in one command, and generates state-conformed (MD/MO) property templates from the OH-anchored master. Companion to lease-form-qc (which QCs drafted leases); this skill produces the templates leases are drafted FROM."
 ---
 
-# Master Lease Jurisdiction Rebase — Oxford Realty Advisors (v1.8)
+# Master Lease Jurisdiction Rebase — Oxford Realty Advisors (v1.9)
 
 One-command regeneration of state-conformed property lease templates whenever the
 controlled master (`ORA_MasterLease_ShallowBayIndustrial_v*.docx`) revs. Built from the
@@ -54,11 +54,16 @@ happened twice on 2026-08-03 (a v2.1 cache was used while v2.4 was canonical).
 ## How to run
 
 ```bash
-python3 scripts/rebase.py --master <path/to/ORA_MasterLease_..._vX.Y_TEMPLATE.docx> \
+python3 -I scripts/rebase.py --master <path/to/ORA_MasterLease_..._vX.Y_TEMPLATE.docx> \
     --property MD-EAS --out <session-scratch-dir>
-# or all configured properties:
-python3 scripts/rebase.py --master <master.docx> --all --out <session-scratch-dir>
+# or all configured properties (on a v3.0 master: only the properties with a "v3_0" entry):
+python3 -I scripts/rebase.py --master <master.docx> --all --out <session-scratch-dir>
 ```
+
+The form line is read from the master's **footer tag** (`ORA Master Lease vX.Y`): v2.x →
+the long-form path below; v3.x → the v3.0 short-form path (see "v3.0 short-form MG master").
+A master whose filename version and footer tag disagree, or whose footer parts carry mixed
+tags, aborts with ANCHOR DRIFT before anything is written.
 
 `--out` is ALWAYS passed explicitly, pointed at session scratch — never omitted, never
 the canonical OneDrive folder (see Workspace & output hygiene).
@@ -186,6 +191,55 @@ the *default* footer — so even-page and first-page footers kept `[PREMISES ADD
 every `/footer` relationship part; `TestFooterFillAllParts` asserts no footer part of any
 rebased multi-tenant template keeps the token (fails on the v1.7 engine for MD-COL/OH-MOR).
 
+## v3.0 short-form MG master (added v1.9)
+
+`ORA_MasterLease_ShallowBay_MultiTenantMG_v3.0_TEMPLATE.docx` (2026-10-08) is a rewrite,
+not an edit of v2.7 — none of the v2.x anchors exist in it. `build_rules_v30()` carries its
+own anchor set, **recovered by paragraph diff of the v3.0 master against the four v3.0
+property templates built from it on 2026-10-08** (OH-MOR, MD-EAS, MD-SBY, MO-RAY), every
+substitution count-asserted (ANCHOR DRIFT never-loosen rule unchanged):
+
+- **Property facts (all four):** `[LANDLORD ENTITY]` ×5 · `a [LANDLORD STATE] limited liability
+  company` ×3 · `[PREMISES ADDRESS]` ×4 (BLI, signature page, Exhibit A, Exhibit B) + every
+  footer part · BLI building line from `building_def` + parcel reference · BLI share
+  denominator · `[BUILDING DEFINITION]` · payment sentence (`payment_direction`) · PM name in
+  the insurance clause and COPY TO block · `[MANAGER STREET ADDRESS]` / `[MANAGER CITY, STATE ZIP]`
+  (×1, or ×2 when `payment_direction` is null and the Rent section keeps its tokens — a filled
+  `pm_block` with a null `payment_direction` fails closed) · `ATTN:`.
+- **Multi-building project (`v3_0.project_rsf`, Salisbury):** `project_def`, BLI
+  "; Project: 53,700 rentable square feet", share "of the Project", gross-up and water
+  allocation Building → Project.
+- **State overlay (MD, MO; not home state):** Business Day holiday state, Specialized
+  Equipment contractor licensing state, insurer licensing state, notice-to-quit waiver
+  (Ohio Chapter 1923 → `possession_statutes`), holdover statute sentence, environmental
+  overlay, Authority qualification state, governing law, MD no-recording proviso, and the
+  signature-page note via the new overlay field **`v3_signature_note`** (MD: memorandum-of-lease
+  note; MO: `null` = delete the Ohio-only notarial note). Required for any v3.0 rebase —
+  fail-closed if absent.
+- **Home state (OH-MOR):** property facts only; Ohio text and the Ohio-only note retained.
+
+Anchors never start in, or span, a bold label/defined term ("Building / Project:",
+"Building", "Hazardous Materials"): `replace_in_paragraph()` writes the new text into the
+first run it touches, so such an anchor bolds the fill or un-bolds the term. The first v1.9
+draft did exactly that in three paragraphs; the run-format parity test caught it.
+
+Config: a property is on the v3.0 line only if its `properties.json` entry has a **`v3_0`**
+object (MD-EAS, MD-SBY, MO-RAY, OH-MOR); it carries v3-only facts (`parcel_reference` with the
+SDAT account numbers for MD-EAS/MD-SBY; `project_rsf` for MD-SBY). MO-RAY uses the overlay's
+`(Jackson County Parcel No. [PARCEL NO])`; OH-MOR derives the Franklin County reference from
+`parcel`. NNN (MD-COL) and single-tenant (OH-ST-NNN) entries never get one — a v3.0 master run
+against them fails closed. The v3.0 master is MG-only: `variant`/`lease_structure` overrides
+abort on it. The v2.x path is unchanged and still rebases all six v2.7 properties.
+
+**Parity (test_rebase.py `V30ParityTests`):** rebasing `scripts/fixtures/…MultiTenantMG_v3.0_TEMPLATE.docx`
+reproduces each stored template in `scripts/fixtures/v3.0_expected/` **text-equal (body +
+every footer part) and character-format-equal** (per-paragraph pPr + per-run rPr segments).
+Package XML differs only in run segmentation (the 2026-10-08 build split fills into separate
+runs); every other package part is byte-identical. Salisbury: the stored template already
+carries Gabriel's 2026-10-08 payee direction, so with the corrected config parity is exact;
+the test also replays the pre-fix config and asserts it differs in exactly the Rent payee,
+insurance PM name and COPY TO name/street lines.
+
 ## Facts provenance (do not re-derive from leases)
 
 Entity names (29000 INFORMATION LANE, LLC · 2203 NORTHWOOD, LLC · 9620 STATE 350, LLC ·
@@ -196,7 +250,10 @@ Map 102 P110), 2205 Northwood Dr (09-053654, P111), 2207 Northwood Dr (09-053662
 each per SDAT (54,000 vs the 53,700 RSF denominator — denominator unchanged pending Gabriel), ZIP
 21801. "2203 Northwood Drive" was never a valid address; the entity name 2203 NORTHWOOD, LLC is
 unchanged (legal name). Easton: SDAT 01-088645 (27,000 SF) + 01-088742 (21,000 SF) = 48,000 SF,
-ZIP 21601 confirmed. Morrison (OH-MOR): Franklin County parcel 010-208204, 31,200 SF, ZIP 43213. 9050 Red Branch Road's Howard County SDAT Tax Account No. is unresolved — direct
+ZIP 21601 confirmed. Salisbury payee/PM (**2026-10-08, Gabriel: rent paid to the property manager,
+not Landlord**): SVN Miller Commercial Real Estate, 206 East Main Street, Salisbury, MD 21801 (SVN
+staff email signatures, M. Messick 10/2/26 and T. Spicer-Davis 10/6/26); `properties.json` MD-SBY
+`payment_direction` + `pm_block` corrected 2026-10-15 (v1.9), ATTN Brady Smith unchanged. Morrison (OH-MOR): Franklin County parcel 010-208204, 31,200 SF, ZIP 43213. 9050 Red Branch Road's Howard County SDAT Tax Account No. is unresolved — direct
 SDAT query did not return content programmatically as of 2026-08-04; left tokenized.
 ZIPs, suites, parcel/tax-account numbers, per-building Northwood RSF, and the Raytown PM
 block are deliberately tokenized: fill at drafting time from the county record or PM
@@ -229,6 +286,25 @@ v2.5 and v2.6 builds before extraction). Anchors must sit inside one `<w:t>` (ru
 `rebase.py`.
 
 ## Changelog
+
+- v1.9 (2026-10-15): v3.0 short-form multi-tenant MG master support. (1) **Form detection** —
+  `master_form()`/`is_v3()` read the footer tag; `rebase_one()`, `post_check()` and `main()`
+  dispatch on it; filename/footer version mismatch and mixed footer tags abort. (2) **v3.0
+  engine** — `build_rules_v30()`, `apply_signature_note_v30()`, `rebase_one_v30()`,
+  `post_check_v30()` (tokens, Ohio/OHIO/Revised Code/R.C. residue, state, savings clause,
+  footer tag, entity). Anchors from the master↔template diff; see the v3.0 section. (3)
+  **Config** — `v3_0` entries for MD-EAS, MD-SBY, MO-RAY, OH-MOR; `v3_signature_note` in the
+  MD/MO overlays; **MD-SBY payee/PM fix** (SVN Miller Commercial Real Estate, 206 East Main
+  Street, Salisbury, MD 21801 — run-memo open item; old values kept in `_payee_note_2026-10-15`).
+  `--all` on a v3.0 master emits only `v3_0` properties. (4) **Tests** — `fixtures/` gains the
+  v3.0 master and `fixtures/v3.0_expected/` (the four 2026-10-08 templates, unmodified copies);
+  new `V30ParityTests` (12: form detection, config keys, text parity, character-format parity,
+  Salisbury pre-fix delta, CLI `--all` set, NNN refusal, anchor drift, duplicated anchor,
+  missing signature note, missing `v3_0`, v2.7 path untouched). Fixed: the
+  `if __name__ == "__main__"` block sat above `TestFooterFillAllParts`, so `python3 test_rebase.py`
+  ran 6 tests, not 7 (discovery ran 7); the CLI subprocess test now runs `-I -B`. Suite: **19
+  passed** (script mode and discovery). v2.7 `--all` re-run: six templates, all 0/60 on
+  lease-form-qc v2.10; v3.0 `--all`: four templates, all 0/65.
 
 - v1.8 (2026-10-06): v2.7 revision cycle. (1) **Home-state path** — `build_rules_home()` +
   `home_state` config flag; post-check and test branches skip Ohio residue; first property
