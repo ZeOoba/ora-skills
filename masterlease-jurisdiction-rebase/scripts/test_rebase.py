@@ -401,5 +401,190 @@ class V30ParityTests(unittest.TestCase):
                 rebase.post_check(out, P, L)
 
 
+# ---------------------------------------------------------------------------
+# v1.10: run-formatting parity (standard post-check) + the power-rights line
+# ---------------------------------------------------------------------------
+FIXTURE_V28 = HERE / "fixtures" / "ORA_MasterLease_ShallowBayIndustrial_v2.8_TEMPLATE.docx"
+FIXTURE_V31 = HERE / "fixtures" / "ORA_MasterLease_ShallowBay_MultiTenantMG_v3.1_TEMPLATE.docx"
+LEASE_QC = HERE.parent.parent / "lease-form-qc" / "scripts" / "lease_qc.py"
+PROD_V27 = HERE.parent.parent / "lease-form-qc" / "tests" / "fixtures"   # production v2.7 templates
+NNN_LINE_KEYS = ("MD-COL", "OH-ST-NNN")
+
+# Phase-1 provision markers (exact approved wording) every power-rights output must carry.
+POWER_MARKERS = {
+    "P1": "exclusive right, for itself and its licensees, lessees and their financing parties",
+    "P2": "utility, interconnection and access easements and licenses",
+    "P2-notice": "twenty-four (24) hours\u2019 notice of any planned interruption of electrical service",
+    "P3": "Tenant\u2019s electrical service is limited to the service serving the",
+    "P3-carve-out": "(other than any electrical capacity, service, transformer, switchgear or metering",
+    "P4": "Operating Costs exclude all costs of, and all revenues, credits and incentives from, any energy generation",
+    "P5": "sign the utility\u2019s authorization allowing Landlord to obtain directly",
+    "P6": "estoppel certificate or acknowledgment reasonably requested by any lessee or licensee of Landlord",
+    "P7": "Landlord may install electric-vehicle charging equipment in the parking areas",
+    "P8": "TENANT BACKUP POWER AND ENERGY STORAGE",
+    "P8-bracket": "[OPTIONAL MODULE \u2014 INCLUDE ONLY IF TENANT WILL INSTALL A STANDBY GENERATOR",
+    "P8-counsel": "[COUNSEL REVIEW REQUIRED BEFORE FIRST USE]",
+}
+
+
+def _L(states, P):
+    if P.get("variant") == "single-tenant":
+        return states.get(P["state_code"], {})
+    if P.get("home_state"):
+        return {"state": "Ohio"}
+    return states[P["state_code"]]
+
+
+class FormatParityTests(unittest.TestCase):
+    """format_parity() is a standard post-check (main() runs it on every output)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.props = json.loads((CONFIG / "properties.json").read_text(encoding="utf-8"))
+        cls.states = json.loads((CONFIG / "state_overlays.json").read_text(encoding="utf-8"))
+
+    def keys_for(self, master):
+        doc = Document(str(master))
+        if rebase.is_v3(doc):
+            return [k for k, P in self.props.items() if isinstance(P, dict) and "v3_0" in P]
+        if rebase.power_rights_master(doc):
+            return list(NNN_LINE_KEYS)
+        return [k for k in self.props if not k.startswith("_")]
+
+    def test_every_output_of_every_master_has_format_parity(self):
+        for master in (FIXTURE_MASTER, FIXTURE_V28, FIXTURE_V30, FIXTURE_V31):
+            m_doc = Document(str(master))
+            for key in self.keys_for(master):
+                with self.subTest(master=master.name, property=key):
+                    P = self.props[key]
+                    out = rebase.rebase_one(master, P, _L(self.states, P))
+                    self.assertEqual(rebase.format_parity(m_doc, out), [])
+
+    def test_bold_label_anchor_is_caught(self):
+        """The pre-v1.10 NNN BLI anchor started in the bold 'Base Year:' label, so the
+        fill came out bold."""
+        doc = Document(str(FIXTURE_MASTER))
+        rebase.apply(doc, [("Base Year: [BASE YEAR]", "Base Year: Not applicable — full NNN", 1)])
+        errs = rebase.format_parity(Document(str(FIXTURE_MASTER)), doc)
+        self.assertTrue(any("Not applicable" in e for e in errs), errs)
+
+    def test_defined_term_spanned_by_an_anchor_is_caught(self):
+        """The pre-v1.10 single-tenant demise anchor spanned the bold defined term
+        "Demised Premises" and un-bolded it."""
+        doc = Document(str(FIXTURE_MASTER))
+        old = ("approximately [PREMISES RSF] square feet of rentable area in the building situated at "
+               "[PREMISES ADDRESS] (such rentable area being hereinafter referred to as the \"Demised Premises\")")
+        rebase.apply(doc, [(old, old.replace("approximately [PREMISES RSF]", "approx. [PREMISES RSF]"), 1)])
+        errs = rebase.format_parity(Document(str(FIXTURE_MASTER)), doc)
+        self.assertTrue(errs)
+
+    def test_production_v27_templates_carried_the_defects_v1_10_fixes(self):
+        """Evidence for the v1.10 re-keys: the production MD-COL / OH-ST-NNN v2.7
+        templates (built before the parity check existed) are text-identical to
+        today's output but carry the formatting defects; today's output does not."""
+        master = Document(str(FIXTURE_MASTER))
+        for key, name in (("MD-COL", "ORA_MasterLease_ShallowBay_MD-Columbia-9050RedBranchRoad_v2.7_TEMPLATE.docx"),
+                          ("OH-ST-NNN", "ORA_MasterLease_ShallowBay_OH-SingleTenant-NNN_v2.7_TEMPLATE.docx")):
+            with self.subTest(property=key):
+                prod = Document(str(PROD_V27 / name))
+                self.assertTrue(rebase.format_parity(master, prod))
+                out = rebase.rebase_one(FIXTURE_MASTER, self.props[key], _L(self.states, self.props[key]))
+                self.assertEqual([p.text for p in out.paragraphs], [p.text for p in prod.paragraphs])
+                self.assertEqual(rebase.format_parity(master, out), [])
+
+    def test_near_black_colour_and_non_visual_props_are_not_formatting(self):
+        from lxml import etree
+        w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        mk = lambda x: etree.fromstring(f'<w:rPr xmlns:w="{w}">{x}</w:rPr>')  # noqa: E731
+        self.assertEqual(rebase._rpr_key(mk('<w:color w:val="2F2F2F"/><w:lang w:val="en-US"/>')), ())
+        self.assertNotEqual(rebase._rpr_key(mk('<w:color w:val="FF0000"/>')), ())
+        self.assertNotEqual(rebase._rpr_key(mk("<w:b/>")), rebase._rpr_key(mk("")))
+        self.assertEqual(rebase._rpr_key(mk('<w:b w:val="0"/>')), ())
+
+
+class PowerRightsRebaseTests(unittest.TestCase):
+    """Phase 2 (2026-10-15): the v2.8 NNN-line and v3.1 MG-line masters rebase cleanly;
+    every output passes lease_qc with the power-rights checks enforced and carries every
+    provision marker; single-tenant paper drops only the P7 allocation fragment."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.props = json.loads((CONFIG / "properties.json").read_text(encoding="utf-8"))
+        cls.states = json.loads((CONFIG / "state_overlays.json").read_text(encoding="utf-8"))
+        cls.td = tempfile.TemporaryDirectory()
+        cls.out = pathlib.Path(cls.td.name)
+        cls.outputs = {}
+        for master, tag in ((FIXTURE_V28, "v28"), (FIXTURE_V31, "v31")):
+            d = cls.out / tag
+            r = subprocess.run([sys.executable, "-I", "-B", str(HERE / "rebase.py"), "--master", str(master),
+                                "--all", "--out", str(d)], capture_output=True, text=True)
+            cls.outputs[tag] = (r, sorted(d.glob("*.docx")) if d.exists() else [])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.td.cleanup()
+
+    def test_power_rights_master_detection(self):
+        self.assertFalse(rebase.power_rights_master(Document(str(FIXTURE_MASTER))))
+        self.assertTrue(rebase.power_rights_master(Document(str(FIXTURE_V28))))
+        self.assertFalse(rebase.power_rights_master(Document(str(FIXTURE_V30))))
+        self.assertTrue(rebase.power_rights_master(Document(str(FIXTURE_V31))))
+
+    def test_cli_all_emits_the_six_line_templates(self):
+        r28, f28 = self.outputs["v28"]
+        r31, f31 = self.outputs["v31"]
+        self.assertEqual(r28.returncode, 0, r28.stdout + r28.stderr)
+        self.assertEqual(r31.returncode, 0, r31.stdout + r31.stderr)
+        self.assertEqual([f.name for f in f28], [
+            "ORA_MasterLease_ShallowBay_MD-Columbia-9050RedBranchRoad_v2.8_TEMPLATE.docx",
+            "ORA_MasterLease_ShallowBay_OH-SingleTenant-NNN_v2.8_TEMPLATE.docx"])
+        self.assertIn("skips the MG-line properties", r28.stdout)
+        self.assertEqual(len(f31), 4)
+        self.assertTrue(all(f.name.endswith("_v3.1_TEMPLATE.docx") for f in f31))
+
+    def test_every_output_passes_lease_qc_enforced_and_carries_every_marker(self):
+        for path in self.outputs["v28"][1] + self.outputs["v31"][1]:
+            with self.subTest(template=path.name):
+                r = subprocess.run([sys.executable, "-I", "-B", str(LEASE_QC), str(path), "--json"],
+                                   capture_output=True, text=True)
+                self.assertEqual(r.returncode, 0, r.stdout[-1500:] + r.stderr)
+                rep = json.loads(r.stdout)[0]
+                self.assertEqual(rep["failures"], [])
+                self.assertEqual(rep["form"]["power_rights"], "ENFORCED")
+                self.assertEqual(rep["checks_run"], 68 if "_v2.8_" in path.name else 73)
+                body = "\n".join(p.text for p in Document(str(path)).paragraphs)
+                missing = [k for k, m in POWER_MARKERS.items() if m not in body]
+                self.assertEqual(missing, [])
+
+    def test_single_tenant_drops_only_the_allocation_fragment(self):
+        path = next(p for p in self.outputs["v28"][1] if "SingleTenant" in p.name)
+        body = "\n".join(p.text for p in Document(str(path)).paragraphs)
+        self.assertNotIn("Allocation", body)
+        self.assertIn("Landlord may install electric-vehicle charging equipment in the parking areas, designate "
+                      "spaces for vehicles while charging, and charge users for charging, provided that Tenant "
+                      "retains reasonable access to parking for its operations.", body)
+        self.assertIn("Tenant shall have the exclusive right to use the parking areas", body)
+        md = next(p for p in self.outputs["v28"][1] if "Columbia" in p.name)
+        self.assertIn(rebase.ST_P7_ALLOCATION_FRAGMENT, "\n".join(p.text for p in Document(str(md)).paragraphs))
+
+    def test_single_tenant_p7_rule_is_asserted(self):
+        # v2.7 has no P7 sentence: the rule is not applied there (and the v2.7 output is unchanged) ...
+        P = self.props["OH-ST-NNN"]
+        rebase.rebase_one(FIXTURE_MASTER, P, {})
+        # ... and on a v2.8 master whose P7 fragment is missing, the run fails loudly.
+        doc = Document(str(FIXTURE_V28))
+        rebase.apply(doc, [(rebase.ST_P7_ALLOCATION_FRAGMENT, " (reworded)", 1)])
+        rebase.apply(doc, rebase.single_tenant_rules())
+        with self.assertRaises(SystemExit) as cm:
+            rebase.apply(doc, rebase.single_tenant_power_rules())
+        self.assertIn("ANCHOR DRIFT", str(cm.exception))
+
+    def test_explicit_property_still_reaches_a_moved_property_on_v28(self):
+        P = self.props["MD-EAS"]
+        out = self.out / "md-eas-v28.docx"
+        rebase.rebase_one(FIXTURE_V28, P, self.states["MD"]).save(str(out))
+        rebase.post_check(out, P, self.states["MD"])
+
+
 if __name__ == "__main__":
     unittest.main()
