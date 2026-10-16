@@ -1,0 +1,5 @@
+# acquisition-underwriting changelog - v4.25 (archived 2026-10-16 under the R24-11 four-entry cap)
+
+Full original text of the v4.25 entry, moved out of SKILL.md when v4.29 was added.
+
+**v4.25 (2026-09-29):** **Chicago–Greater Cook County IL ratified as the 11th canonical cluster (ENTRY phase), plus an IL/Cook State Reassessment row and a Chicago RCT v03 row** (Gabriel, in-turn, 2026-09-29, after the South Chicago Small-Bay Portfolio FULL run). Scope = all of Cook County (City of Chicago + suburban Cook); collar counties are NOT satellites (Ruling 3). Exit cap **8.00%** (Indianapolis 7.50% +50 bps; CoStar Near South Cook 7.8% / Chicago 8.1%, 2026-09-29). RCT row carried from the 2026-09-02 Alsip memo (hard cost confirmed at the C&W extract in v4.26). Parity sweep (target-markets.json v1.11, market-monitor, deal-comparison, daily-brief, Notion selects) per the Code-surface patch `2026-09-29_Cook-County-Cluster_Parity-Patch_v01.md`. **No scorecard weight, Stage 1 floor, or governor constant (DSCR 1.25x / per-property LTV 65% / portfolio-aggregate LTV 40%) changed** — market-set membership, same class as Louisville (2026-08-05).
