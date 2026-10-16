@@ -60,6 +60,15 @@ python3 -I scripts/rebase.py --master <path/to/ORA_MasterLease_..._vX.Y_TEMPLATE
 python3 -I scripts/rebase.py --master <master.docx> --all --out <session-scratch-dir>
 ```
 
+**Standard post-checks on every output (v1.10):** `post_check()` (tokens, residue, markers)
+and **`check_format_parity()`** — per-character run-formatting parity against the master (see
+"Run-formatting parity"). Either failure aborts the run with the template already named.
+
+**`--all` by line (v1.10):** on a v3.x master, the properties with a `v3_0` entry; on a v2.x
+master **from v2.8 on**, only the NNN-line properties (no `v3_0` entry: MD-COL, OH-ST-NNN) — the
+four MG-line properties moved to v3.x and are not re-emitted on the NNN line (`--property`
+still reaches them). v2.7 and earlier: all properties, unchanged.
+
 The form line is read from the master's **footer tag** (`ORA Master Lease vX.Y`): v2.x →
 the long-form path below; v3.x → the v3.0 short-form path (see "v3.0 short-form MG master").
 A master whose filename version and footer tag disagree, or whose footer parts carry mixed
@@ -274,6 +283,39 @@ recovered 2026-08-04 by paragraph diff of the v2.4.1 variant against its v2.4.1
 base; engine output verified text-identical to the hand-built v2.6 canonical.
 Relocation clause (h) is retained as an inert option by ratified judgment call.
 
+## Run-formatting parity (standard check, added v1.10)
+
+`format_parity(master_doc, out_doc)` / `check_format_parity()` in `rebase.py`, run by `main()`
+on every output. `replace_in_paragraph()` writes a fill into the FIRST run its anchor touches,
+so an anchor that starts in a bold label bolds the fill and one that spans a bold defined term
+un-bolds it — text-identical, visibly wrong. Paragraphs are aligned by text; in a changed
+paragraph the common prefix/suffix and any re-emitted master text (≥ 8-character blocks) must
+keep their formatting, and the fill must carry a formatting found on the text it replaced.
+Compared: visible properties only (bold, italic, underline, strike, caps, size, font, colour,
+highlight, shading, style, vertAlign…); rsid/lang/proofing ignored; a colour ≤ #404040 counts as
+black (the v2.x masters carry stray #2F2F2F runs). **First run (2026-10-15) found real defects
+in production templates:** MD-COL v2.7 (BLI "Base Year" fill bold; heading period bolded — 3
+findings) and OH-ST-NNN v2.7 (BLI "Demised Premises" and share fills bold, defined terms
+"Demised Premises" un-bolded and the share definition bolded — 13). Fixed by re-keying five
+anchors (NNN: BLI `" [BASE YEAR]"` after the body sentence, heading without its period;
+single-tenant: demise sentence stops before the defined term, BLI demise and share lines keyed
+after their bold labels, share definition starts at "shall mean") — same text out, counts
+still asserted (never-loosen rule). Tests: `FormatParityTests`.
+
+## Power-rights line: v2.8 NNN / v3.1 MG (added v1.10)
+
+Both Phase-1 masters rebase with **zero anchor drift** on the existing rule sets. One new rule:
+**single-tenant P7** — on a v2.8+ master the OH-SingleTenant-NNN conversion also deletes the P7
+fragment ", and such spaces shall not count against Tenant’s Allocation while so designated"
+(count 1, asserted), so no undefined term remains while Landlord's EV install / designate /
+charge right and the reasonable-access proviso stay (Gabriel, 2026-10-15: "Drop allocation
+sentence"; lease-form-qc FP7 has the matching single-tenant branch). Not applied to v2.7 (no P7
+sentence). `PowerRightsRebaseTests`: `--all` sets, lease_qc 0 of 68 / 0 of 73 ENFORCED on every
+output, every P1–P8 marker present (P8 module bracketed + counsel note), fragment dropped only on
+single-tenant paper, P7 rule asserted. **Counsel item:** on single-tenant paper the P1
+reservation lists "parking areas" while Tenant holds the exclusive right to the parking areas
+(which the single-tenant demise includes) — reconcile in the counsel pass.
+
 ## Shared tracked-change editor (added v1.5; v2 ops added v1.10)
 
 `scripts/ora_docx_redline.py` — the reusable asserted-count tracked-change editor. Use it for
@@ -303,7 +345,13 @@ ANCHOR DRIFT failures follow the same never-loosen rule as `rebase.py`.
 
 ## Changelog
 
-- v1.10 (2026-10-15): (1) **`ora_docx_redline.py` v2** — the Phase-1 power-rights build's four
+- v1.10 (2026-10-15): (0) **Run-formatting parity is a standard post-check** (`format_parity()`,
+  `check_format_parity()`; see its section) and five v2.x anchors were re-keyed after it found
+  bold-fill / un-bolded-term defects in the production MD-COL and OH-ST-NNN v2.7 templates (text
+  unchanged). **v2.8 / v3.1 power-rights masters** supported: `power_rights_master()`,
+  single-tenant P7 allocation-fragment rule, `--all` on a v2.8+ NNN master emits only the
+  NNN-line properties. New tests: `FormatParityTests` (5), `PowerRightsRebaseTests` (6);
+  `test_rebase.py` 19 → 30. (1) **`ora_docx_redline.py` v2** — the Phase-1 power-rights build's four
   wrapper-script workarounds are first-class ops: `insert_paragraph_after` (styled/numbered tracked
   paragraph, pPr copied from the anchor or a reference paragraph), `delete`, `"part"` targeting
   (footer/header globs, count asserted across parts, per-part `w:id` ranges) and XML-level
