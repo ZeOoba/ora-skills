@@ -123,6 +123,7 @@ See the FORM MODES section below CHECKS and SKILL.md Classes 5f/5g.
 """
 
 import argparse
+import functools
 import json
 import os
 import re
@@ -170,7 +171,12 @@ def _linewise(ctx):
     using re.MULTILINE needs. ctx["t"] cannot serve: ora_doc_qc.norm()
     collapses \\s+, newlines included. Only A2 uses this.
     """
-    return re.sub(r'[ \t]+', ' ', ctx["raw"])
+    return _linewise_of(ctx["raw"])
+
+
+@functools.lru_cache(maxsize=16)
+def _linewise_of(raw):
+    return re.sub(r'[ \t]+', ' ', raw)
 
 
 def _a2(ctx):
@@ -1166,8 +1172,11 @@ def _f0_check(detail):
             None, fn)
 
 
+@functools.lru_cache(maxsize=16)
 def _sentences(t):
-    return re.split(r"(?<=[.;])\s+(?=[A-Z(\[])", t)
+    """Sentence split of the norm()'d text. Memoised (pure function of `t`): the
+    power-rights and v3.0 checks call it ~15 times per scan on the same text."""
+    return tuple(re.split(r"(?<=[.;])\s+(?=[A-Z(\[])", t))
 
 
 def _sent_all(t, *pats):
@@ -1371,8 +1380,14 @@ def power_active(ver):
 
 
 def _paras(ctx):
-    return [re.sub(r"\s+", " ", norm(p)).strip()
-            for p in ctx["raw"].replace("\xa0", " ").split("\n") if p.strip()]
+    return _paras_of(ctx["raw"])
+
+
+@functools.lru_cache(maxsize=16)
+def _paras_of(raw):
+    """Normalised non-empty paragraphs of `raw` (memoised; pure function)."""
+    return tuple(re.sub(r"\s+", " ", norm(p)).strip()
+                 for p in raw.replace("\xa0", " ").split("\n") if p.strip())
 
 
 def _window(ctx, *must, span=4):
@@ -1462,12 +1477,28 @@ def _fp6(ctx):
     return None if ok else "no estoppel/acknowledgment to energy-provider lessees/licensees and their financing parties"
 
 
+def _single_tenant_exclusive_parking(t):
+    """Single-tenant form: Tenant has EXCLUSIVE parking and the lease defines no
+    parking allocation/share at all (OH-SingleTenant-NNN conversion). Both halves
+    are required, so a multi-tenant lease never takes FP7's single-tenant branch."""
+    return bool(re.search(r"(?<!non-)(?<!non)exclusive right to use the parking areas", t, re.I)) and not re.search(
+        r"Tenant.s Allocation|parking allocation|share of the (?:unreserved )?parking spaces|"
+        r"non-exclusive right to use the unreserved parking", t, re.I)
+
+
 def _fp7(ctx):
     t, miss = ctx["t"], []
     if not _sent_all(t, r"Landlord may", r"install|operate|construct", r"electric[- ]vehicle|\bEV\b", r"charg"):  # hyphenated form: Phase 1
         miss.append("Landlord right to install EV charging")
-    if not _sent_all(t, r"charging", r"spaces?", r"designat",
-                     r"exclu|not (?:count|be included|form part)|reduc"):
+    if _single_tenant_exclusive_parking(t):
+        # Single-tenant paper (entire building, exclusive parking, no parking allocation
+        # to exclude spaces from): the allocation sentence is dropped by design
+        # (Gabriel, 2026-10-15, "Drop allocation sentence"), so only the designation
+        # right itself is required here; the reasonable-access proviso below still is.
+        if not _sent_all(t, r"charging", r"spaces?", r"designat"):
+            miss.append("Landlord right to designate charging spaces (single-tenant form)")
+    elif not _sent_all(t, r"charging", r"spaces?", r"designat",
+                       r"exclu|not (?:count|be included|form part)|reduc"):
         miss.append("designated charging spaces excluded from Tenant's parking allocation")
     if not _sent_all(t, r"reasonable access", r"Tenant", r"operations|business|loading|Premises"):
         miss.append("Tenant keeps reasonable access for its operations")
@@ -1556,6 +1587,15 @@ def plan_scan(path, declared=None, force_power=False, allow_ocr=True):
         body, meta = extract(path, allow_ocr=allow_ocr, want_footer=True)
     except Exception:                                               # noqa: BLE001
         body, meta = None, {"footer": ""}
+    return plan_from_text(body, meta, declared, force_power)
+
+
+def plan_from_text(body, meta, declared=None, force_power=False):
+    """plan_scan() on already-extracted text: the single place a (body, footer)
+    pair is resolved to a form line + registry. The mutation suite
+    (tests/test_lease_qc_mutations.py) plans every in-memory mutant through
+    this exact function, so a mutant is scanned with the registry the CLI
+    would use on the same document."""
     det = detect_form(body or "", meta.get("footer", ""))
     family, f0_detail, include_f0 = resolve_form(det, declared)
     ver = det["version_tuple"]

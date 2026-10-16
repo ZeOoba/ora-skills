@@ -3,7 +3,7 @@ name: "lease-form-qc"
 description: "Pre-execution QC gate for leases on Oxford Realty Advisors' own landlord form. Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, review our lease draft, or uploads an ORA-form lease DOCX. Run before ANY outbound lease goes to a tenant or broker: 60-73 checks by form line (v2.x NNN long form or v3.x MG short form, auto-detected; --form to force), incl. cross-refs, undefined terms, OpEx, statutory cites, rent arithmetic and the roof/energy/EV power-rights checks, PASS/FAIL. ALSO the sole path for grading an existing lease against its LOI: does the lease match the LOI, LOI vs lease, LOI conformance (LOI-Lease Audit mode; no lease yet = lease-generation). Not legal-intelligence (counterparty paper) or deal-execution 2A (PSA vs LOI)."
 ---
 
-# Lease Form QC — Oxford Realty Advisors own paper (v2.10: v3.0 short-form mode + `--form` + power-rights standard FP1–FP8; v2.9 F19–F21; v2.8 LOI-Lease Audit + --loi-audit)
+# Lease Form QC — Oxford Realty Advisors own paper (v2.11: mutation suite — every check must be able to fail; v2.10: v3.0 short-form mode + `--form` + power-rights standard FP1–FP8; v2.9 F19–F21; v2.8 LOI-Lease Audit + --loi-audit)
 
 Pre-execution gate for leases drafted on the ORA landlord form. Run BEFORE a draft
 goes to a tenant, broker, or counsel. This is a defect scan of **our** paper — for
@@ -400,11 +400,49 @@ sentence or one section window, not exact sentences.
 | FP4 | MED | Operating Costs exclude BOTH costs and revenues of Landlord energy equipment; roof repair/replacement not excluded merely because equipment is on the roof |
 | FP5 | MED | tenant utility-data authorization within ten (10) days |
 | FP6 | MED | estoppel/acknowledgment to energy-provider lessees/licensees and their financing parties |
-| FP7 | MED | Landlord may install EV charging; designated charging spaces excluded from Tenant's parking allocation; Tenant keeps reasonable access for operations |
+| FP7 | MED | Landlord may install EV charging; designated charging spaces excluded from Tenant's parking allocation; Tenant keeps reasonable access for operations. **Single-tenant paper** (exclusive parking AND no parking allocation/share defined — the OH-SingleTenant-NNN conversion): the allocation element is replaced by the designation right alone, because the rebase drops the allocation fragment by Gabriel's 2026-10-15 decision ("Drop allocation sentence"); multi-tenant paper never takes this branch (v2.11) |
 | FP8 | HIGH | optional TENANT BACKUP POWER AND ENERGY STORAGE module — if present: bracketed include-only-if instruction, counsel-review note, UL 9540 + UL 9540A, NFPA 855, NFPA 37 + 110, transfer switch, no back-feed. Absent = nothing to verify |
 
 Tested on synthetic v3.1/v2.8 builds of the real masters (`tests/test_lease_qc_v30.py`):
 bare v3.1 fails FP1–FP7; full provisions pass; dropping any one element fails its check.
+The real Phase-1 masters (v2.8 0 of 68, v3.1 0 of 73, ENFORCED) are committed fixtures and
+every FP check has entries in the mutation suite (below).
+
+**Open item (v2.11, not changed):** FP8 requires the module's
+`[COUNSEL REVIEW REQUIRED BEFORE FIRST USE]` note, and T1 reads that note as an unfilled token in
+an execution copy — so an execution copy that keeps the backup-power module fails one or the
+other. Decide whether FP8's bracket/counsel-note elements apply to `_TEMPLATE` files only (as
+F26 already does for the Specialized Equipment instruction) before the module is first used.
+
+### Mutation suite — every check must be able to fail (added v2.11)
+
+`tests/test_lease_qc_mutations.py`, run in CI by `tools/run_skill_suites.sh` (skill-gates
+workflow). Why: the v3.0 templates passed 0 of 60 on 2026-10-08 with eleven EMPTY passes — the
+v2.7 trigger wording never occurs in v3.0 text, so the checks could not fail. A green scan says
+nothing about a check that cannot fail on the paper being scanned.
+
+- **Fixtures:** the four canonical masters in `masterlease-jurisdiction-rebase/scripts/fixtures/`
+  — v2.7 (60 active checks), v2.8 (68, power-rights ENFORCED), v3.0 (65), v3.1 (73). Each must
+  pass 0 of N unmutated.
+- **Table:** `MUTATIONS` = declarative `M(check, forms, ops, expect, why)` entries. Ops edit the
+  extracted body / footer / file name **in memory** (`sub`, `re`, `append`, `drop_para`,
+  `cut_from`, `drop_between`, `footer_sub`, `footer_append`, `name`, `fill_tokens`); every op
+  asserts its anchor exists (`MutationDrift` otherwise), so a mutation cannot pass vacuously.
+  Each mutant is re-planned through `lease_qc.plan_from_text()` (the CLI's own form resolution
+  and registry) and must fail **exactly** `expect` (default: just the check). Collateral is
+  declared, never ignored — e.g. B7 on v3.x also fails F19 (same notice-address line); a
+  relocation right on v3.1 fails F23 and FP1; filled execution copies of v2.8/v3.1 also trip
+  T1 on the backup-power counsel note (open item above).
+- **Coverage gates:** the suite fails if any check active on any fixture has no mutation entry
+  for that fixture, if an entry targets a check that is not active there, or if the registry's
+  N/A list differs from `NOT_APPLICABLE` (today: F16 on v3.0 and v3.1, with reason).
+  `test_harness_catches_an_empty_pass` proves the harness itself: scanning v3.0 with the v2.7
+  registry leaves 11 re-anchored mutations undetected, and a stubbed always-pass check is caught.
+- **Rule (masterlease-revision-cycle Phase 3):** every new check ships with a mutation entry for
+  every fixture where it is active, and the suite must be green before a master is parked. A new
+  master revision is added to `FIXTURES` / `ACTIVE_COUNT` with its own entries.
+- `MUTATION_REPORT=1 python3 -I -B tests/test_lease_qc_mutations.py` prints the coverage table.
+  Runtime ~15 s for 290 mutants (`_sentences` / `_paras` / `_linewise` are memoised).
 
 ### Class 6 — MISSING PROVISIONS
 
@@ -628,6 +666,18 @@ section, re-verify every numeric cross-reference** — that is exactly how the v
 Section 24 defect was born.
 
 ## Changelog
+
+### v2.11 (2026-10-15) — mutation suite; FP7 single-tenant branch
+
+New `tests/test_lease_qc_mutations.py` (see "Mutation suite"): 290 mutation cases over the
+v2.7 / v2.8 / v3.0 / v3.1 masters, every active check covered (60 / 68 / 65 / 73), F16 N/A on
+v3.x declared, coverage and harness self-tests. `plan_scan()` split so `plan_from_text()` plans
+an in-memory document exactly as the CLI does. FP7: single-tenant branch (exclusive parking and
+no allocation → the designation right replaces the allocation element; reasonable access still
+required), for the OH-SingleTenant-NNN v2.8 template, whose rebase drops the P7 allocation
+fragment by Gabriel's decision; 4 new tests in `test_lease_qc_v30.py`. Performance only:
+`_sentences`, `_paras` and `_linewise` memoised (pure functions of the text). No other check
+changed; `tests/test_lease_qc.py` 145 and `test_lease_qc_v30.py` 27 pass.
 
 ### v2.10.1 (2026-10-15, Phase 1 build) — FP anchors widened on real v2.8/v3.1 wording
 
