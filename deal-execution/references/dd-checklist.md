@@ -99,6 +99,47 @@ For each occupied suite, reconstruct and verify the full chain before waiving th
 - Reconcile **tenant of record** against the rent roll and the estoppel. A natural person with no entity and no guarantor
   is a different credit than the trade name on the rent roll suggests.
 
+**ENTITY VERIFICATION (Category: Legal — run on every acquisition: before the first PSA draft, again before estoppels go out, and again within 30 days of closing — added v1.10)**
+
+> Origin: 2026-10-15, 754 Old State Route 74. Estoppel V3 was ready for signature with three party names never checked
+> against a state record: the 754C co-tenant "Godesana Organics, LLC" (the 2020 lease says "goDesana LLC"), the 754B trade
+> name "3Waters Behavioral Health", and a Union Township PD Minor Amendment approved for applicant "Oxford Financial
+> Partners, LLC" — not ORA's contracting entity, Oxford Capital Partners, LLC. Each was chased one-off eight days before the
+> PSA §9.5 estoppel delivery deadline.
+
+Look up, in the business-entity registry of its **state of formation** (and of the **property's state** where it is
+foreign-registered there), every party that will sign, be named in, or be certified in a deal document:
+
+- **Seller**, and any predecessor in the lease chain or in title vesting.
+- **Each tenant entity, and each trade name** on the rent roll, leases or estoppels (assumed/fictitious-name filings are a
+  separate search, sometimes county-level). A natural-person tenant is confirmed as having no entity behind it.
+- **Each entity guarantor.**
+- **ORA's own buyer and assignee entities**, and any ORA entity named as applicant or owner on a municipal filing
+  (zoning, PD, permits). ORA's own names are where a wrong one is least likely to be caught.
+
+Record for each party in the Deal-Terms Register: exact registered name (punctuation and capitalization as filed),
+entity number, type, formation state, status, registered agent, date checked, and the registry record as evidence.
+Never type a party name from memory or from another document's spelling.
+
+Registries for ORA's states: Ohio — Secretary of State Business Search; Maryland — SDAT Business Entity Search
+(Maryland Business Express; read the forfeiture status, not only "active"); Indiana — INBiz; Wisconsin — DFI corporate
+records search; Missouri — Secretary of State business entity search; Kansas — Secretary of State business entity search;
+Tennessee — Secretary of State business search. Delaware-formed entities: Division of Corporations entity search (status
+there requires ordering a good-standing certificate).
+
+Act on the result:
+- **Name differs from the document** → conform the document to the registered name. Where a lease used a variant, the
+  estoppel recites both and the tenant certifies they are the same entity (`estoppel-request-generation`).
+- **Status not active / good standing** (forfeited, cancelled, revoked, dissolved) → an authority defect, not a typo: the
+  entity cannot validly sign. Seller: affirmative PSA representation plus a good-standing certificate as a closing
+  deliverable. Tenant: surface before the estoppel goes out — it is a credit question and a signature-authority question.
+- **Trade name with no entity behind it** → the individuals are the tenant; draft every instrument that way.
+- **ORA entity misnamed on a municipal filing** → correct it with the municipality, or document it in the closing file,
+  before any instrument cites that approval.
+
+Re-run the status check within 30 days of closing (good standing can lapse mid-contract) and put good-standing
+certificates for Seller and the ORA buyer entity on the closing-deliverables list.
+
 **ZONING & PERMITS (14 items)**
 
 - Zoning classification confirmation
@@ -113,7 +154,7 @@ For each occupied suite, reconstruct and verify the full chain before waiving th
 **TENANT DD (20 items)**
 
 - Credit review on all tenants above 10% of EGI
-- Business verification (active corporation, UCC searches)
+- Business verification (registry status per **Entity Verification** under Legal above; UCC searches)
 - Rent payment history review
 - Any current delinquencies
 - Any pending disputes or litigation
