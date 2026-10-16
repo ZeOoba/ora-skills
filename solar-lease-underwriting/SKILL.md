@@ -1,9 +1,9 @@
 ---
 name: "solar-lease-underwriting"
-description: "Oxford Realty Advisors rooftop solar / community-solar lease underwriting skill. Use when evaluating, negotiating, or reviewing a rooftop solar, community solar, or PPA-style lease proposal (King Energy, Wunderpower or any developer) before signature, or auditing an already-executed one. Trigger on: solar lease, rooftop lease, community solar, King Energy, Wunderpower, roof rent, solar PPA, Site Access Fee, ITC, SREC, solar rent benchmark, should we lease our roof, solar developer proposal, solar lease economics, roof de/re, behind-the-meter solar. Companion to legal-intelligence (clause-level contract review) and acquisition-underwriting (whole-property acquisition) — this skill owns the counterparty-economics, pre-signature property checks and rent-benchmarking layer specific to third-party rooftop energy leases. v1.3 (2026-10-15: see Changelog)."
+description: "Oxford Realty Advisors rooftop solar / community-solar lease underwriting skill. Use when evaluating, negotiating, or reviewing a rooftop solar, community solar, or PPA-style lease proposal (King Energy, Wunderpower or any developer) before signature, or auditing an already-executed one. Trigger on: solar lease, rooftop lease, community solar, King Energy, Wunderpower, roof rent, solar PPA, Site Access Fee, ITC, SREC, solar rent benchmark, should we lease our roof, solar developer proposal, solar lease economics, roof de/re, behind-the-meter solar. Companion to legal-intelligence (clause-level contract review) and acquisition-underwriting (whole-property acquisition) — this skill owns the counterparty-economics, pre-signature property checks and rent-benchmarking layer specific to third-party rooftop energy leases."
 ---
 
-# Solar / Rooftop Lease Underwriting (ORA) — v1.3
+# Solar / Rooftop Lease Underwriting (ORA) (v1.3)
 
 ## Scope and skill tie-break
 
