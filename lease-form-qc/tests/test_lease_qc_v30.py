@@ -373,5 +373,60 @@ class PowerRights(unittest.TestCase):
         self.assertNotIn("F0", ids)
 
 
+class FP7SingleTenant(unittest.TestCase):
+    """v2.11: FP7 on single-tenant paper. The OH-SingleTenant-NNN conversion makes parking
+    exclusive and deletes the "Tenant's Allocation" definition, so the P7 allocation
+    fragment is dropped by rebase (Gabriel, 2026-10-15). FP7 then requires only the
+    designation right + reasonable access -- and only when BOTH single-tenant signals hold."""
+
+    MT_PARKING = ("Tenant shall be entitled to a non-exclusive right to use the unreserved parking spaces in "
+                  "the Project adjacent to the Building in order to satisfy the general operational requirements "
+                  "of the Demised Premises in an amount not to exceed the Tenant’s Allocation (hereinafter "
+                  "defined).  Notwithstanding the foregoing, Landlord reserves the right to designate specific "
+                  "spaces for Tenant’s use or use by any other occupant of the Project and to prohibit "
+                  "Tenant’s use of other designated spaces.")
+    ST_PARKING = ("Tenant shall have the exclusive right to use the parking areas in the Project for Tenant's "
+                  "employees, agents, customers and invitees, subject to the terms of this Lease.")
+    ALLOC_DEF = ("  For purposes hereof, “Tenant’s Allocation” shall be equal to a portion of the total "
+                 "number of available parking spaces in the Project based upon the ratio of (i) the rentable "
+                 "square footage of the Demised Premises compared to (ii) the rentable square footage for the "
+                 "entire Project. ")
+    FRAG = ", and such spaces shall not count against Tenant’s Allocation while so designated"
+
+    def fp7(self, edit):
+        ctx = ctx_from(need(V28), edit)
+        return run(ctx, q._with_family([c for c in q.POWER_CHECKS if c[0] == "FP7"], "v2.7"))
+
+    def to_single_tenant(self, b, drop_fragment=True):
+        for old, new in ((self.MT_PARKING, self.ST_PARKING), (self.ALLOC_DEF, "")) + (
+                ((self.FRAG, ""),) if drop_fragment else ()):
+            self.assertEqual(b.count(old), 1, old[:50])
+            b = b.replace(old, new)
+        return b
+
+    def test_single_tenant_conversion_passes_fp7(self):
+        self.assertEqual(self.fp7(self.to_single_tenant), [])
+
+    def test_single_tenant_still_needs_designation_and_access(self):
+        drop_desig = lambda b: self.to_single_tenant(b).replace(  # noqa: E731
+            "designate spaces for vehicles while charging, ", "")
+        self.assertEqual(self.fp7(drop_desig), ["FP7"])
+        drop_access = lambda b: self.to_single_tenant(b).replace(  # noqa: E731
+            ", provided that Tenant retains reasonable access to parking for its operations", "")
+        self.assertEqual(self.fp7(drop_access), ["FP7"])
+
+    def test_multi_tenant_without_the_exclusion_still_fails(self):
+        # the allocation fragment dropped on MULTI-tenant paper: no single-tenant branch
+        self.assertEqual(self.fp7(lambda b: b.replace(self.FRAG, "")), ["FP7"])
+        # exclusive-parking wording alone (allocation still defined) does not switch the branch
+        self.assertEqual(self.fp7(lambda b: b.replace(self.MT_PARKING, self.ST_PARKING).replace(self.FRAG, "")),
+                         ["FP7"])
+
+    def test_single_tenant_detector(self):
+        self.assertFalse(q._single_tenant_exclusive_parking("Tenant has a non-exclusive right to use the parking areas."))
+        self.assertTrue(q._single_tenant_exclusive_parking(self.ST_PARKING))
+        self.assertFalse(q._single_tenant_exclusive_parking(self.ST_PARKING + " Tenant’s Allocation is 10 spaces."))
+
+
 if __name__ == "__main__":
     unittest.main()
