@@ -12,6 +12,12 @@ Usage:
 
 Anchors keyed to master v2.4.1 (2026-08-03). On assertion failure after a master rev:
 diff the masters, update the anchor here or in config/, log it in SKILL.md changelog.
+
+v1.9 (2026-10-15): two form lines, chosen by the master's FOOTER TAG. v2.x (long-form,
+ShallowBayIndustrial) -> build_rules / build_rules_home / NNN / single-tenant paths below,
+unchanged. v3.x (short-form multi-tenant MG, ShallowBay_MultiTenantMG) -> build_rules_v30()
+with its own asserted anchor set; only properties with a "v3_0" config entry are eligible.
+Run under `python3 -I`.
 """
 import argparse, copy, json, pathlib, re, sys
 from docx import Document
@@ -350,7 +356,197 @@ def build_rules_home(P):
     return rules
 
 
+# --- v3.0 short-form multi-tenant MG master (added v1.9, 2026-10-15) ----------
+# The v3.0 master (ORA_MasterLease_ShallowBay_MultiTenantMG_v3.0) is a ~6,500-
+# word rewrite, not an edit of v2.7, so none of the v2.x anchors above exist in
+# it. Its anchors below were recovered by paragraph diff of the v3.0 master
+# against the four v3.0 property templates built from it on 2026-10-08
+# (OH-MOR, MD-EAS, MD-SBY, MO-RAY); rebasing the master with them reproduces
+# each stored template text-for-text (test_rebase.py V30ParityTests). The form
+# line is read from the master's FOOTER TAG, never inferred from wording:
+# "ORA Master Lease v3.x" -> this path; v2.x -> the long-form path above.
+
+FORM_TAG_RE = re.compile(r"ORA Master Lease v(\d+)\.(\d+)")
+V3_OHIO_SIGNATURE_NOTE = ("[OHIO ONLY — IF THE LEASE TERM, INCLUDING ANY RENEWAL OR EXTENSION OPTIONS, "
+                          "EXCEEDS THREE (3) YEARS, ADD A NOTARIAL ACKNOWLEDGMENT FOR EACH SIGNER "
+                          "(R.C. 5301.01).  DELETE THIS NOTE OTHERWISE.]")
+
+
+def _footer_paragraphs(doc):
+    from docx.text.paragraph import Paragraph
+    for rel in doc.part.rels.values():
+        if rel.reltype.endswith("/footer"):
+            for p_el in rel.target_part.element.iter(qn("w:p")):
+                yield Paragraph(p_el, None)
+
+
+def master_form(doc):
+    """(major, minor) from the footer tag, or None. Every footer part that
+    carries a tag must agree -- a mixed-vintage footer is itself drift."""
+    tags = {(int(m.group(1)), int(m.group(2)))
+            for p in _footer_paragraphs(doc) for m in FORM_TAG_RE.finditer(p.text)}
+    if len(tags) > 1:
+        sys.exit(f"ANCHOR DRIFT: master footers carry mixed form tags {sorted(tags)} -- fix the master first.")
+    return next(iter(tags)) if tags else None
+
+
+def is_v3(doc_or_path):
+    doc = doc_or_path if not isinstance(doc_or_path, (str, pathlib.Path)) else Document(str(doc_or_path))
+    f = master_form(doc)
+    return bool(f and f[0] == 3)
+
+
+def build_rules_v30(P, L, home):
+    """Asserted substitutions for the v3.0 master. `home` = Ohio property (the
+    master's own state): property facts only, no state overlay."""
+    V3 = P.get("v3_0")
+    if V3 is None:
+        sys.exit(f"{P.get('label', P.get('entity'))}: no 'v3_0' entry in config/properties.json -- this "
+                 "property is not on the v3.0 multi-tenant MG line (NNN and single-tenant forms stay on "
+                 "the v2.x master). Fail-closed by design.")
+    es = P.get("entity_state")
+    if not es:
+        sys.exit(f"{P['entity']}: missing 'entity_state' (fail-closed).")
+    m_bd = re.match(r"the building known as (.+), containing (.+) square feet of rentable area$", P["building_def"])
+    if not m_bd:
+        sys.exit(f"{P['label']}: building_def does not read 'the building known as <addr>, containing <rsf> "
+                 "square feet of rentable area' -- cannot derive the v3.0 Basic Lease Information line.")
+    addr, rsf = m_bd.groups()
+    if V3.get("parcel_reference"):
+        parcel_ref = V3["parcel_reference"]
+    elif home:
+        parcel_ref = f"(Franklin County Auditor Parcel No. {P['parcel']})"
+    else:
+        parcel_ref = L["parcel_reference"]
+    proj_rsf = V3.get("project_rsf")
+    pm = P["pm_block"]
+    if not pm[0].startswith("COPY TO:"):
+        sys.exit(f"{P['label']}: pm_block[0] must start with 'COPY TO:'.")
+    pm_name = pm[0][len("COPY TO:"):].strip()
+    pay = P.get("payment_direction")
+    if not pay and pm[1] != "[MANAGER STREET ADDRESS]":
+        sys.exit(f"{P['label']}: pm_block is filled but payment_direction is null -- the v3.0 Rent section "
+                 "names the payee with the manager's address; set payment_direction (fail-closed).")
+    n_pay = 0 if pay else 1          # manager-address tokens left in the Rent section when unpaid-to-PM
+
+    rules = [
+        ("[LANDLORD ENTITY]", P["entity"], 5),   # BLI, preamble, notice block, signature, Exhibit B
+        ("a [LANDLORD STATE] limited liability company", f"{article(es)} {es} limited liability company", 3),
+        ("[PREMISES ADDRESS]", P["premises"], 4),  # BLI, signature page, Exhibit A, Exhibit B
+        # Anchors never include a bold label/defined term ("Building / Project:",
+        # "Building", "Hazardous Materials"): replace_in_paragraph() puts the new
+        # text in the FIRST run it touches, so an anchor that starts in a bold run
+        # bolds the fill, and one that spans a bold term un-bolds it (caught by the
+        # run-format parity test, 2026-10-15).
+        ("[BUILDING ADDRESS] — [BUILDING RSF] rentable square feet [PARCEL REFERENCE]",
+         f"{addr} — {rsf} rentable square feet"
+         + (f"; Project: {proj_rsf} rentable square feet" if proj_rsf else "") + f" {parcel_ref}", 1),
+        ("([PREMISES RSF] / [BUILDING RSF])",
+         f"([PREMISES RSF] / {proj_rsf} rentable square feet of the Project)" if proj_rsf
+         else f"([PREMISES RSF] / {rsf})", 1),
+        ("[BUILDING DEFINITION]", P["building_def"], 1),
+    ]
+    if P.get("project_def"):
+        rules.append(("the Building together with the land on which it is situated and all parking areas, "
+                      "drives, walkways and other common areas serving it", P["project_def"], 1))
+    if proj_rsf:   # share is of the Project (multi-building): gross-up and water follow the Project
+        rules += [("to reflect a fully occupied Building.", "to reflect a fully occupied Project.", 1),
+                  ("Proportionate Share of the Building’s charges", "Proportionate Share of the Project’s charges", 1)]
+    if pay:
+        rules.append(("to [PROPERTY MANAGER], [MANAGER STREET ADDRESS], [MANAGER CITY, STATE ZIP], or through "
+                      "its tenant online portal, payable to Landlord,", pay, 1))
+    rules += [
+        ("(currently [PROPERTY MANAGER])", f"(currently {pm_name})", 1),
+        ("COPY TO:  [PROPERTY MANAGER]", f"COPY TO:  {pm_name}", 1),
+        ("[MANAGER STREET ADDRESS]", pm[1], 1 + n_pay),
+        ("[MANAGER CITY, STATE ZIP]", pm[2], 1 + n_pay),
+        ("ATTN: [MANAGER CONTACT]", pm[3], 1),
+    ]
+    if home:
+        return rules
+    st = L["state"]
+    rules += [
+        (f"bank holiday in {ANCHOR_STATE};", f"bank holiday in {st};", 1),
+        (f"contractors licensed in the State of {ANCHOR_STATE}", f"contractors licensed in the State of {st}", 1),
+        (f"Tenant’s insurers must be licensed in {ANCHOR_STATE}", f"Tenant’s insurers must be licensed in {st}", 1),
+        (f"other than any notice required by Chapter 1923 of the {ANCHOR_STATE} Revised Code that cannot be waived.",
+         f"other than any notice required by law that cannot be waived, including in {L['possession_statutes']}.", 1),
+        ("Landlord may recover possession at any time by lawful process.",
+         "Landlord may recover possession at any time by lawful process.  This section is in addition to, and "
+         f"not in limitation of, Landlord’s rights under {L['holdover_statute']}.", 1),
+        ("the Resource Conservation and Recovery Act (“",
+         f"the Resource Conservation and Recovery Act, and {L['env_overlay']} (“", 1),
+        (f"qualified to do business in {ANCHOR_STATE},", f"qualified to do business in {st},", 1),
+        (f"governed by the laws of the State of {ANCHOR_STATE}.", f"governed by the laws of the State of {st}.", 1),
+    ]
+    if L.get("extra_no_recording"):
+        rules.append(("any recording is void and an Event of Default.",
+                      "any recording is void and an Event of Default." + L["extra_no_recording"], 1))
+    return rules
+
+
+def apply_signature_note_v30(doc, L):
+    """The master's Ohio-only notarial note becomes the state's own note, or is
+    deleted when the overlay says the state has none (v3_signature_note null).
+    The key is REQUIRED for a non-home state -- fail-closed if absent."""
+    if "v3_signature_note" not in L:
+        sys.exit(f"{L.get('state')}: state_overlays.json has no 'v3_signature_note' (string, or null to "
+                 "delete the Ohio-only note) -- required for v3.0 rebases (fail-closed).")
+    hits = [p for p in doc.paragraphs if p.text == V3_OHIO_SIGNATURE_NOTE]
+    if len(hits) != 1:
+        sys.exit(f"ANCHOR DRIFT: Ohio-only signature note expected 1 paragraph, found {len(hits)}.")
+    note = L["v3_signature_note"]
+    if note is None:
+        el = hits[0]._p
+        el.getparent().remove(el)
+    elif replace_in_paragraph(hits[0], V3_OHIO_SIGNATURE_NOTE, note) != 1:
+        sys.exit("ANCHOR DRIFT: Ohio-only signature note replacement failed.")
+
+
+def rebase_one_v30(doc, P, L):
+    home = bool(P.get("home_state"))
+    apply(doc, build_rules_v30(P, L, home))
+    if not home:
+        apply_signature_note_v30(doc, L)
+    n = sum(replace_in_paragraph(p, "[PREMISES ADDRESS]", P["premises"]) for p in _footer_paragraphs(doc))
+    if n < 1:
+        sys.exit("ANCHOR DRIFT: no [PREMISES ADDRESS] token found in any footer part of the v3.0 master.")
+    return doc
+
+
+def _doc_text_v30(doc):
+    return ("\n".join(p.text for p in doc.paragraphs),
+            "\n".join(p.text for p in _footer_paragraphs(doc)))
+
+
+def post_check_v30(path, P, L):
+    doc = Document(str(path))
+    body, foot = _doc_text_v30(doc)
+    full = body + "\n" + foot
+    errs = []
+    for tok in ("[LANDLORD ENTITY]", "[LANDLORD STATE]", "[PREMISES ADDRESS]", "[BUILDING DEFINITION]",
+                "[PARCEL REFERENCE]"):
+        if tok in full:
+            errs.append(f"unfilled token {tok}")
+    if not P.get("home_state"):
+        for residue in (ANCHOR_STATE, ANCHOR_STATE.upper(), "Revised Code", "R.C. "):
+            if residue in full:
+                errs.append(f"{ANCHOR_STATE} residue present: {residue!r}")
+    if L["state"] not in body:
+        errs.append("state name absent")
+    if SAVINGS_TITLE not in body:
+        errs.append("savings clause missing")
+    if not re.search(r"ORA Master Lease v3\.\d+", foot):
+        errs.append("footer form tag (ORA Master Lease v3.x) missing")
+    if P["entity"] not in body:
+        errs.append("landlord entity absent")
+    if errs:
+        sys.exit(f"POST-CHECK FAILED for {path.name}: {errs}")
+
+
 def post_check(path, P, L):
+    if is_v3(path):
+        return post_check_v30(path, P, L)
     full = "\n".join(p.text for p in Document(str(path)).paragraphs)
     errs = []
     if P.get("variant") == "single-tenant":
@@ -403,6 +599,11 @@ def rebase_one(master_path, P, L):
     and the test suite, so a step added here (like the NNN override) can't drift
     out of sync between the CLI path and its own tests again."""
     doc = Document(str(master_path))
+    if is_v3(doc):
+        if P.get("variant") or P.get("lease_structure"):
+            sys.exit(f"{P.get('label')}: the v3.0 master is the multi-tenant modified-gross line only; "
+                     "variant/lease_structure overrides (NNN, single-tenant) stay on the v2.x master.")
+        return rebase_one_v30(doc, P, L)
     if P.get("variant") == "single-tenant":
         # Generic-tokenized variant: no entity/premises/PM fills, no state overlay
         # (the family is anchored to the master's own state). Footer token stays.
@@ -437,7 +638,11 @@ def main():
     props = json.loads((CONFIG / "properties.json").read_text(encoding="utf-8"))
     states = json.loads((CONFIG / "state_overlays.json").read_text(encoding="utf-8"))
     props.pop("_comment", None)
-    keys = list(props) if a.all else [a.prop]
+    v3 = is_v3(a.master)
+    if a.all and v3:
+        keys = [k for k, P in props.items() if isinstance(P, dict) and "v3_0" in P]
+    else:
+        keys = list(props) if a.all else [a.prop]
     if not keys or keys == [None]:
         sys.exit("Specify --property KEY or --all. Known: " + ", ".join(props))
     unknown = [k for k in keys if k not in props]
@@ -447,11 +652,17 @@ def main():
 
     m = re.search(r"_v(\d+\.\d+(?:\.\d+)?(?:-[A-Za-z0-9]+)?)_", pathlib.Path(a.master).name)
     ver = m.group(1) if m else "UNKNOWN"
+    tag = master_form(Document(str(a.master)))
+    if tag and m and tuple(int(x) for x in ver.split("-")[0].split(".")[:2]) != tag:
+        sys.exit(f"ANCHOR DRIFT: master filename says v{ver} but its footer tag says v{tag[0]}.{tag[1]} -- "
+                 "fix the master (or its name) before rebasing.")
     outdir = pathlib.Path(a.out); outdir.mkdir(parents=True, exist_ok=True)
 
     for k in keys:
         P = props[k]
         L = states.get(P["state_code"])
+        if v3 and "v3_0" not in P:
+            sys.exit(f"{k}: no 'v3_0' entry -- not on the v3.0 multi-tenant MG line (fail-closed).")
         if P.get("variant") == "single-tenant":
             L = L or {}
         elif P.get("home_state"):
