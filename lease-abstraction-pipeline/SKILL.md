@@ -1,18 +1,18 @@
 ---
-name: lease-abstraction-pipeline
-description: 'Use when the user mentions: abstract this lease, abstract/parse leases, extract lease data or terms, lease abstract, summarize/read/review this lease, process lease folder, batch lease, lease pipeline, run lease abstraction, update rent roll from leases, or scheduled lease scan — for one or more commercial leases uploaded directly or in a folder, SharePoint, or Google Drive. Also trigger when an uploaded PDF/DOCX appears to be a commercial lease, or on "run the lease pipeline" / "process the leases" / "update my rent roll". Covers single-document and batch lease abstraction and rent roll data extraction for Oxford Realty Advisors; autonomous unattended operation — do not pause mid-run.'
+name: "lease-abstraction-pipeline"
+description: "Lease abstraction (single document or batch) and rent roll data extraction for Oxford Realty Advisors. Use whenever the user mentions: abstract this lease, abstract/parse leases, extract lease data or terms, lease abstract, summarize/read/review this lease, process lease folder, batch lease, lease pipeline, run lease abstraction, update rent roll from leases, or scheduled lease scan — for one or more commercial leases uploaded directly or in a folder, SharePoint, or Google Drive. Also trigger when an uploaded PDF/DOCX appears to be a commercial lease, or on \"run the lease pipeline\" / \"process the leases\" / \"update my rent roll\". Produces: 33-field abstract per lease (markdown single-doc; master XLSX batch with derived metrics, quality flags, portfolio analytics), Notion Tenant Database upsert, email summary to ggoldberg@oxfordra.net ONLY (routing canon 2026-06-10). Autonomous unattended operation — do not pause mid-run. v2.8 (2026-09-28: see Changelog)"
 ---
 
-# Lease Abstraction Pipeline — Oxford Realty Advisors (v2.7)
+# Lease Abstraction Pipeline — Oxford Realty Advisors
 
-Autonomous batch extraction of 32 structured data fields from every lease in a target folder. Outputs a master XLSX workbook, upserts Notion Tenant Database, and sends a completion summary. Designed for unattended execution.
+Autonomous batch extraction of 33 structured data fields from every lease in a target folder. Outputs a master XLSX workbook, upserts Notion Tenant Database, and sends a completion summary. Designed for unattended execution.
 
 ---
 
 ## OPERATING PRINCIPLES
 
 - **Never pause mid-run** for individual lease ambiguities. Mark the field `NOT FOUND`, flag it, and continue.
-- **Exact language preferred** over paraphrase for fields: Permitted Use, Early Termination, Assignment/Subletting, Environmental Responsibility.
+- **Exact language preferred** over paraphrase for fields: Permitted Use, Early Termination, Assignment/Subletting, Parking Terms, Environmental Responsibility.
 - **Conflict rule:** If two conflicting values exist for the same field (e.g., rent in body vs. exhibit), extract both, flag discrepancy, note source of each.
 - **Date format:** MM/DD/YYYY throughout.
 - **Currency:** Two decimal places, no rounding.
@@ -37,7 +37,7 @@ Skip (and log in Tab 6): files that are not leases, corrupted files, password-pr
 
 ## STEP 2 — DOCUMENT INGESTION (per file)
 
-**Text PDF:** Extract via pdfplumber. **Scanned PDF:** Attempt pdfplumber first. If text yield &lt; 100 words, fall back to pytesseract OCR. Flag result as `OCR-EXTRACTED` in output — verify accuracy on flagged records. **DOCX:** Extract via python-docx. **Password-protected / corrupted:** Log in Tab 6 with error code. Skip.
+**Text PDF:** Extract via pdfplumber. **Scanned PDF:** Attempt pdfplumber first. If text yield < 100 words, fall back to pytesseract OCR. Flag result as `OCR-EXTRACTED` in output — verify accuracy on flagged records. **DOCX:** Extract via python-docx. **Password-protected / corrupted:** Log in Tab 6 with error code. Skip.
 
 **Classify the ingestion path and carry it forward.** Record `INGEST_PATH` = `TEXT_LAYER` | `OCR` | `DOCX` per document.
 Any document on the `OCR` path is subject to STEP 2A below and cannot be reported as abstracted until STEP 2A has run.
@@ -87,41 +87,120 @@ document as a whole ingested cleanly), route that page through STEP 2A's render/
 
 ---
 
-## STEP 3 — 30-FIELD EXTRACTION (per lease)
+## STEP 3 — 33-FIELD EXTRACTION (per lease)
 
 Extract every field. Mark `NOT FOUND` if absent.
 
 ### PARTIES & PREMISES
 
-#Field1Landlord entity name (+ state of formation if stated)2Tenant entity name (+ state of formation if stated)3Guarantor(s) — names, entity type, full/limited scope, burn-off terms4Property address — full street address5Suite/unit number (or "entire building")6Rentable square footage7Permitted use — exact lease language
+| # | Field |
+|---|---|
+| 1 | Landlord entity name (+ state of formation if stated) |
+| 2 | Tenant entity name (+ state of formation if stated) |
+| 3 | Guarantor(s) — names, entity type, full/limited scope, burn-off terms |
+| 4 | Property address — full street address |
+| 5 | Suite/unit number (or "entire building") |
+| 6 | Rentable square footage |
+| 7 | Permitted use — exact lease language |
 
 ### TERM
 
-#Field8Lease commencement date9Lease expiration date10Total term length — calculate in months and years11Extension options — count, length each, notice period, rent mechanism (market/fixed/CPI)12Early termination rights — exact conditions, notice requirement, penalty formula13Holdover rate — % of base rent or "market rate"
+| # | Field |
+|---|---|
+| 8 | Lease commencement date |
+| 9 | Lease expiration date |
+| 10 | Total term length — calculate in months and years |
+| 11 | Extension options — count, length each, notice period, rent mechanism (market/fixed/CPI) |
+| 12 | Early termination rights — exact conditions, notice requirement, penalty formula |
+| 13 | Holdover rate — % of base rent or "market rate" |
 
 ### ECONOMICS
 
-#Field14Base rent schedule — full escalation table (period, monthly rent, annual rent, $/SF/yr)15Escalation type — fixed %, CPI, market reset, flat16Free rent / concessions — duration, conditions, abatement structure17Security deposit — amount, form (cash/LOC), return conditions, interest accrual18Lease type — NNN / modified gross / gross / industrial gross19CAM structure — estimated annual CAM, mgmt fee cap, base year, controllable cap, exclusions20Tenant improvement allowance — $/SF or lump sum, conditions, disbursement deadline21Percentage rent — breakpoint, rate, reporting obligation (or N/A)22Late fee — grace period (days), fee amount or % of monthly rent
+| # | Field |
+|---|---|
+| 14 | Base rent schedule — full escalation table (period, monthly rent, annual rent, $/SF/yr) |
+| 15 | Escalation type — fixed %, CPI, market reset, flat |
+| 16 | Free rent / concessions — duration, conditions, abatement structure |
+| 17 | Security deposit — amount, form (cash/LOC), return conditions, interest accrual |
+| 18 | Lease type — NNN / modified gross / gross / industrial gross |
+| 19 | CAM structure — estimated annual CAM, mgmt fee cap, base year, controllable cap, exclusions |
+| 20 | Tenant improvement allowance — $/SF or lump sum, conditions, disbursement deadline |
+| 21 | Percentage rent — breakpoint, rate, reporting obligation (or N/A) |
+| 22 | Late fee — grace period (days), fee amount or % of monthly rent |
 
 ### LEGAL & RISK
 
-#Field23Personal guaranty — present/absent, full/limited, burn-off date or conditions24Assignment/subletting — consent standard, recapture right, profit sharing (exact language)25Insurance requirements — coverage types, minimum amounts, additional insured, waiver of subrogation26Default cure periods — monetary (days), non-monetary (days), cross-default provisions27ROFR/ROFO — on what space, on what terms28SNDA/subordination — required/not required, non-disturbance language29Environmental responsibility — tenant scope, landlord scope, pre-existing carveout (exact language)30Condemnation/casualty — termination trigger, restoration obligation, rent abatement
+| # | Field |
+|---|---|
+| 23 | Personal guaranty — present/absent, full/limited, burn-off date or conditions |
+| 24 | Assignment/subletting — consent standard, recapture right, profit sharing, admin fee amount and whether owed if denied, cost/attorney-fee reimbursement (exact language) |
+| 25 | Insurance requirements — coverage types, minimum amounts, additional insured, waiver of subrogation |
+| 26 | Default cure periods — monetary (days), non-monetary (days), cross-default provisions |
+| 27 | ROFR/ROFO — on what space, on what terms |
+| 28 | SNDA/subordination — required/not required, non-disturbance language |
+| 29 | Environmental responsibility — tenant scope, landlord scope, pre-existing carveout (exact language) |
+| 30 | Condemnation/casualty — termination trigger, restoration obligation, rent abatement |
 
 ### CAM RECOVERY (v2.3 addition — closes a gap found during the FY2025 CAM reconciliation review, 2026-07-12)
 
-#Field31CAM Recovery Type — classify from Field 19's CAM structure language plus Field 18's lease type into exactly one of: "Full CAM + Tax + Insurance", "Tax Only", "Capped CAM", "Uncapped CAM", "NNN — All Pass-Through", "Gross — No Recovery", "Partial Recovery" (these 7 values are the live options on the Notion Tenant Database's CAM Recovery Type field — do not invent a new option). Inference guide: Lease Type=Gross with no CAM/tax passthrough language -> Gross — No Recovery. Lease Type=NNN with full CAM+tax+insurance passthrough and no cap mentioned -> NNN — All Pass-Through (or Uncapped CAM if the lease frames it as CAM specifically, not full NNN). Any "controllable expense cap" or "cap of X% per year" language -> Capped CAM. Tenant pays only real estate tax reimbursement, no CAM -> Tax Only. Passthrough applies to only some categories (e.g. CAM but not insurance) -> Partial Recovery. If the language doesn't clearly map to one option, mark NOT FOUND and flag for manual review rather than guessing — same discipline as every other field.32Tenant Pro-Rata Share — the tenant's % share of building/project CAM pool (usually stated as "Tenant's Proportionate Share" or a ratio of Field 6 Rentable SF to total building/project SF). Extract the stated percentage if given; if only the ratio/SF figures are given, calculate it and flag as CALCULATED (not stated) in output. NOT FOUND if neither is present.
+| # | Field |
+|---|---|
+| 31 | CAM Recovery Type — classify from Field 19's CAM structure language plus Field 18's lease type into exactly one of: "Full CAM + Tax + Insurance", "Tax Only", "Capped CAM", "Uncapped CAM", "NNN — All Pass-Through", "Gross — No Recovery", "Partial Recovery" (these 7 values are the live options on the Notion Tenant Database's CAM Recovery Type field — do not invent a new option). Inference guide: Lease Type=Gross with no CAM/tax passthrough language -> Gross — No Recovery. Lease Type=NNN with full CAM+tax+insurance passthrough and no cap mentioned -> NNN — All Pass-Through (or Uncapped CAM if the lease frames it as CAM specifically, not full NNN). Any "controllable expense cap" or "cap of X% per year" language -> Capped CAM. Tenant pays only real estate tax reimbursement, no CAM -> Tax Only. Passthrough applies to only some categories (e.g. CAM but not insurance) -> Partial Recovery. If the language doesn't clearly map to one option, mark NOT FOUND and flag for manual review rather than guessing — same discipline as every other field. |
+| 32 | Tenant Pro-Rata Share — the tenant's % share of building/project CAM pool (usually stated as "Tenant's Proportionate Share" or a ratio of Field 6 Rentable SF to total building/project SF). Extract the stated percentage if given; if only the ratio/SF figures are given, calculate it and flag as CALCULATED (not stated) in output. NOT FOUND if neither is present. |
+
+### PARKING (v2.8 addition — closes a gap found 2026-09-28 at 9620 State Route 350)
+
+| # | Field |
+|---|---|
+| 33 | Parking terms — exact lease language on: allocation formula or fixed count, exclusive vs. non-exclusive, reserved vs. unreserved, landlord's right to designate or restrict spaces, and restrictions on vehicle storage, maintenance, service or repair. If the allocation is a ratio of tenant RSF to project RSF, compute the percentage and flag as CALCULATED; do NOT state a space count unless the lease or a site plan gives the project's total spaces. NOT FOUND if the lease is silent. |
 
 ---
 
 ## STEP 4 — DERIVED METRICS (per lease)
 
-MetricFormulaRent PSF Year 1Annual base rent Yr 1 ÷ Rentable SFRent PSF Final YearAnnual base rent final year ÷ Rentable SFEscalation CAGR(Final yr rent / Yr 1 rent)^(1/(term yrs − 1)) − 1Total undiscounted base rentSum of all monthly base rent paymentsNPV of base rent (8%)PV of monthly payments discounted at 8%/yrEffective rent PSF(Total rent − free rent value) ÷ (SF × term yrs)Months until expirationFrom today → expiration date
+| Metric | Formula |
+|---|---|
+| Rent PSF Year 1 | Annual base rent Yr 1 ÷ Rentable SF |
+| Rent PSF Final Year | Annual base rent final year ÷ Rentable SF |
+| Escalation CAGR | (Final yr rent / Yr 1 rent)^(1/(term yrs − 1)) − 1 |
+| Total undiscounted base rent | Sum of all monthly base rent payments |
+| NPV of base rent (8%) | PV of monthly payments discounted at 8%/yr |
+| Effective rent PSF | (Total rent − free rent value) ÷ (SF × term yrs) |
+| Months until expiration | From today → expiration date |
 
 ---
 
 ## STEP 5 — QUALITY FLAGS (per lease)
 
-SeverityFlag Condition🔴 CRITICALRent &lt; $4.00/SF NNN🔴 CRITICALMissing personal guaranty on leases &gt; $5,000/mo🔴 CRITICALAssignment permitted without landlord consent🔴 CRITICALNo default cure period stated🔴 CRITICALEnvironmental liability assigned entirely to landlord🟡 WARNINGRent &gt; $12.00/SF NNN — verify market justification🟡 WARNINGEscalation &lt; 2%/yr — below inflation target🟡 WARNINGEscalation &gt; 4%/yr — verify tenant acceptance🟡 WARNINGExtension notice period &lt; 9 months🟡 WARNINGHoldover rate &lt; 150% of base rent🟡 WARNINGSecurity deposit &lt; 2 months rent🟡 WARNINGNo SNDA provision🟡 WARNINGNo late fee provision🟡 WARNINGLease term &lt; 3 years🟡 WARNINGExtension option without market rent reset🔵 INFOAny field = NOT FOUND — manual review required🔵 INFOLease expires within 12 months — add to renewal pipeline🔴 CRITICAL`EXECUTION_STATUS` = UNEXECUTED or PARTIALLY_EXECUTED — file copy is a draft, not a lease🔴 CRITICALAmendment references a base lease or renewal not present in the file (chain gap)🔴 CRITICALManuscript amendment present that is NOT initialed by all parties🔴 CRITICALLandlord named in the lease does not match title vesting (per `title-exam-abstraction`; fall back to the deal's self-reported seller name if title-exam-abstraction hasn't run yet, and note the check as provisional)🟡 WARNINGManuscript amendment present and initialed — must be reproduced verbatim in any estoppel🟡 WARNINGTenant of record is a natural person with no entity and no guaranty🟡 WARNINGTerm evidenced only by a margin note rather than a separate instrument🔵 INFOOCR-extracted document — STEP 2A sweep completed, verify accuracy🔵 INFO`INGEST_PATH` = OCR and STEP 2A not yet run — abstract is INCOMPLETE, do not publish
+| Severity | Flag Condition |
+|---|---|
+| 🔴 CRITICAL | Rent < $4.00/SF NNN |
+| 🔴 CRITICAL | Missing personal guaranty on leases > $5,000/mo |
+| 🔴 CRITICAL | Assignment permitted without landlord consent |
+| 🔴 CRITICAL | No default cure period stated |
+| 🔴 CRITICAL | Environmental liability assigned entirely to landlord |
+| 🟡 WARNING | Rent > $12.00/SF NNN — verify market justification |
+| 🟡 WARNING | Escalation < 2%/yr — below inflation target |
+| 🟡 WARNING | Escalation > 4%/yr — verify tenant acceptance |
+| 🟡 WARNING | Extension notice period < 9 months |
+| 🟡 WARNING | Holdover rate < 150% of base rent |
+| 🟡 WARNING | Security deposit < 2 months rent |
+| 🟡 WARNING | No SNDA provision |
+| 🟡 WARNING | No late fee provision |
+| 🟡 WARNING | Lease term < 3 years |
+| 🟡 WARNING | Extension option without market rent reset |
+| 🔵 INFO | Any field = NOT FOUND — manual review required |
+| 🔵 INFO | Lease expires within 12 months — add to renewal pipeline |
+| 🔴 CRITICAL | `EXECUTION_STATUS` = UNEXECUTED or PARTIALLY_EXECUTED — file copy is a draft, not a lease |
+| 🔴 CRITICAL | Amendment references a base lease or renewal not present in the file (chain gap) |
+| 🔴 CRITICAL | Manuscript amendment present that is NOT initialed by all parties |
+| 🔴 CRITICAL | Landlord named in the lease does not match title vesting (per `title-exam-abstraction`; fall back to the deal's self-reported seller name if title-exam-abstraction hasn't run yet, and note the check as provisional) |
+| 🟡 WARNING | Manuscript amendment present and initialed — must be reproduced verbatim in any estoppel |
+| 🟡 WARNING | Tenant of record is a natural person with no entity and no guaranty |
+| 🟡 WARNING | Term evidenced only by a margin note rather than a separate instrument |
+| 🟡 WARNING | Assignment/subletting clause reaches "permitting occupancy or use by another party" — shared-occupancy requests need landlord consent (informational cross-reference for Field 24) |
+| 🔵 INFO | OCR-extracted document — STEP 2A sweep completed, verify accuracy |
+| 🔵 INFO | `INGEST_PATH` = OCR and STEP 2A not yet run — abstract is INCOMPLETE, do not publish |
 
 ---
 
@@ -129,7 +208,14 @@ SeverityFlag Condition🔴 CRITICALRent &lt; $4.00/SF NNN🔴 CRITICALMissing pe
 
 **File naming:** per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Operating Prompt v3.0, 2026-07-16 — do NOT unify; supersedes the archived v2.0/2026-06-11 doc of the same ratified rule). The master abstract workbook is a session/analysis output → use `YYYY-MM-DD_[Topic]_[DocType]_v##.ext` in an `/outputs/` subfolder. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.) **Save to:** SharePoint `Oxford Realty Advisors > Lease Abstracts > [Year]`
 
-TabContents**1 — Master Rent Roll**One row/lease. All 30 fields + 7 derived metrics + flag counts. Freeze row 1. Auto-filter. Color: red fill = any CRITICAL, yellow = WARNING only, white = clean.**2 — Rent Schedules**One block/tenant: name, property, suite, then full escalation table (Year, Period Start, Period End, Monthly, Annual, PSF).**3 — Quality Flags Dashboard**One row/flag: File, Tenant, Property, Suite, Severity, Description.**4 — Expiration Heatmap**Count of expirations by quarter, next 5 years. Highlight quarters with 3+ expirations.**5 — Portfolio Analytics**WALT (by SF), avg rent PSF (weighted by SF), occupancy-weighted total rent, % with guaranty, % with ROFR, % NNN vs. gross, rent PSF std dev with outlier flags (&gt;1.5 SD).**6 — Skipped Files**File name, reason, timestamp.
+| Tab | Contents |
+|---|---|
+| 1 — Master Rent Roll | One row/lease. All 33 fields + 7 derived metrics + flag counts. Freeze row 1. Auto-filter. Color: red fill = any CRITICAL, yellow = WARNING only, white = clean. |
+| 2 — Rent Schedules | One block/tenant: name, property, suite, then full escalation table (Year, Period Start, Period End, Monthly, Annual, PSF). |
+| 3 — Quality Flags Dashboard | One row/flag: File, Tenant, Property, Suite, Severity, Description. |
+| 4 — Expiration Heatmap | Count of expirations by quarter, next 5 years. Highlight quarters with 3+ expirations. |
+| 5 — Portfolio Analytics | WALT (by SF), avg rent PSF (weighted by SF), occupancy-weighted total rent, % with guaranty, % with ROFR, % NNN vs. gross, rent PSF std dev with outlier flags (>1.5 SD). |
+| 6 — Skipped Files | File name, reason, timestamp. |
 
 ---
 
@@ -137,7 +223,27 @@ TabContents**1 — Master Rent Roll**One row/lease. All 30 fields + 7 derived me
 
 Target database: ORA Notion Tenant Database. Logic: update record if tenant already exists (match on Tenant Name + Property + Suite); create new record if no match. Do not overwrite records where Notion shows a more recent modified date than the lease document, unless Gabriel explicitly instructs.
 
-Notion FieldSource FieldTenant NameField 2 — Tenant entity namePropertyField 4 — Property addressSuiteField 5 — Suite/unitLease StartField 8 — Commencement dateLease EndField 9 — Expiration dateCurrent Rent (monthly)Field 14 — Base rent Year 1, monthlyRent PSFDerived — Rent PSF Year 1Lease TypeField 18Renewal OptionsField 11GuarantyField 23 — Yes/NoDays Until ExpirationDerived — Months until expiration × 30Flag CountTotal flags (all severities)Flag StatusHighest severity: Critical / Warning / CleanCAM Recovery TypeField 31 (v2.3)Tenant Pro-Rata ShareField 32 (v2.4)
+| Notion Field | Source Field |
+|---|---|
+| Tenant Name | Field 2 — Tenant entity name |
+| Property | Field 4 — Property address |
+| Suite | Field 5 — Suite/unit |
+| Lease Start | Field 8 — Commencement date |
+| Lease End | Field 9 — Expiration date |
+| Current Rent (monthly) | Field 14 — Base rent Year 1, monthly |
+| Rent PSF | Derived — Rent PSF Year 1 |
+| Lease Type | Field 18 |
+| Renewal Options | Field 11 |
+| Guaranty | Field 23 — Yes/No |
+| Days Until Expiration | Derived — Months until expiration × 30 |
+| Flag Count | Total flags (all severities) |
+| Flag Status | Highest severity: Critical / Warning / Clean |
+| CAM Recovery Type | Field 31 (v2.3) |
+| Tenant Pro-Rata Share | Field 32 (v2.4) |
+| Assignment / Sublet Terms (Lease) | Field 24 (v2.8) — condensed exact language, prefixed with a source note: document name and `EXECUTION_STATUS` |
+| Parking Terms (Lease) | Field 33 (v2.8) — condensed exact language plus calculated allocation %, prefixed with the same source note |
+
+The existing numeric `Parking Spaces` field is NOT written by this pipeline unless the lease states a fixed count. When `EXECUTION_STATUS` is anything other than EXECUTED, still write Fields 24 and 33 but the source note must say the copy is unexecuted.
 
 ---
 
@@ -197,9 +303,10 @@ Notion: [N] updated / [N] created
 - **tenant-intelligence:** Feed extracted data into tenant risk scoring for existing portfolio tenants.
 - **acquisition-underwriting** (successor to the retired `rent-comp`, 2026-08-05): compare extracted rent PSF against current market comps for below/above-market flags, using that skill's COMPS mode / comp-grid discipline (absorbed from `rent-comp` on 2026-08-12 — see the 2026-08-12 event_log entry).
 - **title-exam-abstraction** (2026-08-21): source of the vesting record the STEP 5 landlord-mismatch flag checks the lease's named landlord against.
-- **estoppel-request-generation** (2026-08-21): consumes the 32-field abstract (including `EXECUTION_STATUS`/`INGEST_PATH`/`MANUSCRIPT AMENDMENTS`) to pre-fill and draft tenant estoppel certificates — the sole path for that deliverable; `document-assembly`'s Template 7 is superseded, see that skill's own note.
+- **estoppel-request-generation** (2026-08-21): consumes the 33-field abstract (including `EXECUTION_STATUS`/`INGEST_PATH`/`MANUSCRIPT AMENDMENTS`) to pre-fill and draft tenant estoppel certificates — the sole path for that deliverable; `document-assembly`'s Template 7 is superseded, see that skill's own note.
 - **document-assembly:** Use extracted data to auto-populate renewal offers, lease addenda.
 - **lease-renewal-pipeline:** Auto-trigger for any lease flagged as expiring within 12 months.
+- **tenant-consent-request** (2026-09-28): reads the Notion `Assignment / Sublet Terms (Lease)` and `Parking Terms (Lease)` fields this pipeline writes (Fields 24 and 33) as its first-pass lease shortcut.
 
 ---
 
@@ -214,6 +321,7 @@ See `references/extraction-edge-cases.md` for guidance on:
 
 ## Changelog
 
+- v2.8 (2026-09-28): added Field 33 (Parking terms) and widened Field 24 to capture the assignment/sublet admin fee, whether it is owed if the request is denied, and cost/attorney-fee reimbursement. Origin: 9620 State Route 350 shared-occupancy request — the parking allocation formula and the $500 per-request fee were only discoverable by re-reading the full lease, and the Notion Tenant Database had no field for either. STEP 7 now writes two new Tenant Database text fields (`Assignment / Sublet Terms (Lease)`, `Parking Terms (Lease)`) with a mandatory source/execution note. Added one STEP 5 warning cross-referencing occupancy-by-another-party language. Rebuilt the field, metric, flag, XLSX-tab and Notion-mapping tables as proper Markdown tables (the synced copy had them collapsed into run-on text); no field, formula, flag threshold or routing rule from v2.7 changed. Field count 32 -> 33.
 - v2.7 (2026-08-21, adversarial review): the v2.6 landlord-mismatch flag had no defined source for "owner of record" —
   now checks against `title-exam-abstraction`'s vesting record (added to CROSS-SKILL INTEGRATION), with a provisional
   seller-name fallback when that skill hasn't run yet. The execution check's "run on every document" line had no
