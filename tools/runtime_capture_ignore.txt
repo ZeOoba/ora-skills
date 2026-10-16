@@ -1,0 +1,27 @@
+# Skills that live in the same Cowork runtime cache as ORA's skills but are provided by the
+# platform (Anthropic / plugins), not authored by ORA. tools/capture_runtime_cache.py never
+# captures these. Keep this list to clear platform skills only: an unknown skill that is NOT
+# listed here gets captured into a DO-NOT-MERGE PR for review, which is the safe failure.
+# If a capture PR turns out to hold a platform skill, close the PR and add the name here.
+#
+# Seeded 2026-10-16 from the first --full --dry-run (skills with no history in any ORA repo
+# that are recognisably platform-provided: LICENSE.txt-bearing document skills, browser and
+# computer-use skills, setup/onboarding and memory skills).
+built-in-browser
+chrome-browser
+computer-use
+consolidate-memory
+deep-research
+docs
+docx
+explain-usage
+google-workspace
+import-memory
+mcp-builder
+pdf
+pptx
+schedule
+setup-claude
+setup-cowork
+skill-creator
+xlsx
