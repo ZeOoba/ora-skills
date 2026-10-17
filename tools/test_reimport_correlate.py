@@ -1246,12 +1246,51 @@ class PostclickPackageVersion(PostclickTests):
         # The package was inspected and declares no version: a versioned checkout must not
         # stand in for it (that is the false match this change removes).
         self._arm(packaged='4.32', installed='4.31', checkout='4.31')
+        _write(self.cache / 'demo-skill' / 'SKILL.md',
+               '---\nname: demo-skill\ndescription: d\n---\n\n# Demo, no version\n')
         _write(rc._baseline_path('demo-skill'),
                json.dumps({**self._baseline_json(), 'expected_version': None}))
         code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
         self.assertEqual(code, 0, out)
         self.assertIn('version not verified', out)
         self.assertIn('no expected version', out)
+
+    def test_unversioned_package_with_a_versioned_cache_is_a_mismatch(self):
+        # A package declaring no version cannot have produced a cache that declares one.
+        self._arm(packaged='4.32', installed='4.31', checkout='4.31')
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({**self._baseline_json(), 'expected_version': None}))
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+
+    def test_malformed_expected_version_never_confirms_a_versioned_cache(self):
+        for bad in (0, False, '', '   ', [4, 32], {'v': 1}):
+            with self.subTest(bad=bad):
+                self._arm(packaged='4.32', installed='4.31', checkout='4.31')
+                _write(rc._baseline_path('demo-skill'),
+                       json.dumps({**self._baseline_json(), 'expected_version': bad}))
+                code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+                self.assertEqual(code, 1, out)
+                self.assertIn('VERSION-MISMATCH', out)
+
+    def test_record_expected_version_does_not_resurrect_a_consumed_baseline(self):
+        (self.cache / 'demo-skill').mkdir()
+        rc.cmd_baseline(['demo-skill'])
+        path = rc._baseline_path('demo-skill')
+        real_read = rc._read_baseline
+        calls = []
+
+        def read_then_consume(pth):
+            text = real_read(pth)
+            calls.append(1)
+            if len(calls) == 1:          # a consume claims the file after precheck read it
+                path.unlink()
+            return text
+
+        with unittest.mock.patch.object(rc, '_read_baseline', read_then_consume):
+            rc._record_expected_version('demo-skill', '4.32')
+        self.assertFalse(path.exists())
 
     def test_unreadable_package_writes_no_baseline(self):
         (self.cache / 'demo-skill').mkdir()
