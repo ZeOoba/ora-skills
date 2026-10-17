@@ -21,8 +21,23 @@ on:
   push:
   workflow_dispatch:
 
+# RUNNER TOGGLE (2026-10-17): jobs run on GitHub-hosted ubuntu-latest by default. Setting the repo
+# variable CI_RUNNER=self moves them to the self-hosted runner on Gabriel's Windows laptop (labels:
+# self-hosted, windows, ora-ci) -- no billed Actions minutes. Added when account billing blocked
+# every hosted job. Same toggle as ZeOoba/oxford-command-center.
+#   gh variable set CI_RUNNER --body self --repo ZeOoba/ora-skills
+#   gh variable delete CI_RUNNER --repo ZeOoba/ora-skills
+# Self-hosted differences: steps run under bash (Git Bash) instead of PowerShell; the laptop's own
+# Python 3.13 is used (setup-python is skipped); apt-get is skipped (poppler/pdftotext comes from the
+# laptop); and the git identity for fixture repos is set via GIT_* env vars, NEVER `git config
+# --global`, which would overwrite the laptop owner's identity.
+
 permissions:
   contents: read
+
+defaults:
+  run:
+    shell: bash
 
 concurrency:
   group: skill-gates-${{ github.ref }}
@@ -30,7 +45,7 @@ concurrency:
 
 jobs:
   skill-gates:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'self' && fromJSON('["self-hosted","windows","ora-ci"]') || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +53,7 @@ jobs:
           fetch-depth: 0  # target-markets base diff needs origin/main history
 
       - uses: actions/setup-python@v5
+        if: vars.CI_RUNNER != 'self'
         with:
           python-version: '3.13'
 
@@ -50,7 +66,7 @@ jobs:
         run: python tools/skill_ci_gates.py target-markets --base auto
 
   skill-tests:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'self' && fromJSON('["self-hosted","windows","ora-ci"]') || 'ubuntu-latest' }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -58,6 +74,7 @@ jobs:
           fetch-depth: 0  # lease-form-qc tests `git show 5a8a98f:...` (frozen-original checks)
 
       - uses: actions/setup-python@v5
+        if: vars.CI_RUNNER != 'self'
         with:
           python-version: '3.13'
 
@@ -66,15 +83,17 @@ jobs:
       # fixture must report UNREADABLE, matching the local baseline.
       - name: Install test dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq poppler-utils
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq poppler-utils
+          fi
           python -m pip install --disable-pip-version-check pymupdf python-docx reportlab lxml openpyxl
           echo "pdftotext: $(command -v pdftotext || echo missing)  tesseract: $(command -v tesseract || echo absent)"
 
-      - name: Configure git identity for fixture repos
-        run: |
-          git config --global user.name ci
-          git config --global user.email ci@example.invalid
-
       - name: Run skill test suites
+        env:
+          GIT_AUTHOR_NAME: ci
+          GIT_AUTHOR_EMAIL: ci@example.invalid
+          GIT_COMMITTER_NAME: ci
+          GIT_COMMITTER_EMAIL: ci@example.invalid
         run: bash tools/run_skill_suites.sh
