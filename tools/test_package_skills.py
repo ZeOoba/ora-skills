@@ -10,6 +10,8 @@ taught it to count Markdown TABLE rows (e.g. loi-generation/references/
 qc-gate.md presents its gate as a numbered table, not a checkbox list).
 """
 import io
+import zipfile
+import shutil
 import json
 import subprocess
 import sys
@@ -808,6 +810,208 @@ class SkillSourceFilesSharedDeps(unittest.TestCase):
                 files = skill_source_files('demo-skill', repo_root)
 
             self.assertNotIn('scripts/shared.py', files)
+
+
+class SharedDepMustMatchHead(unittest.TestCase):
+    """2026-10-17 incident: package_skills bundled target-markets.json from the PRIMARY
+    checkout's dirty working tree, shipping another session's uncommitted edit inside
+    acquisition-underwriting.skill. A shared root dep that differs from HEAD (or is not
+    committed at all) must stop the packager unless explicitly allowed."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='pkg_shared_head_'))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.git('init', '-q')
+        self.git('config', 'user.email', 't@example.com')
+        self.git('config', 'user.name', 't')
+        (self.tmp / 'target-markets.json').write_text('{"v": 1}\n', encoding='utf-8', newline='')
+        self.git('add', 'target-markets.json')
+        self.git('commit', '-q', '-m', 'init')
+
+    def git(self, *a):
+        subprocess.run(['git', '-C', str(self.tmp), *a], check=True, capture_output=True)
+
+    def test_clean_file_passes(self):
+        self.assertIsNone(package_skills.shared_dep_dirty_reason(self.tmp, 'target-markets.json'))
+
+    def test_modified_file_is_reported(self):
+        (self.tmp / 'target-markets.json').write_text('{"v": 2}\n', encoding='utf-8', newline='')
+        reason = package_skills.shared_dep_dirty_reason(self.tmp, 'target-markets.json')
+        self.assertIsNotNone(reason)
+        self.assertIn('differs from HEAD', reason)
+
+    def test_crlf_only_difference_is_not_dirty(self):
+        (self.tmp / 'target-markets.json').write_bytes(b'{"v": 1}\r\n')
+        self.assertIsNone(package_skills.shared_dep_dirty_reason(self.tmp, 'target-markets.json'))
+
+    def test_uncommitted_new_file_is_reported(self):
+        (self.tmp / 'new-shared.json').write_text('{}\n', encoding='utf-8')
+        reason = package_skills.shared_dep_dirty_reason(self.tmp, 'new-shared.json')
+        self.assertIsNotNone(reason)
+        self.assertIn('not committed', reason)
+
+    def test_non_git_directory_is_not_checked(self):
+        with tempfile.TemporaryDirectory() as plain:
+            (Path(plain) / 'target-markets.json').write_text('{}\n', encoding='utf-8')
+            self.assertIsNone(package_skills.shared_dep_dirty_reason(Path(plain), 'target-markets.json'))
+
+    def _package(self, **kw):
+        skill = self.tmp / 'demo-skill'
+        skill.mkdir(exist_ok=True)
+        (skill / 'SKILL.md').write_text('---\nname: demo-skill\ndescription: d\n---\n# Demo\n', encoding='utf-8')
+        out = self.tmp / 'out'
+        out.mkdir(exist_ok=True)
+        with mock.patch.object(package_skills, 'REPO', self.tmp), \
+             mock.patch.object(package_skills, 'SHARED_ROOT_DEPS', {'demo-skill': ['target-markets.json']}), \
+             mock.patch.object(package_skills, 'validate_frontmatter', lambda *a, **k: None), \
+             redirect_stdout(io.StringIO()):
+            return package_skills.package('demo-skill', out, **kw)
+
+    def test_package_refuses_dirty_shared_dep(self):
+        (self.tmp / 'target-markets.json').write_text('{"v": 2}\n', encoding='utf-8', newline='')
+        with self.assertRaises(SystemExit) as cm:
+            self._package()
+        self.assertIn('target-markets.json', str(cm.exception))
+        self.assertFalse((self.tmp / 'out' / 'demo-skill.skill').exists())
+
+    def test_package_builds_when_shared_dep_is_clean(self):
+        dest = self._package()
+        with zipfile.ZipFile(dest) as z:
+            self.assertIn('demo-skill/target-markets.json', z.namelist())
+
+    def test_allow_dirty_shared_overrides(self):
+        (self.tmp / 'target-markets.json').write_text('{"v": 2}\n', encoding='utf-8', newline='')
+        dest = self._package(allow_dirty_shared=True)
+        self.assertTrue(dest.is_file())
+
+
+class SharedDepFailsClosed(unittest.TestCase):
+    """REFUTE round 1 (C5): any git failure other than 'not a git repository' used to
+    read as 'no HEAD to compare to' and let a dirty shared file ship. Unknown git states
+    must refuse; only a genuine non-repo directory is exempt."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='pkg_failclosed_'))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        (self.tmp / 'target-markets.json').write_text('{}\n', encoding='utf-8')
+
+    def _fake(self, rev_rc=0, rev_err=b'', show_rc=0, show_out=b'{}\n', show_err=b''):
+        calls = []
+
+        def run(cmd, **kw):
+            calls.append(cmd)
+            if 'rev-parse' in cmd:
+                return subprocess.CompletedProcess(cmd, rev_rc, b'', rev_err)
+            return subprocess.CompletedProcess(cmd, show_rc, show_out, show_err)
+        return run
+
+    def test_dubious_ownership_refuses(self):
+        run = self._fake(rev_rc=128, rev_err=b"fatal: detected dubious ownership in repository at 'x'")
+        with mock.patch.object(package_skills.subprocess, 'run', run):
+            reason = package_skills.shared_dep_dirty_reason(self.tmp, 'target-markets.json')
+        self.assertIsNotNone(reason)
+        self.assertIn('cannot verify', reason)
+
+    def test_git_missing_refuses(self):
+        def run(cmd, **kw):
+            raise FileNotFoundError('git')
+        with mock.patch.object(package_skills.subprocess, 'run', run):
+            reason = package_skills.shared_dep_dirty_reason(self.tmp, 'target-markets.json')
+        self.assertIsNotNone(reason)
+        self.assertIn('cannot verify', reason)
+
+    def test_not_a_git_repository_is_still_exempt(self):
+        run = self._fake(rev_rc=128, rev_err=b'fatal: not a git repository (or any of the parent directories): .git')
+        with mock.patch.object(package_skills.subprocess, 'run', run):
+            self.assertIsNone(package_skills.shared_dep_dirty_reason(self.tmp, 'target-markets.json'))
+
+    def test_unexpected_show_error_refuses(self):
+        run = self._fake(show_rc=128, show_err=b'fatal: bad object HEAD')
+        with mock.patch.object(package_skills.subprocess, 'run', run):
+            reason = package_skills.shared_dep_dirty_reason(self.tmp, 'target-markets.json')
+        self.assertIsNotNone(reason)
+
+    def test_already_read_bytes_are_what_gets_compared(self):
+        run = self._fake(show_out=b'{"v": 1}\n')
+        with mock.patch.object(package_skills.subprocess, 'run', run):
+            self.assertIsNone(package_skills.shared_dep_dirty_reason(
+                self.tmp, 'target-markets.json', data=b'{"v": 1}\r\n'))
+            self.assertIn('differs from HEAD', package_skills.shared_dep_dirty_reason(
+                self.tmp, 'target-markets.json', data=b'{"v": 2}\n'))
+
+
+class PackageShipsTheBytesItChecked(SharedDepMustMatchHead):
+    """REFUTE round 1 (C5, TOCTOU): the check read the file, then the zip step read it
+    again. The bytes verified must be the bytes shipped; a missing dep must fail before
+    any partial .skill exists."""
+
+    def test_edit_between_check_and_zip_does_not_ship(self):
+        real = package_skills.shared_dep_dirty_reason
+
+        def check_then_dirty_the_file(repo, rel, data=None):
+            out = real(repo, rel, data)
+            (self.tmp / rel).write_text('{"v": 99}\n', encoding='utf-8', newline='')
+            return out
+        with mock.patch.object(package_skills, 'shared_dep_dirty_reason', check_then_dirty_the_file):
+            dest = self._package()
+        with zipfile.ZipFile(dest) as z:
+            self.assertEqual(z.read('demo-skill/target-markets.json').replace(b'\r\n', b'\n'),
+                             b'{"v": 1}\n')
+
+    def test_missing_dep_fails_before_creating_a_zip(self):
+        (self.tmp / 'target-markets.json').unlink()
+        with self.assertRaises(SystemExit):
+            self._package()
+        self.assertFalse((self.tmp / 'out' / 'demo-skill.skill').exists())
+
+
+class OrphanedWorktreeIsNotExempt(unittest.TestCase):
+    """REFUTE round 2 (F2): a worktree whose admin dir (.git/worktrees/<name>) was moved or
+    pruned makes `git rev-parse` say 'not a git repository', which the first fail-closed
+    version read as 'no HEAD to compare to' and let a dirty shared file ship. Only a
+    directory with NO .git at it or any ancestor is genuinely not a work tree."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='pkg_orphan_wt_'))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.main = self.tmp / 'main'
+        self.main.mkdir()
+        self.git(self.main, 'init', '-q')
+        self.git(self.main, 'config', 'user.email', 't@example.com')
+        self.git(self.main, 'config', 'user.name', 't')
+        (self.main / 'target-markets.json').write_text('{"v": 1}\n', encoding='utf-8', newline='')
+        self.git(self.main, 'add', '-A')
+        self.git(self.main, 'commit', '-q', '-m', 'init')
+        self.wt = self.tmp / 'wt'
+        self.git(self.main, 'worktree', 'add', '-q', '-b', 'side', str(self.wt))
+
+    def git(self, cwd, *a):
+        subprocess.run(['git', '-C', str(cwd), *a], check=True, capture_output=True)
+
+    def _orphan(self):
+        shutil.move(str(self.main / '.git' / 'worktrees'), str(self.tmp / 'moved-worktrees'))
+
+    def test_healthy_worktree_clean_passes_dirty_refuses(self):
+        self.assertIsNone(package_skills.shared_dep_dirty_reason(self.wt, 'target-markets.json'))
+        (self.wt / 'target-markets.json').write_text('{"v": 2}\n', encoding='utf-8', newline='')
+        self.assertIn('differs from HEAD',
+                      package_skills.shared_dep_dirty_reason(self.wt, 'target-markets.json'))
+
+    def test_orphaned_worktree_with_a_dirty_file_refuses(self):
+        (self.wt / 'target-markets.json').write_text('{"v": 2}\n', encoding='utf-8', newline='')
+        self._orphan()
+        reason = package_skills.shared_dep_dirty_reason(self.wt, 'target-markets.json')
+        self.assertIsNotNone(reason)
+        self.assertIn('cannot verify', reason)
+
+    def test_orphaned_worktree_even_with_a_clean_file_refuses(self):
+        self._orphan()
+        self.assertIsNotNone(package_skills.shared_dep_dirty_reason(self.wt, 'target-markets.json'))
+
+    def test_directory_with_no_git_anywhere_is_still_exempt(self):
+        with tempfile.TemporaryDirectory() as plain:
+            (Path(plain) / 'target-markets.json').write_text('{}\n', encoding='utf-8')
+            self.assertIsNone(package_skills.shared_dep_dirty_reason(Path(plain), 'target-markets.json'))
 
 
 if __name__ == '__main__':
