@@ -283,5 +283,79 @@ class BumpOrdering(unittest.TestCase):
             self.assertEqual(on_disk['version'], '0.1.1')
 
 
+class PluginSharedDepMustMatchHead(unittest.TestCase):
+    """REFUTE round 1 (C5): build_plugin bundled shared root deps through
+    skill_source_files() with no HEAD check, so a plugin could ship the same unreviewed
+    working-tree edit the .skill packager now refuses."""
+
+    def setUp(self):
+        self._td = tempfile.TemporaryDirectory()
+        self.addCleanup(self._td.cleanup)
+        self.root, self.plugins_dir = make_fixture_plugin(self._td.name, skills=('fake-skill',))
+        (self.root / 'target-markets.json').write_text('{"v": 1}\n', encoding='utf-8', newline='')
+
+    def git(self, *a):
+        import subprocess
+        subprocess.run(['git', '-C', str(self.root), *a], check=True, capture_output=True)
+
+    def commit_all(self):
+        self.git('init', '-q')
+        self.git('config', 'user.email', 't@example.com')
+        self.git('config', 'user.name', 't')
+        self.git('add', '-A')
+        self.git('commit', '-q', '-m', 'init')
+
+    def entries(self, **kw):
+        with mock.patch.object(bp, 'PLUGINS_DIR', self.plugins_dir), \
+             mock.patch.object(ps, 'SHARED_ROOT_DEPS', {'fake-skill': ['target-markets.json']}):
+            return bp.plugin_entries(PLUGIN, repo_root=self.root, **kw)
+
+    def test_clean_shared_dep_bundles(self):
+        self.commit_all()
+        self.assertIn('skills/fake-skill/target-markets.json', self.entries())
+
+    def test_dirty_shared_dep_is_refused(self):
+        self.commit_all()
+        (self.root / 'target-markets.json').write_text('{"v": 2}\n', encoding='utf-8', newline='')
+        with self.assertRaises(SystemExit) as cm:
+            self.entries()
+        self.assertIn('target-markets.json', str(cm.exception))
+
+    def test_allow_flag_overrides(self):
+        self.commit_all()
+        (self.root / 'target-markets.json').write_text('{"v": 2}\n', encoding='utf-8', newline='')
+        self.assertIn('skills/fake-skill/target-markets.json', self.entries(allow_dirty_shared=True))
+
+    def test_non_git_root_is_not_checked(self):
+        self.assertIn('skills/fake-skill/target-markets.json', self.entries())
+
+
+class MainStripsAllowDirtyFlagFirst(unittest.TestCase):
+    """REFUTE round 2: build_plugin.main() read --bump's value positionally, so the new flag
+    after --bump became the bump part, and before the plugin name became the plugin name."""
+
+    def _run(self, *argv):
+        calls = []
+        with mock.patch.object(bp, 'build_plugin', lambda *a, **k: calls.append((a, k))), \
+             mock.patch.object(sys, 'argv', ['build_plugin.py', *argv]):
+            bp.main()
+        return calls[0]
+
+    def test_flag_after_bump_does_not_become_the_bump_part(self):
+        args, kw = self._run('p', 'out', '--bump', '--allow-dirty-shared')
+        self.assertEqual(args[0], 'p')
+        self.assertEqual(args[2], 'patch')
+        self.assertTrue(kw['allow_dirty_shared'])
+
+    def test_flag_first_does_not_become_the_plugin_name(self):
+        args, kw = self._run('--allow-dirty-shared', 'p', 'out')
+        self.assertEqual(args[0], 'p')
+        self.assertTrue(kw['allow_dirty_shared'])
+
+    def test_flag_absent_means_not_allowed(self):
+        args, kw = self._run('p', 'out')
+        self.assertFalse(kw['allow_dirty_shared'])
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
