@@ -370,6 +370,10 @@ def _record_expected_version(skill: str, version: str | None) -> None:
         data['expected_version'] = version
     except (TypeError, ValueError):
         return
+    # A consume may have claimed the baseline since the read: writing now would bring a
+    # pre-install baseline back from the dead and CONFIRM the same install twice.
+    if _read_baseline(path) != text:
+        return
     _atomic_write_text(path, json.dumps(data, indent=2))
 
 
@@ -384,7 +388,13 @@ def _baseline_expected_version(skill: str):
     if not isinstance(data, dict) or 'expected_version' not in data:
         return False, None
     v = data['expected_version']
-    return True, (_norm_ver(str(v)) if v else None)
+    if v is None:
+        return True, None
+    if not isinstance(v, str) or not v.strip():
+        # Hand-edited or foreign: never read as "no expected version" (that would CONFIRM
+        # unchecked). A marker no cache version equals makes any readable cache a mismatch.
+        return True, f'<malformed expected_version {v!r}>'
+    return True, _norm_ver(v)
 
 
 def _sync_events(log_path: Path):
@@ -702,16 +712,18 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
         cmd_verify([skill], baseline_override)
     verdict = buf.getvalue().strip()
     confirmed = f'{skill}: CONFIRMED' in verdict
+    pkg_unversioned = False
     if confirmed and not version:
         # --version, then the PACKAGE recorded at baseline time, then the repo checkout. A
         # baseline that inspected a package declaring no version is final: the checkout is
         # not the package, so it must not stand in for it.
         recorded, version = _baseline_expected_version(skill)
+        pkg_unversioned = recorded and not version
         if not recorded:
             version = _repo_expected_version(skill)
     cache_ver = _cache_version(skill) if confirmed else None
     want = _norm_ver(version) if version else None
-    mismatch = bool(confirmed and want and cache_ver and want != cache_ver)
+    mismatch = bool(confirmed and cache_ver and (want or pkg_unversioned) and want != cache_ver)
     # A timing match proves SOME install happened, not WHICH version (2026-10-17: v4.28
     # was logged as CONFIRMED while the cache held v4.29). Never print CONFIRMED for it.
     print(verdict.replace(f'{skill}: CONFIRMED', f'{skill}: VERSION-MISMATCH', 1) if mismatch else verdict)
@@ -721,8 +733,9 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
               'report the log state above.')
         return 1
     if mismatch:
+        expected = f'v{want}' if want else 'version (the package declares none)'
         print(f'STOP: VERSION-MISMATCH -- the install moved, but the cache SKILL.md reads '
-              f'v{cache_ver}, not the expected v{want}. Nothing appended, ledger and baseline '
+              f'v{cache_ver}, not the expected {expected}. Nothing appended, ledger and baseline '
               f'untouched. Find what was actually saved (a newer draft or a different package) '
               f'before logging or clearing anything.')
         return 1
