@@ -965,5 +965,54 @@ class PackageShipsTheBytesItChecked(SharedDepMustMatchHead):
         self.assertFalse((self.tmp / 'out' / 'demo-skill.skill').exists())
 
 
+class OrphanedWorktreeIsNotExempt(unittest.TestCase):
+    """REFUTE round 2 (F2): a worktree whose admin dir (.git/worktrees/<name>) was moved or
+    pruned makes `git rev-parse` say 'not a git repository', which the first fail-closed
+    version read as 'no HEAD to compare to' and let a dirty shared file ship. Only a
+    directory with NO .git at it or any ancestor is genuinely not a work tree."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='pkg_orphan_wt_'))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.main = self.tmp / 'main'
+        self.main.mkdir()
+        self.git(self.main, 'init', '-q')
+        self.git(self.main, 'config', 'user.email', 't@example.com')
+        self.git(self.main, 'config', 'user.name', 't')
+        (self.main / 'target-markets.json').write_text('{"v": 1}\n', encoding='utf-8', newline='')
+        self.git(self.main, 'add', '-A')
+        self.git(self.main, 'commit', '-q', '-m', 'init')
+        self.wt = self.tmp / 'wt'
+        self.git(self.main, 'worktree', 'add', '-q', '-b', 'side', str(self.wt))
+
+    def git(self, cwd, *a):
+        subprocess.run(['git', '-C', str(cwd), *a], check=True, capture_output=True)
+
+    def _orphan(self):
+        shutil.move(str(self.main / '.git' / 'worktrees'), str(self.tmp / 'moved-worktrees'))
+
+    def test_healthy_worktree_clean_passes_dirty_refuses(self):
+        self.assertIsNone(package_skills.shared_dep_dirty_reason(self.wt, 'target-markets.json'))
+        (self.wt / 'target-markets.json').write_text('{"v": 2}\n', encoding='utf-8', newline='')
+        self.assertIn('differs from HEAD',
+                      package_skills.shared_dep_dirty_reason(self.wt, 'target-markets.json'))
+
+    def test_orphaned_worktree_with_a_dirty_file_refuses(self):
+        (self.wt / 'target-markets.json').write_text('{"v": 2}\n', encoding='utf-8', newline='')
+        self._orphan()
+        reason = package_skills.shared_dep_dirty_reason(self.wt, 'target-markets.json')
+        self.assertIsNotNone(reason)
+        self.assertIn('cannot verify', reason)
+
+    def test_orphaned_worktree_even_with_a_clean_file_refuses(self):
+        self._orphan()
+        self.assertIsNotNone(package_skills.shared_dep_dirty_reason(self.wt, 'target-markets.json'))
+
+    def test_directory_with_no_git_anywhere_is_still_exempt(self):
+        with tempfile.TemporaryDirectory() as plain:
+            (Path(plain) / 'target-markets.json').write_text('{}\n', encoding='utf-8')
+            self.assertIsNone(package_skills.shared_dep_dirty_reason(Path(plain), 'target-markets.json'))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
