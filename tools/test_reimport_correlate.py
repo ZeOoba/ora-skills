@@ -332,8 +332,15 @@ class PostclickTests(FixtureTestCase):
             'import sys\n'
             f'open({str(self.calls)!r}, "a").write(open(sys.argv[2]).read())\n'
             'sys.exit(int(__import__("os").environ.get("FAKE_APPEND_RC", "0")))\n')
+        # PENDING is the script `--clear-ledger` runs: never let a regression reach the real one.
+        self.pending_calls = self.tmp / 'pending_calls.txt'
+        self.fake_pending = self.tmp / 'fake_pending.py'
+        self.fake_pending.write_text(
+            'import sys\n'
+            f'open({str(self.pending_calls)!r}, "a").write(" ".join(sys.argv[1:]))\n')
         for p in (unittest.mock.patch.object(rc, 'REPO', self.repo),
-                  unittest.mock.patch.object(rc, 'APPEND_LOG', self.fake_append)):
+                  unittest.mock.patch.object(rc, 'APPEND_LOG', self.fake_append),
+                  unittest.mock.patch.object(rc, 'PENDING', self.fake_pending)):
             p.start()
             self.addCleanup(p.stop)
 
@@ -1015,18 +1022,6 @@ class PostclickVersionGuard(PostclickTests):
     can be read from the cache and disagrees must stop postclick like any non-CONFIRMED
     verdict: nothing appended, baseline kept, ledger untouched."""
 
-    def setUp(self):
-        super().setUp()
-        # Never let a regression reach the real ledger: PENDING is the script `clear` runs.
-        self.pending_calls = self.tmp / 'pending_calls.txt'
-        fake = self.tmp / 'fake_pending.py'
-        fake.write_text(
-            'import sys\n'
-            f'open({str(self.pending_calls)!r}, "a").write(" ".join(sys.argv[1:]))\n')
-        p = unittest.mock.patch.object(rc, 'PENDING', fake)
-        p.start()
-        self.addCleanup(p.stop)
-
     def _skill_md(self, h1='# Demo Skill (v4.29 — Buy Box)', fm=''):
         _write(self.cache / 'demo-skill' / 'SKILL.md',
                f'---\nname: demo-skill\ndescription: d\n{fm}---\n\n{h1}\n')
@@ -1152,6 +1147,36 @@ class PostclickRepoDerivedVersion(PostclickVersionGuard):
         (d / 'SKILL.md').write_bytes(b'---\nname: demo-skill\n---\n\n# Demo (v4.29)\n\xff\xfe\n')
         code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, False)
         self.assertEqual(code, 0, out)
+
+
+class PostclickNoExpectedVersionWarns(PostclickTests):
+    """REFUTE round 2 (low): 12 skills declare no version anywhere, so with no --version the
+    guard had nothing to compare and skipped SILENTLY. It must say so."""
+
+    def test_confirmed_with_no_expected_version_warns(self):
+        self._confirmable()
+        (self.cache / 'demo-skill' / 'SKILL.md').write_text(
+            '---\nname: demo-skill\ndescription: d\n---\n\n# Demo with no version\n', encoding='utf-8')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+        self.assertEqual(code, 0, out)
+        self.assertIn('version not verified', out)
+        self.assertIn('no expected version', out)
+
+
+class PostclickTestsNeverReachTheRealLedger(unittest.TestCase):
+    """The base PostclickTests fixture must itself patch PENDING: its
+    test_failed_append_returns_1_and_skips_ledger_clear passes clear_ledger=True, so a
+    regression there would otherwise run the real pending_reimport.py clear."""
+
+    def test_base_fixture_patches_pending(self):
+        t = PostclickTests('test_no_append_flag_verifies_only')
+        t.setUp()
+        try:
+            self.assertNotEqual(Path(rc.PENDING).resolve(),
+                                (Path(rc.__file__).resolve().parent / 'pending_reimport.py'))
+        finally:
+            t.doCleanups()
+            t.tearDown()
 
 
 if __name__ == '__main__':

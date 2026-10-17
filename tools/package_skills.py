@@ -622,13 +622,22 @@ def skill_source_files(skill: str, repo_root: Path = REPO) -> dict[str, Path]:
     return files
 
 
+def _git_marker_at_or_above(path: Path) -> Path | None:
+    """The nearest `.git` (dir OR file, as in a linked worktree) at `path` or an ancestor."""
+    p = Path(path).resolve()
+    for d in (p, *p.parents):
+        if (d / '.git').exists():
+            return d / '.git'
+    return None
+
+
 def shared_dep_dirty_reason(repo: Path, rel: str, data: bytes | None = None) -> str | None:
     """Why `rel` (a repo-root shared file) must not be bundled as-is, else None.
 
     A shared dep is copied from the working tree, so in a shared checkout it can carry
     another session's uncommitted edit. Compares to HEAD, ignoring line endings; `data`
     is the exact bytes about to ship (so check and bundle see one read).
-    Only a directory that is genuinely not a git work tree is exempt (there is no HEAD to
+    Only a directory with no `.git` at it or any ancestor is exempt (there is no HEAD to
     compare to). Any other git failure -- dubious ownership, git missing, a broken
     object store -- REFUSES: an unverifiable file is not a clean one.
     """
@@ -638,7 +647,15 @@ def shared_dep_dirty_reason(repo: Path, rel: str, data: bytes | None = None) -> 
         if top.returncode != 0:
             err = top.stderr.decode('utf-8', 'replace')
             if 'not a git repository' in err.lower():
-                return None
+                # "Not a repository" is only believable when there is no .git anywhere on the
+                # way up. A worktree whose admin dir was moved or pruned says the same thing
+                # while its .git file is still there -- that is a broken work tree, not a
+                # plain directory, and its files must not ship unverified.
+                marker = _git_marker_at_or_above(repo)
+                if marker is None:
+                    return None
+                return (f'cannot verify {rel} against HEAD ({marker} exists but git cannot '
+                        f'use it: {err.strip()[:200]})')
             return f'cannot verify {rel} against HEAD (git said: {err.strip()[:200]})'
         show = subprocess.run(['git', '-C', str(repo), 'show', f'HEAD:{rel}'],
                               capture_output=True)

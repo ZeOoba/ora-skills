@@ -662,6 +662,9 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
     if want and cache_ver is None:
         print(f'WARNING: version not verified -- the cache SKILL.md has no readable version '
               f'(frontmatter `version:` or an H1 `(vX.Y)`); v{want} is taken on trust.')
+    elif not want:
+        print('WARNING: version not verified -- no expected version (no --version, and the '
+              'repo SKILL.md declares none), so the installed version was not checked.')
     if no_append:
         print('CONFIRMED (--no-append: event log untouched).')
         return 0
