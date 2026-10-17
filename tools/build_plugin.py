@@ -28,7 +28,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from package_skills import (  # noqa: E402
     REPO, PLUGINS_DIR, MAX_DESC, skill_source_files, resolve_outdir_collision,
+    shared_dep_dirty_reason, _dep_pair,
 )
+import package_skills as _ps  # noqa: E402  (SHARED_ROOT_DEPS read at call time)
 
 KEBAB = re.compile(r'^[a-z0-9]+(-[a-z0-9]+)*$')
 # build-only keys that must NOT appear in the shipped .claude-plugin/plugin.json
@@ -65,7 +67,8 @@ def shipped_manifest(build_manifest: dict) -> dict:
     return {k: v for k, v in build_manifest.items() if k not in BUILD_ONLY_KEYS}
 
 
-def plugin_entries(plugin: str, repo_root: Path = REPO, bm: dict | None = None) -> dict[str, bytes]:
+def plugin_entries(plugin: str, repo_root: Path = REPO, bm: dict | None = None,
+                   allow_dirty_shared: bool = False) -> dict[str, bytes]:
     """{zip arcname (forward-slash): file bytes} for the whole bundle, assembled in
     memory. Validates name kebab-case, description length, member skills present."""
     bm = bm if bm is not None else load_manifest(plugin)
@@ -91,8 +94,17 @@ def plugin_entries(plugin: str, repo_root: Path = REPO, bm: dict | None = None) 
         src_files = skill_source_files(skill, repo_root)
         if 'SKILL.md' not in src_files:
             raise SystemExit(f'{plugin}: member skill {skill!r} has no SKILL.md at {repo_root / skill}')
+        shared_src = {_dep_pair(d)[1]: _dep_pair(d)[0] for d in _ps.SHARED_ROOT_DEPS.get(skill, [])}
         for rel, path in src_files.items():
-            entries[f'skills/{skill}/{rel}'] = path.read_bytes()
+            data = path.read_bytes()  # read once: the bytes verified are the bytes shipped
+            if rel in shared_src and not allow_dirty_shared:
+                reason = shared_dep_dirty_reason(repo_root, shared_src[rel], data)
+                if reason:
+                    raise SystemExit(
+                        f'{plugin}: REFUSING to bundle skill {skill!r} -- {reason}. The plugin '
+                        f'would ship uncommitted or unverifiable content. Build from a clean '
+                        f'checkout of the commit you mean to ship, or pass --allow-dirty-shared.')
+            entries[f'skills/{skill}/{rel}'] = data
 
     bad = [a for a in entries if '\\' in a]
     if bad:
@@ -101,7 +113,7 @@ def plugin_entries(plugin: str, repo_root: Path = REPO, bm: dict | None = None) 
 
 
 def build_plugin(plugin: str, outdir: Path, bump: str | None = None,
-                 repo_root: Path = REPO) -> Path:
+                 repo_root: Path = REPO, allow_dirty_shared: bool = False) -> Path:
     # Mirrors package_skills.py's resolve_outdir_collision guard (2026-07-24 incident):
     # build_plugin() writes into `outdir` via the same skill_source_files() ->
     # rglob('*') -> is_bundled() path shared with the .skill packager, and
@@ -122,7 +134,7 @@ def build_plugin(plugin: str, outdir: Path, bump: str | None = None,
     # skill's SKILL.md missing) never touches the tracked plugin-build.json --
     # and a retry after fixing the real problem doesn't compound a phantom
     # version bump from the failed attempt.
-    entries = plugin_entries(plugin, repo_root, bm=bm)
+    entries = plugin_entries(plugin, repo_root, bm=bm, allow_dirty_shared=allow_dirty_shared)
 
     if bump:
         mf = manifest_path(plugin)
@@ -150,7 +162,8 @@ def build_plugin(plugin: str, outdir: Path, bump: str | None = None,
 
 
 def main() -> None:
-    argv = sys.argv[1:]
+    allow_dirty_shared = '--allow-dirty-shared' in sys.argv
+    argv = [a for a in sys.argv[1:] if a != '--allow-dirty-shared']
     if not argv or argv[0] in ('-h', '--help') or len(argv) < 2:
         print(__doc__.strip())
         sys.exit(0)
@@ -159,7 +172,7 @@ def main() -> None:
     if '--bump' in argv:
         i = argv.index('--bump')
         bump = argv[i + 1] if i + 1 < len(argv) else 'patch'
-    build_plugin(plugin, outdir, bump)
+    build_plugin(plugin, outdir, bump, allow_dirty_shared=allow_dirty_shared)
 
 
 if __name__ == '__main__':
