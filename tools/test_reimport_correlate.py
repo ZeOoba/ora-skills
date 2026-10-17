@@ -1009,5 +1009,78 @@ class CycleCloseUsesTheBaselineUp(unittest.TestCase):
         self.assertFalse(any('consume' in c for c in calls))
 
 
+class PostclickVersionGuard(PostclickTests):
+    """2026-10-17: postclick logged "v4.28 ... CONFIRMED" while the cache held v4.29,
+    because --version was trusted and the installed SKILL.md never read. A version that
+    can be read from the cache and disagrees must stop postclick like any non-CONFIRMED
+    verdict: nothing appended, baseline kept, ledger untouched."""
+
+    def _skill_md(self, h1='# Demo Skill (v4.29 — Buy Box)', fm=''):
+        _write(self.cache / 'demo-skill' / 'SKILL.md',
+               f'---\nname: demo-skill\ndescription: d\n{fm}---\n\n{h1}\n')
+
+    def _confirmable_with(self, **kw):
+        self._confirmable()
+        self._skill_md(**kw)
+
+    def test_h1_mismatch_refuses_and_appends_nothing(self):
+        self._confirmable_with()
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.28', False, False)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+        self.assertNotIn('demo-skill: CONFIRMED', out)
+        self.assertFalse(self.calls.exists())
+
+    def test_mismatch_keeps_the_baseline_for_a_later_correct_install(self):
+        self._confirmable_with()
+        self._run(rc.cmd_postclick, 'demo-skill', '4.28', False, False)
+        self.assertTrue(rc._baseline_path('demo-skill').exists())
+
+    def test_mismatch_never_clears_the_ledger(self):
+        self._confirmable_with()
+        with unittest.mock.patch.object(rc.subprocess, 'run', wraps=rc.subprocess.run) as run:
+            code, _ = self._run(rc.cmd_postclick, 'demo-skill', '4.28', False, True)
+        self.assertEqual(code, 1)
+        self.assertFalse(any('clear' in [str(a) for a in c.args[0]] for c in run.call_args_list))
+
+    def test_mismatch_also_refuses_under_no_append(self):
+        self._confirmable_with()
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.28', True, False)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+
+    def test_matching_h1_version_appends(self):
+        self._confirmable_with()
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.29', False, False)
+        self.assertEqual(code, 0, out)
+        self.assertIn('demo-skill v4.29 reimport confirmed', self.calls.read_text())
+
+    def test_leading_v_on_the_requested_version_is_tolerated(self):
+        self._confirmable_with()
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', 'v4.29', False, False)
+        self.assertEqual(code, 0, out)
+
+    def test_frontmatter_version_takes_precedence_over_h1(self):
+        self._confirmable_with(h1='# Demo (v9.9)', fm='version: 2.1\n')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '9.9', False, False)
+        self.assertEqual(code, 1, out)
+        self.assertFalse(self.calls.exists())
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '2.1', False, False)
+        self.assertEqual(code, 0, out)
+
+    def test_h1_without_parens_uses_trailing_version(self):
+        self._confirmable_with(h1='# Solar Lease — v1.3')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '1.3', False, False)
+        self.assertEqual(code, 0, out)
+
+    def test_unreadable_cache_version_warns_but_proceeds(self):
+        # Existing contract: a cache with no SKILL.md / no version token cannot be checked.
+        self._confirmable()
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.23', False, False)
+        self.assertEqual(code, 0, out)
+        self.assertIn('version not verified', out)
+        self.assertTrue(self.calls.exists())
+
+
 if __name__ == '__main__':
     unittest.main()
