@@ -3,7 +3,9 @@ name: cowork-settings
 description: Use when the user wants to version, diff, or publish the Oxford Realty Advisors Claude Cowork Global Settings document — mentions version the cowork settings, new cowork settings, diff cowork settings, update cowork preferences, revise global settings, new preferences version, cowork settings vN, rev the preferences block, or any request to revise, compare, or publish the ORA Cowork User Preferences governance document (versioned settings .md, brand-styled .pdf with extractable text layer, version-to-version diff report).
 ---
 
-# cowork-settings (v1.0)
+# cowork-settings (v1.1)
+
+> v1.1 (2026-10-17): added the step 4a parity gate against the Global Operating Prompt; fixed the stale Invariant-5 audit pattern in `diff_versions.py`; disambiguated "Amendment No. 1".
 
 Governs the ORA Claude Cowork Global Settings document — the single-source user-preferences block for every Cowork session.
 
@@ -25,6 +27,7 @@ Governs the ORA Claude Cowork Global Settings document — the single-source use
    - **Major (v1.0 → v2.0)**: rule removed or semantics changed.
 3. Copy latest into `./versions/YYYYMMDD_ORA_CoworkGlobalSettings_v{N}_{M}.md` with today's date.
 4. Apply the user's proposed changes inline.
+4a. **Parity gate (blocking).** Diff the new Settings Block against the ORA Global Operating Prompt (the live `<userPreferences>` layer, or Claude_Workspace/00_Governance copy). For every rule both layers state — identity/title, naming schemas, send path and routing, connector status (Zapier, Composio, Rube), skill tie-breaks, Notion DB ids — list each contradiction and ask Gabriel which side wins (one multiple-choice question per conflict, recommendation first). Do not build the PDF while any contradiction is unresolved. Record each resolution in the version's "Why this version exists" table, and emit paste-ready corrected lines for whichever layer lost.
 5. Bump the version table at the bottom of the markdown with a one-line changelog entry.
 6. Run `scripts/build_pdf.py` against the new .md to produce the branded PDF.
 7. Run `scripts/diff_versions.py <old> <new>` to emit a changelog markdown.
@@ -51,7 +54,7 @@ Run `scripts/build_pdf.py` against the current version; re-output both .md and .
 - **Every version MUST preserve these invariants** (Tier-0, cannot be removed without explicit major-version confirmation):
   1. Identity guardrail — "Never 'Ze' or 'Ze Ooba'"
   2. Email routing — Outlook COM (`send-via-outlook.ps1`) sole send path; automated outputs → ggoldberg@ ONLY; ora-am-brief Daily Brief is the sole cc-Eric exception (ratified 2026-06-10/11)
-  3. PDF extractable-text standard (Amendment No. 1)
+  3. PDF extractable-text standard (Style Guide Amendment No. 1 — distinct from the closed Cowork Settings Amendment No. 1, superseded by v2.0)
   4. Netlify `--prod` guardrail
   5. File-naming — THREE standing schemas (deal files / financial models / ISO-dated outputs; ratified 2026-06-10, never unify)
 - **Review cadence.** Surface a reminder if ≥90 days since the last version; suggest either a v(N+0.1) refresh or an explicit "no changes needed" decision logged in the changelog.
