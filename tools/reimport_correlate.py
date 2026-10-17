@@ -585,18 +585,13 @@ def _norm_ver(v: str) -> str:
     return v.strip().lstrip('vV')
 
 
-def _cache_version(skill: str) -> str | None:
-    """Version of the INSTALLED copy: frontmatter `version:` first, else the first
-    H1's `(vX.Y` token, else a trailing ` vX.Y`. None when the cache has no SKILL.md
-    or no readable version -- the caller then cannot verify and says so."""
-    f = _cache_dir(skill) / 'SKILL.md'
-    try:
-        text = f.read_text(encoding='utf8', errors='replace').replace('\r\n', '\n')
-    except OSError:
-        return None
+def _skill_md_version(text: str) -> str | None:
+    """Version a SKILL.md declares: frontmatter `version:` first, else the first H1's
+    `(vX.Y` token, else a trailing ` vX.Y`. None when it declares none."""
+    text = text.replace('\r\n', '\n').lstrip('\ufeff')
     m = re.match(r'^---\n(.*?)\n---\n', text, re.S)
     if m:
-        v = re.search(r'^version:\s*["\']?v?([\w.\-]+)["\']?\s*$', m.group(1), re.M)
+        v = re.search(r'^version:\s*["\']?v?([\w.\-]+)["\']?\s*(?:#.*)?$', m.group(1), re.M)
         if v:
             return _norm_ver(v.group(1))
         text = text[m.end():]
@@ -605,6 +600,25 @@ def _cache_version(skill: str) -> str | None:
         return None
     v = re.search(r'\(v?(\d+(?:\.\d+)+)', h1) or re.search(r'\bv(\d+(?:\.\d+)+)\b', h1)
     return _norm_ver(v.group(1)) if v else None
+
+
+def _cache_version(skill: str) -> str | None:
+    """Version of the INSTALLED copy, or None when the cache has no SKILL.md or no
+    readable version -- the caller then cannot verify and says so."""
+    try:
+        return _skill_md_version((_cache_dir(skill) / 'SKILL.md').read_text(encoding='utf8', errors='replace'))
+    except OSError:
+        return None
+
+
+def _repo_expected_version(skill: str) -> str | None:
+    """Version the repo checkout declares for `skill`, used as the expected install when
+    no --version is given (reimport_cycle never passes one). Never raises: a missing or
+    non-UTF-8 SKILL.md just means there is nothing to compare against."""
+    try:
+        return _skill_md_version((REPO / skill / 'SKILL.md').read_text(encoding='utf8', errors='replace'))
+    except OSError:
+        return None
 
 
 def _log_report(tail: int) -> None:
@@ -627,7 +641,7 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
     verdict = buf.getvalue().strip()
     confirmed = f'{skill}: CONFIRMED' in verdict
     if confirmed:
-        version = version or _repo_version(skill)
+        version = version or _repo_expected_version(skill)
     cache_ver = _cache_version(skill) if confirmed else None
     want = _norm_ver(version) if version else None
     mismatch = bool(confirmed and want and cache_ver and want != cache_ver)

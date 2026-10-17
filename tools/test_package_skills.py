@@ -885,5 +885,85 @@ class SharedDepMustMatchHead(unittest.TestCase):
         self.assertTrue(dest.is_file())
 
 
+class SharedDepFailsClosed(unittest.TestCase):
+    """REFUTE round 1 (C5): any git failure other than 'not a git repository' used to
+    read as 'no HEAD to compare to' and let a dirty shared file ship. Unknown git states
+    must refuse; only a genuine non-repo directory is exempt."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='pkg_failclosed_'))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        (self.tmp / 'target-markets.json').write_text('{}\n', encoding='utf-8')
+
+    def _fake(self, rev_rc=0, rev_err=b'', show_rc=0, show_out=b'{}\n', show_err=b''):
+        calls = []
+
+        def run(cmd, **kw):
+            calls.append(cmd)
+            if 'rev-parse' in cmd:
+                return subprocess.CompletedProcess(cmd, rev_rc, b'', rev_err)
+            return subprocess.CompletedProcess(cmd, show_rc, show_out, show_err)
+        return run
+
+    def test_dubious_ownership_refuses(self):
+        run = self._fake(rev_rc=128, rev_err=b"fatal: detected dubious ownership in repository at 'x'")
+        with mock.patch.object(package_skills.subprocess, 'run', run):
+            reason = package_skills.shared_dep_dirty_reason(self.tmp, 'target-markets.json')
+        self.assertIsNotNone(reason)
+        self.assertIn('cannot verify', reason)
+
+    def test_git_missing_refuses(self):
+        def run(cmd, **kw):
+            raise FileNotFoundError('git')
+        with mock.patch.object(package_skills.subprocess, 'run', run):
+            reason = package_skills.shared_dep_dirty_reason(self.tmp, 'target-markets.json')
+        self.assertIsNotNone(reason)
+        self.assertIn('cannot verify', reason)
+
+    def test_not_a_git_repository_is_still_exempt(self):
+        run = self._fake(rev_rc=128, rev_err=b'fatal: not a git repository (or any of the parent directories): .git')
+        with mock.patch.object(package_skills.subprocess, 'run', run):
+            self.assertIsNone(package_skills.shared_dep_dirty_reason(self.tmp, 'target-markets.json'))
+
+    def test_unexpected_show_error_refuses(self):
+        run = self._fake(show_rc=128, show_err=b'fatal: bad object HEAD')
+        with mock.patch.object(package_skills.subprocess, 'run', run):
+            reason = package_skills.shared_dep_dirty_reason(self.tmp, 'target-markets.json')
+        self.assertIsNotNone(reason)
+
+    def test_already_read_bytes_are_what_gets_compared(self):
+        run = self._fake(show_out=b'{"v": 1}\n')
+        with mock.patch.object(package_skills.subprocess, 'run', run):
+            self.assertIsNone(package_skills.shared_dep_dirty_reason(
+                self.tmp, 'target-markets.json', data=b'{"v": 1}\r\n'))
+            self.assertIn('differs from HEAD', package_skills.shared_dep_dirty_reason(
+                self.tmp, 'target-markets.json', data=b'{"v": 2}\n'))
+
+
+class PackageShipsTheBytesItChecked(SharedDepMustMatchHead):
+    """REFUTE round 1 (C5, TOCTOU): the check read the file, then the zip step read it
+    again. The bytes verified must be the bytes shipped; a missing dep must fail before
+    any partial .skill exists."""
+
+    def test_edit_between_check_and_zip_does_not_ship(self):
+        real = package_skills.shared_dep_dirty_reason
+
+        def check_then_dirty_the_file(repo, rel, data=None):
+            out = real(repo, rel, data)
+            (self.tmp / rel).write_text('{"v": 99}\n', encoding='utf-8', newline='')
+            return out
+        with mock.patch.object(package_skills, 'shared_dep_dirty_reason', check_then_dirty_the_file):
+            dest = self._package()
+        with zipfile.ZipFile(dest) as z:
+            self.assertEqual(z.read('demo-skill/target-markets.json').replace(b'\r\n', b'\n'),
+                             b'{"v": 1}\n')
+
+    def test_missing_dep_fails_before_creating_a_zip(self):
+        (self.tmp / 'target-markets.json').unlink()
+        with self.assertRaises(SystemExit):
+            self._package()
+        self.assertFalse((self.tmp / 'out' / 'demo-skill.skill').exists())
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
