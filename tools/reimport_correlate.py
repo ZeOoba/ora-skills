@@ -19,13 +19,15 @@ This scripts both halves.
 
 Usage
 -----
-    python tools/reimport_correlate.py baseline <skill> [<skill> ...]
+    python tools/reimport_correlate.py baseline <skill> [<skill> ...] [--package PATH.skill]
         Record each skill's current cache-directory CreationTime to
         <primary checkout>/_staging/reimport-baselines/<skill>/<session>.json. Run this
         during the pre-packaging pre-check, before presenting the Save-skill button.
         Baselines are scoped to the Claude session ($CLAUDE_CODE_SESSION_ID; runs
         outside a session share 'no-session'): the dir is shared by every checkout,
         and an unscoped baseline let one session CONFIRM another's install.
+        --package (ONE skill) also stores the packaged SKILL.md's version as
+        `expected_version`; postclick compares the cache to it. `precheck` records it too.
 
     python tools/reimport_correlate.py verify <skill> [<skill> ...] [--baseline TIME]
         Compare current CreationTime against the saved baseline (or an
@@ -64,8 +66,8 @@ Usage
         CONFIRMED appends the event-log line via append-event-log.py
         --entry-file (dated `## ` header, exit 0 required). On NO-CHANGE /
         MOVED-ONLY / any non-CONFIRMED verdict it STOPS: prints the log tail,
-        appends nothing, exits 1. --version defaults to the repo SKILL.md
-        `version:` frontmatter token if present. --clear-ledger runs
+        appends nothing, exits 1. Expected version: --version, else the
+        baseline's `expected_version` (the PACKAGE), else the repo SKILL.md. --clear-ledger runs
         `pending_reimport.py clear <skill>` only AFTER the append exited 0.
         --no-append verifies only (safe to re-run). After a successful append
         the baselines that predate this install are used up (see `consume`); if
@@ -303,7 +305,7 @@ def _refresh_stale_baseline(skill: str) -> str | None:
     return f'baseline kept ({recorded.isoformat() if recorded else None})'
 
 
-def cmd_baseline(skills: list[str]) -> int:
+def cmd_baseline(skills: list[str], package: str | None = None) -> int:
     """Record each skill's current cache-directory CreationTime -- or, when no
     cache dir exists yet (the skill has never been installed), an explicit
     ABSENT baseline (creation_time: null) rather than skipping the skill
@@ -317,18 +319,72 @@ def cmd_baseline(skills: list[str]) -> int:
     case (a brand-new publish) this correlation tool exists to make routine.
     Recording ABSENT explicitly lets `verify` treat "no dir -> a dir exists" as
     first-hand evidence of install, the same way it treats a CreationTime move
-    for a skill that already existed."""
+    for a skill that already existed.
+
+    With `package` (a .skill zip), also record the version that package's SKILL.md
+    declares as `expected_version`, which postclick then compares the cache against
+    instead of whichever checkout runs it (#139's known limitation). The package is read
+    BEFORE anything is written, so an unreadable one leaves no baseline behind. A package
+    belongs to one skill, so `package` with several skills is refused (exit 2)."""
+    extra: dict = {}
+    if package is not None:
+        if len(skills) != 1:
+            print('--package names ONE package, so give exactly one skill', file=sys.stderr)
+            return 2
+        try:
+            extra = {'expected_version': _package_version(Path(package), skills[0])}
+        except (OSError, zipfile.BadZipFile, KeyError) as exc:
+            print(f'{skills[0]}: cannot read the package version from {package} '
+                  f'({type(exc).__name__}: {exc}) -- no baseline written', file=sys.stderr)
+            return 1
     for skill in skills:
         ct = _creation_time(skill)
         path = _baseline_path(skill)
         if ct is None:
-            _atomic_write_text(path, json.dumps({'skill': skill, 'creation_time': None}, indent=2))
+            _atomic_write_text(path, json.dumps({'skill': skill, 'creation_time': None, **extra},
+                                                indent=2))
             print(f'{skill}: baseline ABSENT (no cache dir yet -- first install) -> {path}')
             continue
-        _atomic_write_text(path, json.dumps({'skill': skill, 'creation_time': ct.isoformat()},
-                                            indent=2))
+        _atomic_write_text(path, json.dumps({'skill': skill, 'creation_time': ct.isoformat(),
+                                             **extra}, indent=2))
         print(f'{skill}: baseline {ct.isoformat()} -> {path}')
     return 0
+
+
+def _package_version(pkg: Path, skill: str) -> str | None:
+    """Version the packaged SKILL.md declares (None = it declares none). Raises OSError /
+    BadZipFile / KeyError when the package or its SKILL.md cannot be read."""
+    with zipfile.ZipFile(pkg) as z:
+        return _skill_md_version(z.read(f'{skill}/SKILL.md').decode('utf8', errors='replace'))
+
+
+def _record_expected_version(skill: str, version: str | None) -> None:
+    """Merge `expected_version` into this session's existing baseline (precheck keeps or
+    recaptures one, and must not leave it without the package it just inspected)."""
+    path = _baseline_path(skill)
+    text = _read_baseline(path)
+    if text is None:
+        return
+    try:
+        data = json.loads(text)
+        data['expected_version'] = version
+    except (TypeError, ValueError):
+        return
+    _atomic_write_text(path, json.dumps(data, indent=2))
+
+
+def _baseline_expected_version(skill: str):
+    """(recorded, version): `recorded` is True when this session's baseline carries an
+    `expected_version` key at all -- even null, meaning the package declared none."""
+    text = _read_baseline(_baseline_path(skill))
+    try:
+        data = json.loads(text) if text is not None else None
+    except (TypeError, ValueError):
+        return False, None
+    if not isinstance(data, dict) or 'expected_version' not in data:
+        return False, None
+    v = data['expected_version']
+    return True, (_norm_ver(str(v)) if v else None)
 
 
 def _sync_events(log_path: Path):
@@ -551,6 +607,10 @@ def cmd_precheck(pkgs: list[str]) -> int:
                             warns.append(f'{rel}: in repo, not in package')
             else:
                 fails.append(f'repo skill dir not found: {sd}')
+        try:
+            pkg_version = _package_version(p, skill)
+        except (OSError, zipfile.BadZipFile, KeyError):
+            pkg_version = None     # no readable SKILL.md: already a FAIL above
         note = _refresh_stale_baseline(skill)
         if note is not None:
             base_note = note
@@ -558,6 +618,8 @@ def cmd_precheck(pkgs: list[str]) -> int:
             with contextlib.redirect_stdout(io.StringIO()):
                 cmd_baseline([skill])
             base_note = 'baseline CAPTURED'
+        if f'{skill}/SKILL.md' in names:
+            _record_expected_version(skill, pkg_version)
         if fails:
             rc = 1
             print(f'{skill}: PRECHECK FAIL -- ' + '; '.join(fails))
@@ -640,8 +702,13 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
         cmd_verify([skill], baseline_override)
     verdict = buf.getvalue().strip()
     confirmed = f'{skill}: CONFIRMED' in verdict
-    if confirmed:
-        version = version or _repo_expected_version(skill)
+    if confirmed and not version:
+        # --version, then the PACKAGE recorded at baseline time, then the repo checkout. A
+        # baseline that inspected a package declaring no version is final: the checkout is
+        # not the package, so it must not stand in for it.
+        recorded, version = _baseline_expected_version(skill)
+        if not recorded:
+            version = _repo_expected_version(skill)
     cache_ver = _cache_version(skill) if confirmed else None
     want = _norm_ver(version) if version else None
     mismatch = bool(confirmed and want and cache_ver and want != cache_ver)
@@ -720,13 +787,14 @@ def main() -> int:
     cmd, rest = args[0], args[1:]
     baseline_override, rest = _pop(rest, '--baseline', True)
     version, rest = _pop(rest, '--version', True)
+    package, rest = _pop(rest, '--package', True)
     no_append, rest = _pop(rest, '--no-append', False)
     clear_ledger, rest = _pop(rest, '--clear-ledger', False)
     if not rest:
         print('no skill name(s) given', file=sys.stderr)
         return 2
     if cmd == 'baseline':
-        return cmd_baseline(rest)
+        return cmd_baseline(rest, package)
     if cmd == 'consume':
         return cmd_consume(rest)
     if cmd == 'precheck':
