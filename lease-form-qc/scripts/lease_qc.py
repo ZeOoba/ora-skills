@@ -103,11 +103,27 @@ lease-generation's SKILL.md documents two handoffs to this scanner:
     See the "--loi-conformance mode" section near the bottom of this file.
 
 Both are additive: CHECKS keeps every existing entry, ID, and severity
-unchanged, and the default (no `--loi-conformance`) CLI behavior is
-byte-for-byte the same call into ora_doc_qc.run_cli() as before.
+unchanged.
+
+FORM MODES + POWER-RIGHTS STANDARD (v2.10, 2026-10-15)
+------------------------------------------------------
+    python3 -I lease_qc.py <files> [--form v2.7|v3.0] [--power-rights] ...
+
+The default CLI no longer calls ora_doc_qc.run_cli() directly: main() runs
+_run_scan_cli(), which resolves each file's form line (footer tag ->
+structure -> legacy v2.7 default), builds that file's registry
+(build_registry), and then calls the same ora_doc_qc.scan()/print_report()
+with the same flags and exit codes, appending FORM / N/A / PENDING lines
+(and form/na/pending keys in --json). A v2.x document with no form conflict
+is scanned with the CHECKS list object itself -- same 60 checks, same
+result. v3.x documents get the v3.0 registry (re-anchors, F16 N/A, F0,
+F22-F26); FP1-FP8 (power-rights standard) are enforced only on >= v2.8 /
+>= v3.1 forms or with --power-rights, and are otherwise reported PENDING.
+See the FORM MODES section below CHECKS and SKILL.md Classes 5f/5g.
 """
 
 import argparse
+import functools
 import json
 import os
 import re
@@ -127,8 +143,17 @@ from pathlib import Path
 # ora_doc_qc there. Verified 2026-08-17 against both a raw worktree checkout
 # and a real extracted .skill (see task-4-fix-report.md).
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent / 'tools'))
+# `python3 -I` (isolated mode, the ORA standard for running scripts) does NOT
+# put the script's own directory on sys.path, so the co-located
+# ora_doc_qc.py was unimportable under -I (ModuleNotFoundError, measured
+# 2026-10-15 on the unmodified v2.9 script). Put it first explicitly -- the
+# same precedence plain `python3 lease_qc.py` already gives it.
+_HERE = str(Path(__file__).resolve().parent)
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
 
-from ora_doc_qc import bool_check, run_cli, extract, norm, scan, print_report
+from ora_doc_qc import (bool_check, run_cli, extract, norm, scan, print_report,  # noqa: E402
+                        build_cli, run_checks)
 
 Q = '["“”‘’«»]'
 
@@ -146,7 +171,12 @@ def _linewise(ctx):
     using re.MULTILINE needs. ctx["t"] cannot serve: ora_doc_qc.norm()
     collapses \\s+, newlines included. Only A2 uses this.
     """
-    return re.sub(r'[ \t]+', ' ', ctx["raw"])
+    return _linewise_of(ctx["raw"])
+
+
+@functools.lru_cache(maxsize=16)
+def _linewise_of(raw):
+    return re.sub(r'[ \t]+', ' ', raw)
 
 
 def _a2(ctx):
@@ -609,6 +639,13 @@ CHECKS = [
 TOKEN_RE = re.compile(r"\[[A-Z][A-Z0-9 /,.'&-]{2,}\]")
 
 
+# The one bracketed drafting note that is REQUIRED to survive into an execution copy:
+# FP8 demands it in the optional TENANT BACKUP POWER AND ENERGY STORAGE module, so T1
+# must not read it as an unfilled token (Gabriel, 2026-10-17: exempt this exact note
+# from T1). Exact match only -- any other bracketed token still trips T1.
+T1_EXEMPT_TOKENS = frozenset({"[COUNSEL REVIEW REQUIRED BEFORE FIRST USE]"})
+
+
 def _t1(ctx):
     """Unfilled template tokens remain — scanned in the BODY *and* the FOOTER.
 
@@ -637,7 +674,7 @@ def _t1(ctx):
     if ctx.get("is_template") or ctx.get("allow_tokens"):
         return None
     hay = ctx["raw"] + "\n" + ctx["meta"].get("footer", "")
-    toks = sorted(set(TOKEN_RE.findall(hay)))
+    toks = sorted(set(TOKEN_RE.findall(hay)) - T1_EXEMPT_TOKENS)
     if not toks:
         return None
     shown = ", ".join(toks[:6]) + ("..." if len(toks) > 6 else "")
@@ -1043,6 +1080,581 @@ CHECKS.append(("D1", "MED", "Basic Lease Information value drifts from the body"
                None, _d1))
 CHECKS.append(("D2", "HIGH", "Rent schedule arithmetic does not reproduce",
                None, _d2))
+
+
+# ==========================================================================
+# FORM MODES -- v2.7 long-form NNN line vs v3.0 short-form MG line (v3.0)
+# ==========================================================================
+# CHECKS above is the v2.7 registry and is NOT modified by anything below: a
+# document resolved to the v2.7 family with no form conflict is scanned with
+# exactly CHECKS (same 60 checks, same IDs, same severities, same output).
+#
+# The v3.0 master (ORA_MasterLease_ShallowBay_MultiTenantMG_v3.0) is a
+# ~6,500-word rewrite, not an edit of v2.7. Measured 2026-10-15: the
+# unmodified v2.7 scanner already reported "0 of 60" on the v3.0 master and
+# all four v3.0 property templates -- that is the "lease_qc 0/60" in the
+# 2026-10-08 v3.0 run memo -- but eleven of those passes were VACUOUS: the
+# check's v2.7 trigger phrase does not occur in v3.0 wording, so the check
+# never looked at the v3.0 provision at all (A7, B2, B3, B8, F6, F13, F14,
+# F15, F16, F17, F20). v3.0 mode re-anchors each of those to v3.0 wording
+# (same ID, label suffixed "-- v3.0 anchor"), marks F16 N/A because v3.0
+# deliberately removed the provision it requires, and adds v3.0-only form
+# checks F0 and F22-F26.
+
+FORM_FAMILIES = ("v2.7", "v3.0")
+_FOOTER_VER_RE = re.compile(r"ORA Master Lease v(\d+)\.(\d+)")
+
+# Section headings that exist in one line and not the other (re.M on
+# _linewise text). Two or more hits on one side, and fewer than two on the
+# other, decides the structural family.
+_STRUCT_MARKERS = {
+    "v3.0": (r"^\s*ENTRY AND LANDLORD.S RIGHTS\.",
+             r"^\s*SUBORDINATION, ATTORNMENT AND ESTOPPEL\.",
+             r"^\s*EXHIBIT B\s*\n\s*RULES AND REGULATIONS\s*$",
+             r"^\s*Definitions\.\s+In this Lease:"),
+    "v2.7": (r"^\s*RIGHTS RESERVED BY LANDLORD\.",
+             r"^\s*FINANCIAL STATEMENTS\.",
+             r"^\s*ESTOPPEL CERTIFICATES\.",
+             r"^\s*ENTRY FOR INSPECTIONS"),
+}
+
+
+def _family_of(ver):
+    if ver is None:
+        return None
+    return {2: "v2.7", 3: "v3.0"}.get(ver[0])
+
+
+def detect_form(raw, footer):
+    """Read the form line from the footer tag and, independently, from the
+    document's section structure. Returns a dict; never guesses a family the
+    evidence does not support (None = not determinable)."""
+    m = _FOOTER_VER_RE.search(footer or "")
+    ver = (int(m.group(1)), int(m.group(2))) if m else None
+    lw = re.sub(r"[ \t]+", " ", raw or "")
+    hits = {fam: sum(1 for p in pats if re.search(p, lw, re.M))
+            for fam, pats in _STRUCT_MARKERS.items()}
+    struct = None
+    if hits["v3.0"] >= 2 and hits["v2.7"] < 2:
+        struct = "v3.0"
+    elif hits["v2.7"] >= 2 and hits["v3.0"] < 2:
+        struct = "v2.7"
+    return {"version": f"v{ver[0]}.{ver[1]}" if ver else None, "version_tuple": ver,
+            "footer_family": _family_of(ver), "structure_family": struct,
+            "structure_hits": hits}
+
+
+def resolve_form(det, declared=None):
+    """(family, conflict_detail_or_None, include_F0).
+
+    Explicit --form: the declared family is scanned, and F0 FAILS (BLOCK) if
+    the footer tag or the structure contradicts it, or if neither confirms it.
+    Auto: footer family, else structure family, else the legacy v2.7 default
+    (preserves every pre-v3.0 result, e.g. a non-lease Exhibit B file); F0 is
+    registered only if footer and structure disagree with each other."""
+    ff, sf = det["footer_family"], det["structure_family"]
+    if declared:
+        bad = []
+        if ff and ff != declared:
+            bad.append(f"footer tag says ORA Master Lease {det['version']} ({ff} line)")
+        if sf and sf != declared:
+            bad.append(f"section structure is the {sf} line")
+        if not ff and not sf:
+            bad.append("no ORA Master Lease footer tag and no recognizable form structure")
+        detail = (f"--form {declared} declared but " + "; ".join(bad) +
+                  " -- this document is not a " + declared + " form; rescan with the "
+                  "correct --form (or none, to auto-detect).") if bad else None
+        return declared, detail, True
+    if ff and sf and ff != sf:
+        return ff, (f"footer tag says {det['version']} ({ff} line) but the section "
+                    f"structure is the {sf} line -- vintage/footer forensics: the footer "
+                    f"was carried onto a different form."), True
+    return ff or sf or "v2.7", None, False
+
+
+def _f0_check(detail):
+    def fn(ctx):
+        return detail
+    return ("F0", "BLOCK", "Form/mode mismatch -- the scan mode does not match this document's form line",
+            None, fn)
+
+
+@functools.lru_cache(maxsize=16)
+def _sentences(t):
+    """Sentence split of the norm()'d text. Memoised (pure function of `t`): the
+    power-rights and v3.0 checks call it ~15 times per scan on the same text."""
+    return tuple(re.split(r"(?<=[.;])\s+(?=[A-Z(\[])", t))
+
+
+def _sent_all(t, *pats):
+    """True if ONE sentence matches every pattern (case-insensitive)."""
+    return any(all(re.search(p, s, re.I) for p in pats) for s in _sentences(t))
+
+
+# ---- v3.0 re-anchors of v2.7 checks (same ID, v3.0 wording) --------------
+
+_V3_BASE_YEAR = r"exceed those for the Base Year|over (?:those for )?the Base Year|increase over base year"
+
+
+def _v3_a7(t):
+    if not re.search(_V3_BASE_YEAR, t, re.I):
+        return True                     # MG form with no base-year stop at all
+    return bool(re.search(r"net base rent|triple[- ]net|\bNNN\b", t, re.I))
+
+
+def _v3_b2(t):
+    for s in _sentences(t):
+        if re.search(r"no (?:duty|obligation) to relet", s, re.I) and \
+                not re.search(r"required by (?:applicable )?law", s, re.I):
+            return True
+    return False
+
+
+def _v3_b3(t):
+    for clause in re.split(r";", t):
+        if re.search(r"Rent for the (?:rest|remainder|balance) of the Lease Term|accelerate and recover",
+                     clause, re.I) and \
+                not re.search(r"less the (?:net proceeds of any reletting|fair rental value)|"
+                              r"net proceeds of any reletting|fair rental value", clause, re.I):
+            return True
+    return False
+
+
+def _v3_b8(t):
+    if not re.search(r"Landlord (?:provides|shall provide|furnishes) water|water[^.]{0,60}drinking", t, re.I):
+        return False
+    return not (_sent_all(t, r"reimburse Landlord|pay Landlord", r"invoice|bill")
+                and re.search(r"sub-?meter|Proportionate Share of the (?:Building|Project).s charges|"
+                              r"equitable allocation|flat rate of \$", t, re.I))
+
+
+def _v3_f6(t):
+    return bool(re.search(r"\(5\) Business Days (?:following the date when due|after it is due|late)", t, re.I)) \
+        and not _defined(t, "Business Days?")
+
+
+def _v3_f13(t):
+    return bool(re.search(_V3_BASE_YEAR, t, re.I)) and not re.search(
+        r"excluding (?:any )?costs billed directly to (?:any )?tenant|shall not include amounts separately billed|"
+        r"excluding (?:any )?amounts? separately billed", t, re.I)
+
+
+def _v3_f14(t):
+    if not re.search(r"all risks? of physical loss|special form|all risk", t, re.I):
+        return True                     # no property-insurance standard at all
+    return bool(re.search(r"all risk", t, re.I)) and not re.search(r"special form", t, re.I)
+
+
+def _v3_f15(t):
+    return not (re.search(r"(?:only|solely) out of Landlord.s interest in the (?:Project|Building)", t, re.I)
+                and "member, manager, officer, employee or agent of Landlord" in t)
+
+
+def _v3_f17(t):
+    return not re.search(r"preventi(?:ve|ative)[- ]maintenance contract[^.]{0,80}(?:HVAC|heating)|"
+                         r"HVAC[^.]{0,80}preventi(?:ve|ative)[- ]maintenance contract", t, re.I)
+
+
+def _v3_f19(t):
+    return bool(re.search(r"if to Tenant,\s+at the (?:Demised )?Premises\s*[.;]|"
+                          r"to Tenant only at the (?:Demised )?Premises", t, re.I)) \
+        or not re.search(r"TENANT NOTICE ADDRESS:", t)
+
+
+def _v3_f20(t):
+    if not re.search(r"Lease Year after the first|second Lease Year|escalation percentage|"
+                     r"per Lease Year, compounded", t, re.I):
+        return False
+    return ("[OPTIONAL: ATTACH RENT SCHEDULE" in t
+            or not re.search(r"set (?:out|forth) in the following schedule", t, re.I)
+            or not re.search(r"Rent Schedule controls|schedule (?:shall )?control", t, re.I))
+
+
+V30_REANCHOR = {
+    "A7": ("BLOCK", "Base-year MG form lacks its base-year expense stop, or carries a 'net' label — v3.0 anchor", _v3_a7),
+    "B2": ("HIGH", "'No duty to relet' not qualified by 'except to the extent required by law' in the same sentence — v3.0 anchor", _v3_b2),
+    "B3": ("MED", "Rent-for-the-rest-of-the-Term remedy without credit for reletting proceeds / fair rental value — v3.0 anchor", _v3_b3),
+    "B4": ("MED", "Holdover multiplier applied to accrued arrears ('N% of the amount of (a)') — v3.0 anchor", lambda t: bool(re.search(r"percent \(\d+%\) of the amount of \(a\)", t, re.I))),
+    "B8": ("MED", "Landlord-provided water with no invoice reimbursement + measurement mechanism — v3.0 anchor", _v3_b8),
+    "F6": ("LOW", "Late fee runs on Business Days and 'Business Day' is undefined — v3.0 anchor", _v3_f6),
+    "F13": ("MED", "Operating Costs lack the directly-billed-costs exclusion (double-recovery risk) — v3.0 anchor", _v3_f13),
+    "F14": ("MED", "Property insurance not on an all-risk (special form) basis — v3.0 anchor", _v3_f14),
+    "F15": ("MED", "Landlord exculpation (interest-in-Project cap + manager/member/officer/employee/agent enumeration) missing — v3.0 anchor", _v3_f15),
+    "F17": ("MED", "No continuous HVAC preventive-maintenance contract — v3.0 anchor", _v3_f17),
+    "F19": ("HIGH", "Tenant notices routed to the Premises only / no TENANT NOTICE ADDRESS — v3.0 anchor", _v3_f19),
+    "F20": ("MED", "Escalating rent without a mandatory, controlling Rent Schedule — v3.0 anchor", _v3_f20),
+}
+
+# Checks that are deliberately NOT run in v3.0 mode: the provision they require
+# was removed from the v3.0 master by ratified firm-wide position (2026-10-08
+# run memo, "Firm-wide positions now set by the master"). Reported as N/A,
+# never as a pass and never as a failure.
+V30_NA = {
+    "F16": "v3.0 deliberately has no excess-rent/profit capture: assignment is sole-discretion "
+           "consent with cost reimbursement only (no recapture, profit share or transfer fee) "
+           "-- ratified v3.0 position, 2026-10-08 run memo.",
+}
+
+
+# ---- v3.0-only form checks (F22-F26) ---------------------------------------
+
+_V3_XREF_RE = re.compile(r"\bthe ((?:[A-Z][A-Za-z']+)(?: (?:and|of|[A-Z][A-Za-z']+))*) section\b")
+_HEAD_CAPS_RE = re.compile(r"^\s*([A-Z][A-Z0-9 ;,&'’-]{2,}?)\.(?:\s|$)", re.M)
+_HEAD_RUNIN_RE = re.compile(r"^\s*([A-Z][A-Za-z'’]+(?:[ ;,]+[A-Za-z'’]+){0,6})\.\s{1,3}\S", re.M)
+
+
+def _v3_f22(ctx):
+    """Dead 'the <Name> section' cross-reference (v3.0 refers to sections by
+    NAME, never by number). Every name must resolve to a caps heading or a
+    run-in sub-heading. Catches, among others, a Specialized Equipment module
+    deleted without deleting the references to it."""
+    lw = _linewise(ctx).replace("’", "'")
+    heads = {h.strip().upper().replace("’", "'") for h in _HEAD_CAPS_RE.findall(lw)}
+    heads |= {h.strip().upper() for h in _HEAD_RUNIN_RE.findall(lw)}
+    parts = set()
+    for h in heads:
+        parts |= {p.strip() for p in re.split(r";", h)}
+    dead = []
+    for name in _V3_XREF_RE.findall(ctx["t"]):
+        if name.upper() not in heads and name.upper() not in parts:
+            dead.append(name)
+    if not dead:
+        return None
+    return "no heading for: " + ", ".join(f"'the {n} section'" for n in sorted(set(dead)))
+
+
+_RELOCATION_RE = (r"\brelocat\w*\b[^.]{0,160}\b(?:Premises|space|tenant)\b|right to relocate|"
+                  r"substitute premises|Relocation Premises")
+
+
+def _v3_f25(ctx):
+    lines = ctx["raw"].replace("\xa0", " ").split("\n")
+    for i, ln in enumerate(lines):
+        if re.match(r"\s*EXHIBIT B\s*$", ln) and any(
+                re.match(r"\s*RULES AND REGULATIONS\s*$", x) for x in lines[i + 1:i + 3]):
+            words = len(" ".join(lines[i + 1:]).split())
+            return None if words >= 150 else f"Exhibit B heading has only {words} word(s) of rules"
+    return True
+
+
+def _v3_f26(ctx):
+    t = ctx["t"]
+    has_head = bool(re.search(r"^\s*SPECIALIZED EQUIPMENT\.", _linewise(ctx), re.M))
+    refs = re.findall(r"Specialized Equipment|Approved Consumables|Dedicated Circuit", t)
+    if refs and not has_head:
+        return (f"Specialized Equipment module deleted but {len(refs)} reference(s) to it remain "
+                f"(module deletion note: delete the section, the Approved Consumables reference in "
+                f"ENVIRONMENTAL MATTERS and the 'Except as provided in the Specialized Equipment "
+                f"section' words in MAINTENANCE AND REPAIRS)")
+    if has_head and not ctx.get("is_template") and "[OPTIONAL MODULE" in t:
+        return "Specialized Equipment module kept but its [OPTIONAL MODULE ...] drafting instruction remains"
+    return None
+
+
+V30_EXTRA = [
+    ("F22", "HIGH", "Dead 'the <Name> section' cross-reference — v3.0 standard", None, _v3_f22),
+    bool_check("F23", "HIGH", "Relocation right present (v3.0 firm-wide position: no relocation right) — v3.0 standard",
+               lambda t: bool(re.search(_RELOCATION_RE, t, re.I))),
+    bool_check("F24", "MED", "Financial-statements demand present (v3.0 firm-wide position: no financial-statements section) — v3.0 standard",
+               lambda t: bool(re.search(r"financial statements?", t, re.I))),
+    ("F25", "MED", "Exhibit B Rules and Regulations not embedded (v3.0 carries its own one-page Exhibit B) — v3.0 standard",
+     None, _v3_f25),
+    ("F26", "HIGH", "Optional Specialized Equipment module half-deleted or instruction left in an execution copy — v3.0 standard",
+     None, _v3_f26),
+]
+
+
+# ==========================================================================
+# POWER-RIGHTS STANDARD (FP1-FP8) -- next-build energy provisions
+# ==========================================================================
+# F-class form standard keyed to the NEXT builds: v2.8 (NNN long-form line)
+# and v3.1 (MG short-form line). Off by default: on any form older than
+# that it is evaluated and REPORTED AS PENDING (provision present/absent),
+# never counted as a failure, so today's v2.7/v3.0 paper is unaffected.
+# Enforced (normal failures) when the footer declares >= v2.8 / >= v3.1, or
+# when --power-rights forces it on (pre-release drafting of v2.8/v3.1).
+# Anchors are keyword co-occurrence (one sentence, or one section window),
+# not exact sentences: final wording is not settled.
+
+POWER_MIN = {2: 8, 3: 1}
+
+
+def power_active(ver):
+    if ver is None:
+        return False
+    major, minor = ver
+    return minor >= POWER_MIN[major] if major in POWER_MIN else major > max(POWER_MIN)
+
+
+def _paras(ctx):
+    return _paras_of(ctx["raw"])
+
+
+@functools.lru_cache(maxsize=16)
+def _paras_of(raw):
+    """Normalised non-empty paragraphs of `raw` (memoised; pure function)."""
+    return tuple(re.sub(r"\s+", " ", norm(p)).strip()
+                 for p in raw.replace("\xa0", " ").split("\n") if p.strip())
+
+
+def _window(ctx, *must, span=4):
+    """Text of each paragraph matching all `must` patterns plus the next
+    `span`-1 paragraphs (one provision can run over several subsections)."""
+    ps = _paras(ctx)
+    out = []
+    for i, p in enumerate(ps):
+        if all(re.search(m, p, re.I) for m in must):
+            out.append(" ".join(ps[i:i + span]))
+    return out
+
+
+_ENERGY = r"solar|photovoltaic|energy (?:storage|equipment|system|facilit|generation)|batter(?:y|ies)|Energy Equipment"  # +generation: Phase 1 v2.8/v3.1 wording "energy generation, storage, ..."
+
+
+def _fp1(ctx):
+    wins = _window(ctx, r"reserv", r"roof")
+    if not wins:
+        return "no Landlord reservation of roof/exterior rights found"
+    w = " ".join(wins)
+    miss = [label for label, pat in (
+        ("solar", r"solar|photovoltaic"),
+        ("energy storage", r"storage|batter(?:y|ies)"),
+        ("EV charging", r"electric[- ]vehicle|\bEV\b"),   # hyphenated form: Phase 1 v2.8/v3.1 wording
+        ("telecom", r"telecom|antenna|wireless|communications"),
+        ("exterior", r"exterior"),
+        ("revenue belongs to Landlord",
+         r"(?:revenue|income|rent|payments?|proceeds|credits|incentives)[^.]{0,160}(?:belong|inure|accrue|payable|retained)[^.]{0,30}(?:solely |exclusively )?to Landlord|"
+         r"Landlord[^.]{0,60}(?:entitled to|retain|keep)[^.]{0,60}(?:all )?(?:revenue|income|proceeds)"),
+        ("no abatement",
+         r"without (?:any )?(?:abatement|reduction) (?:of|in) Rent|no abatement|Rent (?:shall )?(?:does )?not abate|not (?:be an eviction or )?entitle Tenant to (?:any )?abatement|without liability or abatement"),  # +"not be an eviction or entitle": Phase 1 wording
+    ) if not re.search(pat, w, re.I)]
+    if ctx.get("_form_family") == "v3.0" and re.search(_RELOCATION_RE, ctx["t"], re.I):
+        miss.append("NO relocation right (v3.x) -- a relocation right is present")
+    return ("roof/exterior/energy reservation lacks: " + ", ".join(miss)) if miss else None
+
+
+def _fp2(ctx):
+    t, miss = ctx["t"], []
+    if not _sent_all(t, r"easements?", r"utilit|interconnect"):
+        miss.append("utility/interconnection easements")
+    if not _sent_all(t, r"shut-?downs?|shut-?offs?|outages?|interruptions?",
+                     r"electric|power", r"twenty-four \(24\) hours|\b24 hours"):
+        miss.append("planned electrical shutdowns on >= twenty-four (24) hours' notice")
+    return ("lacks: " + "; ".join(miss)) if miss else None
+
+
+def _fp3(ctx):
+    t, miss = ctx["t"], []
+    if not _sent_all(t, r"Tenant (?:shall|may) not|Tenant shall have no right", r"utility|utilities",
+                     r"(?:new|upgraded|additional|increased|upgrade)[^.]{0,40}(?:electric|service|capacity)|interconnect",
+                     r"consent|approval"):
+        miss.append("no tenant utility application (new/upgraded service or interconnection) without consent")
+    if not _sent_all(t, r"capacity|service upgrade|electrical (?:service|infrastructure)",
+                     r"part of the (?:Project|Building|Premises)|Landlord.s (?:sole )?property|property of Landlord|belong(?:s)? to Landlord"):
+        miss.append("added electrical capacity is part of the Project")
+    if not _sent_all(t, r"capacity|electrical (?:service|infrastructure|upgrade)",
+                     r"(?:not|never) (?:be )?(?:required|obligated) to remove|need not remove|shall not (?:be required to )?remove|"
+                     r"excluded from[^.]{0,40}(?:removal|restoration)|not subject to[^.]{0,40}remov|carve|notwithstanding[^.]{0,80}remov"):
+        miss.append("added capacity carved out of Tenant's removal obligations")
+    return ("lacks: " + "; ".join(miss)) if miss else None
+
+
+def _fp4(ctx):
+    miss = []
+    wins = _window(ctx, r"Operating Costs", _ENERGY, span=2)
+    w = " ".join(wins)
+    if not (wins and re.search(r"exclu|not include|not be included|not credited|shall not reduce", w, re.I)
+            and re.search(r"\bcosts?\b", w, re.I) and re.search(r"revenues?|income", w, re.I)):
+        miss.append("Operating Costs exclusion of BOTH costs and revenues of Landlord energy equipment")
+    if not _sent_all(ctx["t"], r"roof", r"repair|replace", r"Operating Costs|included|not (?:be )?excluded",
+                     r"merely|solely|only because|by reason of|even (?:if|though)|notwithstanding|presence|located on"):
+        miss.append("roof repair/replacement not excluded merely because energy equipment is on the roof")
+    return ("lacks: " + "; ".join(miss)) if miss else None
+
+
+def _fp5(ctx):
+    ok = _sent_all(ctx["t"], r"(?:utility|energy|consumption|usage|meter|interval|billing)[^.]{0,30}(?:data|information|records)|data[^.]{0,30}(?:utility|energy)",
+                   r"authori[sz]", r"ten \(10\) (?:Business )?days|\b10 days")
+    return None if ok else "no Tenant utility-data authorization within ten (10) days"
+
+
+def _fp6(ctx):
+    ok = _sent_all(ctx["t"], r"estoppel|acknowledg", r"lessee|licensee",
+                   r"energy|solar|Energy Provider|Energy Equipment", r"financ|lender|tax equity|secured part")
+    return None if ok else "no estoppel/acknowledgment to energy-provider lessees/licensees and their financing parties"
+
+
+def _single_tenant_exclusive_parking(t):
+    """Single-tenant form: Tenant has EXCLUSIVE parking and the lease defines no
+    parking allocation/share at all (OH-SingleTenant-NNN conversion). Both halves
+    are required, so a multi-tenant lease never takes FP7's single-tenant branch."""
+    return bool(re.search(r"(?<!non-)(?<!non)exclusive right to use the parking areas", t, re.I)) and not re.search(
+        r"Tenant.s Allocation|parking allocation|share of the (?:unreserved )?parking spaces|"
+        r"non-exclusive right to use the unreserved parking", t, re.I)
+
+
+def _fp7(ctx):
+    t, miss = ctx["t"], []
+    if not _sent_all(t, r"Landlord may", r"install|operate|construct", r"electric[- ]vehicle|\bEV\b", r"charg"):  # hyphenated form: Phase 1
+        miss.append("Landlord right to install EV charging")
+    if _single_tenant_exclusive_parking(t):
+        # Single-tenant paper (entire building, exclusive parking, no parking allocation
+        # to exclude spaces from): the allocation sentence is dropped by design
+        # (Gabriel, 2026-10-15, "Drop allocation sentence"), so only the designation
+        # right itself is required here; the reasonable-access proviso below still is.
+        if not _sent_all(t, r"charging", r"spaces?", r"designat"):
+            miss.append("Landlord right to designate charging spaces (single-tenant form)")
+    elif not _sent_all(t, r"charging", r"spaces?", r"designat",
+                       r"exclu|not (?:count|be included|form part)|reduc"):
+        miss.append("designated charging spaces excluded from Tenant's parking allocation")
+    if not _sent_all(t, r"reasonable access", r"Tenant", r"operations|business|loading|Premises"):
+        miss.append("Tenant keeps reasonable access for its operations")
+    return ("lacks: " + "; ".join(miss)) if miss else None
+
+
+def _fp8(ctx):
+    lw = _linewise(ctx)
+    m = re.search(r"^\s*TENANT BACKUP POWER AND ENERGY STORAGE\b.*$", lw, re.M | re.I)
+    if not m:
+        return None                    # optional module not included: nothing to verify
+    rest = lw[m.start():]
+    nxt = re.search(r"\n\s*[A-Z][A-Z ;,&'’-]{5,}\.(?:\s|$)", rest[len(m.group(0)):])
+    mod = norm(rest[:len(m.group(0)) + (nxt.start() if nxt else len(rest))])
+    miss = [label for label, pat in (
+        ("bracketed include-only-if instruction", r"\[[^\]]*INCLUDE ONLY IF"),
+        ("counsel-review note", r"counsel[^.\]]{0,80}review|review[^.\]]{0,80}counsel"),
+        ("UL 9540", r"UL 9540(?!A)"),
+        ("UL 9540A", r"UL 9540A"),
+        ("NFPA 855", r"NFPA 855"),
+        ("NFPA 37", r"NFPA 37\b"),
+        ("NFPA 110", r"NFPA (?:37\s*(?:/|and|,)\s*)?110\b"),
+        ("transfer switch", r"transfer switch"),
+        ("no back-feed", r"(?:no|not|never|prevent\w*|without|prohibit\w*)[^.]{0,80}back-?feed"),
+    ) if not re.search(pat, mod, re.I)]
+    return ("TENANT BACKUP POWER AND ENERGY STORAGE module lacks: " + ", ".join(miss)) if miss else None
+
+
+POWER_CHECKS = [
+    ("FP1", "HIGH", "Landlord reserved roof/exterior/energy rights (solar, storage, EV, telecom; revenue to Landlord; no abatement) — power-rights standard", None, _fp1),
+    ("FP2", "HIGH", "Utility/interconnection easements and planned electrical shutdowns on 24 hours' notice — power-rights standard", None, _fp2),
+    ("FP3", "HIGH", "No tenant utility application without consent; added capacity is Project property, carved out of removal — power-rights standard", None, _fp3),
+    ("FP4", "MED", "Operating Costs exclude energy-equipment costs and revenues; roof repair not excluded merely because equipment is on the roof — power-rights standard", None, _fp4),
+    ("FP5", "MED", "Tenant utility-data authorization within ten (10) days — power-rights standard", None, _fp5),
+    ("FP6", "MED", "Estoppel/acknowledgment to energy-provider lessees/licensees and their financing parties — power-rights standard", None, _fp6),
+    ("FP7", "MED", "Landlord EV charging; charging spaces excluded from Tenant's parking allocation; Tenant keeps reasonable access — power-rights standard", None, _fp7),
+    ("FP8", "HIGH", "Optional TENANT BACKUP POWER AND ENERGY STORAGE module incomplete (bracket, counsel note, UL 9540/9540A, NFPA 855/37/110, transfer switch, no back-feed) — power-rights standard", None, _fp8),
+]
+
+
+def _with_family(checks, family):
+    """Give ctx-aware checks the resolved family (FP1's v3.x relocation rule)
+    without touching ora_doc_qc.scan()'s ctx construction."""
+    out = []
+    for cid, sev, title, pos, fn in checks:
+        def wrapped(ctx, _fn=fn):
+            ctx["_form_family"] = family
+            return _fn(ctx)
+        out.append((cid, sev, title, pos, wrapped))
+    return out
+
+
+def build_registry(family, f0_detail=None, include_f0=False, power=False):
+    """(checks, na) for one scan. The v2.7 family with no F0 and no power
+    checks returns CHECKS itself, unchanged (identity, not a copy)."""
+    na = []
+    if family == "v3.0":
+        checks = []
+        for c in CHECKS:
+            cid = c[0]
+            if cid in V30_NA:
+                na.append({"id": cid, "title": c[2], "reason": V30_NA[cid]})
+            elif cid in V30_REANCHOR:
+                sev, label, test = V30_REANCHOR[cid]
+                checks.append(bool_check(cid, sev, label, test))
+            else:
+                checks.append(c)
+        checks += V30_EXTRA
+        include_f0 = True
+    else:
+        checks = CHECKS
+    extra = []
+    if include_f0:
+        extra.append(_f0_check(f0_detail))
+    if power:
+        extra += _with_family(POWER_CHECKS, family)
+    if extra:
+        checks = list(checks) + extra
+    return checks, na
+
+
+def plan_scan(path, declared=None, force_power=False, allow_ocr=True):
+    """Resolve form + registry for one file before scanning it. Extraction
+    errors fall back to the legacy registry so scan() reports them itself."""
+    try:
+        body, meta = extract(path, allow_ocr=allow_ocr, want_footer=True)
+    except Exception:                                               # noqa: BLE001
+        body, meta = None, {"footer": ""}
+    return plan_from_text(body, meta, declared, force_power)
+
+
+def plan_from_text(body, meta, declared=None, force_power=False):
+    """plan_scan() on already-extracted text: the single place a (body, footer)
+    pair is resolved to a form line + registry. The mutation suite
+    (tests/test_lease_qc_mutations.py) plans every in-memory mutant through
+    this exact function, so a mutant is scanned with the registry the CLI
+    would use on the same document."""
+    det = detect_form(body or "", meta.get("footer", ""))
+    family, f0_detail, include_f0 = resolve_form(det, declared)
+    ver = det["version_tuple"]
+    if declared and det["footer_family"] != declared:
+        ver = None                      # a contradicted version tag cannot switch power on
+    active = force_power or power_active(ver)
+    checks, na = build_registry(family, f0_detail, include_f0, power=active)
+    return {"form": {"declared": declared, "resolved": family, "version": det["version"],
+                     "footer_family": det["footer_family"],
+                     "structure_family": det["structure_family"],
+                     "mismatch": f0_detail,
+                     "power_rights": ("ENFORCED" + (" (--power-rights)" if force_power and not power_active(ver) else ""))
+                     if active else "PENDING"},
+            "checks": checks, "na": na, "body": body, "meta": meta,
+            "power_active": active, "family": family}
+
+
+def pending_power(plan, path, allow_tokens=False):
+    """Evaluate FP1-FP8 without enforcing them (form older than v2.8/v3.1)."""
+    if plan["power_active"] or plan["body"] is None:
+        return []
+    name = os.path.basename(path)
+    ctx = {"t": norm(plan["body"]), "raw": plan["body"], "meta": plan["meta"], "name": name,
+           "allow_tokens": allow_tokens, "is_template": "_TEMPLATE" in name.upper()}
+    fails = {f["id"]: f["detail"] for f in run_checks(ctx, _with_family(POWER_CHECKS, plan["family"]))}
+    return [{"id": cid, "title": title,
+             "status": "absent" if cid in fails else ("not included (optional)" if cid == "FP8" else "present"),
+             "detail": fails.get(cid)} for cid, _sev, title, _pos, _fn in POWER_CHECKS]
+
+
+def print_mode_block(r):
+    f = r.get("form") or {}
+    print(f"FORM       resolved {f.get('resolved')}"
+          + (f" (declared --form {f['declared']})" if f.get("declared") else " (auto)")
+          + f"; footer tag {f.get('version') or 'none'}; structure {f.get('structure_family') or 'undetermined'}"
+          + f"; power-rights {f.get('power_rights')}")
+    if f.get("mismatch"):
+        print("!" * 78)
+        print("FORM MISMATCH - F0 BLOCK: " + f["mismatch"])
+        print("!" * 78)
+    for x in r.get("na", []):
+        print(f"[N/A  ] {x['id']:<5} {x['title']}")
+        for line in re.findall(r".{1,70}(?:\s|$)", x["reason"]):
+            print(f"           {line.strip()}")
+    pend = r.get("pending") or []
+    if pend:
+        n = sum(1 for p in pend if p["status"] == "present" and p["id"] != "FP8")
+        print(f"PENDING    power-rights standard not enforced on this form (needs >= v2.8 NNN / "
+              f">= v3.1 MG); {n} of 7 required provisions already present:")
+        for p in pend:
+            print(f"  [PEND ] {p['id']:<4} {p['status']:<24} {p['title'][:44]}")
+    print()
 
 
 # ==========================================================================
@@ -1690,6 +2302,7 @@ def _run_loi_audit(argv):
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--allow-tokens", action="store_true")
     ap.add_argument("--no-ocr", action="store_true")
+    _add_mode_args(ap)
     a = ap.parse_args(argv)
 
     try:
@@ -1704,10 +2317,16 @@ def _run_loi_audit(argv):
         return 2
 
     register_scan_path(a.lease_file)
-    scan_report = scan(a.lease_file, CHECKS, a.allow_tokens, allow_ocr=not a.no_ocr,
+    # v3.0: same form resolution as the standard scan (a v2.7 document with no
+    # conflict still gets exactly CHECKS).
+    plan = plan_scan(a.lease_file, a.form, a.power_rights, allow_ocr=not a.no_ocr)
+    scan_report = scan(a.lease_file, plan["checks"], a.allow_tokens, allow_ocr=not a.no_ocr,
                        want_footer=True)
     if scan_report is None:
         return 2                        # scan() already printed the reason
+    scan_report["form"], scan_report["na"] = plan["form"], plan["na"]
+    scan_report["pending"] = (pending_power(plan, a.lease_file, a.allow_tokens)
+                              if not scan_report["unreadable"] else [])
     if scan_report["unreadable"]:
         if a.json:
             print(json.dumps({"scan": [scan_report], "matrix": None, "exit": 2}, indent=2))
@@ -1730,6 +2349,7 @@ def _run_loi_audit(argv):
         print(json.dumps({"scan": [scan_report], "matrix": matrix, "exit": code}, indent=2))
     else:
         print_report(scan_report)
+        print_mode_block(scan_report)
         print("=" * 78)
         _print_conformance_report(matrix)
         print(f"AUDIT: {len(failures)} scan failure(s) [{n_block} BLOCK] · "
@@ -1748,14 +2368,57 @@ def main():
         sys.exit(_run_loi_audit(argv))
     if any(a == "--loi-conformance" or a.startswith("--loi-conformance=") for a in argv):
         sys.exit(_run_loi_conformance(argv))
-    for a in argv:
-        if not a.startswith("-") and os.path.exists(a):
-            register_scan_path(a)
-    run_cli(CHECKS, "ORA lease-form QC gate", want_footer=True,
-            ocr_absence_note=("Absence findings (A6, B5, B6a-B6c, B7, C1-C8, "
-                              "F10, F11) are PROVISIONAL - OCR text is lossy, "
-                              "so confirm against the page images before "
-                              "reporting a clause missing."))
+    sys.exit(_run_scan_cli(argv))
+
+
+OCR_ABSENCE_NOTE = ("Absence findings (A6, B5, B6a-B6c, B7, C1-C8, "
+                    "F10, F11) are PROVISIONAL - OCR text is lossy, "
+                    "so confirm against the page images before "
+                    "reporting a clause missing.")
+
+
+def _add_mode_args(ap):
+    ap.add_argument("--form", choices=FORM_FAMILIES, default=None,
+                    help="scan as this form line (v2.7 long-form NNN, v3.0 short-form MG). "
+                         "Default: auto-detect from the footer tag, then structure. A "
+                         "declared form the document contradicts FAILS (F0 BLOCK).")
+    ap.add_argument("--power-rights", action="store_true",
+                    help="enforce the power-rights standard (FP1-FP8) even on a form "
+                         "older than v2.8 / v3.1 (pre-release drafting).")
+    return ap
+
+
+def _run_scan_cli(argv):
+    """ora_doc_qc.run_cli() equivalent with form resolution per file. Same
+    flags, same report block, same exit codes (0 clean, 1 failures, 2
+    usage/extraction/unreadable); adds a FORM line, N/A lines and the
+    PENDING power-rights block after each report (and the same keys in
+    --json)."""
+    a = _add_mode_args(build_cli("ORA lease-form QC gate")).parse_args(argv)
+    reports, bad = [], 0
+    for f in a.files:
+        if os.path.exists(f):
+            register_scan_path(f)
+        plan = plan_scan(f, a.form, a.power_rights, allow_ocr=not a.no_ocr)
+        r = scan(f, plan["checks"], a.allow_tokens, allow_ocr=not a.no_ocr, want_footer=True)
+        if r is None:
+            bad = 2
+            continue
+        r["form"], r["na"] = plan["form"], plan["na"]
+        r["pending"] = pending_power(plan, f, a.allow_tokens) if not r["unreadable"] else []
+        reports.append(r)
+        if r["unreadable"]:
+            bad = 2
+    if a.json:
+        print(json.dumps(reports, indent=2))
+    else:
+        for r in reports:
+            print_report(r, ocr_absence_note=OCR_ABSENCE_NOTE)
+            if not r["unreadable"]:
+                print_mode_block(r)
+    if any(r["failures"] for r in reports):
+        return 1
+    return bad
 
 
 if __name__ == "__main__":
