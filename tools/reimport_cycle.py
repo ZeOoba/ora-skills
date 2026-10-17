@@ -2,15 +2,15 @@
 """One-call wrapper for the package-and-stage-skill reimport cycle.
 
 Every standalone reimport runs the same sequence: step-0 plugin gate, step-1
-git-clean check, shared-dep direction gate, description budget, CreationTime
-baseline, ONE packager call, and -- after Gabriel clicks Save skill -- verify,
+git-clean check, shared-dep direction gate, description budget, ONE packager call,
+CreationTime baseline (recording the packaged version), and -- after Gabriel clicks Save skill -- verify,
 a single event-log append, ledger clear and the closing sweep. This script
 chains the existing tools; it adds no new source of truth.
 
 Usage
 -----
     python tools/reimport_cycle.py prep <skill> [<skill> ...] [--out DIR]
-        Gates, baseline, package. Stops (exit 1) before packaging if any skill
+        Gates, package, baseline. Stops (exit 1) before packaging if any skill
         is a plugin member, has a dirty tree, or is a shared-dep consumer whose
         dep reads CACHE-AHEAD / DIVERGENT / UNKNOWN. Default --out:
         _staging/<today>/pkg. Prints each package's SHA256 for the cloud-side
@@ -102,15 +102,20 @@ def cmd_prep(skills: list[str], out: Path) -> int:
         print("prep: gate failed -- nothing packaged.")
         return 1
     _run([str(TOOLS / "description_budget.py"), *skills])
-    print("== baseline")
-    if _run([str(TOOLS / "reimport_correlate.py"), "baseline", *skills]).returncode:
-        return 1
     out.mkdir(parents=True, exist_ok=True)
     print(f"== package -> {out}")
     cp = _run([str(TOOLS / "package_skills.py"), str(out), *skills])
     if cp.returncode:
         print(f"PACKAGER_EXIT={cp.returncode} -- real defect, quote verbatim; do not work around.")
         return cp.returncode
+    # Baseline only AFTER a good package: a packager refusal (dirty shared dep) must not
+    # leave an unconsumed baseline behind, and each baseline records the version of the
+    # package it names so close compares the cache to THAT, not to the closing checkout.
+    print("== baseline")
+    for s in skills:
+        if _run([str(TOOLS / "reimport_correlate.py"), "baseline", s,
+                 "--package", str(out / f"{s}.skill")]).returncode:
+            return 1
     print("== packages")
     for s in skills:
         pkg = out / f"{s}.skill"
