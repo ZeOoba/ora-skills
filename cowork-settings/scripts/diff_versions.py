@@ -26,7 +26,7 @@ TIER_0_INVARIANTS = [
     r'extractable text layer',
     r'Microsoft Print to PDF',
     r'netlify deploy --prod',
-    r'YYYYMMDD_\[',
+    r'do NOT unify',  # Invariant 5: three standing naming schemas (was r'YYYYMMDD_\[' — stale since v2.0)
 ]
 
 
