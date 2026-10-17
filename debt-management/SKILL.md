@@ -52,7 +52,7 @@ Unpaid principal = the balance **after the last installment actually received an
 
 - Read the accrual convention out of the Note itself. A 30/360 note accrues 30 days per month regardless of the calendar; do not substitute actual/365.
 - Per diem = principal × annual rate ÷ 360 (on a 30/360 note).
-- Day count from paid-through date to payoff date on the same convention: `360×(Y2−Y1) + 30×(M2−M1) + (D2−D1)` after the variant's day-31 / February adjustments. Run `python debt-management/scripts/daycount.py <paid-through> <payoff> <variant>` (`bond_basis` = 30/360 Bond Basis, `us_eom` = 30/360 US with end-of-February rule, `e360` = 30E/360). Use the variant the Note states; if the Note is silent or says NASD, flag it to Gabriel — do not default. Check: Dec 1 → Jan 15 = 44 days.
+- Day count from paid-through date to payoff date on the same convention: `360×(Y2−Y1) + 30×(M2−M1) + (D2−D1)` after the variant's day-31 / February adjustments. Run `python scripts/daycount.py <paid-through> <payoff> <variant>` from this skill's folder (`bond_basis` = 30/360 Bond Basis, `us_eom` = 30/360 US with end-of-February rule, `e360` = 30E/360 Eurobond Basis, ISDA §4.16(g)). Use the variant the Note states; if the Note is silent, says NASD, or says 30E/360 (ISDA) — which has a February rule and is not supported — **flag it to Gabriel — do not default**. Worked check: Dec 1 → Jan 15 = 44 days.
 - Cross-check the per diem against the schedule's own next-month interest ÷ 30. They must agree.
 
 ### A4. Principal does NOT accrue between installment dates
