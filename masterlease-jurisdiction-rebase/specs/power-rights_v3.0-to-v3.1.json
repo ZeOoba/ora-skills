@@ -1,0 +1,241 @@
+{
+ "_comment": "Power-rights build v3.0 -> v3.1 (Phase 1, 2026-10-15), ported verbatim from the Phase-1 build.py edit list onto ora_docx_redline.py v2 first-class ops. Re-running it on the v3.0 master reproduces the Phase-1 REDLINE and TEMPLATE (test_ora_docx_redline.py Phase1EquivalenceTests).",
+ "author": "Oxford Realty Advisors",
+ "date": "2026-10-15T00:00:00Z",
+ "start_id": 9000,
+ "source": "ORA_MasterLease_ShallowBay_MultiTenantMG_v3.0_TEMPLATE.docx",
+ "rpr": {
+  "U": "<w:rPr><w:u w:val=\"single\"/></w:rPr>",
+  "BU": "<w:rPr><w:b/><w:u w:val=\"single\"/></w:rPr>",
+  "B": "<w:rPr><w:b/></w:rPr>",
+  "N": "<w:rPr/>"
+ },
+ "ppr": {
+  "H1": "<w:pStyle w:val=\"Heading1\"/><w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"1\"/></w:numPr><w:rPr/>",
+  "H2": "<w:pStyle w:val=\"Heading2\"/><w:numPr><w:ilvl w:val=\"1\"/><w:numId w:val=\"1\"/></w:numPr><w:rPr/>"
+ },
+ "ops": [
+  {
+   "op": "insert_after",
+   "label": "P4 Operating Costs definition",
+   "anchor": "Landlord may adjust variable Operating Costs in the Base Year and each later year to reflect a fully occupied Building.",
+   "text": "  Operating Costs exclude all costs of, and all revenues, credits and incentives from, any energy generation, storage, electric-vehicle charging or telecommunications equipment installed by or for Landlord or its licensees; except that the cost of a roof repair or replacement is not excluded merely because such equipment is on the roof.",
+   "count": 1
+  },
+  {
+   "op": "insert_after",
+   "label": "P3 carve-out Alterations and Liens (b)",
+   "anchor": "When this Lease ends, Landlord may require Tenant to remove any Alterations made by or for Tenant",
+   "text": " (other than any electrical capacity, service, transformer, switchgear or metering, which remains as provided in the Services and Utilities section)",
+   "count": 1
+  },
+  {
+   "op": "insert_after",
+   "label": "P7 Parking and Signage",
+   "anchor": "and to the Rules and Regulations.",
+   "text": "  Landlord may install electric-vehicle charging equipment in the parking areas, designate spaces for vehicles while charging, and charge users for charging, and such spaces shall not count against Tenant’s share of the parking spaces while so designated, provided that Tenant retains reasonable access to parking for its operations.",
+   "count": 1
+  },
+  {
+   "op": "insert_after",
+   "label": "P6 Subordination, Attornment and Estoppel (c)",
+   "anchor": "Failure to deliver either on time is an Event of Default, without further notice or cure period.",
+   "text": "  Tenant shall also deliver, within the same period, an estoppel certificate or acknowledgment reasonably requested by any lessee or licensee of Landlord under Landlord’s reserved energy rights in this Lease or its financing parties, confirming the matters stated above and that Tenant has no claim to the equipment or its output and will not interfere with its operation.",
+   "count": 1
+  },
+  {
+   "op": "insert_paragraph_after",
+   "label": "P5 S&U (e)",
+   "anchor_text": "Landlord makes no representation about the capacity of any utility serving the Premises.",
+   "count": 1,
+   "ppr_from": "anchor",
+   "runs": [
+    {
+     "rpr": "U",
+     "text": "Utility Data"
+    },
+    {
+     "rpr": "N",
+     "text": ".  Within ten (10) days after Landlord’s request, Tenant shall deliver, or sign the utility’s authorization allowing Landlord to obtain directly, Tenant’s electricity and gas consumption and billing data (including interval data, where available) for the Premises for the prior twenty-four (24) months and for the remainder of the Lease Term.  Landlord may use such data for building benchmarking, regulatory compliance, energy and capacity planning and incentive applications, and shall not disclose Tenant-identifiable data except as required by law or to its lenders, consultants and energy providers under a duty of confidentiality."
+    }
+   ]
+  },
+  {
+   "op": "insert_paragraph_after",
+   "label": "P2 S&U (d)",
+   "anchor_text": "Landlord makes no representation about the capacity of any utility serving the Premises.",
+   "count": 1,
+   "ppr_from": "anchor",
+   "runs": [
+    {
+     "rpr": "U",
+     "text": "Utility Work and Interconnection"
+    },
+    {
+     "rpr": "N",
+     "text": ".  Landlord may grant utility, interconnection and access easements and licenses over the Project and may relocate, upgrade or add utility service, transformers, meters and switchgear serving the Building.  Landlord shall give Tenant at least twenty-four (24) hours’ notice of any planned interruption of electrical service for such work (except in an emergency or where the utility gives less notice), shall schedule it outside Tenant’s normal business hours where the utility permits, and shall use commercially reasonable efforts to limit its duration.  Tenant shall provide access to the Premises for such work on the same notice."
+    }
+   ]
+  },
+  {
+   "op": "insert_paragraph_after",
+   "label": "P3 S&U (c)",
+   "anchor_text": "Landlord makes no representation about the capacity of any utility serving the Premises.",
+   "count": 1,
+   "ppr_from": "anchor",
+   "runs": [
+    {
+     "rpr": "U",
+     "text": "Electrical Capacity"
+    },
+    {
+     "rpr": "N",
+     "text": ".  Tenant’s electrical service is limited to the service serving the Premises on the Commencement Date.  Tenant shall not apply to any utility for new, additional or upgraded service, or for interconnection of any generation or storage, without Landlord’s prior written consent, which Landlord may withhold in its sole discretion.  Any electrical capacity, service, transformer, switchgear or metering added to the Project, by whomever paid for, is part of the Project, shall remain at the end of the Lease Term, and Landlord may allocate it among the Project’s occupants.  Tenant shall not remove any electrical service equipment, notwithstanding any right to remove its trade fixtures."
+    }
+   ]
+  },
+  {
+   "op": "insert_paragraph_after",
+   "label": "P1 Entry (a)",
+   "anchor_text": "So long as no Event of Default exists, Tenant may quietly enjoy the Premises",
+   "count": 1,
+   "ppr_from": "Definitions.  In this",
+   "runs": [
+    {
+     "rpr": "U",
+     "text": "Reserved Roof, Exterior and Energy Rights"
+    },
+    {
+     "rpr": "N",
+     "text": ".  Landlord reserves the exclusive right, for itself and its licensees, lessees and their financing parties, to use the roof, exterior walls, electrical rooms, parking areas and other portions of the Project outside the Premises for solar and other energy generation, energy storage, electric-vehicle charging, telecommunications and related equipment, and to install, operate, maintain, replace and remove such equipment and the conduit, wiring and connections serving it, including through the Premises in locations that do not materially reduce Tenant’s usable floor area.  All revenue, credits, incentives and environmental attributes from such equipment belong to Landlord or its licensees.  Landlord shall use commercially reasonable efforts to minimize interference with Tenant’s business, and such work shall not be an eviction or entitle Tenant to any abatement of Rent."
+    }
+   ]
+  },
+  {
+   "op": "insert_paragraph_after",
+   "label": "P8 after SPECIALIZED EQUIPMENT sub \"Insurance, Indemnity and Removal\"",
+   "anchor_text": "Approved Consumables remain Hazardous Materials for purposes of Tenant’s cleanup",
+   "count": 1,
+   "ppr_from": "anchor",
+   "runs": [
+    {
+     "rpr": "U",
+     "text": "Insurance, Indemnity and Removal"
+    },
+    {
+     "rpr": "N",
+     "text": ".  Tenant shall insure the Backup Power Equipment under its property insurance and carry any additional liability or pollution coverage Landlord reasonably requires, naming the additional insureds required by the Insurance section, and Tenant’s indemnity in the Indemnity section applies to all claims arising from the Backup Power Equipment.  When this Lease ends, Tenant shall remove the Backup Power Equipment and all fuel and batteries and repair all resulting damage, except that Landlord may elect by notice to keep any conduit, wiring, pads and switchgear, which then become Landlord’s property without payment."
+    }
+   ]
+  },
+  {
+   "op": "insert_paragraph_after",
+   "label": "P8 after SPECIALIZED EQUIPMENT sub \"Fuel and Battery Materials\"",
+   "anchor_text": "Approved Consumables remain Hazardous Materials for purposes of Tenant’s cleanup",
+   "count": 1,
+   "ppr_from": "anchor",
+   "runs": [
+    {
+     "rpr": "U",
+     "text": "Fuel and Battery Materials"
+    },
+    {
+     "rpr": "N",
+     "text": ".  Notwithstanding the Environmental Matters section, Tenant may keep in the Backup Power Equipment the fuel and battery chemistry Landlord approves under this section, in the approved quantities (“"
+    },
+    {
+     "rpr": "B",
+     "text": "Approved Backup Materials"
+    },
+    {
+     "rpr": "N",
+     "text": "”); all other Hazardous Materials remain prohibited.  Approved Backup Materials remain Hazardous Materials for purposes of Tenant’s cleanup and indemnity obligations, which apply to them in full, and Tenant shall report any spill, leak, fire or thermal event to Landlord immediately."
+    }
+   ]
+  },
+  {
+   "op": "insert_paragraph_after",
+   "label": "P8 after SPECIALIZED EQUIPMENT sub \"Location, Fuel and Operation\"",
+   "anchor_text": "Approved Consumables remain Hazardous Materials for purposes of Tenant’s cleanup",
+   "count": 1,
+   "ppr_from": "anchor",
+   "runs": [
+    {
+     "rpr": "U",
+     "text": "Location, Fuel and Operation"
+    },
+    {
+     "rpr": "N",
+     "text": ".  The location, fuel type and maximum quantity of fuel stored on the Project are limited to those Landlord approves in advance.  Tenant shall test the Backup Power Equipment only at times Landlord reasonably approves, keep its exhaust, noise and vibration within the limits Landlord reasonably sets and the law allows, and, except during a utility outage, stop operating it on Landlord’s notice that it is disturbing other occupants or damaging the Building until the condition is corrected."
+    }
+   ]
+  },
+  {
+   "op": "insert_paragraph_after",
+   "label": "P8 after SPECIALIZED EQUIPMENT sub \"Electrical Connection\"",
+   "anchor_text": "Approved Consumables remain Hazardous Materials for purposes of Tenant’s cleanup",
+   "count": 1,
+   "ppr_from": "anchor",
+   "runs": [
+    {
+     "rpr": "U",
+     "text": "Electrical Connection"
+    },
+    {
+     "rpr": "N",
+     "text": ".  The Backup Power Equipment shall serve only the Premises and shall connect to the Premises’ electrical system only through a listed transfer switch that prevents any back-feed to the utility, the Building’s electrical system or any other occupant.  Tenant shall not interconnect the Backup Power Equipment with the utility grid, export power from it, or apply to any utility in connection with it, without Landlord’s prior written consent under the Services and Utilities section."
+    }
+   ]
+  },
+  {
+   "op": "insert_paragraph_after",
+   "label": "P8 after SPECIALIZED EQUIPMENT sub \"Approvals and Codes\"",
+   "anchor_text": "Approved Consumables remain Hazardous Materials for purposes of Tenant’s cleanup",
+   "count": 1,
+   "ppr_from": "anchor",
+   "runs": [
+    {
+     "rpr": "U",
+     "text": "Approvals and Codes"
+    },
+    {
+     "rpr": "N",
+     "text": ".  Before ordering or installing the Backup Power Equipment, Tenant shall deliver its specifications, location, fuel type and on-site fuel quantity, single-line electrical diagram and installer’s written scope, and shall not proceed until Landlord approves them in writing; Landlord may have them reviewed by an engineer of its choice at Tenant’s cost.  Any generator shall be installed, tested and maintained in accordance with NFPA 37 and NFPA 110, and any battery energy storage system shall be listed to UL 9540, supported by UL 9540A test data, and installed in accordance with NFPA 855 and the local fire code.  All work shall be done at Tenant’s cost by licensed contractors approved by Landlord, under all required governmental permits, and in accordance with the Alterations and Liens section."
+    }
+   ]
+  },
+  {
+   "op": "insert_paragraph_after",
+   "label": "P8 after SPECIALIZED EQUIPMENT heading",
+   "anchor_text": "Approved Consumables remain Hazardous Materials for purposes of Tenant’s cleanup",
+   "count": 1,
+   "ppr_from": "DEMISED PREMISES.  Landlord",
+   "runs": [
+    {
+     "rpr": "BU",
+     "text": "TENANT BACKUP POWER AND ENERGY STORAGE"
+    },
+    {
+     "rpr": "N",
+     "text": ".  [OPTIONAL MODULE — INCLUDE ONLY IF TENANT WILL INSTALL A STANDBY GENERATOR OR A BATTERY ENERGY STORAGE SYSTEM; OTHERWISE DELETE THIS SECTION.]  [COUNSEL REVIEW REQUIRED BEFORE FIRST USE]  Landlord consents to Tenant’s installation and operation of [BACKUP POWER EQUIPMENT DESCRIPTION, RATING AND LOCATION] (the “"
+    },
+    {
+     "rpr": "B",
+     "text": "Backup Power Equipment"
+    },
+    {
+     "rpr": "N",
+     "text": "”) on the conditions in this section, which control over any conflicting provision of this Lease."
+    }
+   ]
+  },
+  {
+   "op": "replace",
+   "label": "footer form tag v3.0 -> v3.1",
+   "part": "word/footer*.xml",
+   "old": "v3.0",
+   "new": "v3.1",
+   "count": 2
+  }
+ ]
+}
