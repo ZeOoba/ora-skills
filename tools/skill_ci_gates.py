@@ -296,7 +296,7 @@ def cmd_packaged_layout() -> int:
         out.mkdir()
         for skill in skills:
             with redirect_stdout(StringIO()):
-                pkg = package_skills.package(skill, out)  # the real packager, frontmatter gate included
+                pkg = package_skills.package(skill, out, allow_dirty_shared=True)  # the real packager, frontmatter gate included; tests staging layout, not what is committed
             with zipfile.ZipFile(pkg) as z:
                 z.extractall(root)
             targets = staged_import_targets(skill, root)
