@@ -23,8 +23,23 @@ on:
   push:
   workflow_dispatch:
 
+# RUNNER TOGGLE (2026-10-17): jobs run on GitHub-hosted ubuntu-latest by default. Setting the repo
+# variable CI_RUNNER=self moves them to the self-hosted runner on Gabriel's Windows laptop (labels:
+# self-hosted, windows, ora-ci) -- no billed Actions minutes. Added when account billing blocked
+# every hosted job. Same toggle as ZeOoba/oxford-command-center.
+#   gh variable set CI_RUNNER --body self --repo ZeOoba/ora-skills
+#   gh variable delete CI_RUNNER --repo ZeOoba/ora-skills
+# Self-hosted differences: steps run under bash (Git Bash) instead of PowerShell; the laptop's own
+# Python 3.13 is used (setup-python is skipped); apt-get is skipped (poppler/pdftotext comes from the
+# laptop); and the git identity for fixture repos is set via GIT_* env vars, NEVER `git config
+# --global`, which would overwrite the laptop owner's identity.
+
 permissions:
   contents: read
+
+defaults:
+  run:
+    shell: bash
 
 concurrency:
   group: tools-tests-${{ github.ref }}
@@ -32,12 +47,13 @@ concurrency:
 
 jobs:
   tools-tests:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'self' && fromJSON('["self-hosted","windows","ora-ci"]') || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
+        if: vars.CI_RUNNER != 'self'
         with:
           python-version: '3.13'
 
