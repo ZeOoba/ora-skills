@@ -332,8 +332,15 @@ class PostclickTests(FixtureTestCase):
             'import sys\n'
             f'open({str(self.calls)!r}, "a").write(open(sys.argv[2]).read())\n'
             'sys.exit(int(__import__("os").environ.get("FAKE_APPEND_RC", "0")))\n')
+        # PENDING is the script `--clear-ledger` runs: never let a regression reach the real one.
+        self.pending_calls = self.tmp / 'pending_calls.txt'
+        self.fake_pending = self.tmp / 'fake_pending.py'
+        self.fake_pending.write_text(
+            'import sys\n'
+            f'open({str(self.pending_calls)!r}, "a").write(" ".join(sys.argv[1:]))\n')
         for p in (unittest.mock.patch.object(rc, 'REPO', self.repo),
-                  unittest.mock.patch.object(rc, 'APPEND_LOG', self.fake_append)):
+                  unittest.mock.patch.object(rc, 'APPEND_LOG', self.fake_append),
+                  unittest.mock.patch.object(rc, 'PENDING', self.fake_pending)):
             p.start()
             self.addCleanup(p.stop)
 
@@ -1007,6 +1014,172 @@ class CycleCloseUsesTheBaselineUp(unittest.TestCase):
 
         self.assertEqual(code, 1)
         self.assertFalse(any('consume' in c for c in calls))
+
+
+class PostclickVersionGuard(PostclickTests):
+    """2026-10-17: postclick logged "v4.28 ... CONFIRMED" while the cache held v4.29,
+    because --version was trusted and the installed SKILL.md never read. A version that
+    can be read from the cache and disagrees must stop postclick like any non-CONFIRMED
+    verdict: nothing appended, baseline kept, ledger untouched."""
+
+    def _skill_md(self, h1='# Demo Skill (v4.29 — Buy Box)', fm=''):
+        _write(self.cache / 'demo-skill' / 'SKILL.md',
+               f'---\nname: demo-skill\ndescription: d\n{fm}---\n\n{h1}\n')
+
+    def _confirmable_with(self, **kw):
+        self._confirmable()
+        self._skill_md(**kw)
+
+    def test_h1_mismatch_refuses_and_appends_nothing(self):
+        self._confirmable_with()
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.28', False, False)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+        self.assertNotIn('demo-skill: CONFIRMED', out)
+        self.assertFalse(self.calls.exists())
+
+    def test_mismatch_keeps_the_baseline_for_a_later_correct_install(self):
+        self._confirmable_with()
+        self._run(rc.cmd_postclick, 'demo-skill', '4.28', False, False)
+        self.assertTrue(rc._baseline_path('demo-skill').exists())
+
+    def test_mismatch_never_clears_the_ledger(self):
+        self._confirmable_with()
+        with unittest.mock.patch.object(rc.subprocess, 'run', wraps=rc.subprocess.run) as run:
+            code, _ = self._run(rc.cmd_postclick, 'demo-skill', '4.28', False, True)
+        self.assertEqual(code, 1)
+        self.assertFalse(any('clear' in [str(a) for a in c.args[0]] for c in run.call_args_list))
+        self.assertFalse(self.pending_calls.exists())
+
+    def test_not_confirmed_run_never_reads_the_repo_skill_md(self):
+        # An unreadable (non-UTF-8) repo SKILL.md must not turn a plain STOP into a crash.
+        (self.cache / 'demo-skill').mkdir()
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({'skill': 'demo-skill', 'creation_time': '2020-01-01T00:00:00'}))
+        (self.repo / 'demo-skill').mkdir()
+        (self.repo / 'demo-skill' / 'SKILL.md').write_bytes(
+            b'---\nname: demo-skill\n---\n\xff\xfe bad\n')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, False)
+        self.assertEqual(code, 1, out)
+        self.assertIn('STOP', out)
+
+    def test_mismatch_also_refuses_under_no_append(self):
+        self._confirmable_with()
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.28', True, False)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+
+    def test_matching_h1_version_appends(self):
+        self._confirmable_with()
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.29', False, False)
+        self.assertEqual(code, 0, out)
+        self.assertIn('demo-skill v4.29 reimport confirmed', self.calls.read_text())
+
+    def test_leading_v_on_the_requested_version_is_tolerated(self):
+        self._confirmable_with()
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', 'v4.29', False, False)
+        self.assertEqual(code, 0, out)
+        logged = self.calls.read_text()
+        self.assertIn('demo-skill v4.29 reimport confirmed', logged)
+        self.assertNotIn('vv4.29', logged)
+
+    def test_frontmatter_version_takes_precedence_over_h1(self):
+        self._confirmable_with(h1='# Demo (v9.9)', fm='version: 2.1\n')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '9.9', False, False)
+        self.assertEqual(code, 1, out)
+        self.assertFalse(self.calls.exists())
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '2.1', False, False)
+        self.assertEqual(code, 0, out)
+
+    def test_h1_without_parens_uses_trailing_version(self):
+        self._confirmable_with(h1='# Solar Lease — v1.3')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '1.3', False, False)
+        self.assertEqual(code, 0, out)
+
+    def test_unreadable_cache_version_warns_but_proceeds(self):
+        # Existing contract: a cache with no SKILL.md / no version token cannot be checked.
+        self._confirmable()
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.23', False, False)
+        self.assertEqual(code, 0, out)
+        self.assertIn('version not verified', out)
+        self.assertTrue(self.calls.exists())
+
+
+class PostclickRepoDerivedVersion(PostclickVersionGuard):
+    """REFUTE round 1 (biggest finding): reimport_cycle.cmd_close runs `postclick
+    --no-append` WITHOUT --version, and no skill carries a frontmatter version, so the
+    guard was skipped on the standard path. With no --version the expected version now
+    comes from the repo checkout's SKILL.md (frontmatter version, else H1)."""
+
+    def _repo_skill(self, h1):
+        d = self.repo / 'demo-skill'
+        d.mkdir(parents=True, exist_ok=True)
+        (d / 'SKILL.md').write_text(f'---\nname: demo-skill\ndescription: d\n---\n\n{h1}\n', encoding='utf-8')
+
+    def test_no_version_flag_still_catches_a_mismatch(self):
+        self._confirmable_with(h1='# Demo (v4.29)')
+        self._repo_skill('# Demo (v4.28)')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)  # --no-append, as reimport_cycle
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+        self.assertFalse(self.calls.exists())
+
+    def test_no_version_flag_matching_repo_confirms(self):
+        self._confirmable_with(h1='# Demo (v4.29)')
+        self._repo_skill('# Demo (v4.29)')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, False)
+        self.assertEqual(code, 0, out)
+        self.assertIn('demo-skill v4.29 reimport confirmed', self.calls.read_text())
+
+    def test_explicit_version_still_wins_over_the_repo(self):
+        self._confirmable_with(h1='# Demo (v4.29)')
+        self._repo_skill('# Demo (v4.28)')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.29', False, False)
+        self.assertEqual(code, 0, out)
+
+    def test_repo_without_a_readable_version_stays_unchecked(self):
+        self._confirmable_with(h1='# Demo (v4.29)')
+        self._repo_skill('# Demo with no version token')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, False)
+        self.assertEqual(code, 0, out)
+
+    def test_non_utf8_repo_skill_md_does_not_crash(self):
+        self._confirmable_with(h1='# Demo (v4.29)')
+        d = self.repo / 'demo-skill'
+        d.mkdir(parents=True, exist_ok=True)
+        (d / 'SKILL.md').write_bytes(b'---\nname: demo-skill\n---\n\n# Demo (v4.29)\n\xff\xfe\n')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, False)
+        self.assertEqual(code, 0, out)
+
+
+class PostclickNoExpectedVersionWarns(PostclickTests):
+    """REFUTE round 2 (low): 12 skills declare no version anywhere, so with no --version the
+    guard had nothing to compare and skipped SILENTLY. It must say so."""
+
+    def test_confirmed_with_no_expected_version_warns(self):
+        self._confirmable()
+        (self.cache / 'demo-skill' / 'SKILL.md').write_text(
+            '---\nname: demo-skill\ndescription: d\n---\n\n# Demo with no version\n', encoding='utf-8')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+        self.assertEqual(code, 0, out)
+        self.assertIn('version not verified', out)
+        self.assertIn('no expected version', out)
+
+
+class PostclickTestsNeverReachTheRealLedger(unittest.TestCase):
+    """The base PostclickTests fixture must itself patch PENDING: its
+    test_failed_append_returns_1_and_skips_ledger_clear passes clear_ledger=True, so a
+    regression there would otherwise run the real pending_reimport.py clear."""
+
+    def test_base_fixture_patches_pending(self):
+        t = PostclickTests('test_no_append_flag_verifies_only')
+        t.setUp()
+        try:
+            self.assertNotEqual(Path(rc.PENDING).resolve(),
+                                (Path(rc.__file__).resolve().parent / 'pending_reimport.py'))
+        finally:
+            t.doCleanups()
+            t.tearDown()
 
 
 if __name__ == '__main__':
