@@ -16,6 +16,10 @@ Usage: python tools/package_skills.py <outdir> [skill ...]
        last_batch (just this call's skill names). Added 2026-08-15 so a downstream
        consumer can tell "not staged yet" from "staged, zero packages" from "staged
        at a different path than expected" without walking the tree by hand.)
+       Refuses to bundle a SHARED_ROOT_DEPS file (e.g. target-markets.json) whose
+       working-tree copy differs from HEAD or is not committed: a dirty primary checkout
+       otherwise ships another session's unreviewed edit inside the .skill (2026-10-17).
+       Pass --allow-dirty-shared to override deliberately.
        python tools/package_skills.py --check-staged
        (validates frontmatter for every skill dir with staged changes; used by
        tools/hooks/pre-commit — exit 0 clean, exit 1 blocked)
@@ -618,11 +622,43 @@ def skill_source_files(skill: str, repo_root: Path = REPO) -> dict[str, Path]:
     return files
 
 
-def package(skill: str, outdir: Path) -> Path:
+def shared_dep_dirty_reason(repo: Path, rel: str) -> str | None:
+    """Why `rel` (a repo-root shared file) must not be bundled as-is, else None.
+
+    A shared dep is copied from the working tree, so in a shared checkout it can carry
+    another session's uncommitted edit. Compares to HEAD, ignoring line endings.
+    Not a git work tree (or git unavailable) -> None: there is no HEAD to compare to."""
+    try:
+        if subprocess.run(['git', '-C', str(repo), 'rev-parse', '--git-dir'],
+                          capture_output=True).returncode != 0:
+            return None
+        show = subprocess.run(['git', '-C', str(repo), 'show', f'HEAD:{rel}'],
+                              capture_output=True)
+    except OSError:
+        return None
+    if show.returncode != 0:
+        return f'{rel} is not committed at HEAD'
+    lf = lambda b: b.replace(b'\r\n', b'\n')
+    if lf((repo / rel).read_bytes()) != lf(show.stdout):
+        return f'{rel} in the working tree differs from HEAD'
+    return None
+
+
+def package(skill: str, outdir: Path, allow_dirty_shared: bool = False) -> Path:
     src = REPO / skill
     if not (src / 'SKILL.md').is_file():
         raise SystemExit(f'{skill}: no SKILL.md at {src}')
     validate_frontmatter(skill, src)
+    if not allow_dirty_shared:
+        for shared_name in SHARED_ROOT_DEPS.get(skill, []):
+            dep_src, _dest = _dep_pair(shared_name)
+            reason = shared_dep_dirty_reason(REPO, dep_src) if (REPO / dep_src).is_file() else None
+            if reason:
+                raise SystemExit(
+                    f'{skill}: REFUSING to package -- {reason}. The package would ship '
+                    f'uncommitted content. Package from a clean checkout of the commit you '
+                    f'mean to ship (a worktree at origin/main), or pass --allow-dirty-shared '
+                    f'if this is deliberate.')
     dest = outdir / f'{skill}.skill'
     with zipfile.ZipFile(dest, 'w', zipfile.ZIP_DEFLATED) as z:
         for p in sorted(src.rglob('*')):
@@ -716,6 +752,9 @@ def write_staging_manifest(outdir: Path, packaged: list[Path]) -> Path:
 
 
 def main() -> None:
+    allow_dirty_shared = '--allow-dirty-shared' in sys.argv
+    if allow_dirty_shared:
+        sys.argv = [a for a in sys.argv if a != '--allow-dirty-shared']
     if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
         print(__doc__.strip())
         sys.exit(0)
@@ -742,7 +781,7 @@ def main() -> None:
     skills = sys.argv[2:] or [
         d.name for d in REPO.iterdir() if d.is_dir() and is_skill_dir(d.name)
     ]
-    packaged = [package(s, outdir) for s in skills]
+    packaged = [package(s, outdir, allow_dirty_shared) for s in skills]
     sentinel = write_staging_manifest(outdir, packaged)
     print(f'staged {len(packaged)} package(s); manifest: {sentinel.name}')
 

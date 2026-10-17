@@ -581,6 +581,32 @@ def _repo_version(skill: str) -> str | None:
     return v.group(1) if v else None
 
 
+def _norm_ver(v: str) -> str:
+    return v.strip().lstrip('vV')
+
+
+def _cache_version(skill: str) -> str | None:
+    """Version of the INSTALLED copy: frontmatter `version:` first, else the first
+    H1's `(vX.Y` token, else a trailing ` vX.Y`. None when the cache has no SKILL.md
+    or no readable version -- the caller then cannot verify and says so."""
+    f = _cache_dir(skill) / 'SKILL.md'
+    try:
+        text = f.read_text(encoding='utf8', errors='replace').replace('\r\n', '\n')
+    except OSError:
+        return None
+    m = re.match(r'^---\n(.*?)\n---\n', text, re.S)
+    if m:
+        v = re.search(r'^version:\s*["\']?v?([\w.\-]+)["\']?\s*$', m.group(1), re.M)
+        if v:
+            return _norm_ver(v.group(1))
+        text = text[m.end():]
+    h1 = next((l for l in text.split('\n') if l.startswith('# ')), None)
+    if h1 is None:
+        return None
+    v = re.search(r'\(v?(\d+(?:\.\d+)+)', h1) or re.search(r'\bv(\d+(?:\.\d+)+)\b', h1)
+    return _norm_ver(v.group(1)) if v else None
+
+
 def _log_report(tail: int) -> None:
     now = datetime.now()
     for lp in (LOCAL_LOG, ROAMING_LOG):
@@ -599,16 +625,31 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
     with contextlib.redirect_stdout(buf):
         cmd_verify([skill], baseline_override)
     verdict = buf.getvalue().strip()
-    print(verdict)
+    confirmed = f'{skill}: CONFIRMED' in verdict
+    version = version or _repo_version(skill)
+    cache_ver = _cache_version(skill) if confirmed else None
+    want = _norm_ver(version) if version else None
+    mismatch = bool(confirmed and want and cache_ver and want != cache_ver)
+    # A timing match proves SOME install happened, not WHICH version (2026-10-17: v4.28
+    # was logged as CONFIRMED while the cache held v4.29). Never print CONFIRMED for it.
+    print(verdict.replace(f'{skill}: CONFIRMED', f'{skill}: VERSION-MISMATCH', 1) if mismatch else verdict)
     _log_report(6)
-    if f'{skill}: CONFIRMED' not in verdict:
+    if not confirmed:
         print('STOP: verdict is not CONFIRMED. Nothing appended. Do not repackage, edit or commit; '
               'report the log state above.')
         return 1
+    if mismatch:
+        print(f'STOP: VERSION-MISMATCH -- the install moved, but the cache SKILL.md reads '
+              f'v{cache_ver}, not the expected v{want}. Nothing appended, ledger and baseline '
+              f'untouched. Find what was actually saved (a newer draft or a different package) '
+              f'before logging or clearing anything.')
+        return 1
+    if want and cache_ver is None:
+        print(f'WARNING: version not verified -- the cache SKILL.md has no readable version '
+              f'(frontmatter `version:` or an H1 `(vX.Y)`); v{want} is taken on trust.')
     if no_append:
         print('CONFIRMED (--no-append: event log untouched).')
         return 0
-    version = version or _repo_version(skill)
     vtxt = f' v{version}' if version else ''
     today = datetime.now().strftime('%Y-%m-%d')
     ef = REPO / '_staging' / f'_eventlog_entry_{skill}.md'
