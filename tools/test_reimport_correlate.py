@@ -1015,6 +1015,18 @@ class PostclickVersionGuard(PostclickTests):
     can be read from the cache and disagrees must stop postclick like any non-CONFIRMED
     verdict: nothing appended, baseline kept, ledger untouched."""
 
+    def setUp(self):
+        super().setUp()
+        # Never let a regression reach the real ledger: PENDING is the script `clear` runs.
+        self.pending_calls = self.tmp / 'pending_calls.txt'
+        fake = self.tmp / 'fake_pending.py'
+        fake.write_text(
+            'import sys\n'
+            f'open({str(self.pending_calls)!r}, "a").write(" ".join(sys.argv[1:]))\n')
+        p = unittest.mock.patch.object(rc, 'PENDING', fake)
+        p.start()
+        self.addCleanup(p.stop)
+
     def _skill_md(self, h1='# Demo Skill (v4.29 — Buy Box)', fm=''):
         _write(self.cache / 'demo-skill' / 'SKILL.md',
                f'---\nname: demo-skill\ndescription: d\n{fm}---\n\n{h1}\n')
@@ -1042,6 +1054,19 @@ class PostclickVersionGuard(PostclickTests):
             code, _ = self._run(rc.cmd_postclick, 'demo-skill', '4.28', False, True)
         self.assertEqual(code, 1)
         self.assertFalse(any('clear' in [str(a) for a in c.args[0]] for c in run.call_args_list))
+        self.assertFalse(self.pending_calls.exists())
+
+    def test_not_confirmed_run_never_reads_the_repo_skill_md(self):
+        # An unreadable (non-UTF-8) repo SKILL.md must not turn a plain STOP into a crash.
+        (self.cache / 'demo-skill').mkdir()
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({'skill': 'demo-skill', 'creation_time': '2020-01-01T00:00:00'}))
+        (self.repo / 'demo-skill').mkdir()
+        (self.repo / 'demo-skill' / 'SKILL.md').write_bytes(
+            b'---\nname: demo-skill\n---\n\xff\xfe bad\n')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, False)
+        self.assertEqual(code, 1, out)
+        self.assertIn('STOP', out)
 
     def test_mismatch_also_refuses_under_no_append(self):
         self._confirmable_with()
