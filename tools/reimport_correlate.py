@@ -668,7 +668,7 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
     if no_append:
         print('CONFIRMED (--no-append: event log untouched).')
         return 0
-    vtxt = f' v{version}' if version else ''
+    vtxt = f' v{_norm_ver(version)}' if version else ''
     today = datetime.now().strftime('%Y-%m-%d')
     ef = REPO / '_staging' / f'_eventlog_entry_{skill}.md'
     # Baselines live in the primary now, so nothing else creates this checkout's _staging/.
