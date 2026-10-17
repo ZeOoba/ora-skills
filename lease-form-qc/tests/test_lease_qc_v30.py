@@ -428,5 +428,27 @@ class FP7SingleTenant(unittest.TestCase):
         self.assertFalse(q._single_tenant_exclusive_parking(self.ST_PARKING + " Tenant’s Allocation is 10 spaces."))
 
 
+class T1CounselNoteExemption(unittest.TestCase):
+    """T1 exempts the FP8-required counsel note (and only that exact string) in execution copies."""
+    NOTE = "[COUNSEL REVIEW REQUIRED BEFORE FIRST USE]"
+
+    def t1(self, raw, footer=""):
+        return q._t1({"raw": raw, "meta": {"footer": footer}})
+
+    def test_exact_note_alone_passes(self):
+        self.assertIsNone(self.t1(f"Backup power. {self.NOTE}"))
+        self.assertIsNone(self.t1("Body.", footer=self.NOTE))
+
+    def test_other_token_still_blocks_beside_the_note(self):
+        d = self.t1(f"{self.NOTE} Permitted Use: [PERMITTED USE]")
+        self.assertIn("1 unfilled token(s)", d)
+        self.assertIn("[PERMITTED USE]", d)
+        self.assertNotIn("COUNSEL", d)
+
+    def test_near_miss_note_is_not_exempt(self):
+        self.assertIsNotNone(self.t1("[COUNSEL REVIEW REQUIRED]"))
+        self.assertIsNotNone(self.t1("[COUNSEL REVIEW REQUIRED BEFORE FIRST USE] [TENANT ENTITY]"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -640,6 +640,13 @@ CHECKS = [
 TOKEN_RE = re.compile(r"\[[A-Z][A-Z0-9 /,.'&-]{2,}\]")
 
 
+# The one bracketed drafting note that is REQUIRED to survive into an execution copy:
+# FP8 demands it in the optional TENANT BACKUP POWER AND ENERGY STORAGE module, so T1
+# must not read it as an unfilled token (Gabriel, 2026-10-17: exempt this exact note
+# from T1). Exact match only -- any other bracketed token still trips T1.
+T1_EXEMPT_TOKENS = frozenset({"[COUNSEL REVIEW REQUIRED BEFORE FIRST USE]"})
+
+
 def _t1(ctx):
     """Unfilled template tokens remain — scanned in the BODY *and* the FOOTER.
 
@@ -668,7 +675,7 @@ def _t1(ctx):
     if ctx.get("is_template") or ctx.get("allow_tokens"):
         return None
     hay = ctx["raw"] + "\n" + ctx["meta"].get("footer", "")
-    toks = sorted(set(TOKEN_RE.findall(hay)))
+    toks = sorted(set(TOKEN_RE.findall(hay)) - T1_EXEMPT_TOKENS)
     if not toks:
         return None
     shown = ", ".join(toks[:6]) + ("..." if len(toks) > 6 else "")
