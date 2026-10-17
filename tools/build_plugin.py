@@ -162,7 +162,8 @@ def build_plugin(plugin: str, outdir: Path, bump: str | None = None,
 
 
 def main() -> None:
-    argv = sys.argv[1:]
+    allow_dirty_shared = '--allow-dirty-shared' in sys.argv
+    argv = [a for a in sys.argv[1:] if a != '--allow-dirty-shared']
     if not argv or argv[0] in ('-h', '--help') or len(argv) < 2:
         print(__doc__.strip())
         sys.exit(0)
@@ -171,7 +172,7 @@ def main() -> None:
     if '--bump' in argv:
         i = argv.index('--bump')
         bump = argv[i + 1] if i + 1 < len(argv) else 'patch'
-    build_plugin(plugin, outdir, bump, allow_dirty_shared='--allow-dirty-shared' in argv)
+    build_plugin(plugin, outdir, bump, allow_dirty_shared=allow_dirty_shared)
 
 
 if __name__ == '__main__':

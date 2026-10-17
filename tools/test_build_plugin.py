@@ -330,5 +330,32 @@ class PluginSharedDepMustMatchHead(unittest.TestCase):
         self.assertIn('skills/fake-skill/target-markets.json', self.entries())
 
 
+class MainStripsAllowDirtyFlagFirst(unittest.TestCase):
+    """REFUTE round 2: build_plugin.main() read --bump's value positionally, so the new flag
+    after --bump became the bump part, and before the plugin name became the plugin name."""
+
+    def _run(self, *argv):
+        calls = []
+        with mock.patch.object(bp, 'build_plugin', lambda *a, **k: calls.append((a, k))), \
+             mock.patch.object(sys, 'argv', ['build_plugin.py', *argv]):
+            bp.main()
+        return calls[0]
+
+    def test_flag_after_bump_does_not_become_the_bump_part(self):
+        args, kw = self._run('p', 'out', '--bump', '--allow-dirty-shared')
+        self.assertEqual(args[0], 'p')
+        self.assertEqual(args[2], 'patch')
+        self.assertTrue(kw['allow_dirty_shared'])
+
+    def test_flag_first_does_not_become_the_plugin_name(self):
+        args, kw = self._run('--allow-dirty-shared', 'p', 'out')
+        self.assertEqual(args[0], 'p')
+        self.assertTrue(kw['allow_dirty_shared'])
+
+    def test_flag_absent_means_not_allowed(self):
+        args, kw = self._run('p', 'out')
+        self.assertFalse(kw['allow_dirty_shared'])
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
