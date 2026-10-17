@@ -83,27 +83,49 @@ def record_run(results, run_dir, skill_sha=None, run_label=None, run_timestamp=N
     snapshot_filename = f"{timestamp}{'_' + run_label if run_label else ''}.json"
     snapshot_path = os.path.join(run_dir, snapshot_filename)
     tmp_path = snapshot_path + ".tmp"
+    created_tmp = False
     try:
-        # Exclusive-create ("x") the temp file, not the exists-check-then-open("w")
-        # pattern this used to follow -- that had a TOCTOU window (another process
-        # could create snapshot_path between the check and the open) and, more to
-        # the point, would leave a truncated/partial JSON file behind if the
-        # process died mid-write, which the refuse-to-overwrite guard below would
-        # then permanently treat as "already recorded" on any retry.
+        # Exclusive-create the temp file (no exists-then-open TOCTOU window).
         with open(tmp_path, "x", encoding="utf-8") as f:
+            created_tmp = True
             json.dump(snapshot, f, indent=2)
-        # os.rename fails outright (does not silently overwrite) if snapshot_path
-        # already exists on Windows -- this IS the refuse-to-overwrite guard now,
-        # atomically, rather than a separate exists() check racing the write.
-        os.rename(tmp_path, snapshot_path)
+        try:
+            # os.link raises FileExistsError on POSIX and Windows alike, so
+            # refuse-to-overwrite is portable (os.rename silently clobbers on POSIX).
+            os.link(tmp_path, snapshot_path)
+        except FileExistsError:
+            raise
+        except OSError:
+            # Filesystem without hard links (FAT/exFAT, some network/sync mounts):
+            # claim the name exclusively, then atomically replace it.
+            # claimed_snapshot documents that only a snapshot claimed by THIS call
+            # is ever cleaned up: a foreign file makes os.open raise
+            # FileExistsError before the cleanup below is reachable.
+            claimed_snapshot = False
+            fd = os.open(snapshot_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            claimed_snapshot = True
+            os.close(fd)
+            try:
+                os.replace(tmp_path, snapshot_path)
+            except BaseException:
+                # Release our still-empty placeholder so the name is not permanently
+                # blocked; a non-empty file means the move completed -- keep it.
+                if claimed_snapshot and os.path.exists(snapshot_path) \
+                        and os.path.getsize(snapshot_path) == 0:
+                    try:
+                        os.remove(snapshot_path)
+                    except OSError:
+                        pass  # best effort; never mask the original exception
+                raise
     except FileExistsError as e:
         raise ValueError(
             f"refusing to overwrite an existing snapshot or in-progress write "
-            f"({e.filename}) -- re-run with a distinct run_timestamp/run_label, "
+            f"({e.filename2 or e.filename}) -- re-run with a distinct run_timestamp/run_label, "
             "or check the clock"
         ) from e
     finally:
-        if os.path.exists(tmp_path):
+        # Only remove a tmp this call created; never another writer's in-flight file.
+        if created_tmp and os.path.exists(tmp_path):
             os.remove(tmp_path)
 
     csv_path = os.path.join(run_dir, "summary.csv")
