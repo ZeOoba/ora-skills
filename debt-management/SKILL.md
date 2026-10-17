@@ -3,7 +3,7 @@ name: "debt-management"
 description: "Use when the user mentions: refinance, refi, term sheet, lender selection, loan negotiation, DSCR, debt yield, LTV, debt covenant, lender call, prepayment, defeasance, swap, rate cap, hedge, balloon, maturity, loan reserves, lender package, capital stack, recap, mezzanine, preferred equity — ORA debt and capital-markets skill. Also on an uploaded term sheet, commitment letter, lender proposal or amortization schedule. SOLE path for PAYOFF STATEMENTS in either direction: payoff letter or figure, per diem, title company payoff request or authorization, seller-financed note payoff or release, auditing a payoff quoted TO us. Strategic hold/refi/1031/sell decisions route to disposition-analysis first."
 ---
 
-# Debt Management (v1.4)
+# Debt Management (v1.5)
 
 Manage and optimize ORA's debt across the loan lifecycle: origination, monitoring, covenant compliance, refinance evaluation, lender relationships — and payoff statements on notes ORA **holds** as well as notes ORA **owes**.
 
@@ -52,7 +52,7 @@ Unpaid principal = the balance **after the last installment actually received an
 
 - Read the accrual convention out of the Note itself. A 30/360 note accrues 30 days per month regardless of the calendar; do not substitute actual/365.
 - Per diem = principal × annual rate ÷ 360 (on a 30/360 note).
-- Day count from paid-through date to payoff date on the same convention: `(m2−m1)×30 + (d2−d1)`.
+- Day count from paid-through date to payoff date on the same convention: `360×(Y2−Y1) + 30×(M2−M1) + (D2−D1)` after the variant's day-31 / February adjustments. Run `python debt-management/scripts/daycount.py <paid-through> <payoff> <variant>` (`bond_basis` = 30/360 Bond Basis, `us_eom` = 30/360 US with end-of-February rule, `e360` = 30E/360). Use the variant the Note states; if the Note is silent or says NASD, flag it to Gabriel — do not default. Check: Dec 1 → Jan 15 = 44 days.
 - Cross-check the per diem against the schedule's own next-month interest ÷ 30. They must agree.
 
 ### A4. Principal does NOT accrue between installment dates
@@ -113,7 +113,7 @@ Derive the date from the current date, never from file timestamps or an assumed 
 Run the same math in reverse against the lender's figure. Check:
 
 - Paid-through date against ORA's own payment records
-- Day-count convention and per diem against the Note
+- Day-count convention and per diem against the Note (recompute days with `scripts/daycount.py`; a lender figure built on a year-less `(m2−m1)×30` count is a variance)
 - Whether a prepayment penalty / yield maintenance / defeasance charge actually applies at this date, and whether the open window has been reached
 - Fees for legitimacy: recording and release are real; "processing," "demand," and "statement" fees frequently are not and are often waivable
 - Whether any late charges asserted are within the Note's grace terms
@@ -199,6 +199,7 @@ Report variances with the arithmetic shown; do not accept a lender's total on it
 
 ## Changelog
 
+- v1.5 (2026-10-17): Corrected the A3 30/360 day count (the old formula had no year term and returned −316 for Dec 1 → Jan 15; correct is 44) and added `scripts/daycount.py` with tests (Bond Basis, US/SIA end-of-February, 30E/360; NASD refused). No governor constant, trigger vocabulary or QC gate touched.
 - v1.4 (2026-09-07): ORA Automation Audit R23-9-adjacent — a full pairwise trigger sweep found "refinance" shared with disposition-analysis (strategic hold/refi/1031/sell decision vs. this skill's execution). Added a one-clause deferral: strategic refi-vs-other-exit calls route to disposition-analysis first. Reciprocal clause added there. No procedure, QC gate, or trigger vocabulary otherwise changed.
 - v1.3 (2026-08-17): Added the PAYOFF STATEMENTS section — Step 0 direction check, Workflow A (issuing, ORA as Lender), Workflow B (auditing a payoff received), and a 13-point payoff QC gate. Encodes four errors made while hand-building the 5600 Sunnyside / Restoration Church payoff three times: (1) an installment double-counted on top of un-reduced principal plus full accrued interest, overstating by $16,713.65; (2) a total rounded from unrounded inputs instead of footing the displayed column, off by $0.01; (3) a letter dated from file timestamps rather than the current date, which falsely asserted a past-due installment as not yet due; (4) a register-sourced late-charge grace period (15 days) used instead of the executed Note's actual term (5 days). Adds the A6 Path A/Path B consistency cross-check that catches the double-count class arithmetically. Scope widened to seller-financed notes where an ORA SPV is Lender.
 - v1.2 (2026-07-08): Migrated into `ora-skills` (git-pinned, `package-and-stage-skill`-covered) from the `ora-operations-extensions` plugin. That plugin has no `installed_plugins.json` entry and no local commit pinning — it is Cowork/Connector-platform-managed, not Code-managed — so its runtime-cache copy had zero protection against a silent re-sync revert. This repo copy is now the source of truth. Once installed via Save-skill, remove the old `ora-operations-extensions:debt-management` plugin skill (Settings → Capabilities) to avoid duplicate-skill triggering.
