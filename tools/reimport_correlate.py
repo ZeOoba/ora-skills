@@ -626,7 +626,8 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
         cmd_verify([skill], baseline_override)
     verdict = buf.getvalue().strip()
     confirmed = f'{skill}: CONFIRMED' in verdict
-    version = version or _repo_version(skill)
+    if confirmed:
+        version = version or _repo_version(skill)
     cache_ver = _cache_version(skill) if confirmed else None
     want = _norm_ver(version) if version else None
     mismatch = bool(confirmed and want and cache_ver and want != cache_ver)
