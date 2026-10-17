@@ -10,6 +10,8 @@ taught it to count Markdown TABLE rows (e.g. loi-generation/references/
 qc-gate.md presents its gate as a numbered table, not a checkbox list).
 """
 import io
+import zipfile
+import shutil
 import json
 import subprocess
 import sys
@@ -808,6 +810,79 @@ class SkillSourceFilesSharedDeps(unittest.TestCase):
                 files = skill_source_files('demo-skill', repo_root)
 
             self.assertNotIn('scripts/shared.py', files)
+
+
+class SharedDepMustMatchHead(unittest.TestCase):
+    """2026-10-17 incident: package_skills bundled target-markets.json from the PRIMARY
+    checkout's dirty working tree, shipping another session's uncommitted edit inside
+    acquisition-underwriting.skill. A shared root dep that differs from HEAD (or is not
+    committed at all) must stop the packager unless explicitly allowed."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='pkg_shared_head_'))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.git('init', '-q')
+        self.git('config', 'user.email', 't@example.com')
+        self.git('config', 'user.name', 't')
+        (self.tmp / 'target-markets.json').write_text('{"v": 1}\n', encoding='utf-8', newline='')
+        self.git('add', 'target-markets.json')
+        self.git('commit', '-q', '-m', 'init')
+
+    def git(self, *a):
+        subprocess.run(['git', '-C', str(self.tmp), *a], check=True, capture_output=True)
+
+    def test_clean_file_passes(self):
+        self.assertIsNone(package_skills.shared_dep_dirty_reason(self.tmp, 'target-markets.json'))
+
+    def test_modified_file_is_reported(self):
+        (self.tmp / 'target-markets.json').write_text('{"v": 2}\n', encoding='utf-8', newline='')
+        reason = package_skills.shared_dep_dirty_reason(self.tmp, 'target-markets.json')
+        self.assertIsNotNone(reason)
+        self.assertIn('differs from HEAD', reason)
+
+    def test_crlf_only_difference_is_not_dirty(self):
+        (self.tmp / 'target-markets.json').write_bytes(b'{"v": 1}\r\n')
+        self.assertIsNone(package_skills.shared_dep_dirty_reason(self.tmp, 'target-markets.json'))
+
+    def test_uncommitted_new_file_is_reported(self):
+        (self.tmp / 'new-shared.json').write_text('{}\n', encoding='utf-8')
+        reason = package_skills.shared_dep_dirty_reason(self.tmp, 'new-shared.json')
+        self.assertIsNotNone(reason)
+        self.assertIn('not committed', reason)
+
+    def test_non_git_directory_is_not_checked(self):
+        with tempfile.TemporaryDirectory() as plain:
+            (Path(plain) / 'target-markets.json').write_text('{}\n', encoding='utf-8')
+            self.assertIsNone(package_skills.shared_dep_dirty_reason(Path(plain), 'target-markets.json'))
+
+    def _package(self, **kw):
+        skill = self.tmp / 'demo-skill'
+        skill.mkdir(exist_ok=True)
+        (skill / 'SKILL.md').write_text('---\nname: demo-skill\ndescription: d\n---\n# Demo\n', encoding='utf-8')
+        out = self.tmp / 'out'
+        out.mkdir(exist_ok=True)
+        with mock.patch.object(package_skills, 'REPO', self.tmp), \
+             mock.patch.object(package_skills, 'SHARED_ROOT_DEPS', {'demo-skill': ['target-markets.json']}), \
+             mock.patch.object(package_skills, 'validate_frontmatter', lambda *a, **k: None), \
+             redirect_stdout(io.StringIO()):
+            return package_skills.package('demo-skill', out, **kw)
+
+    def test_package_refuses_dirty_shared_dep(self):
+        (self.tmp / 'target-markets.json').write_text('{"v": 2}\n', encoding='utf-8', newline='')
+        with self.assertRaises(SystemExit) as cm:
+            self._package()
+        self.assertIn('target-markets.json', str(cm.exception))
+        self.assertFalse((self.tmp / 'out' / 'demo-skill.skill').exists())
+
+    def test_package_builds_when_shared_dep_is_clean(self):
+        dest = self._package()
+        with zipfile.ZipFile(dest) as z:
+            self.assertIn('demo-skill/target-markets.json', z.namelist())
+
+    def test_allow_dirty_shared_overrides(self):
+        (self.tmp / 'target-markets.json').write_text('{"v": 2}\n', encoding='utf-8', newline='')
+        dest = self._package(allow_dirty_shared=True)
+        self.assertTrue(dest.is_file())
 
 
 if __name__ == '__main__':
