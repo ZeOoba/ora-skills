@@ -171,7 +171,7 @@ def scan_doc(doc, registry=None):
 
 
 EXEC = "ORA_Lease_ExecutionCopy_Acme.docx"        # a non-template file name (T1/T3/T4/F26 gates)
-EXEC_COLLATERAL = {"v2.7": set(), "v2.8": {"T1"}, "v3.0": {"F26"}, "v3.1": {"F26", "T1"}}
+EXEC_COLLATERAL = {"v2.7": set(), "v2.8": set(), "v3.0": {"F26"}, "v3.1": {"F26"}}
 
 # ---------------------------------------------------------------------------
 # The mutation table. Grouped by check family; per-form variants where the two
@@ -326,8 +326,7 @@ MUTATIONS = [
     # would). EXEC_COLLATERAL: what a filled copy of each master still trips by design --
     # v3.x keeps the Specialized Equipment [OPTIONAL MODULE ...] instruction (F26), and
     # v2.8/v3.1 keep the backup-power module's [COUNSEL REVIEW REQUIRED BEFORE FIRST USE]
-    # note, which T1 reads as a token in an execution copy while FP8 requires it
-    # (see SKILL.md Class 5g open item).
+    # note, which FP8 requires; T1 exempts that exact note (T1_EXEMPT_TOKENS, v2.11.1).
     M(cid, (form,), [("name", EXEC), ("fill_tokens",)] + list(extra), expect={cid} | EXEC_COLLATERAL[form] | set(more),
       why=why)
     for form in ALL

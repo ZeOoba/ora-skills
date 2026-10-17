@@ -408,11 +408,11 @@ bare v3.1 fails FP1–FP7; full provisions pass; dropping any one element fails 
 The real Phase-1 masters (v2.8 0 of 68, v3.1 0 of 73, ENFORCED) are committed fixtures and
 every FP check has entries in the mutation suite (below).
 
-**Open item (v2.11, not changed):** FP8 requires the module's
-`[COUNSEL REVIEW REQUIRED BEFORE FIRST USE]` note, and T1 reads that note as an unfilled token in
-an execution copy — so an execution copy that keeps the backup-power module fails one or the
-other. Decide whether FP8's bracket/counsel-note elements apply to `_TEMPLATE` files only (as
-F26 already does for the Specialized Equipment instruction) before the module is first used.
+**Resolved (v2.11.1, Gabriel 2026-10-17):** FP8 requires the module's
+`[COUNSEL REVIEW REQUIRED BEFORE FIRST USE]` note, so T1 exempts that exact string
+(`T1_EXEMPT_TOKENS`) in execution copies; any other bracketed token still trips T1. The note
+therefore survives into an execution copy until counsel clears it and a human removes it --
+neither T1 nor FP8 will prompt for that removal.
 
 ### Mutation suite — every check must be able to fail (added v2.11)
 
