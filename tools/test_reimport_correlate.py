@@ -1079,6 +1079,9 @@ class PostclickVersionGuard(PostclickTests):
         self._confirmable_with()
         code, out = self._run(rc.cmd_postclick, 'demo-skill', 'v4.29', False, False)
         self.assertEqual(code, 0, out)
+        logged = self.calls.read_text()
+        self.assertIn('demo-skill v4.29 reimport confirmed', logged)
+        self.assertNotIn('vv4.29', logged)
 
     def test_frontmatter_version_takes_precedence_over_h1(self):
         self._confirmable_with(h1='# Demo (v9.9)', fm='version: 2.1\n')
