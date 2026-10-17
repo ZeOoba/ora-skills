@@ -1166,6 +1166,187 @@ class PostclickNoExpectedVersionWarns(PostclickTests):
         self.assertIn('no expected version', out)
 
 
+class PostclickPackageVersion(PostclickTests):
+    """Follow-up to #139 (its "Known limitation"): with no --version, the expected version
+    followed the checkout running postclick, so v4.32 packaged in a worktree + v4.31
+    installed + close run from a primary still on v4.31 logged a false CONFIRMED. `baseline
+    --package` records the PACKAGED SKILL.md version; postclick compares the cache to that."""
+
+    def _pkg(self, version_line, name='demo-skill.skill'):
+        pkg = self.tmp / name
+        fm = f'---\nname: demo-skill\ndescription: d\n{version_line}---\n\n# Demo\n'
+        _make_pkg(pkg, 'demo-skill', {'demo-skill/SKILL.md': fm.encode()})
+        return pkg
+
+    def _cache_md(self, ver):
+        _write(self.cache / 'demo-skill' / 'SKILL.md',
+               f'---\nname: demo-skill\ndescription: d\n---\n\n# Demo (v{ver})\n')
+
+    def _repo_md(self, ver):
+        _write(self.repo / 'demo-skill' / 'SKILL.md',
+               f'---\nname: demo-skill\ndescription: d\n---\n\n# Demo (v{ver})\n')
+
+    def _baseline_json(self):
+        return json.loads(rc._baseline_path('demo-skill').read_text())
+
+    def _arm(self, packaged, installed, checkout):
+        """A baseline taken from a package, then an install that moves the cache."""
+        self._cache_md('0.0')
+        code, out = self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg(f'version: {packaged}\n')))
+        self.assertEqual(code, 0, out)
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({**self._baseline_json(), 'creation_time': '2020-01-01T00:00:00'}))
+        self._cache_md(installed)
+        self._repo_md(checkout)
+        ts = rc._creation_time('demo-skill').strftime('%Y-%m-%d %H:%M:%S')
+        _write(self.local_log,
+               f'{ts} [info] [SkillsPlugin] Delta: 1 to download\n'
+               f'{ts} [info] [SkillsPlugin] Sync complete: 1 downloaded, 0 failed\n')
+
+    def test_baseline_package_records_the_packaged_version(self):
+        (self.cache / 'demo-skill').mkdir()
+        code, out = self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.32\n')))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self._baseline_json()['expected_version'], '4.32')
+
+    def test_false_match_v432_packaged_v431_installed_checkout_on_v431(self):
+        self._arm(packaged='4.32', installed='4.31', checkout='4.31')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+        self.assertNotIn('demo-skill: CONFIRMED', out)
+        self.assertFalse(self.calls.exists())
+        self.assertTrue(rc._baseline_path('demo-skill').exists())
+
+    def test_package_version_confirms_when_checkout_is_behind(self):
+        self._arm(packaged='4.32', installed='4.32', checkout='4.31')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, False)
+        self.assertEqual(code, 0, out)
+        self.assertIn('demo-skill v4.32 reimport confirmed', self.calls.read_text())
+
+    def test_explicit_version_beats_the_baseline(self):
+        self._arm(packaged='4.32', installed='4.31', checkout='4.30')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.31', True, False)
+        self.assertEqual(code, 0, out)
+
+    def test_baseline_beats_the_repo_checkout(self):
+        self._arm(packaged='4.31', installed='4.31', checkout='4.99')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+        self.assertEqual(code, 0, out)
+
+    def test_baseline_without_expected_version_still_falls_back_to_the_repo(self):
+        self._confirmable()                      # legacy baseline: no expected_version key
+        self._cache_md('4.31')
+        self._repo_md('4.32')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+
+    def test_unversioned_package_does_not_fall_back_to_the_repo(self):
+        # The package was inspected and declares no version: a versioned checkout must not
+        # stand in for it (that is the false match this change removes).
+        self._arm(packaged='4.32', installed='4.31', checkout='4.31')
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({**self._baseline_json(), 'expected_version': None}))
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+        self.assertEqual(code, 0, out)
+        self.assertIn('version not verified', out)
+        self.assertIn('no expected version', out)
+
+    def test_unreadable_package_writes_no_baseline(self):
+        (self.cache / 'demo-skill').mkdir()
+        bad = self.tmp / 'bad.skill'
+        bad.write_bytes(b'not a zip')
+        code, out = self._run(rc.cmd_baseline, ['demo-skill'], str(bad))
+        self.assertEqual(code, 1, out)
+        self.assertFalse(rc._baseline_path('demo-skill').exists())
+        code, out = self._run(rc.cmd_baseline, ['demo-skill'], str(self.tmp / 'ghost.skill'))
+        self.assertEqual(code, 1, out)
+        self.assertFalse(rc._baseline_path('demo-skill').exists())
+
+    def test_package_without_skill_md_writes_no_baseline(self):
+        (self.cache / 'demo-skill').mkdir()
+        pkg = self.tmp / 'demo-skill.skill'
+        _make_pkg(pkg, 'demo-skill', {'demo-skill/other.md': b'x'})
+        code, out = self._run(rc.cmd_baseline, ['demo-skill'], str(pkg))
+        self.assertEqual(code, 1, out)
+        self.assertFalse(rc._baseline_path('demo-skill').exists())
+
+    def test_package_with_several_skills_is_refused(self):
+        code, out = self._run(rc.cmd_baseline, ['demo-skill', 'other'],
+                              str(self._pkg('version: 1.0\n')))
+        self.assertEqual(code, 2, out)
+        self.assertFalse(rc._baseline_path('demo-skill').exists())
+
+    def test_cli_package_flag_reaches_cmd_baseline(self):
+        (self.cache / 'demo-skill').mkdir()
+        pkg = self._pkg('version: 4.32\n')
+        with unittest.mock.patch.object(sys, 'argv',
+                                        ['rc', 'baseline', 'demo-skill', '--package', str(pkg)]):
+            code, out = self._run(rc.main)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self._baseline_json()['expected_version'], '4.32')
+
+    def test_precheck_records_the_package_version_on_capture_and_on_keep(self):
+        # Entry point A takes its baseline in precheck, so precheck must record it too.
+        pkg = self._pkg('version: 4.32\n')
+        _write(self.repo / 'demo-skill' / 'SKILL.md',
+               '---\nname: demo-skill\ndescription: d\nversion: 4.32\n---\n\n# Demo\n')
+        with unittest.mock.patch.object(rc, '_plugin_of', lambda s: None):
+            code, out = self._run(rc.cmd_precheck, [str(pkg)])
+            self.assertEqual(code, 0, out)
+            self.assertEqual(self._baseline_json()['expected_version'], '4.32')
+            _write(rc._baseline_path('demo-skill'),
+                   json.dumps({'skill': 'demo-skill', 'creation_time': None}))   # kept, no version
+            code, out = self._run(rc.cmd_precheck, [str(pkg)])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self._baseline_json()['expected_version'], '4.32')
+
+
+class CyclePrepPackagesBeforeBaseline(unittest.TestCase):
+    """reimport_cycle prep wrote the baseline FIRST, so a package_skills refusal (dirty
+    shared dep) left an unconsumed baseline that could confirm a later unrelated install."""
+
+    def _prep(self, package_rc):
+        calls = []
+        tmp = Path(tempfile.mkdtemp(prefix='reimport_correlate_test_'))
+        self.addCleanup(_rmtree, tmp)
+        out_dir = tmp / 'pkg'
+
+        def fake_run(args, echo=True):
+            calls.append([str(a) for a in args])
+            is_pkg = 'package_skills.py' in str(args[0])
+            if is_pkg and package_rc == 0:
+                for s in args[2:]:
+                    _make_pkg(out_dir / f'{s}.skill', s, {f'{s}/SKILL.md': b'---\nname: x\n---\n'})
+            return subprocess.CompletedProcess(args, package_rc if is_pkg else 0,
+                                               stdout='', stderr='')
+
+        fake_git = lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout='', stderr='')  # noqa: E731
+        with unittest.mock.patch.object(cyc, '_run', fake_run), \
+                unittest.mock.patch.object(cyc, 'gate_failures', lambda *a, **k: []), \
+                unittest.mock.patch.object(cyc.subprocess, 'run', fake_git), \
+                redirect_stdout(io.StringIO()):
+            code = cyc.cmd_prep(['demo-skill', 'demo-two'], out_dir)
+        return code, calls, out_dir
+
+    def test_packager_failure_leaves_no_baseline(self):
+        code, calls, _ = self._prep(package_rc=3)
+        self.assertEqual(code, 3)
+        self.assertFalse(any('reimport_correlate.py' in c[0] for c in calls), calls)
+
+    def test_baseline_follows_the_package_and_names_it(self):
+        code, calls, out_dir = self._prep(package_rc=0)
+        self.assertEqual(code, 0)
+        pkg_at = next(i for i, c in enumerate(calls) if 'package_skills.py' in c[0])
+        bases = [(i, c) for i, c in enumerate(calls) if 'reimport_correlate.py' in c[0]]
+        self.assertEqual(len(bases), 2)                          # one per skill
+        for (i, c), s in zip(bases, ['demo-skill', 'demo-two']):
+            self.assertGreater(i, pkg_at)
+            self.assertEqual(c[c.index('baseline') + 1], s)
+            self.assertEqual(c[c.index('--package') + 1], str(out_dir / f'{s}.skill'))
+
+
 class PostclickTestsNeverReachTheRealLedger(unittest.TestCase):
     """The base PostclickTests fixture must itself patch PENDING: its
     test_failed_append_returns_1_and_skips_ledger_clear passes clear_ledger=True, so a
