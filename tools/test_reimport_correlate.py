@@ -1107,5 +1107,52 @@ class PostclickVersionGuard(PostclickTests):
         self.assertTrue(self.calls.exists())
 
 
+class PostclickRepoDerivedVersion(PostclickVersionGuard):
+    """REFUTE round 1 (biggest finding): reimport_cycle.cmd_close runs `postclick
+    --no-append` WITHOUT --version, and no skill carries a frontmatter version, so the
+    guard was skipped on the standard path. With no --version the expected version now
+    comes from the repo checkout's SKILL.md (frontmatter version, else H1)."""
+
+    def _repo_skill(self, h1):
+        d = self.repo / 'demo-skill'
+        d.mkdir(parents=True, exist_ok=True)
+        (d / 'SKILL.md').write_text(f'---\nname: demo-skill\ndescription: d\n---\n\n{h1}\n', encoding='utf-8')
+
+    def test_no_version_flag_still_catches_a_mismatch(self):
+        self._confirmable_with(h1='# Demo (v4.29)')
+        self._repo_skill('# Demo (v4.28)')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)  # --no-append, as reimport_cycle
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+        self.assertFalse(self.calls.exists())
+
+    def test_no_version_flag_matching_repo_confirms(self):
+        self._confirmable_with(h1='# Demo (v4.29)')
+        self._repo_skill('# Demo (v4.29)')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, False)
+        self.assertEqual(code, 0, out)
+        self.assertIn('demo-skill v4.29 reimport confirmed', self.calls.read_text())
+
+    def test_explicit_version_still_wins_over_the_repo(self):
+        self._confirmable_with(h1='# Demo (v4.29)')
+        self._repo_skill('# Demo (v4.28)')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.29', False, False)
+        self.assertEqual(code, 0, out)
+
+    def test_repo_without_a_readable_version_stays_unchecked(self):
+        self._confirmable_with(h1='# Demo (v4.29)')
+        self._repo_skill('# Demo with no version token')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, False)
+        self.assertEqual(code, 0, out)
+
+    def test_non_utf8_repo_skill_md_does_not_crash(self):
+        self._confirmable_with(h1='# Demo (v4.29)')
+        d = self.repo / 'demo-skill'
+        d.mkdir(parents=True, exist_ok=True)
+        (d / 'SKILL.md').write_bytes(b'---\nname: demo-skill\n---\n\n# Demo (v4.29)\n\xff\xfe\n')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, False)
+        self.assertEqual(code, 0, out)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -622,24 +622,37 @@ def skill_source_files(skill: str, repo_root: Path = REPO) -> dict[str, Path]:
     return files
 
 
-def shared_dep_dirty_reason(repo: Path, rel: str) -> str | None:
+def shared_dep_dirty_reason(repo: Path, rel: str, data: bytes | None = None) -> str | None:
     """Why `rel` (a repo-root shared file) must not be bundled as-is, else None.
 
     A shared dep is copied from the working tree, so in a shared checkout it can carry
-    another session's uncommitted edit. Compares to HEAD, ignoring line endings.
-    Not a git work tree (or git unavailable) -> None: there is no HEAD to compare to."""
+    another session's uncommitted edit. Compares to HEAD, ignoring line endings; `data`
+    is the exact bytes about to ship (so check and bundle see one read).
+    Only a directory that is genuinely not a git work tree is exempt (there is no HEAD to
+    compare to). Any other git failure -- dubious ownership, git missing, a broken
+    object store -- REFUSES: an unverifiable file is not a clean one.
+    """
     try:
-        if subprocess.run(['git', '-C', str(repo), 'rev-parse', '--git-dir'],
-                          capture_output=True).returncode != 0:
-            return None
+        top = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--git-dir'],
+                             capture_output=True)
+        if top.returncode != 0:
+            err = top.stderr.decode('utf-8', 'replace')
+            if 'not a git repository' in err.lower():
+                return None
+            return f'cannot verify {rel} against HEAD (git said: {err.strip()[:200]})'
         show = subprocess.run(['git', '-C', str(repo), 'show', f'HEAD:{rel}'],
                               capture_output=True)
-    except OSError:
-        return None
+    except OSError as exc:
+        return f'cannot verify {rel} against HEAD (git unavailable: {exc})'
     if show.returncode != 0:
-        return f'{rel} is not committed at HEAD'
+        err = show.stderr.decode('utf-8', 'replace')
+        if any(m in err for m in ('exists on disk, but not in', 'does not exist in', "invalid object name 'HEAD'")):
+            return f'{rel} is not committed at HEAD'
+        return f'cannot verify {rel} against HEAD (git said: {err.strip()[:200]})'
+    if data is None:
+        data = (repo / rel).read_bytes()
     lf = lambda b: b.replace(b'\r\n', b'\n')
-    if lf((repo / rel).read_bytes()) != lf(show.stdout):
+    if lf(data) != lf(show.stdout):
         return f'{rel} in the working tree differs from HEAD'
     return None
 
@@ -649,16 +662,23 @@ def package(skill: str, outdir: Path, allow_dirty_shared: bool = False) -> Path:
     if not (src / 'SKILL.md').is_file():
         raise SystemExit(f'{skill}: no SKILL.md at {src}')
     validate_frontmatter(skill, src)
-    if not allow_dirty_shared:
-        for shared_name in SHARED_ROOT_DEPS.get(skill, []):
-            dep_src, _dest = _dep_pair(shared_name)
-            reason = shared_dep_dirty_reason(REPO, dep_src) if (REPO / dep_src).is_file() else None
-            if reason:
-                raise SystemExit(
-                    f'{skill}: REFUSING to package -- {reason}. The package would ship '
-                    f'uncommitted content. Package from a clean checkout of the commit you '
-                    f'mean to ship (a worktree at origin/main), or pass --allow-dirty-shared '
-                    f'if this is deliberate.')
+    # Read every shared dep ONCE, before any output exists: the bytes verified against
+    # HEAD are the bytes shipped, and a missing dep fails before a partial .skill is made.
+    shared: dict[str, bytes] = {}
+    for shared_name in SHARED_ROOT_DEPS.get(skill, []):
+        dep_src, dep_dest = _dep_pair(shared_name)
+        shared_path = REPO / dep_src
+        if not shared_path.is_file():
+            raise SystemExit(f'{skill}: declared shared dep {dep_src} not found at {shared_path}')
+        data = shared_path.read_bytes()
+        reason = None if allow_dirty_shared else shared_dep_dirty_reason(REPO, dep_src, data)
+        if reason:
+            raise SystemExit(
+                f'{skill}: REFUSING to package -- {reason}. The package would ship '
+                f'uncommitted or unverifiable content. Package from a clean checkout of the '
+                f'commit you mean to ship (a worktree at origin/main), or pass '
+                f'--allow-dirty-shared if this is deliberate.')
+        shared[dep_dest] = data
     dest = outdir / f'{skill}.skill'
     with zipfile.ZipFile(dest, 'w', zipfile.ZIP_DEFLATED) as z:
         for p in sorted(src.rglob('*')):
@@ -670,12 +690,8 @@ def package(skill: str, outdir: Path, allow_dirty_shared: bool = False) -> Path:
                 arc = f'{skill}/' + p.relative_to(src).as_posix()
                 assert '\\' not in arc, arc
                 z.write(p, arc)
-        for shared_name in SHARED_ROOT_DEPS.get(skill, []):
-            dep_src, dep_dest = _dep_pair(shared_name)
-            shared_path = REPO / dep_src
-            if not shared_path.is_file():
-                raise SystemExit(f'{skill}: declared shared dep {dep_src} not found at {shared_path}')
-            z.write(shared_path, f'{skill}/{dep_dest}')
+        for dep_dest, data in shared.items():
+            z.writestr(f'{skill}/{dep_dest}', data)
     with zipfile.ZipFile(dest) as z:
         bad = [n for n in z.namelist() if '\\' in n]
         if bad:
