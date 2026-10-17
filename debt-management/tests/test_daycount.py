@@ -34,6 +34,14 @@ class TestDays30360(unittest.TestCase):
         self.assertEqual(days_30_360(date(2025, 2, 28), date(2025, 3, 1), "bond_basis"), 3)
         self.assertEqual(days_30_360(date(2024, 2, 29), date(2024, 3, 31), "us_eom"), 30)  # leap year
 
+    def test_boundary_cases_pinning_rule_edges(self):
+        # D1=29 does not trigger the D2=31 -> 30 rule (only D1 of 30/31 does).
+        self.assertEqual(days_30_360(date(2025, 1, 29), date(2025, 3, 31), "bond_basis"), 62)
+        # Feb 28 in a leap year is NOT the last day of February: no Feb rule.
+        self.assertEqual(days_30_360(date(2024, 2, 28), date(2024, 3, 31), "us_eom"), 33)
+        # End on last day of Feb with a start that is not month-end: D2 stays 28.
+        self.assertEqual(days_30_360(date(2025, 1, 15), date(2025, 2, 28), "us_eom"), 43)
+
     def test_anniversaries_are_360_multiples(self):
         for v in VARIANTS:
             self.assertEqual(days_30_360(date(2024, 5, 10), date(2026, 5, 10), v), 720)
