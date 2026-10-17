@@ -1,5 +1,5 @@
 {
- "_comment": "Property configs. Provenance: entities AND entity_state from executed leases (2026-08-03) — entity_state is the LLC's formation state per the lease recital, NOT assumed from property location (2026-08-03 eval finding); SF from Portfolio Basis workbook; PM blocks from executed-lease practice. Unknown facts stay bracketed tokens — never invent. 'lease_structure' is optional; omit it for the ratified default (modified gross, calendar base year). Set to 'NNN' only on Gabriel's explicit, sourced direction that the property runs full triple-net — see MD-COL for the model (2026-08-04, confirmed against the executed LINERX/Eddie Woo Park lease and Muirkirk Properties' ~15-year NNN practice at the building).",
+ "_comment": "Property configs. Provenance: entities AND entity_state from executed leases (2026-08-03) — entity_state is the LLC's formation state per the lease recital, NOT assumed from property location (2026-08-03 eval finding); SF from Portfolio Basis workbook; PM blocks from executed-lease practice. Unknown facts stay bracketed tokens — never invent. 'lease_structure' is optional; omit it for the ratified default (modified gross, calendar base year). Set to 'NNN' only on Gabriel's explicit, sourced direction that the property runs full triple-net — see MD-COL for the model (2026-08-04, confirmed against the executed LINERX/Eddie Woo Park lease and Muirkirk Properties' ~15-year NNN practice at the building). 'v3_0' (2026-10-15) marks a property as on the v3.0 multi-tenant modified-gross short-form line and carries any v3-only facts (parcel_reference, project_rsf); rebase.py --all on a v3.0 master emits only properties with this key. NNN and single-tenant entries never get one.",
  "MD-EAS": {
   "state_code": "MD",
   "entity": "29000 INFORMATION LANE, LLC",
@@ -17,7 +17,11 @@
    "ATTN: Civita Peters"
   ],
   "_zip_note_2026-10-06": "ZIP added (Easton 21601 / Raytown 64133): USPS-consistent (adjacent addresses + executed ORA paper); county parcel cross-check pending.",
-  "_sdat_note_2026-10-06": "MD SDAT: two accounts at 29000 INFORMATION LN, Easton 21601 -- 01-088645 (Lot 5, 27,000 SF) + 01-088742 (Lot 4, 21,000 SF) = 48,000 SF; matches building_def. ZIP 21601 county-confirmed."
+  "_sdat_note_2026-10-06": "MD SDAT: two accounts at 29000 INFORMATION LN, Easton 21601 -- 01-088645 (Lot 5, 27,000 SF) + 01-088742 (Lot 4, 21,000 SF) = 48,000 SF; matches building_def. ZIP 21601 county-confirmed.",
+  "v3_0": {
+   "parcel_reference": "(Maryland SDAT Tax Account Nos. 01-088645 and 01-088742)",
+   "_note": "v3.0 MG line. Parcel reference = the two SDAT accounts in _sdat_note_2026-10-06, as built into the 2026-10-08 v3.0 template. Open (run memo): premises 'Technology Commons' vs payee 'Easton Technology Center' -- both from executed paper; confirm."
+  }
  },
  "MD-SBY": {
   "state_code": "MD",
@@ -28,13 +32,19 @@
   "building_def": "the building known as [BUILDING ADDRESS — 2203 Marvel Road, 2205 Northwood Drive or 2207 Northwood Drive], Salisbury, Maryland 21801, containing [BUILDING RSF] square feet of rentable area",
   "project_def": "the buildings known as 2203 Marvel Road and 2205 and 2207 Northwood Drive, Salisbury, Maryland 21801 (Wicomico County Tax Map 102, Parcels 110, 111 and 113), collectively containing 53,700 square feet of rentable area, together with the land on which they are situated and all parking areas, drives, walkways and other common areas serving them",
   "share_denominator": "bears to the total rentable square footage of the Project, being 53,700 square feet ",
-  "payment_direction": "to 2203 Northwood, LLC through the tenant online portal, payable to Landlord,",
+  "payment_direction": "to SVN Miller Commercial Real Estate, 206 East Main Street, Salisbury, MD 21801, or through its tenant online portal, payable to Landlord,",
   "pm_block": [
-   "COPY TO:Sperry Van Ness — Miller Commercial",
-   "[MANAGER STREET ADDRESS]",
+   "COPY TO:SVN Miller Commercial Real Estate",
+   "206 East Main Street",
    "Salisbury, MD 21801",
    "ATTN: Brady Smith"
   ],
+  "_payee_note_2026-10-15": "Payee/PM fixed per Gabriel's 2026-10-08 direction (rent paid to the property manager, not Landlord): SVN Miller Commercial Real Estate, 206 East Main Street, Salisbury, MD 21801, sourced from SVN staff email signatures (M. Messick 10/2/26, T. Spicer-Davis 10/6/26) -- 2026-10-08 v3.0 run memo. Prior values: payment_direction 'to 2203 Northwood, LLC through the tenant online portal, payable to Landlord,'; pm_block[0] 'COPY TO:Sperry Van Ness — Miller Commercial', pm_block[1] '[MANAGER STREET ADDRESS]'. ATTN Brady Smith unchanged (matches the stored v3.0 template).",
+  "v3_0": {
+   "parcel_reference": "(Maryland SDAT Tax Account Nos. 09-053646, 09-053654 and 09-053662)",
+   "project_rsf": "53,700",
+   "_note": "v3.0 MG line. Parcel reference = the three SDAT accounts in _sdat_note_2026-10-06. project_rsf makes the share, gross-up and water allocation Project-based (3 buildings) -- as built into the 2026-10-08 v3.0 template."
+  },
   "_sdat_note_2026-10-06": "MD SDAT / MdProperty View (2026 extract): acct 09-053646 = 2203 MARVEL RD (Map 102 P110, Lot 23A, 18,000 SF); 09-053654 = 2205 NORTHWOOD DR (P111, Lot 26A, 18,000 SF); 09-053662 = 2207 NORTHWOOD DR (P113, Lot 25A, 18,000 SF); all c/o Eric Goldberg, 9510 Persimmon Tree Rd; deed 2024-10-31, $4.4M. 2203 is on Marvel Road, not Northwood Drive. SDAT SQFTSTRC totals 54,000 vs 53,700 RSF denominator here -- denominator NOT changed (financial assumption; Gabriel to confirm)."
  },
  "MO-RAY": {
@@ -53,7 +63,10 @@
    "[MANAGER CITY, STATE ZIP]",
    "ATTN: [MANAGER CONTACT]"
   ],
-  "_zip_note_2026-10-06": "ZIP added (Easton 21601 / Raytown 64133): USPS-consistent (adjacent addresses + executed ORA paper); county parcel cross-check pending."
+  "_zip_note_2026-10-06": "ZIP added (Easton 21601 / Raytown 64133): USPS-consistent (adjacent addresses + executed ORA paper); county parcel cross-check pending.",
+  "v3_0": {
+   "_note": "v3.0 MG line. No v3-specific facts: parcel reference comes from the MO overlay ('(Jackson County Parcel No. [PARCEL NO])'); Jackson County parcel number and the PM block stay tokens until sourced (run memo open item)."
+  }
  },
  "MD-COL": {
   "state_code": "MD",
@@ -99,6 +112,9 @@
    "Columbus, OH 43215",
    "ATTN: Paul Trautman"
   ],
-  "_provenance_note": "2026-10-06. Entity + MD formation: Shefler v04 recital (Fairground Village Center, LLC, a Maryland LLC) and Notion Property Register legal name. Building 384-420 Morrison Rd, 31,200 RSF, ZIP 43213, parcel 010-208204: Franklin County Auditor record (ZIPCD 43213, BLDGAREA 31,200) per lease-form-qc skill + recorded Symetra mortgage legal description (PIN 010-208204-00). PM/payment: Kohr Royer Griffith per Shefler v04. Home-state (OH) property: no state overlay; master's Ohio text retained."
+  "_provenance_note": "2026-10-06. Entity + MD formation: Shefler v04 recital (Fairground Village Center, LLC, a Maryland LLC) and Notion Property Register legal name. Building 384-420 Morrison Rd, 31,200 RSF, ZIP 43213, parcel 010-208204: Franklin County Auditor record (ZIPCD 43213, BLDGAREA 31,200) per lease-form-qc skill + recorded Symetra mortgage legal description (PIN 010-208204-00). PM/payment: Kohr Royer Griffith per Shefler v04. Home-state (OH) property: no state overlay; master's Ohio text retained.",
+  "v3_0": {
+   "_note": "v3.0 MG line (home state). Parcel reference derived from 'parcel' (Franklin County Auditor Parcel No. 010-208204); Ohio-only signature note retained."
+  }
  }
 }

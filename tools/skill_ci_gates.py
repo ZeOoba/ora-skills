@@ -66,7 +66,7 @@ GATED_SKILL_SUITES = [
     'dirty-tree-triage/tests/test_*.py',
     'rent-roll-reconciliation/tests/test_*.py',
     'website-perfection/tests/test_*.py',
-    'masterlease-jurisdiction-rebase/scripts/test_rebase.py',
+    'masterlease-jurisdiction-rebase/scripts/test_*.py',
     'acquisition-underwriting-eval-harness/lib/test_aggregate_replays.py',
     'acquisition-underwriting-eval-harness/lib/test_diff_verdict.py',
     'acquisition-underwriting-eval-harness/lib/test_doctrine_skip_gate.py',
