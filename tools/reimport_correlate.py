@@ -358,7 +358,10 @@ def _package_version(pkg: Path, skill: str) -> str | None:
         return _skill_md_version(z.read(f'{skill}/SKILL.md').decode('utf8', errors='replace'))
 
 
-def _record_expected_version(skill: str, version: str | None) -> None:
+_DROP = object()
+
+
+def _record_expected_version(skill: str, version) -> None:
     """Merge `expected_version` into this session's existing baseline (precheck keeps or
     recaptures one, and must not leave it without the package it just inspected)."""
     path = _baseline_path(skill)
@@ -367,8 +370,11 @@ def _record_expected_version(skill: str, version: str | None) -> None:
         return
     try:
         data = json.loads(text)
-        data['expected_version'] = version
-    except (TypeError, ValueError):
+        if version is _DROP:
+            data.pop('expected_version', None)
+        else:
+            data['expected_version'] = version
+    except (TypeError, ValueError, AttributeError):
         return
     # A consume may have claimed the baseline since the read: writing now would bring a
     # pre-install baseline back from the dead and CONFIRM the same install twice.
@@ -657,7 +663,9 @@ def cmd_precheck(pkgs: list[str]) -> int:
                 cmd_baseline([skill])
             base_note = 'baseline CAPTURED'
         if f'{skill}/SKILL.md' in names:
-            _record_expected_version(skill, pkg_version)
+            # Only a package that PASSED precheck is the one about to be installed; a stale
+            # one's version would otherwise outlive the repo bump that made it stale.
+            _record_expected_version(skill, _DROP if fails else pkg_version)
         if fails:
             rc = 1
             print(f'{skill}: PRECHECK FAIL -- ' + '; '.join(fails))
@@ -679,6 +687,12 @@ def _repo_version(skill: str) -> str | None:
         return None
     v = re.search(r'^version:\s*["\']?v?([\w.\-]+)["\']?\s*$', m.group(1), re.M)
     return v.group(1) if v else None
+
+
+def _bad_version(v) -> bool:
+    """True for a --version value that cannot name a version: blank, flag-like, or only
+    'v' prefixes (which normalize to '' and would silently skip the version check)."""
+    return not isinstance(v, str) or v.strip().startswith('-') or not _norm_ver(v)
 
 
 def _norm_ver(v: str) -> str:
@@ -735,6 +749,12 @@ def _log_report(tail: int) -> None:
 
 def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger: bool,
                   baseline_override: str | None = None) -> int:
+    if version is not None and _bad_version(version):
+        print(f'--version needs a version value (e.g. 4.32), got {version!r}')
+        return 2
+    if baseline_override is not None and not baseline_override.strip():
+        print('--baseline needs a time ("YYYY-MM-DD HH:MM:SS"), got a blank value')
+        return 2
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         cmd_verify([skill], baseline_override)
@@ -758,7 +778,9 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
             version = _repo_expected_version(skill)
     cache_ver = _cache_version(skill) if confirmed else None
     want = _norm_ver(version) if version else None
-    mismatch = bool(confirmed and cache_ver and (want or pkg_unversioned) and want != cache_ver)
+    malformed = bool(want and want.startswith('<malformed'))   # never confirms, versioned cache or not
+    mismatch = bool(confirmed and (malformed or (cache_ver and (want or pkg_unversioned)
+                                                   and want != cache_ver)))
     # A timing match proves SOME install happened, not WHICH version (2026-10-17: v4.28
     # was logged as CONFIRMED while the cache held v4.29). Never print CONFIRMED for it.
     if mismatch or unknown:
@@ -778,8 +800,9 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
         return 1
     if mismatch:
         expected = f'v{want}' if want else 'version (the package declares none)'
+        cache_txt = f'v{cache_ver}' if cache_ver else 'no readable version'
         print(f'STOP: VERSION-MISMATCH -- the install moved, but the cache SKILL.md reads '
-              f'v{cache_ver}, not the expected {expected}. Nothing appended, ledger and baseline '
+              f'{cache_txt}, not the expected {expected}. Nothing appended, ledger and baseline '
               f'untouched. Find what was actually saved (a newer draft or a different package) '
               f'before logging or clearing anything.')
         return 1
@@ -845,8 +868,11 @@ def main() -> int:
     baseline_override, rest = _pop(rest, '--baseline', True)
     version, rest = _pop(rest, '--version', True)
     package, rest = _pop(rest, '--package', True)
-    if version is not None and (not version.strip() or version.startswith('-')):
-        print('--version needs a version value (e.g. 4.32), not a flag or blank', file=sys.stdout)
+    if version is not None and _bad_version(version):
+        print(f'--version needs a version value (e.g. 4.32), got {version!r}')
+        return 2
+    if baseline_override is not None and not baseline_override.strip():
+        print('--baseline needs a time ("YYYY-MM-DD HH:MM:SS"), got a blank value')
         return 2
     no_append, rest = _pop(rest, '--no-append', False)
     clear_ledger, rest = _pop(rest, '--clear-ledger', False)

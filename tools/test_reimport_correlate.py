@@ -1013,6 +1013,18 @@ class CycleCloseUsesTheBaselineUp(unittest.TestCase):
         self.assertEqual(code, 2)
         run.assert_not_called()
 
+    def test_c4_a_blank_version_is_passed_through_so_postclick_refuses_it(self):
+        code, calls = self._close(0, version='')
+
+        postclick = next(c for c in calls if 'postclick' in c)
+        self.assertEqual(postclick[postclick.index('--version') + 1], '')
+
+    def test_c5_a_blank_baseline_is_passed_through_so_postclick_refuses_it(self):
+        code, calls = self._close(0, baseline='')
+
+        postclick = next(c for c in calls if 'postclick' in c)
+        self.assertEqual(postclick[postclick.index('--baseline') + 1], '')
+
     def test_consumes_after_a_successful_append(self):
         code, calls = self._close(0)
 
@@ -1539,6 +1551,99 @@ class VersionFlagValueIsValidated(PostclickTests):
         self._confirmable()
         code, out = self._main('postclick', 'demo-skill', '--version', 'v4.23', '--no-append')
         self.assertEqual(code, 0, out)
+
+
+class ReviewRoundThreeFindings(PostclickPackageVersion):
+    """REFUTE round 3 (C1-C5), each a path to a false CONFIRMED or a wrong ledger clear."""
+
+    def _confirmable_install(self, ver):
+        self._cache_md(ver)
+        ts = rc._creation_time('demo-skill').strftime('%Y-%m-%d %H:%M:%S')
+        _write(self.local_log,
+               f'{ts} [info] [SkillsPlugin] Delta: 1 to download\n'
+               f'{ts} [info] [SkillsPlugin] Sync complete: 1 downloaded, 0 failed\n')
+
+    def _main(self, *argv):
+        with unittest.mock.patch.object(sys, 'argv', ['rc', *argv]):
+            return self._run(rc.main)
+
+    # C1 ------------------------------------------------------------------
+    def test_c1_precheck_failure_does_not_record_the_stale_packages_version(self):
+        self._repo_md('4.33')                           # repo moved on; the 4.32 package is stale
+        self._cache_md('0.0')
+        pkg = self._pkg('version: 4.32\n')
+        with unittest.mock.patch.object(rc, '_plugin_of', lambda s: None):
+            code, out = self._run(rc.cmd_precheck, [str(pkg)])
+        self.assertEqual(code, 1, out)
+        self.assertIn('PRECHECK FAIL', out)
+        self.assertNotIn('expected_version', self._baseline_json())
+
+    def test_c1_precheck_failure_drops_a_version_an_earlier_run_recorded(self):
+        self._repo_md('4.33')
+        self._cache_md('0.0')
+        self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.32\n')))
+        self.assertEqual(self._baseline_json()['expected_version'], '4.32')
+        with unittest.mock.patch.object(rc, '_plugin_of', lambda s: None):
+            self._run(rc.cmd_precheck, [str(self._pkg('version: 4.32\n'))])
+        self.assertNotIn('expected_version', self._baseline_json())
+
+    def test_c1_stale_install_after_a_failed_precheck_is_a_mismatch(self):
+        self._repo_md('4.33')
+        self._cache_md('0.0')
+        with unittest.mock.patch.object(rc, '_plugin_of', lambda s: None):
+            self._run(rc.cmd_precheck, [str(self._pkg('version: 4.32\n'))])
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({**self._baseline_json(), 'creation_time': '2020-01-01T00:00:00'}))
+        self._confirmable_install('4.32')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+        self.assertFalse(self.calls.exists())
+        self.assertFalse(self.pending_calls.exists())
+
+    # C2 ------------------------------------------------------------------
+    def test_c2_versions_that_normalize_to_empty_are_refused_by_main(self):
+        self._confirmable_install('4.31')
+        for bad in ('v', 'V', 'vv', 'vV', ' v '):
+            with self.subTest(bad=bad):
+                code, out = self._main('postclick', 'demo-skill', '--version', bad, '--clear-ledger')
+                self.assertEqual(code, 2, out)
+                self.assertFalse(self.calls.exists())
+                self.assertFalse(self.pending_calls.exists())
+
+    def test_c2_cmd_postclick_refuses_them_too(self):
+        # A direct caller (reimport_cycle passes the value through) is covered, not just main().
+        self._confirmable_install('4.31')
+        for bad in ('v', 'V', 'vv', '', '   ', '--no-append'):
+            with self.subTest(bad=bad):
+                code, out = self._run(rc.cmd_postclick, 'demo-skill', bad, False, True)
+                self.assertEqual(code, 2, out)
+                self.assertFalse(self.calls.exists())
+                self.assertFalse(self.pending_calls.exists())
+
+    # C3 ------------------------------------------------------------------
+    def test_c3_malformed_expected_version_stops_even_with_an_unversioned_cache(self):
+        self._arm(packaged='4.32', installed='4.31', checkout='4.31')
+        _write(self.cache / 'demo-skill' / 'SKILL.md',
+               '---\nname: demo-skill\ndescription: d\n---\n\n# Demo, no version\n')
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({**self._baseline_json(), 'expected_version': 4.32}))
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+        self.assertFalse(self.calls.exists())
+        self.assertFalse(self.pending_calls.exists())
+
+    # C5 ------------------------------------------------------------------
+    def test_c5_blank_baseline_is_refused_by_main_and_cmd_postclick(self):
+        self._confirmable_install('4.31')
+        for bad in ('', '   '):
+            with self.subTest(bad=bad):
+                code, out = self._main('postclick', 'demo-skill', '--baseline', bad, '--version', '4.31')
+                self.assertEqual(code, 2, out)
+                code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.31', True, False, bad)
+                self.assertEqual(code, 2, out)
+        self.assertFalse(self.calls.exists())
 
 
 class CyclePrepPackagesBeforeBaseline(unittest.TestCase):

@@ -128,14 +128,14 @@ def cmd_prep(skills: list[str], out: Path) -> int:
 
 def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool,
               baseline: str | None = None, version: str | None = None) -> int:
-    if version and len(skills) != 1:
+    if version is not None and len(skills) != 1:
         print("close: --version names ONE skill's packaged version -- close skills one at a time.")
         return 2
     failed = []
     for s in skills:
         print(f"== postclick {s}")
-        extra = ["--baseline", baseline] if baseline else []
-        if version:
+        extra = ["--baseline", baseline] if baseline is not None else []
+        if version is not None:
             extra += ["--version", version]
         if _run([str(TOOLS / "reimport_correlate.py"), "postclick", s,
                  "--no-append", *extra]).returncode:
