@@ -71,6 +71,7 @@ GATED_SKILL_SUITES = [
     'acquisition-underwriting-eval-harness/lib/test_diff_verdict.py',
     'acquisition-underwriting-eval-harness/lib/test_doctrine_skip_gate.py',
     'acquisition-underwriting-eval-harness/lib/test_record_run.py',
+    'debt-management/tests/test_*.py',
 ]
 
 # path-glob -> reason. Excluded suites are follow-ups, not permanent exemptions: fix the
