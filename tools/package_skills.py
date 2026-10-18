@@ -70,11 +70,16 @@ DELIBERATELY_UNPUBLISHED: frozenset[str] = frozenset({
 # Skills that exist only on the Claude Code surface (git / gh / worktree work, subagent
 # orchestration, local ~/.claude files). They are installed under ~/.claude/skills and are
 # NOT meant for the Cowork runtime cache, so "no cache dir" is expected for them, not a gap.
-# REPORTING ONLY: repo_first_check labels such a skill CODE-ONLY instead of NOT-INSTALLED.
-# This is deliberately NOT DELIBERATELY_UNPUBLISHED: that set means "retired by Gabriel's
-# ruling" and suppresses reimport candidates; this one suppresses nothing, and the label
-# applies only while there is no cache dir -- a Code-only skill that does get installed in
-# the cache is classified normally, so its drift still shows.
+# Two consumers, both conditional on there being NO Cowork cache dir for the skill:
+#   * repo_first_check labels it CODE-ONLY instead of NOT-INSTALLED;
+#   * pending_reimport does not record a ledger line for it at commit time (a Save-skill
+#     click could never satisfy it), and `clear` needs no install log for it (nothing was
+#     installed, so there is no install to log).
+# If a listed skill ever does get a cache dir, every one of those rules switches off and it
+# is classified, recorded and guarded like any other skill. This is deliberately NOT
+# DELIBERATELY_UNPUBLISHED: that set means "retired by Gabriel's ruling" and also hides the
+# skill from reimport candidates. Adding a name here is a decision, not a tidy-up: do not add
+# entries speculatively.
 CODE_ONLY_SKILLS: frozenset[str] = frozenset({
     'adversarial-merge-gate',
     'branch-catchup',
