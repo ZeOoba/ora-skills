@@ -838,7 +838,15 @@ class CodeOnlySkills(FixtureTestCase):
         self.assertEqual(code, 0)
         self.assertRegex(text, r'codey\s+CODE-ONLY')
         self.assertRegex(text, r'plain\s+NOT-INSTALLED')
-        self.assertFalse(ledger.exists() and 'codey' in ledger.read_text(encoding='utf-8'))
+        # REFUTE round 1 (low): the old ledger-text assertion could not fail, because
+        # NOT-INSTALLED was never ledgered either. Bind it to the real mechanism instead:
+        # CODE-ONLY must never be a finding (those are what get ledgered and rescued).
+        findings = rfc._sweep_findings(repo_root=self.repo, cache_root=self.cache)
+        self.assertNotIn('codey', {f[0] for f in findings})
+        # ...and that same sweep DOES find a listed skill once its cached copy has drifted.
+        _write(self.cache / 'codey' / 'SKILL.md', 'name: codey-EDITED-IN-COWORK\n')
+        findings = rfc._sweep_findings(repo_root=self.repo, cache_root=self.cache)
+        self.assertIn('codey', {f[0] for f in findings})
 
 
 if __name__ == '__main__':
