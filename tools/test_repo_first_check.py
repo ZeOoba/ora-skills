@@ -790,5 +790,64 @@ class StagingResolvesToPrimaryCheckout(FixtureTestCase):
         self.assertIn('not the primary checkout', out.getvalue())
 
 
+class CodeOnlySkills(FixtureTestCase):
+    """Code-surface-only skills (git/gh/worktree work, local ~/.claude) are installed under
+    ~/.claude/skills and are never meant for the Cowork runtime cache. With no cache dir they
+    must read CODE-ONLY (expected), not NOT-INSTALLED (looks like a gap) -- but ONLY while
+    there is no cache dir: once a copy IS in the cache its drift is real and must show."""
+
+    def setUp(self):
+        super().setUp()
+        _commit(self.repo, 'codey/SKILL.md', 'name: codey\n', 'init codey')
+        _commit(self.repo, 'plain/SKILL.md', 'name: plain\n', 'init plain')
+        p = mock.patch.object(rfc, 'CODE_ONLY_SKILLS', frozenset({'codey'}))
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_listed_skill_without_a_cache_dir_is_code_only(self):
+        verdict, per_file = rfc.classify_skill('codey', self.repo, self.cache)
+        self.assertEqual(verdict, 'CODE-ONLY')
+        self.assertEqual(per_file, [])
+
+    def test_unlisted_skill_without_a_cache_dir_is_still_not_installed(self):
+        verdict, _ = rfc.classify_skill('plain', self.repo, self.cache)
+        self.assertEqual(verdict, 'NOT-INSTALLED')
+
+    def test_code_only_skill_that_IS_cached_is_classified_normally_in_sync(self):
+        _write(self.cache / 'codey' / 'SKILL.md', 'name: codey\n')
+        verdict, _ = rfc.classify_skill('codey', self.repo, self.cache)
+        self.assertEqual(verdict, 'IN-SYNC')
+
+    def test_code_only_skill_that_IS_cached_still_reports_real_drift(self):
+        _write(self.cache / 'codey' / 'SKILL.md', 'name: codey-EDITED-IN-COWORK\n')
+        verdict, _ = rfc.classify_skill('codey', self.repo, self.cache)
+        self.assertEqual(verdict, 'CACHE-AHEAD')
+
+    def test_code_only_is_not_a_bad_verdict(self):
+        self.assertNotIn('CODE-ONLY', rfc.BAD_VERDICTS)
+
+    def test_full_sweep_prints_code_only_and_never_ledgers_it(self):
+        import contextlib
+        import io
+        ledger = self.tmp / 'STORE_AHEAD_OF_REPO.md'
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = rfc.run(False, repo_root=self.repo, cache_root=self.cache,
+                           ledger_path=ledger, rescue_dir=self.tmp / 'rescue')
+        text = out.getvalue()
+        self.assertEqual(code, 0)
+        self.assertRegex(text, r'codey\s+CODE-ONLY')
+        self.assertRegex(text, r'plain\s+NOT-INSTALLED')
+        # REFUTE round 1 (low): the old ledger-text assertion could not fail, because
+        # NOT-INSTALLED was never ledgered either. Bind it to the real mechanism instead:
+        # CODE-ONLY must never be a finding (those are what get ledgered and rescued).
+        findings = rfc._sweep_findings(repo_root=self.repo, cache_root=self.cache)
+        self.assertNotIn('codey', {f[0] for f in findings})
+        # ...and that same sweep DOES find a listed skill once its cached copy has drifted.
+        _write(self.cache / 'codey' / 'SKILL.md', 'name: codey-EDITED-IN-COWORK\n')
+        findings = rfc._sweep_findings(repo_root=self.repo, cache_root=self.cache)
+        self.assertIn('codey', {f[0] for f in findings})
+
+
 if __name__ == '__main__':
     unittest.main()
