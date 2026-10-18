@@ -422,7 +422,7 @@ def _override_expected_version(skill: str, override: datetime):
             data = json.loads(text) if ok else None
         except (OSError, ValueError):
             continue
-        if ok and recorded is not None and abs((recorded - override).total_seconds()) < 1:
+        if ok and recorded is not None and recorded.replace(microsecond=0) == override:
             found.append(_expected_from(data))
     if not found:
         return None, f'no baseline records a CreationTime of {override:%Y-%m-%d %H:%M:%S}'
@@ -602,8 +602,16 @@ def cmd_precheck(pkgs: list[str]) -> int:
             print(f'{skill}: FAIL -- package not found at {p}. MISSING, not stale: the handoff '
                   f'premise is false; route to Entry point A (first build) and say so.')
             rc = 1
+            _record_expected_version(skill, _DROP)   # a failed precheck leaves no stale version
             continue
-        with zipfile.ZipFile(p) as z:
+        try:
+            zf = zipfile.ZipFile(p)
+        except (OSError, zipfile.BadZipFile) as exc:
+            print(f'{skill}: PRECHECK FAIL -- cannot open the package ({type(exc).__name__}: {exc})')
+            rc = 1
+            _record_expected_version(skill, _DROP)
+            continue
+        with zf as z:
             infos = z.infolist()
             names = [i.filename for i in infos]
             if any('\\' in n for n in _raw_entry_names(p)):
@@ -662,10 +670,9 @@ def cmd_precheck(pkgs: list[str]) -> int:
             with contextlib.redirect_stdout(io.StringIO()):
                 cmd_baseline([skill])
             base_note = 'baseline CAPTURED'
-        if f'{skill}/SKILL.md' in names:
-            # Only a package that PASSED precheck is the one about to be installed; a stale
-            # one's version would otherwise outlive the repo bump that made it stale.
-            _record_expected_version(skill, _DROP if fails else pkg_version)
+        # Only a package that PASSED precheck is the one about to be installed; a stale
+        # one's version would otherwise outlive the repo bump that made it stale.
+        _record_expected_version(skill, _DROP if fails else pkg_version)
         if fails:
             rc = 1
             print(f'{skill}: PRECHECK FAIL -- ' + '; '.join(fails))
@@ -876,6 +883,13 @@ def main() -> int:
         return 2
     no_append, rest = _pop(rest, '--no-append', False)
     clear_ledger, rest = _pop(rest, '--clear-ledger', False)
+    stray = [t for t in rest if t.startswith('-')]
+    if stray:
+        # `--version=4.29` and typos would otherwise be taken as skill names and the flag's
+        # check silently skipped.
+        print(f'unrecognised option(s) {stray} -- flags take a SEPARATE value '
+              f'(--version 4.29), not --flag=value')
+        return 2
     if not rest:
         print('no skill name(s) given', file=sys.stderr)
         return 2
