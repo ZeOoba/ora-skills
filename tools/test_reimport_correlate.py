@@ -449,7 +449,9 @@ class _SessionFixture(FixtureTestCase):
             'import sys\n'
             f'open({str(self.calls)!r}, "a").write(open(sys.argv[2]).read())\n'
             'sys.exit(int(__import__("os").environ.get("FAKE_APPEND_RC", "0")))\n')
+        self.fake_pending = self.tmp / 'fake_pending.py'      # never the real ledger script
         for p in (unittest.mock.patch.object(rc, 'REPO', self.repo),
+                  unittest.mock.patch.object(rc, 'PENDING', self.fake_pending),
                   unittest.mock.patch.object(rc, 'APPEND_LOG', self.fake_append)):
             p.start()
             self.addCleanup(p.stop)
@@ -1034,7 +1036,7 @@ class CycleCloseUsesTheBaselineUp(unittest.TestCase):
 
         out = io.StringIO()
         with unittest.mock.patch.object(cyc, '_run', fake_run), \
-                unittest.mock.patch.object(cyc._rcor, '_repo_expected_version', lambda s: repo_version), \
+                unittest.mock.patch.object(cyc._rcor, '_version_at', lambda root, s: repo_version), \
                 unittest.mock.patch.object(cyc._rcor, '_cache_version', lambda s: cache_version), \
                 unittest.mock.patch.object(cyc, 'REPO', Path(tempfile.mkdtemp(
                     prefix='reimport_correlate_test_'))) as repo, redirect_stdout(out):
@@ -1060,6 +1062,15 @@ class CycleCloseUsesTheBaselineUp(unittest.TestCase):
         code, calls, out = self._close_clearing(None, '4.29')
 
         self.assertTrue(any('clear' in c for c in calls), calls)
+
+    def test_c3_close_keeps_the_entry_when_the_installed_version_is_unknown(self):
+        # postclick can name the expected version; close cannot, so unknown + versioned repo
+        # must keep the entry (the safe side) rather than clear it.
+        code, calls, out = self._close_clearing('4.30', None)
+
+        self.assertEqual(code, 0, out)
+        self.assertFalse(any('clear' in c for c in calls), calls)
+        self.assertIn('ledger NOT cleared', out)
 
     def test_consumes_after_a_successful_append(self):
         code, calls = self._close(0)
@@ -1777,6 +1788,77 @@ class LedgerClearGuard(PostclickPackageVersion):
         self.assertIn('v4.30', rc.ledger_clear_blocker('demo-skill', '4.29'))
         self.assertIsNone(rc.ledger_clear_blocker('demo-skill', 'v4.30'))
         self.assertIsNone(rc.ledger_clear_blocker('no-such-skill', '4.29'))
+
+
+class LedgerGuardRoundFive(PostclickPackageVersion):
+    """REFUTE round 5: the guard must look where the LEDGER lives (the primary checkout), and
+    an installed version that is unknown must not read as 'nothing to compare'."""
+
+    def _primary(self, version):
+        primary = self.tmp / 'primary'
+        _write(primary / 'demo-skill' / 'SKILL.md',
+               f'---\nname: demo-skill\ndescription: d\n---\n\n# Demo (v{version})\n')
+        p = unittest.mock.patch.object(rc, '_primary_checkout', lambda r: primary)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_c1_blocks_when_the_primary_is_ahead_of_the_running_checkout(self):
+        self._repo_md('4.28')            # the worktree running close
+        self._primary('4.30')            # where the ledger entry for v4.30 was written
+        self.assertIn('repo is v4.30', rc.ledger_clear_blocker('demo-skill', '4.28'))
+
+    def test_c1_blocks_when_the_running_checkout_is_ahead_of_the_primary(self):
+        self._repo_md('4.30')
+        self._primary('4.28')
+        self.assertIn('repo is v4.30', rc.ledger_clear_blocker('demo-skill', '4.28'))
+
+    def test_c1_clears_when_both_checkouts_agree_with_the_install(self):
+        self._repo_md('4.28')
+        self._primary('4.28')
+        self.assertIsNone(rc.ledger_clear_blocker('demo-skill', '4.28'))
+
+    def test_c1_postclick_keeps_the_entry_when_only_the_primary_moved_on(self):
+        self._arm(packaged='4.28', installed='4.28', checkout='4.28')
+        self._primary('4.30')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 0, out)
+        self.assertIn('demo-skill v4.28 reimport confirmed', self.calls.read_text())
+        self.assertIn('ledger NOT cleared: repo is v4.30', out)
+        self.assertFalse(self.pending_calls.exists())
+
+    def test_c2_unknown_installed_version_blocks_when_the_repo_is_versioned(self):
+        self._repo_md('4.30')
+        self.assertIn('repo is v4.30', rc.ledger_clear_blocker('demo-skill', None))
+
+    def test_c2_unknown_installed_and_unversioned_repo_still_clears(self):
+        _write(self.repo / 'demo-skill' / 'SKILL.md',
+               '---\nname: demo-skill\ndescription: d\n---\n\n# Demo, no version\n')
+        self.assertIsNone(rc.ledger_clear_blocker('demo-skill', None))
+
+    def test_c2_unversioned_package_and_cache_keep_the_entry_after_a_repo_bump(self):
+        self._arm(packaged='4.29', installed='4.29', checkout='4.30')
+        _write(self.cache / 'demo-skill' / 'SKILL.md',
+               '---\nname: demo-skill\ndescription: d\n---\n\n# Demo, no version\n')
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({**self._baseline_json(), 'expected_version': None}))
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 0, out)
+        self.assertIn('ledger NOT cleared', out)
+        self.assertFalse(self.pending_calls.exists())
+
+
+class SessionFixtureNeverReachesTheRealLedger(unittest.TestCase):
+    """REFUTE round 5 (latent): _SessionFixture must itself patch PENDING."""
+
+    def test_session_fixture_patches_pending(self):
+        t = PostclickRoundTwoGateFindings('test_postclick_honours_baseline_across_sessions')
+        t.setUp()
+        try:
+            self.assertNotEqual(Path(rc.PENDING).resolve(),
+                                Path(rc.__file__).resolve().parent / 'pending_reimport.py')
+        finally:
+            t.doCleanups()
+            t.tearDown()
 
 
 class CyclePrepPackagesBeforeBaseline(unittest.TestCase):
