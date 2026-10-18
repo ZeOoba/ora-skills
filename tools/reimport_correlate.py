@@ -340,13 +340,14 @@ def cmd_baseline(skills: list[str], package: str | None = None) -> int:
     for skill in skills:
         ct = _creation_time(skill)
         path = _baseline_path(skill)
+        kept = extra or _kept_expected_version(path, ct)
         if ct is None:
-            _atomic_write_text(path, json.dumps({'skill': skill, 'creation_time': None, **extra},
+            _atomic_write_text(path, json.dumps({'skill': skill, 'creation_time': None, **kept},
                                                 indent=2))
             print(f'{skill}: baseline ABSENT (no cache dir yet -- first install) -> {path}')
             continue
         _atomic_write_text(path, json.dumps({'skill': skill, 'creation_time': ct.isoformat(),
-                                             **extra}, indent=2))
+                                             **kept}, indent=2))
         print(f'{skill}: baseline {ct.isoformat()} -> {path}')
     return 0
 
@@ -377,14 +378,9 @@ def _record_expected_version(skill: str, version: str | None) -> None:
     _atomic_write_text(path, json.dumps(data, indent=2))
 
 
-def _baseline_expected_version(skill: str):
-    """(recorded, version): `recorded` is True when this session's baseline carries an
+def _expected_from(data):
+    """(recorded, version) from a parsed baseline: `recorded` is True when it carries an
     `expected_version` key at all -- even null, meaning the package declared none."""
-    text = _read_baseline(_baseline_path(skill))
-    try:
-        data = json.loads(text) if text is not None else None
-    except (TypeError, ValueError):
-        return False, None
     if not isinstance(data, dict) or 'expected_version' not in data:
         return False, None
     v = data['expected_version']
@@ -397,6 +393,56 @@ def _baseline_expected_version(skill: str):
     return True, _norm_ver(v)
 
 
+def _baseline_expected_version(skill: str):
+    """(recorded, version) from THIS session's baseline."""
+    text = _read_baseline(_baseline_path(skill))
+    try:
+        return _expected_from(json.loads(text) if text is not None else None)
+    except (TypeError, ValueError):
+        return False, None
+
+
+def _kept_expected_version(path: Path, ct) -> dict:
+    """A plain `baseline` re-run must not drop the version a --package/precheck recorded,
+    or the repo fallback comes back. Kept only while the CreationTime is unchanged: an
+    install since then makes the recorded package stale."""
+    text = _read_baseline(path)
+    try:
+        data = json.loads(text) if text is not None else None
+    except (TypeError, ValueError):
+        return {}
+    recorded, ok = _recorded(text) if text is not None else (None, False)
+    if not ok or not isinstance(data, dict) or 'expected_version' not in data:
+        return {}
+    if (ct is None) != (recorded is None) or (ct is not None and _predates(recorded, ct)):
+        return {}
+    return {'expected_version': data['expected_version']}
+
+
+def _override_expected_version(skill: str, override: datetime):
+    """Expected version for `postclick --baseline TIME`: read from the baseline(s), of ANY
+    session, whose recorded CreationTime IS `override` (to the second). Returns
+    (version_or_None, unknown_reason): `unknown_reason` is set -- and the caller must STOP
+    -- when no baseline matches, a match recorded no version, or matches disagree. Never
+    consults this session's unrelated baseline or the repo checkout."""
+    found = []
+    d = BASELINE_DIR / skill
+    for path in sorted(d.glob('*.json')) if d.is_dir() else []:
+        try:
+            text = _read_baseline(path)
+            recorded, ok = _recorded(text) if text is not None else (None, False)
+            data = json.loads(text) if ok else None
+        except (OSError, ValueError):
+            continue
+        if ok and recorded is not None and abs((recorded - override).total_seconds()) < 1:
+            found.append(_expected_from(data))
+    if not found:
+        return None, f'no baseline records a CreationTime of {override:%Y-%m-%d %H:%M:%S}'
+    if not all(rec for rec, _ in found):
+        return None, 'the matching baseline recorded no packaged version'
+    if len({v for _, v in found}) > 1:
+        return None, 'matching baselines disagree on the packaged version'
+    return found[0][1], None
 def _sync_events(log_path: Path):
     """Yield (timestamp, delta_n, downloaded_n, failed_n) for every Delta-line
     followed within a few lines by its Sync-complete line. Pairs by proximity
@@ -713,7 +759,14 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
     verdict = buf.getvalue().strip()
     confirmed = f'{skill}: CONFIRMED' in verdict
     pkg_unversioned = False
-    if confirmed and not version:
+    unknown = None
+    if confirmed and not version and baseline_override:
+        # Override mode (prep ran in another session): this session's baseline and this
+        # checkout are both unrelated to the package, so neither may stand in for it.
+        version, unknown = _override_expected_version(
+            skill, datetime.strptime(baseline_override, '%Y-%m-%d %H:%M:%S'))
+        pkg_unversioned = unknown is None and not version
+    elif confirmed and not version:
         # --version, then the PACKAGE recorded at baseline time, then the repo checkout. A
         # baseline that inspected a package declaring no version is final: the checkout is
         # not the package, so it must not stand in for it.
@@ -726,11 +779,20 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
     mismatch = bool(confirmed and cache_ver and (want or pkg_unversioned) and want != cache_ver)
     # A timing match proves SOME install happened, not WHICH version (2026-10-17: v4.28
     # was logged as CONFIRMED while the cache held v4.29). Never print CONFIRMED for it.
-    print(verdict.replace(f'{skill}: CONFIRMED', f'{skill}: VERSION-MISMATCH', 1) if mismatch else verdict)
+    if mismatch or unknown:
+        word = 'VERSION-MISMATCH' if mismatch else 'VERSION-UNKNOWN'
+        verdict = verdict.replace(f'{skill}: CONFIRMED', f'{skill}: {word}', 1)
+    print(verdict)
     _log_report(6)
     if not confirmed:
         print('STOP: verdict is not CONFIRMED. Nothing appended. Do not repackage, edit or commit; '
               'report the log state above.')
+        return 1
+    if unknown:
+        print(f'STOP: expected version unknown -- {unknown}. The install moved, but nothing '
+              f'says which version was packaged (this checkout is not the package), so it '
+              f'is not logged. pass --version X.Y (the packaged version). Nothing appended, '
+              f'ledger and baseline untouched.')
         return 1
     if mismatch:
         expected = f'v{want}' if want else 'version (the package declares none)'
