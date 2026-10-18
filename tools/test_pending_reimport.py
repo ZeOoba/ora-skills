@@ -1603,5 +1603,143 @@ class FixtureTeardownRemovesGitRepos(unittest.TestCase):
         self.assertFalse(tmp.exists())
 
 
+class CodeOnlyUninstalledHelper(unittest.TestCase):
+    """code_only_uninstalled(): True only for a CODE_ONLY_SKILLS member that has no Cowork
+    cache dir -- nothing was installed, so there is nothing stale to reimport."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='pending_reimport_codeonly_'))
+        self.addCleanup(_rmtree, self.tmp)
+        self.cache = self.tmp / 'cache'
+        self.cache.mkdir()
+        p = unittest.mock.patch.object(pr, 'CODE_ONLY_SKILLS', frozenset({'codey'}))
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_listed_and_not_cached_is_true(self):
+        self.assertTrue(pr.code_only_uninstalled('codey', cache_root=self.cache))
+
+    def test_listed_but_cached_is_false(self):
+        (self.cache / 'codey').mkdir()
+        self.assertFalse(pr.code_only_uninstalled('codey', cache_root=self.cache))
+
+    def test_unlisted_and_not_cached_is_false(self):
+        self.assertFalse(pr.code_only_uninstalled('brand-new-skill', cache_root=self.cache))
+
+    def test_defaults_to_the_module_cache_root(self):
+        with unittest.mock.patch.object(pr, 'CACHE_ROOT', self.cache):
+            self.assertTrue(pr.code_only_uninstalled('codey'))
+
+
+class CmdRecordSkipsCodeOnly(CmdRecordDeliberatelyUnpublishedWarning):
+    """The post-commit recorder wrote a ledger line for EVERY touched skill, including
+    Code-surface-only ones that are never installed in Cowork, so their lines could
+    never be satisfied by a Save-skill click. Skip them -- but only while they have no
+    cache dir, so a Code-only skill that ever does get installed resumes recording."""
+
+    def setUp(self):
+        super().setUp()
+        self.cache = self.tmp / 'cache'
+        self.cache.mkdir()
+        for p in (unittest.mock.patch.object(pr, 'CACHE_ROOT', self.cache),
+                  unittest.mock.patch.object(pr, 'CODE_ONLY_SKILLS', frozenset({'codey'}))):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_code_only_uninstalled_skill_is_not_recorded_and_says_so(self):
+        sha = self._commit_skill('codey', 'name: codey\nv2\n', 'edit')
+        out = self._record(sha)
+        self.assertNotIn('codey', self.fake_ledger)
+        self.assertIn('Code-only', out)
+        self.assertIn('codey', out)
+        self.assertNotIn('WARNING', out)
+
+    def test_code_only_skill_with_a_cache_dir_is_recorded_normally(self):
+        (self.cache / 'codey').mkdir()
+        sha = self._commit_skill('codey', 'name: codey\nv2\n', 'edit')
+        out = self._record(sha)
+        self.assertIn('codey', self.fake_ledger)
+        self.assertNotIn('Code-only', out)
+
+    def test_brand_new_unlisted_skill_is_still_recorded_for_its_first_install(self):
+        sha = self._commit_skill('brand-new-skill', 'name: brand-new-skill\nv1\n', 'add')
+        self._record(sha)
+        self.assertIn('brand-new-skill', self.fake_ledger)
+
+    def test_mixed_commit_records_only_the_ordinary_skill(self):
+        _write(self.repo / 'codey' / 'SKILL.md', 'name: codey\nv2\n')
+        _write(self.repo / 'ordinary-skill' / 'SKILL.md', 'name: ordinary-skill\nv2\n')
+        self._git('add', '-A')
+        self._git('commit', '-q', '-m', 'mixed edit')
+        out = self._record(self._git('rev-parse', 'HEAD').strip())
+        self.assertIn('ordinary-skill', self.fake_ledger)
+        self.assertNotIn('codey', self.fake_ledger)
+        notice = [ln for ln in out.splitlines() if 'Code-only' in ln][0]
+        self.assertIn('codey', notice)
+        self.assertNotIn('ordinary-skill', notice)
+
+    def test_commit_touching_only_code_only_skills_writes_nothing(self):
+        wrote = []
+        with unittest.mock.patch.object(pr, 'record_hits', lambda *a, **k: wrote.append(a)):
+            self._record(self._commit_skill('codey', 'name: codey\nv3\n', 'edit'))
+        self.assertEqual(wrote, [])
+
+
+class ClearAcceptsCodeOnlyUninstalled(LogBeforeClearGuard):
+    """Nothing was ever installed for a Code-only skill, so there is no install to log: the
+    log-before-clear guard has nothing to guard and must not demand one. It still guards
+    every other skill, and a Code-only skill that IS cached."""
+
+    def setUp(self):
+        super().setUp()
+        self.cache = Path(tempfile.mkdtemp(prefix='pending_reimport_cache_'))
+        self.addCleanup(_rmtree, self.cache)
+        for p in (unittest.mock.patch.object(pr, 'CACHE_ROOT', self.cache),
+                  unittest.mock.patch.object(pr, 'CODE_ONLY_SKILLS', frozenset({'code-only-skill'}))):
+            p.start()
+            self.addCleanup(p.stop)
+
+    UNRELATED = '## 2026-10-17 -- something else\n\nother-skill v1 reimport confirmed.\n'
+
+    def test_code_only_uninstalled_clears_without_being_named_in_the_log(self):
+        err, out, _ = self._clear(['code-only-skill'], self.UNRELATED,
+                                  known=['code-only-skill', 'other-skill'])
+        self.assertNotIn('REFUSED', err)
+        self.assertIn('cleared code-only-skill', out)
+
+    def test_code_only_skill_that_is_cached_is_still_guarded(self):
+        (self.cache / 'code-only-skill').mkdir()
+        err, out, _ = self._clear(['code-only-skill'], self.UNRELATED,
+                                  known=['code-only-skill', 'other-skill'])
+        self.assertIn('REFUSED', err)
+        self.assertNotIn('cleared code-only-skill', out)
+
+    def test_ordinary_skill_is_still_guarded_in_the_same_call(self):
+        err, out, _ = self._clear(['code-only-skill', 'third-skill'], self.UNRELATED,
+                                  known=['code-only-skill', 'other-skill', 'third-skill'])
+        self.assertIn('REFUSED to clear third-skill', err)
+        self.assertIn('cleared code-only-skill', out)
+        self.assertNotIn('cleared code-only-skill, third-skill', out)
+
+    def test_missing_event_log_blocks_ordinary_but_not_code_only(self):
+        def attempt(skills):
+            err = __import__('io').StringIO()
+            with unittest.mock.patch.object(pr, 'newest_event_log_block', return_value=(None, None)), \
+                 unittest.mock.patch.object(pr, 'read_entries', return_value={s: f'- {s} | x' for s in skills}), \
+                 unittest.mock.patch.object(pr, 'write_entries'), \
+                 unittest.mock.patch('sys.stderr', err), \
+                 unittest.mock.patch('sys.stdout', __import__('io').StringIO()) as out:
+                try:
+                    pr.cmd_clear(skills)
+                except SystemExit:
+                    pass
+            return err.getvalue(), out.getvalue()
+        err, out = attempt(['code-only-skill'])
+        self.assertNotIn('REFUSED', err)
+        self.assertIn('cleared code-only-skill', out)
+        err, out = attempt(['third-skill'])
+        self.assertIn('REFUSED', err)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
