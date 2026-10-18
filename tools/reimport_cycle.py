@@ -18,7 +18,7 @@ Usage
 
     python tools/reimport_cycle.py close <skill> [<skill> ...]
                                      [--note TEXT] [--no-clear] [--no-sweep]
-                                     [--baseline "YYYY-MM-DD HH:MM:SS"]
+                                     [--baseline "YYYY-MM-DD HH:MM:SS"] [--version X.Y]
         After the click(s). Runs `reimport_correlate.py postclick --no-append`
         per skill (log liveness + verify). ONLY if every skill is CONFIRMED:
         one combined event-log append via append-event-log.py --entry-file
@@ -127,11 +127,16 @@ def cmd_prep(skills: list[str], out: Path) -> int:
 
 
 def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool,
-              baseline: str | None = None) -> int:
+              baseline: str | None = None, version: str | None = None) -> int:
+    if version and len(skills) != 1:
+        print("close: --version names ONE skill's packaged version -- close skills one at a time.")
+        return 2
     failed = []
     for s in skills:
         print(f"== postclick {s}")
         extra = ["--baseline", baseline] if baseline else []
+        if version:
+            extra += ["--version", version]
         if _run([str(TOOLS / "reimport_correlate.py"), "postclick", s,
                  "--no-append", *extra]).returncode:
             failed.append(s)
@@ -189,10 +194,12 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--no-sweep", action="store_true")
     c.add_argument("--baseline", help='"YYYY-MM-DD HH:MM:SS" -- when prep ran in another '
                                       'session (baselines are session-scoped)')
+    c.add_argument("--version", help="packaged X.Y of ONE skill; required with --baseline when no "
+                                     "baseline of any session recorded that CreationTime")
     a = ap.parse_args(argv)
     if a.cmd == "prep":
         return cmd_prep(a.skills, a.out)
-    return cmd_close(a.skills, a.note, not a.no_clear, not a.no_sweep, a.baseline)
+    return cmd_close(a.skills, a.note, not a.no_clear, not a.no_sweep, a.baseline, a.version)
 
 
 if __name__ == "__main__":
