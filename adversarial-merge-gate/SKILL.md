@@ -113,7 +113,10 @@ All five in **one message** so they run concurrently. Prompt templates:
 
 Right before dispatch (after writing any override of your own), list
 `~/.claude/hooks/sessions/<your session>/` and `overrides/` with names, modification
-times and the contents of any `override`. Step 4 compares against this listing.
+times and the contents of any `override`; list `reviews/` recursively; and record the
+value of `code-edits.count`, the listing of `~/.claude/hooks/active-work/`, and the
+`touched-files.txt` of every other session holding a claim. Step 4 compares against this
+listing.
 
 Four clauses every mandate needs, and the reason each exists:
 
@@ -197,10 +200,14 @@ does not, and the difference is invisible until you run the tool name against it
 Before consolidating, check the swarm against clause 4. List
 `~/.claude/hooks/sessions/<your session>/` and `overrides/` again, with names,
 modification times and the contents of any `override`, and compare it with the Step 3
-listing. The bypass markers are `override`, `plan-approved`, `allow-foreign-commit` and
-anything under `overrides/`; any of them that is new or changed since that listing is a breach.
-Counters, logs, `touched-files.txt` and `gate-green` are written by the hooks during
-normal tool use and are expected. A user prompt with two or more "Phase N:" headers
+listing. The bypass markers are `override`, `plan-approved`, `allow-foreign-commit`,
+anything under `overrides/` and anything under `reviews/` (listed recursively); any of
+them that is new or changed since that listing is a breach. So is any new, changed or
+deleted file under `~/.claude/hooks/active-work/`, and any change to another session's
+`touched-files.txt`, that this run did not cause. A decrease or deletion of `code-edits.count`
+is a breach (it resets the plan gate's edit limit) unless `plan-gate-resets.log` has a
+matching new reset line. Other counters, logs, `touched-files.txt` of this session and
+`gate-green` are written by the hooks during normal tool use and are expected. A user prompt with two or more "Phase N:" headers
 also makes the router write `plan-approved`; attribute it to that prompt, not a swarm agent. Archive a breach marker (never delete) to
 `~/.claude/hooks/sessions/_archive_override_tokens/`, the folder
 `override-token-frequency-probe.py` reads and the weekly sweep archives into:
