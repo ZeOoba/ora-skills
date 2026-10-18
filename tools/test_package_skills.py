@@ -1014,5 +1014,29 @@ class OrphanedWorktreeIsNotExempt(unittest.TestCase):
             self.assertIsNone(package_skills.shared_dep_dirty_reason(Path(plain), 'target-markets.json'))
 
 
+class CodeOnlySkillSet(unittest.TestCase):
+    """CODE_ONLY_SKILLS is REPORTING ONLY (repo_first_check labels). It is a different set
+    from DELIBERATELY_UNPUBLISHED, which means "retired by Gabriel's ruling" and has a
+    do-not-add-speculatively rule; the two must never overlap or blur."""
+
+    FOUR = {'adversarial-merge-gate', 'branch-catchup',
+            'evidence-dossier-drafting', 'external-artifact-intake'}
+
+    def test_contains_the_four_code_surface_skills(self):
+        self.assertEqual(set(package_skills.CODE_ONLY_SKILLS), self.FOUR)
+
+    def test_is_disjoint_from_deliberately_unpublished(self):
+        self.assertEqual(package_skills.CODE_ONLY_SKILLS & package_skills.DELIBERATELY_UNPUBLISHED, frozenset())
+
+    def test_every_listed_skill_exists_in_the_repo(self):
+        for s in package_skills.CODE_ONLY_SKILLS:
+            self.assertTrue((REPO / s / 'SKILL.md').is_file(), s)
+
+    def test_deliberately_unpublished_is_unchanged(self):
+        self.assertEqual(set(package_skills.DELIBERATELY_UNPUBLISHED),
+                         {'annual-cycle', 'capex-budgeting', 'cash-position-monitor',
+                          'deal-retirement', 'investor-relations'})
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
