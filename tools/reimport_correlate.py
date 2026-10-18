@@ -863,6 +863,9 @@ def main() -> int:
     baseline_override, rest = _pop(rest, '--baseline', True)
     version, rest = _pop(rest, '--version', True)
     package, rest = _pop(rest, '--package', True)
+    if version is not None and (not version.strip() or version.startswith('-')):
+        print('--version needs a version value (e.g. 4.32), not a flag or blank', file=sys.stdout)
+        return 2
     no_append, rest = _pop(rest, '--no-append', False)
     clear_ledger, rest = _pop(rest, '--clear-ledger', False)
     if not rest:
