@@ -67,6 +67,21 @@ DELIBERATELY_UNPUBLISHED: frozenset[str] = frozenset({
     'investor-relations',
 })
 
+# Skills that exist only on the Claude Code surface (git / gh / worktree work, subagent
+# orchestration, local ~/.claude files). They are installed under ~/.claude/skills and are
+# NOT meant for the Cowork runtime cache, so "no cache dir" is expected for them, not a gap.
+# REPORTING ONLY: repo_first_check labels such a skill CODE-ONLY instead of NOT-INSTALLED.
+# This is deliberately NOT DELIBERATELY_UNPUBLISHED: that set means "retired by Gabriel's
+# ruling" and suppresses reimport candidates; this one suppresses nothing, and the label
+# applies only while there is no cache dir -- a Code-only skill that does get installed in
+# the cache is classified normally, so its drift still shows.
+CODE_ONLY_SKILLS: frozenset[str] = frozenset({
+    'adversarial-merge-gate',
+    'branch-catchup',
+    'evidence-dossier-drafting',
+    'external-artifact-intake',
+})
+
 
 def _scan_named_counts(text: str) -> tuple[list[str], list[str]]:
     """Core 'N-Point'/'N-item' header-vs-actual-count scan, shared by check_named_counts

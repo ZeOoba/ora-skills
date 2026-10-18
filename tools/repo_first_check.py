@@ -35,6 +35,10 @@ path already uses (`pending_reimport.classify_shared_copy`):
                   all (created platform-side, e.g. create-skill    (same remedy class
                   adding a new scripts/ file, never committed)      as CACHE-AHEAD)
     UNKNOWN       git unavailable / file untracked -- NEVER auto-actioned (see BAD_VERDICTS)
+    NOT-INSTALLED no cache dir at all (never installed)  -> not drift; reinstall if it should be
+    CODE-ONLY     no cache dir, and the skill is in package_skills.CODE_ONLY_SKILLS (Code-surface
+                  only, installed under ~/.claude/skills) -> expected, not a Cowork gap. Only
+                  while there is no cache dir: a cached copy is classified like any other.
 
 A full sweep first runs a best-effort `git fetch origin main` so a PR merged on GitHub
 is recognized as MAIN-BEHIND-ORIGIN rather than DIVERGENT/CACHE-AHEAD. That updates
@@ -67,7 +71,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from package_skills import SHARED_ROOT_DEPS, _dep_pair, is_bundled  # noqa: E402
+from package_skills import CODE_ONLY_SKILLS, SHARED_ROOT_DEPS, _dep_pair, is_bundled  # noqa: E402
 from pending_reimport import (  # noqa: E402
     CACHE_ROOT,
     REPO,
@@ -275,7 +279,7 @@ def classify_skill(skill: str, repo_root: Path = REPO, cache_root: Path = CACHE_
     """
     cache_dir = Path(cache_root) / skill
     if not _isdir_long(cache_dir):
-        return 'NOT-INSTALLED', []
+        return ('CODE-ONLY' if skill in CODE_ONLY_SKILLS else 'NOT-INSTALLED'), []
 
     # DIVERGENT and REPO-MISSING outrank CACHE-AHEAD (2026-08-04 fix, found writing
     # this function's first tests): CACHE-AHEAD has one clean fix ("commit it"), but
