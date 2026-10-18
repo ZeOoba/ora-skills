@@ -1504,6 +1504,29 @@ class PlainBaselineKeepsTheRecordedVersion(PostclickPackageVersion):
         self.assertEqual(self._baseline_json()['expected_version'], '4.32')
 
 
+class VersionFlagValueIsValidated(PostclickTests):
+    """`postclick demo --version --no-append` swallowed --no-append as the version, and a blank
+    --version skipped the check entirely. Both are operator slips; refuse them (exit 2)."""
+
+    def _main(self, *argv):
+        with unittest.mock.patch.object(sys, 'argv', ['rc', *argv]):
+            return self._run(rc.main)
+
+    def test_flag_like_and_blank_versions_are_refused(self):
+        self._confirmable()
+        for bad in ('--no-append', '-x', '', '   '):
+            with self.subTest(bad=bad):
+                code, out = self._main('postclick', 'demo-skill', '--version', bad)
+                self.assertEqual(code, 2, out)
+                self.assertIn('--version needs a version', out)
+                self.assertFalse(self.calls.exists())
+
+    def test_a_real_version_still_passes(self):
+        self._confirmable()
+        code, out = self._main('postclick', 'demo-skill', '--version', 'v4.23', '--no-append')
+        self.assertEqual(code, 0, out)
+
+
 class CyclePrepPackagesBeforeBaseline(unittest.TestCase):
     """reimport_cycle prep wrote the baseline FIRST, so a package_skills refusal (dirty
     shared dep) left an unconsumed baseline that could confirm a later unrelated install."""
