@@ -732,26 +732,36 @@ def _cache_version(skill: str) -> str | None:
         return None
 
 
-def _repo_expected_version(skill: str) -> str | None:
-    """Version the repo checkout declares for `skill`, used as the expected install when
-    no --version is given (reimport_cycle never passes one). Never raises: a missing or
-    non-UTF-8 SKILL.md just means there is nothing to compare against."""
+def _version_at(root: Path, skill: str) -> str | None:
+    """Version `root`/`skill`/SKILL.md declares. Never raises: a missing or non-UTF-8 file
+    just means there is nothing to compare against."""
     try:
-        return _skill_md_version((REPO / skill / 'SKILL.md').read_text(encoding='utf8', errors='replace'))
+        return _skill_md_version((root / skill / 'SKILL.md').read_text(encoding='utf8', errors='replace'))
     except OSError:
         return None
 
 
+def _repo_expected_version(skill: str) -> str | None:
+    """Version the repo checkout declares for `skill`, used as the expected install when
+    no --version is given (reimport_cycle never passes one)."""
+    return _version_at(REPO, skill)
+
+
 def ledger_clear_blocker(skill: str, installed: str | None) -> str | None:
-    """Why the ledger entry must NOT be cleared, or None. The ledger clears by skill NAME, so
-    clearing after the repo moved past what was installed would also wipe the pending
-    reimport of the repo's newer version. Blocks only when the repo version is readable and
-    differs from the installed one; an unreadable side fails open (nothing to compare)."""
-    repo = _repo_expected_version(skill)
-    if not repo or not installed or _norm_ver(installed) == _norm_ver(repo):
-        return None
-    return (f'ledger NOT cleared: repo is v{repo} but v{_norm_ver(installed)} was installed -- '
-            f'the pending reimport of the repo version stays in the ledger')
+    """Why the ledger entry must NOT be cleared, or None. The ledger clears by skill NAME and
+    lives in the PRIMARY checkout, so clearing after any checkout moved past what was installed
+    would also wipe the pending reimport of that newer version. Looks at the running checkout
+    AND the primary; blocks when either declares a readable version that differs from the
+    installed one, or when the installed version is unknown but a checkout is versioned. Only a
+    checkout that declares no version fails open (nothing to compare)."""
+    repos = sorted({v for v in (_version_at(REPO, skill), _version_at(_primary_checkout(REPO), skill)) if v})
+    for repo in repos:
+        if installed and _norm_ver(installed) == _norm_ver(repo):
+            continue
+        got = f'v{_norm_ver(installed)} was installed' if installed else 'no installed version could be read'
+        return (f'ledger NOT cleared: repo is v{repo} but {got} -- '
+                f'the pending reimport of the repo version stays in the ledger')
+    return None
 
 
 def _log_report(tail: int) -> None:
