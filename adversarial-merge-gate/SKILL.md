@@ -234,9 +234,10 @@ no gate, because it launders the guess as a verdict.
 ## Step 5 — Fix and re-run
 
 Fix agents get one confirmed finding each and the same read-only discipline everywhere
-except their assigned file. Their prompts carry the two NEVER lines from the
-`agent-prompts.md` preamble (no writes under `~/.claude/hooks/`; no encoding or splitting
-command text to pass a guard), verbatim. Then re-pin the new head and re-run the **full** swarm.
+except their assigned file. Their prompts carry the two NEVER lines at
+`agent-prompts.md` preamble lines 22-28 (no create/edit/move under `~/.claude/hooks/`; no
+encoding or splitting command text to pass a guard), verbatim, plus: do not invoke lane
+skills or write plan files (either writes `plan-approved`). Then re-pin the new head and re-run the **full** swarm.
 
 Merge only on a clean pass: zero CONFIRMED findings, every mandate reporting either
 findings-resolved or no-surface-with-evidence.
@@ -246,9 +247,12 @@ on the old SHA are reviewing a diff nobody will merge. Stop them (TaskStop) inst
 letting them finish, keep any finding they had already reported, and dispatch the new swarm
 on the new pin. Running both generations at once only burns RAM and muddies which SHA each
 verdict applies to. Once the fix agents have finished and the superseded reviewers are
-stopped, and before the new pre-dispatch listing is taken, run the Step 4 breach check
-against the previous generation's listing, so a marker a fix agent or a stopped reviewer
-wrote is reported rather than absorbed into the new baseline.
+stopped (confirm they and any background jobs they started have ended), run the Step 4
+breach check against the previous generation's listing BEFORE writing any override of your
+own for the next round and before taking the new pre-dispatch listing, so a marker a fix
+agent or a stopped reviewer wrote is reported rather than absorbed into the new baseline.
+If a fix needs a plan-gate override mid-Step 5, run the check first, then write it and
+re-list immediately; treat any change before that point as a breach.
 
 **Scoped re-run: a user decision, never the default.** The default stays the full swarm.
 When the only CONFIRMED findings are LOW, cosmetic, or confined to one file's write path,
