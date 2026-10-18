@@ -200,7 +200,8 @@ modification times and the contents of any `override`, and compare it with the S
 listing. The bypass markers are `override`, `plan-approved`, `allow-foreign-commit` and
 anything under `overrides/`; any of them that is new or changed since that listing is a breach.
 Counters, logs, `touched-files.txt` and `gate-green` are written by the hooks during
-normal tool use and are expected. Archive a breach marker (never delete) to
+normal tool use and are expected. A user prompt with two or more "Phase N:" headers
+also makes the router write `plan-approved`; attribute it to that prompt, not a swarm agent. Archive a breach marker (never delete) to
 `~/.claude/hooks/sessions/_archive_override_tokens/`, the folder
 `override-token-frequency-probe.py` reads and the weekly sweep archives into:
 - `overrides/<tier>` goes to `<session>_overrides_<tier>`, so the probe counts it.
@@ -237,7 +238,8 @@ Fix agents get one confirmed finding each and the same read-only discipline ever
 except their assigned file. Their prompts carry the two NEVER lines at
 `agent-prompts.md` preamble lines 22-28 (no create/edit/move under `~/.claude/hooks/`; no
 encoding or splitting command text to pass a guard), verbatim, plus: do not invoke lane
-skills or write plan files (either writes `plan-approved`). Then re-pin the new head and re-run the **full** swarm.
+skills (/plan, /build, /debug, /refactor, /research, /ship) and do not write under
+`docs/superpowers/plans/` or `.claude/plans/` (either writes `plan-approved`). Then re-pin the new head and re-run the **full** swarm.
 
 Merge only on a clean pass: zero CONFIRMED findings, every mandate reporting either
 findings-resolved or no-surface-with-evidence.
@@ -251,8 +253,10 @@ stopped (confirm they and any background jobs they started have ended), run the 
 breach check against the previous generation's listing BEFORE writing any override of your
 own for the next round and before taking the new pre-dispatch listing, so a marker a fix
 agent or a stopped reviewer wrote is reported rather than absorbed into the new baseline.
-If a fix needs a plan-gate override mid-Step 5, run the check first, then write it and
-re-list immediately; treat any change before that point as a breach.
+If a fix needs a plan-gate override mid-Step 5, first stop or wait out every in-flight fix
+agent and reviewer (and their background jobs), run the check, then write the override and
+re-list immediately. That re-list replaces the previous listing as the baseline for the
+end-of-Step 5 check; anything that changed before the check is a breach.
 
 **Scoped re-run: a user decision, never the default.** The default stays the full swarm.
 When the only CONFIRMED findings are LOW, cosmetic, or confined to one file's write path,
