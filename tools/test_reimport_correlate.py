@@ -1025,6 +1025,42 @@ class CycleCloseUsesTheBaselineUp(unittest.TestCase):
         postclick = next(c for c in calls if 'postclick' in c)
         self.assertEqual(postclick[postclick.index('--baseline') + 1], '')
 
+    def _close_clearing(self, repo_version, cache_version):
+        calls = []
+
+        def fake_run(args, echo=True):
+            calls.append([str(a) for a in args])
+            return subprocess.CompletedProcess(args, 0, stdout='', stderr='')
+
+        out = io.StringIO()
+        with unittest.mock.patch.object(cyc, '_run', fake_run), \
+                unittest.mock.patch.object(cyc._rcor, '_repo_expected_version', lambda s: repo_version), \
+                unittest.mock.patch.object(cyc._rcor, '_cache_version', lambda s: cache_version), \
+                unittest.mock.patch.object(cyc, 'REPO', Path(tempfile.mkdtemp(
+                    prefix='reimport_correlate_test_'))) as repo, redirect_stdout(out):
+            self.addCleanup(_rmtree, repo)
+            code = cyc.cmd_close(['demo-skill'], None, True, False)
+        return code, calls, out.getvalue()
+
+    def test_c1_close_keeps_the_ledger_entry_when_the_repo_moved_on(self):
+        code, calls, out = self._close_clearing('4.30', '4.29')
+
+        self.assertEqual(code, 0, out)
+        self.assertTrue(any(c[0] == str(cyc.APPEND) for c in calls))      # install still logged
+        self.assertFalse(any('clear' in c for c in calls), calls)
+        self.assertIn('ledger NOT cleared: repo is v4.30', out)
+
+    def test_c1_close_clears_when_the_repo_matches(self):
+        code, calls, out = self._close_clearing('4.29', '4.29')
+
+        self.assertEqual(code, 0, out)
+        self.assertTrue(any('clear' in c for c in calls), calls)
+
+    def test_c1_close_clears_when_the_repo_declares_no_version(self):
+        code, calls, out = self._close_clearing(None, '4.29')
+
+        self.assertTrue(any('clear' in c for c in calls), calls)
+
     def test_consumes_after_a_successful_append(self):
         code, calls = self._close(0)
 
@@ -1700,6 +1736,47 @@ class ReviewRoundFourLows(ReviewRoundThreeFindings):
                            'expected_version': '4.29'}))
         v, why = rc._override_expected_version('demo-skill', datetime(2026, 10, 1, 12, 0, 0))
         self.assertEqual((v, why), ('4.29', None))
+
+
+class LedgerClearGuard(PostclickPackageVersion):
+    """REFUTE round 4 (C1): the install of v4.29 is real, but the ledger clears by skill NAME,
+    so clearing it after the repo moved to v4.30 wipes the pending v4.30 reimport. The true
+    install is still logged; the ledger entry is kept."""
+
+    def test_install_logged_but_ledger_kept_when_the_repo_moved_on(self):
+        self._arm(packaged='4.29', installed='4.29', checkout='4.30')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 0, out)
+        self.assertIn('demo-skill v4.29 reimport confirmed', self.calls.read_text())
+        self.assertIn('ledger NOT cleared: repo is v4.30', out)
+        self.assertFalse(self.pending_calls.exists())
+
+    def test_ledger_cleared_when_the_repo_matches_the_install(self):
+        self._arm(packaged='4.29', installed='4.29', checkout='4.29')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn('ledger NOT cleared', out)
+        self.assertIn('clear demo-skill', self.pending_calls.read_text())
+
+    def test_ledger_cleared_when_the_repo_declares_no_version(self):
+        self._arm(packaged='4.29', installed='4.29', checkout='4.29')
+        _write(self.repo / 'demo-skill' / 'SKILL.md',
+               '---\nname: demo-skill\ndescription: d\n---\n\n# Demo, no version\n')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(self.pending_calls.exists())
+
+    def test_explicit_version_installed_is_compared_to_the_repo_too(self):
+        self._arm(packaged='4.29', installed='4.29', checkout='4.30')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.29', False, True)
+        self.assertIn('ledger NOT cleared: repo is v4.30', out)
+        self.assertFalse(self.pending_calls.exists())
+
+    def test_guard_helper_is_fail_open_only_when_the_repo_version_is_unreadable(self):
+        self._repo_md('4.30')
+        self.assertIn('v4.30', rc.ledger_clear_blocker('demo-skill', '4.29'))
+        self.assertIsNone(rc.ledger_clear_blocker('demo-skill', 'v4.30'))
+        self.assertIsNone(rc.ledger_clear_blocker('no-such-skill', '4.29'))
 
 
 class CyclePrepPackagesBeforeBaseline(unittest.TestCase):
