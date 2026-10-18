@@ -197,8 +197,8 @@ does not, and the difference is invisible until you run the tool name against it
 Before consolidating, check the swarm against clause 4. List
 `~/.claude/hooks/sessions/<your session>/` and `overrides/` again, with names,
 modification times and the contents of any `override`, and compare it with the Step 3
-listing. The bypass markers are `override`, `plan-approved` and anything under
-`overrides/`; any of them that is new or changed since that listing is a breach.
+listing. The bypass markers are `override`, `plan-approved`, `allow-foreign-commit` and
+anything under `overrides/`; any of them that is new or changed since that listing is a breach.
 Counters, logs, `touched-files.txt` and `gate-green` are written by the hooks during
 normal tool use and are expected. Archive a breach marker (never delete) to
 `~/.claude/hooks/sessions/_archive_override_tokens/`, the folder
