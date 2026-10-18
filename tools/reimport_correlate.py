@@ -19,13 +19,15 @@ This scripts both halves.
 
 Usage
 -----
-    python tools/reimport_correlate.py baseline <skill> [<skill> ...]
+    python tools/reimport_correlate.py baseline <skill> [<skill> ...] [--package PATH.skill]
         Record each skill's current cache-directory CreationTime to
         <primary checkout>/_staging/reimport-baselines/<skill>/<session>.json. Run this
         during the pre-packaging pre-check, before presenting the Save-skill button.
         Baselines are scoped to the Claude session ($CLAUDE_CODE_SESSION_ID; runs
         outside a session share 'no-session'): the dir is shared by every checkout,
         and an unscoped baseline let one session CONFIRM another's install.
+        --package (ONE skill) also stores the packaged SKILL.md's version as
+        `expected_version`; postclick compares the cache to it. `precheck` records it too.
 
     python tools/reimport_correlate.py verify <skill> [<skill> ...] [--baseline TIME]
         Compare current CreationTime against the saved baseline (or an
@@ -64,8 +66,8 @@ Usage
         CONFIRMED appends the event-log line via append-event-log.py
         --entry-file (dated `## ` header, exit 0 required). On NO-CHANGE /
         MOVED-ONLY / any non-CONFIRMED verdict it STOPS: prints the log tail,
-        appends nothing, exits 1. --version defaults to the repo SKILL.md
-        `version:` frontmatter token if present. --clear-ledger runs
+        appends nothing, exits 1. Expected version: --version, else the
+        baseline's `expected_version` (the PACKAGE), else the repo SKILL.md. --clear-ledger runs
         `pending_reimport.py clear <skill>` only AFTER the append exited 0.
         --no-append verifies only (safe to re-run). After a successful append
         the baselines that predate this install are used up (see `consume`); if
@@ -303,7 +305,7 @@ def _refresh_stale_baseline(skill: str) -> str | None:
     return f'baseline kept ({recorded.isoformat() if recorded else None})'
 
 
-def cmd_baseline(skills: list[str]) -> int:
+def cmd_baseline(skills: list[str], package: str | None = None) -> int:
     """Record each skill's current cache-directory CreationTime -- or, when no
     cache dir exists yet (the skill has never been installed), an explicit
     ABSENT baseline (creation_time: null) rather than skipping the skill
@@ -317,20 +319,118 @@ def cmd_baseline(skills: list[str]) -> int:
     case (a brand-new publish) this correlation tool exists to make routine.
     Recording ABSENT explicitly lets `verify` treat "no dir -> a dir exists" as
     first-hand evidence of install, the same way it treats a CreationTime move
-    for a skill that already existed."""
+    for a skill that already existed.
+
+    With `package` (a .skill zip), also record the version that package's SKILL.md
+    declares as `expected_version`, which postclick then compares the cache against
+    instead of whichever checkout runs it (#139's known limitation). The package is read
+    BEFORE anything is written, so an unreadable one leaves no baseline behind. A package
+    belongs to one skill, so `package` with several skills is refused (exit 2)."""
+    extra: dict = {}
+    if package is not None:
+        if len(skills) != 1:
+            print('--package names ONE package, so give exactly one skill', file=sys.stderr)
+            return 2
+        try:
+            extra = {'expected_version': _package_version(Path(package), skills[0])}
+        except (OSError, zipfile.BadZipFile, KeyError) as exc:
+            print(f'{skills[0]}: cannot read the package version from {package} '
+                  f'({type(exc).__name__}: {exc}) -- no baseline written', file=sys.stderr)
+            return 1
     for skill in skills:
         ct = _creation_time(skill)
         path = _baseline_path(skill)
         if ct is None:
-            _atomic_write_text(path, json.dumps({'skill': skill, 'creation_time': None}, indent=2))
+            _atomic_write_text(path, json.dumps({'skill': skill, 'creation_time': None, **extra},
+                                                indent=2))
             print(f'{skill}: baseline ABSENT (no cache dir yet -- first install) -> {path}')
             continue
-        _atomic_write_text(path, json.dumps({'skill': skill, 'creation_time': ct.isoformat()},
-                                            indent=2))
+        _atomic_write_text(path, json.dumps({'skill': skill, 'creation_time': ct.isoformat(),
+                                             **extra}, indent=2))
         print(f'{skill}: baseline {ct.isoformat()} -> {path}')
     return 0
 
 
+def _package_version(pkg: Path, skill: str) -> str | None:
+    """Version the packaged SKILL.md declares (None = it declares none). Raises OSError /
+    BadZipFile / KeyError when the package or its SKILL.md cannot be read."""
+    with zipfile.ZipFile(pkg) as z:
+        return _skill_md_version(z.read(f'{skill}/SKILL.md').decode('utf8', errors='replace'))
+
+
+_DROP = object()
+
+
+def _record_expected_version(skill: str, version) -> None:
+    """Merge `expected_version` into this session's existing baseline (precheck keeps or
+    recaptures one, and must not leave it without the package it just inspected)."""
+    path = _baseline_path(skill)
+    text = _read_baseline(path)
+    if text is None:
+        return
+    try:
+        data = json.loads(text)
+        if version is _DROP:
+            data.pop('expected_version', None)
+        else:
+            data['expected_version'] = version
+    except (TypeError, ValueError, AttributeError):
+        return
+    # A consume may have claimed the baseline since the read: writing now would bring a
+    # pre-install baseline back from the dead and CONFIRM the same install twice.
+    if _read_baseline(path) != text:
+        return
+    _atomic_write_text(path, json.dumps(data, indent=2))
+
+
+def _expected_from(data):
+    """(recorded, version) from a parsed baseline: `recorded` is True when it carries an
+    `expected_version` key at all -- even null, meaning the package declared none."""
+    if not isinstance(data, dict) or 'expected_version' not in data:
+        return False, None
+    v = data['expected_version']
+    if v is None:
+        return True, None
+    if not isinstance(v, str) or not v.strip():
+        # Hand-edited or foreign: never read as "no expected version" (that would CONFIRM
+        # unchecked). A marker no cache version equals makes any readable cache a mismatch.
+        return True, f'<malformed expected_version {v!r}>'
+    return True, _norm_ver(v)
+
+
+def _baseline_expected_version(skill: str):
+    """(recorded, version) from THIS session's baseline."""
+    text = _read_baseline(_baseline_path(skill))
+    try:
+        return _expected_from(json.loads(text) if text is not None else None)
+    except (TypeError, ValueError):
+        return False, None
+
+
+def _override_expected_version(skill: str, override: datetime):
+    """Expected version for `postclick --baseline TIME`: read from the baseline(s), of ANY
+    session, whose recorded CreationTime IS `override` (to the second). Returns
+    (version_or_None, unknown_reason): `unknown_reason` is set -- and the caller must STOP
+    -- when no baseline matches, a match recorded no version, or matches disagree. Never
+    consults this session's unrelated baseline or the repo checkout."""
+    found = []
+    d = BASELINE_DIR / skill
+    for path in sorted(d.glob('*.json')) if d.is_dir() else []:
+        try:
+            text = _read_baseline(path)
+            recorded, ok = _recorded(text) if text is not None else (None, False)
+            data = json.loads(text) if ok else None
+        except (OSError, ValueError):
+            continue
+        if ok and recorded is not None and recorded.replace(microsecond=0) == override:
+            found.append(_expected_from(data))
+    if not found:
+        return None, f'no baseline records a CreationTime of {override:%Y-%m-%d %H:%M:%S}'
+    if not all(rec for rec, _ in found):
+        return None, 'the matching baseline recorded no packaged version'
+    if len({v for _, v in found}) > 1:
+        return None, 'matching baselines disagree on the packaged version'
+    return found[0][1], None
 def _sync_events(log_path: Path):
     """Yield (timestamp, delta_n, downloaded_n, failed_n) for every Delta-line
     followed within a few lines by its Sync-complete line. Pairs by proximity
@@ -502,8 +602,16 @@ def cmd_precheck(pkgs: list[str]) -> int:
             print(f'{skill}: FAIL -- package not found at {p}. MISSING, not stale: the handoff '
                   f'premise is false; route to Entry point A (first build) and say so.')
             rc = 1
+            _record_expected_version(skill, _DROP)   # a failed precheck leaves no stale version
             continue
-        with zipfile.ZipFile(p) as z:
+        try:
+            zf = zipfile.ZipFile(p)
+        except (OSError, zipfile.BadZipFile) as exc:
+            print(f'{skill}: PRECHECK FAIL -- cannot open the package ({type(exc).__name__}: {exc})')
+            rc = 1
+            _record_expected_version(skill, _DROP)
+            continue
+        with zf as z:
             infos = z.infolist()
             names = [i.filename for i in infos]
             if any('\\' in n for n in _raw_entry_names(p)):
@@ -551,6 +659,10 @@ def cmd_precheck(pkgs: list[str]) -> int:
                             warns.append(f'{rel}: in repo, not in package')
             else:
                 fails.append(f'repo skill dir not found: {sd}')
+        try:
+            pkg_version = _package_version(p, skill)
+        except (OSError, zipfile.BadZipFile, KeyError):
+            pkg_version = None     # no readable SKILL.md: already a FAIL above
         note = _refresh_stale_baseline(skill)
         if note is not None:
             base_note = note
@@ -558,6 +670,9 @@ def cmd_precheck(pkgs: list[str]) -> int:
             with contextlib.redirect_stdout(io.StringIO()):
                 cmd_baseline([skill])
             base_note = 'baseline CAPTURED'
+        # Only a package that PASSED precheck is the one about to be installed; a stale
+        # one's version would otherwise outlive the repo bump that made it stale.
+        _record_expected_version(skill, _DROP if fails else pkg_version)
         if fails:
             rc = 1
             print(f'{skill}: PRECHECK FAIL -- ' + '; '.join(fails))
@@ -579,6 +694,12 @@ def _repo_version(skill: str) -> str | None:
         return None
     v = re.search(r'^version:\s*["\']?v?([\w.\-]+)["\']?\s*$', m.group(1), re.M)
     return v.group(1) if v else None
+
+
+def _bad_version(v) -> bool:
+    """True for a --version value that cannot name a version: blank, flag-like, or only
+    'v' prefixes (which normalize to '' and would silently skip the version check)."""
+    return not isinstance(v, str) or v.strip().startswith('-') or not _norm_ver(v)
 
 
 def _norm_ver(v: str) -> str:
@@ -611,14 +732,36 @@ def _cache_version(skill: str) -> str | None:
         return None
 
 
-def _repo_expected_version(skill: str) -> str | None:
-    """Version the repo checkout declares for `skill`, used as the expected install when
-    no --version is given (reimport_cycle never passes one). Never raises: a missing or
-    non-UTF-8 SKILL.md just means there is nothing to compare against."""
+def _version_at(root: Path, skill: str) -> str | None:
+    """Version `root`/`skill`/SKILL.md declares. Never raises: a missing or non-UTF-8 file
+    just means there is nothing to compare against."""
     try:
-        return _skill_md_version((REPO / skill / 'SKILL.md').read_text(encoding='utf8', errors='replace'))
+        return _skill_md_version((root / skill / 'SKILL.md').read_text(encoding='utf8', errors='replace'))
     except OSError:
         return None
+
+
+def _repo_expected_version(skill: str) -> str | None:
+    """Version the repo checkout declares for `skill`, used as the expected install when
+    no --version is given (reimport_cycle never passes one)."""
+    return _version_at(REPO, skill)
+
+
+def ledger_clear_blocker(skill: str, installed: str | None) -> str | None:
+    """Why the ledger entry must NOT be cleared, or None. The ledger clears by skill NAME and
+    lives in the PRIMARY checkout, so clearing after any checkout moved past what was installed
+    would also wipe the pending reimport of that newer version. Looks at the running checkout
+    AND the primary; blocks when either declares a readable version that differs from the
+    installed one, or when the installed version is unknown but a checkout is versioned. Only a
+    checkout that declares no version fails open (nothing to compare)."""
+    repos = sorted({v for v in (_version_at(REPO, skill), _version_at(_primary_checkout(REPO), skill)) if v})
+    for repo in repos:
+        if installed and _norm_ver(installed) == _norm_ver(repo):
+            continue
+        got = f'v{_norm_ver(installed)} was installed' if installed else 'no installed version could be read'
+        return (f'ledger NOT cleared: repo is v{repo} but {got} -- '
+                f'the pending reimport of the repo version stays in the ledger')
+    return None
 
 
 def _log_report(tail: int) -> None:
@@ -635,27 +778,60 @@ def _log_report(tail: int) -> None:
 
 def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger: bool,
                   baseline_override: str | None = None) -> int:
+    if version is not None and _bad_version(version):
+        print(f'--version needs a version value (e.g. 4.32), got {version!r}')
+        return 2
+    if baseline_override is not None and not baseline_override.strip():
+        print('--baseline needs a time ("YYYY-MM-DD HH:MM:SS"), got a blank value')
+        return 2
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         cmd_verify([skill], baseline_override)
     verdict = buf.getvalue().strip()
     confirmed = f'{skill}: CONFIRMED' in verdict
-    if confirmed:
-        version = version or _repo_expected_version(skill)
+    pkg_unversioned = False
+    unknown = None
+    if confirmed and not version and baseline_override:
+        # Override mode (prep ran in another session): this session's baseline and this
+        # checkout are both unrelated to the package, so neither may stand in for it.
+        version, unknown = _override_expected_version(
+            skill, datetime.strptime(baseline_override, '%Y-%m-%d %H:%M:%S'))
+        pkg_unversioned = unknown is None and not version
+    elif confirmed and not version:
+        # --version, then the PACKAGE recorded at baseline time, then the repo checkout. A
+        # baseline that inspected a package declaring no version is final: the checkout is
+        # not the package, so it must not stand in for it.
+        recorded, version = _baseline_expected_version(skill)
+        pkg_unversioned = recorded and not version
+        if not recorded:
+            version = _repo_expected_version(skill)
     cache_ver = _cache_version(skill) if confirmed else None
     want = _norm_ver(version) if version else None
-    mismatch = bool(confirmed and want and cache_ver and want != cache_ver)
+    malformed = bool(want and want.startswith('<malformed'))   # never confirms, versioned cache or not
+    mismatch = bool(confirmed and (malformed or (cache_ver and (want or pkg_unversioned)
+                                                   and want != cache_ver)))
     # A timing match proves SOME install happened, not WHICH version (2026-10-17: v4.28
     # was logged as CONFIRMED while the cache held v4.29). Never print CONFIRMED for it.
-    print(verdict.replace(f'{skill}: CONFIRMED', f'{skill}: VERSION-MISMATCH', 1) if mismatch else verdict)
+    if mismatch or unknown:
+        word = 'VERSION-MISMATCH' if mismatch else 'VERSION-UNKNOWN'
+        verdict = verdict.replace(f'{skill}: CONFIRMED', f'{skill}: {word}', 1)
+    print(verdict)
     _log_report(6)
     if not confirmed:
         print('STOP: verdict is not CONFIRMED. Nothing appended. Do not repackage, edit or commit; '
               'report the log state above.')
         return 1
+    if unknown:
+        print(f'STOP: expected version unknown -- {unknown}. The install moved, but nothing '
+              f'says which version was packaged (this checkout is not the package), so it '
+              f'is not logged. pass --version X.Y (the packaged version). Nothing appended, '
+              f'ledger and baseline untouched.')
+        return 1
     if mismatch:
+        expected = f'v{want}' if want else 'version (the package declares none)'
+        cache_txt = f'v{cache_ver}' if cache_ver else 'no readable version'
         print(f'STOP: VERSION-MISMATCH -- the install moved, but the cache SKILL.md reads '
-              f'v{cache_ver}, not the expected v{want}. Nothing appended, ledger and baseline '
+              f'{cache_txt}, not the expected {expected}. Nothing appended, ledger and baseline '
               f'untouched. Find what was actually saved (a newer draft or a different package) '
               f'before logging or clearing anything.')
         return 1
@@ -695,6 +871,10 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
         print(f'WARNING: baseline NOT used up ({exc}) -- run '
               f'`reimport_correlate.py consume {skill}` before the next reimport.')
         consume_failed = 1
+    blocker = ledger_clear_blocker(skill, cache_ver or want) if clear_ledger else None
+    if blocker:
+        print(blocker)
+        return consume_failed
     if clear_ledger:
         c = subprocess.run([sys.executable, str(PENDING), 'clear', skill],
                            capture_output=True, text=True)
@@ -720,13 +900,27 @@ def main() -> int:
     cmd, rest = args[0], args[1:]
     baseline_override, rest = _pop(rest, '--baseline', True)
     version, rest = _pop(rest, '--version', True)
+    package, rest = _pop(rest, '--package', True)
+    if version is not None and _bad_version(version):
+        print(f'--version needs a version value (e.g. 4.32), got {version!r}')
+        return 2
+    if baseline_override is not None and not baseline_override.strip():
+        print('--baseline needs a time ("YYYY-MM-DD HH:MM:SS"), got a blank value')
+        return 2
     no_append, rest = _pop(rest, '--no-append', False)
     clear_ledger, rest = _pop(rest, '--clear-ledger', False)
+    stray = [t for t in rest if t.startswith('-')]
+    if stray:
+        # `--version=4.29` and typos would otherwise be taken as skill names and the flag's
+        # check silently skipped.
+        print(f'unrecognised option(s) {stray} -- flags take a SEPARATE value '
+              f'(--version 4.29), not --flag=value')
+        return 2
     if not rest:
         print('no skill name(s) given', file=sys.stderr)
         return 2
     if cmd == 'baseline':
-        return cmd_baseline(rest)
+        return cmd_baseline(rest, package)
     if cmd == 'consume':
         return cmd_consume(rest)
     if cmd == 'precheck':
