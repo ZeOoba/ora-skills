@@ -545,8 +545,15 @@ def code_only_uninstalled(skill: str, cache_root=None) -> bool:
     moment a cache dir exists (someone did install it), so recording and the
     log-before-clear guard resume on their own. `cache_root` defaults to the module's
     CACHE_ROOT, looked up at call time so tests can patch it."""
-    root = CACHE_ROOT if cache_root is None else cache_root
-    return skill in CODE_ONLY_SKILLS and not _isdir_long(Path(root) / skill)
+    root = Path(CACHE_ROOT if cache_root is None else cache_root)
+    if skill not in CODE_ONLY_SKILLS:
+        return False
+    # An unreachable cache root (a Cowork bash sandbox, an unattended session on another
+    # machine) says nothing about whether the skill is installed: never read "can't see the
+    # cache" as "never installed". Same posture as sweep_drift and repo_first_check.run.
+    if not _isdir_long(root):
+        return False
+    return not _isdir_long(root / skill)
 
 def _read_bytes_long(path) -> bytes:
     with open(_win_long(path), 'rb') as f:
@@ -1109,7 +1116,12 @@ def cmd_clear(skills: list[str], force: bool = False) -> None:
     is refused with the same message REGARDLESS of whether it's actually pending --
     the guard runs before the pending/not-pending question is even asked, since a
     session should not learn "nothing to clear" as an excuse to skip the log step
-    it was supposed to do first."""
+    it was supposed to do first.
+
+    Exception: a CODE_ONLY_SKILLS member with no Cowork cache dir (see
+    code_only_uninstalled) was never installed, so there is no install to log; it is
+    cleared without the guard. Every other skill in the same call is still gated, and
+    --force is unchanged."""
     # Nothing was ever installed for a Code-only skill with no cache dir, so there is no
     # install to log and the log-before-clear guard has nothing to guard for it.
     gated = [sk for sk in skills if not code_only_uninstalled(sk)]
