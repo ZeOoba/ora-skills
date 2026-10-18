@@ -82,7 +82,7 @@ Re-run `git fetch` and re-read `origin/main` before EVERY dispatch (including re
 a fix), not only the first. If main advanced (a README-only PR landed mid-gate on PR #127),
 merge it in server-side (`gh pr update-branch`), fast-forward locally, and re-pin: the base
 SHA and the diff both change, and reviewers must be told which changes are main's and not
-the PR's.
+the PR's. Only do this if no other session holds the branch (next paragraph).
 
 **Before dispatching, check who else holds the branch.** In a shared checkout, enumerate
 live claims and in-flight worktrees. This is not hygiene; it decides whether Step 4 is
@@ -111,7 +111,14 @@ Scope and staging is substrate-independent, which is part of why it yields most.
 All five in **one message** so they run concurrently. Prompt templates:
 `agent-prompts.md` in this directory.
 
-Three clauses every mandate needs, and the reason each exists:
+Right before dispatch (after writing any override of your own), list
+`~/.claude/hooks/sessions/<your session>/` and `overrides/` with names, modification
+times and the contents of any `override`; list `reviews/` recursively; and record the
+value of `code-edits.count`, the listing of `~/.claude/hooks/active-work/`, and the
+`touched-files.txt` of every other session holding a claim. Step 4 compares against this
+listing.
+
+Four clauses every mandate needs, and the reason each exists:
 
 1. **Read-only, worktree-scoped, live tree named as forbidden.** Otherwise agents edit
    what you told them to review.
@@ -120,6 +127,26 @@ Three clauses every mandate needs, and the reason each exists:
 3. **Zero findings is a valid and expected outcome; manufacturing one is a mandate
    failure and will be discarded.** Without this an agent under a "find problems" framing
    reliably produces something. This clause is what makes a clean pass mean anything.
+4. **Guard surface is off limits.** Never create, edit or move anything under
+   `~/.claude/hooks/` (override markers, tokens, claims), and never encode, obfuscate or
+   split command text to get past a guard. A blocked command is reported, not worked
+   around. If a repo has a sanctioned workaround for a known false positive (such as
+   the scratchpad-glob pattern for site-marker reads), name it in the dispatch prompt;
+   reviewers use only the workarounds you name. Reviewers run as subagents of your
+   session, so a marker one of them writes exempts *your* session from that gate for
+   the rest of the run. In the PR #89 gate a test-validity reviewer blocked by
+   `eos-plan-gate` on its scratch harness scripts wrote the override marker itself,
+   and base64-encoded a site path in one command, which would have got it past the
+   site-write guard. Only the orchestrating session writes an override, and only
+   where that gate's own rules allow it (the site-write token needs the user's
+   in-turn go-ahead).
+
+   `eos-plan-gate` counts every code-file Write/Edit in the session, scratch copies
+   included, and denies the 4th. Reviewers share your session, so a swarm with a
+   mutation harness will hit it. When a mandate will write scratch code, write the
+   plan-gate `override` yourself before dispatch, with the reason (e.g. "merge gate
+   PR #N: throwaway mutation-harness scripts outside the repo"), rather than leaving
+   the reviewer to stall or improvise.
 
 ### Ask for the outcome a user sees, not only that the parts exist
 
@@ -170,6 +197,27 @@ does not, and the difference is invisible until you run the tool name against it
 
 ## Step 4 — Consolidate, then STOP before fixing
 
+Before consolidating, check the swarm against clause 4. List
+`~/.claude/hooks/sessions/<your session>/` and `overrides/` again, with names,
+modification times and the contents of any `override`, and compare it with the Step 3
+listing. The bypass markers are `override`, `plan-approved`, `allow-foreign-commit`,
+anything under `overrides/` and anything under `reviews/` (listed recursively); any of
+them that is new or changed since that listing is a breach. So is any new, changed or
+deleted file under `~/.claude/hooks/active-work/`, and any change to another session's
+`touched-files.txt`, that this run did not cause. A decrease or deletion of `code-edits.count`
+is a breach (it resets the plan gate's edit limit) unless `plan-gate-resets.log` has a
+matching new reset line. Other counters, logs, `touched-files.txt` of this session and
+`gate-green` are written by the hooks during normal tool use and are expected. A user prompt with two or more "Phase N:" headers
+also makes the router write `plan-approved`; attribute it to that prompt, not a swarm agent. Archive a breach marker (never delete) to
+`~/.claude/hooks/sessions/_archive_override_tokens/`, the folder
+`override-token-frequency-probe.py` reads and the weekly sweep archives into:
+- `overrides/<tier>` goes to `<session>_overrides_<tier>`, so the probe counts it.
+- A plain `override` goes to `<session>_override.breach-<YYYY-MM-DD>`. The suffix
+  stops the weekly sweep (`Move-Item -Force` to `<session>_override`) from later
+  overwriting the evidence with a legitimate override of yours.
+
+Report every breach to the user alongside the findings.
+
 One table, most severe first:
 
 | Sev | Agent | file:line | Reproduction | Proposed fix | Verdict |
@@ -194,7 +242,11 @@ no gate, because it launders the guess as a verdict.
 ## Step 5 — Fix and re-run
 
 Fix agents get one confirmed finding each and the same read-only discipline everywhere
-except their assigned file. Then re-pin the new head and re-run the **full** swarm.
+except their assigned file. Their prompts carry the two NEVER lines at
+`agent-prompts.md` preamble lines 22-28 (no create/edit/move under `~/.claude/hooks/`; no
+encoding or splitting command text to pass a guard), verbatim, plus: do not invoke lane
+skills (/plan, /build, /debug, /refactor, /research, /ship) and do not write under
+`docs/superpowers/plans/` or `.claude/plans/` (either writes `plan-approved`). Then re-pin the new head and re-run the **full** swarm.
 
 Merge only on a clean pass: zero CONFIRMED findings, every mandate reporting either
 findings-resolved or no-surface-with-evidence.
@@ -203,7 +255,15 @@ findings-resolved or no-surface-with-evidence.
 on the old SHA are reviewing a diff nobody will merge. Stop them (TaskStop) instead of
 letting them finish, keep any finding they had already reported, and dispatch the new swarm
 on the new pin. Running both generations at once only burns RAM and muddies which SHA each
-verdict applies to.
+verdict applies to. Once the fix agents have finished and the superseded reviewers are
+stopped (confirm they and any background jobs they started have ended), run the Step 4
+breach check against the previous generation's listing BEFORE writing any override of your
+own for the next round and before taking the new pre-dispatch listing, so a marker a fix
+agent or a stopped reviewer wrote is reported rather than absorbed into the new baseline.
+If a fix needs a plan-gate override mid-Step 5, first stop or wait out every in-flight fix
+agent and reviewer (and their background jobs), run the check, then write the override and
+re-list immediately. That re-list replaces the previous listing as the baseline for the
+end-of-Step 5 check; anything that changed before the check is a breach.
 
 **Scoped re-run: a user decision, never the default.** The default stays the full swarm.
 When the only CONFIRMED findings are LOW, cosmetic, or confined to one file's write path,
