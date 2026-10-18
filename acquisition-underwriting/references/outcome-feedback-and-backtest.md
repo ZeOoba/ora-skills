@@ -21,3 +21,15 @@ Extracted verbatim from `acquisition-underwriting/SKILL.md` (2026-08-13, progres
 ## Drift sweep opens the back-test (v4.14, full text — moved from `SKILL.md` OUTCOME FEEDBACK 2026-09-22, v4.23)
 
 - **Drift sweep opens the back-test (v4.14).** The annual December back-test begins by running `market-monitor` across **all ten canonical markets** — Columbus, Cincinnati, Kansas City, Indianapolis, Madison, Maryland/DC, Grand Rapids, Richmond, Des Moines, Louisville — and collecting each market's `DOCTRINE-DRIFT` block (market-monitor v1.5) into a single divergence table. Run-triggered drift reporting only covers markets a deal happened to touch; this ensures the back-test convenes with the full picture rather than the accidental one. The sweep is a **reporting** step: constants still move only by ratification at that session. Origin: Madison carried three stale constants simultaneously — exit cap 165 bps tight, RCT v03 ~20% overstated, and a refuted owner-user pricing band — all surfaced by one deal in August 2026 and none by any scheduled process.
+
+---
+
+## Closed-deal variance review (v4.33, Gabriel 2026-10-18)
+
+The back-test compares score components with realized YoC; it does not test the standing **defaults**. This review does.
+
+- **When:** 12, 24 and 36 months after each close. Results are read into the December back-test; the review itself can run whenever a deal crosses one of the three marks.
+- **Lines compared (underwritten vs actual):** stabilized NOI; reassessed property tax (vs the State Reassessment Matrix figure); insurance; CapEx by system (roof, paving, HVAC, doors, electrical) vs Stage 2.5 items 3–4 and the reserve line; downtime per rollover and renewal rate (vs the Suite-Level Rollover & Credit Block); TI/LC per lease; credit loss (vs 1.25%/2.0%); market rent achieved at rollover (vs the growth input).
+- **Sources:** the deal's own UNDERWRITE workbook (Inputs and Pro Forma tabs, as closed — never a later re-score), PM-portal P&L and delinquency exports (`pm-portal-pnl-export`, `pm-portal-delinquency-export`), QuickBooks actuals, and the Capex & Contractor Pricing Ledger. Every actual is source-tagged; a missing actual is `[DATA-GAP]`, never estimated.
+- **Output:** one variance row per line per deal (underwritten · actual · Δ · Δ% · source) appended to the back-test workbook.
+- **Routing:** a standing default whose variance has the same sign and exceeds **20%** on **≥3 closed deals** becomes a QUESTIONS FOR GABRIEL item proposing the specific change. Never a self-edit (POST-RUN LESSON CAPTURE rule).
