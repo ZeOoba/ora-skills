@@ -340,14 +340,13 @@ def cmd_baseline(skills: list[str], package: str | None = None) -> int:
     for skill in skills:
         ct = _creation_time(skill)
         path = _baseline_path(skill)
-        kept = extra or _kept_expected_version(path, ct)
         if ct is None:
-            _atomic_write_text(path, json.dumps({'skill': skill, 'creation_time': None, **kept},
+            _atomic_write_text(path, json.dumps({'skill': skill, 'creation_time': None, **extra},
                                                 indent=2))
             print(f'{skill}: baseline ABSENT (no cache dir yet -- first install) -> {path}')
             continue
         _atomic_write_text(path, json.dumps({'skill': skill, 'creation_time': ct.isoformat(),
-                                             **kept}, indent=2))
+                                             **extra}, indent=2))
         print(f'{skill}: baseline {ct.isoformat()} -> {path}')
     return 0
 
@@ -400,23 +399,6 @@ def _baseline_expected_version(skill: str):
         return _expected_from(json.loads(text) if text is not None else None)
     except (TypeError, ValueError):
         return False, None
-
-
-def _kept_expected_version(path: Path, ct) -> dict:
-    """A plain `baseline` re-run must not drop the version a --package/precheck recorded,
-    or the repo fallback comes back. Kept only while the CreationTime is unchanged: an
-    install since then makes the recorded package stale."""
-    text = _read_baseline(path)
-    try:
-        data = json.loads(text) if text is not None else None
-    except (TypeError, ValueError):
-        return {}
-    recorded, ok = _recorded(text) if text is not None else (None, False)
-    if not ok or not isinstance(data, dict) or 'expected_version' not in data:
-        return {}
-    if (ct is None) != (recorded is None) or (ct is not None and _predates(recorded, ct)):
-        return {}
-    return {'expected_version': data['expected_version']}
 
 
 def _override_expected_version(skill: str, override: datetime):
