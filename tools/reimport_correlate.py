@@ -742,6 +742,18 @@ def _repo_expected_version(skill: str) -> str | None:
         return None
 
 
+def ledger_clear_blocker(skill: str, installed: str | None) -> str | None:
+    """Why the ledger entry must NOT be cleared, or None. The ledger clears by skill NAME, so
+    clearing after the repo moved past what was installed would also wipe the pending
+    reimport of the repo's newer version. Blocks only when the repo version is readable and
+    differs from the installed one; an unreadable side fails open (nothing to compare)."""
+    repo = _repo_expected_version(skill)
+    if not repo or not installed or _norm_ver(installed) == _norm_ver(repo):
+        return None
+    return (f'ledger NOT cleared: repo is v{repo} but v{_norm_ver(installed)} was installed -- '
+            f'the pending reimport of the repo version stays in the ledger')
+
+
 def _log_report(tail: int) -> None:
     now = datetime.now()
     for lp in (LOCAL_LOG, ROAMING_LOG):
@@ -849,6 +861,10 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
         print(f'WARNING: baseline NOT used up ({exc}) -- run '
               f'`reimport_correlate.py consume {skill}` before the next reimport.')
         consume_failed = 1
+    blocker = ledger_clear_blocker(skill, cache_ver or want) if clear_ledger else None
+    if blocker:
+        print(blocker)
+        return consume_failed
     if clear_ledger:
         c = subprocess.run([sys.executable, str(PENDING), 'clear', skill],
                            capture_output=True, text=True)

@@ -48,6 +48,7 @@ APPEND = Path.home() / ".claude" / "maintenance" / "append-event-log.py"
 BAD_DEP_LABELS = ("CACHE-AHEAD", "DIVERGENT", "UNKNOWN")
 
 sys.path.insert(0, str(TOOLS))
+import reimport_correlate as _rcor  # noqa: E402
 
 
 def _run(args: list[str], echo: bool = True) -> subprocess.CompletedProcess:
@@ -162,6 +163,10 @@ def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool,
               f"{' '.join(skills)}` before the next reimport, or it will CONFIRM this one again.")
     if clear:
         for s in skills:
+            blocker = _rcor.ledger_clear_blocker(s, version or _rcor._cache_version(s))
+            if blocker:
+                print(f"{s}: {blocker}")
+                continue
             _run([str(TOOLS / "pending_reimport.py"), "clear", s])
     if sweep:
         print("== closing sweep")
