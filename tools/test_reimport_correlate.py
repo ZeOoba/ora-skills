@@ -449,7 +449,9 @@ class _SessionFixture(FixtureTestCase):
             'import sys\n'
             f'open({str(self.calls)!r}, "a").write(open(sys.argv[2]).read())\n'
             'sys.exit(int(__import__("os").environ.get("FAKE_APPEND_RC", "0")))\n')
+        self.fake_pending = self.tmp / 'fake_pending.py'      # never the real ledger script
         for p in (unittest.mock.patch.object(rc, 'REPO', self.repo),
+                  unittest.mock.patch.object(rc, 'PENDING', self.fake_pending),
                   unittest.mock.patch.object(rc, 'APPEND_LOG', self.fake_append)):
             p.start()
             self.addCleanup(p.stop)
@@ -730,8 +732,9 @@ class RoundThreeGateFindings(_SessionFixture):
         self._as('sess-A', rc.cmd_baseline, ['demo-skill'])
         self._install(datetime(2026, 9, 23, 12, 5, 0))
 
+        # Override mode has no checkout fallback, so a plain baseline needs --version.
         code, out = self._main('sess-B', 'postclick', 'demo-skill', '--no-append',
-                               '--baseline', '2026-09-23 12:00:00')
+                               '--baseline', '2026-09-23 12:00:00', '--version', '1.0')
 
         self.assertEqual(code, 0, out)
         self.assertIn('demo-skill: CONFIRMED', out)
@@ -750,9 +753,10 @@ class RoundThreeGateFindings(_SessionFixture):
         seen = {}
         with unittest.mock.patch.object(cyc, 'cmd_close',
                                         lambda *a: seen.setdefault('args', a) and 0):
-            cyc.main(['close', 'demo-skill', '--baseline', '2026-09-23 12:00:00'])
+            cyc.main(['close', 'demo-skill', '--baseline', '2026-09-23 12:00:00',
+                      '--version', '4.32'])
 
-        self.assertEqual(seen['args'][-1], '2026-09-23 12:00:00')
+        self.assertEqual(seen['args'][-2:], ('2026-09-23 12:00:00', '4.32'))
 
 
 class RoundFourGateFindings(_SessionFixture):
@@ -955,7 +959,7 @@ class CycleCloseUsesTheBaselineUp(unittest.TestCase):
     with --no-append), so it must use the baselines up itself -- and only once that
     append exited 0."""
 
-    def _close(self, append_rc, baseline=None, consume_rc=0):
+    def _close(self, append_rc, baseline=None, consume_rc=0, version=None):
         calls = []
 
         def fake_run(args, echo=True):
@@ -972,10 +976,7 @@ class CycleCloseUsesTheBaselineUp(unittest.TestCase):
                 unittest.mock.patch.object(cyc, 'REPO', Path(tempfile.mkdtemp(
                     prefix='reimport_correlate_test_'))) as repo, redirect_stdout(io.StringIO()):
             self.addCleanup(_rmtree, repo)
-            if baseline is None:
-                code = cyc.cmd_close(['demo-skill'], None, False, False)
-            else:
-                code = cyc.cmd_close(['demo-skill'], None, False, False, baseline)
+            code = cyc.cmd_close(['demo-skill'], None, False, False, baseline, version)
         return code, calls
 
     def test_consume_after_the_append_needs_no_time_bound(self):
@@ -999,6 +1000,77 @@ class CycleCloseUsesTheBaselineUp(unittest.TestCase):
         postclick = next(c for c in calls if 'postclick' in c)
         self.assertEqual(code, 0)
         self.assertEqual(postclick[postclick.index('--baseline') + 1], '2026-09-23 12:00:00')
+
+    def test_version_is_passed_through_to_postclick(self):
+        code, calls = self._close(0, version='4.32')
+
+        postclick = next(c for c in calls if 'postclick' in c)
+        self.assertEqual(code, 0)
+        self.assertEqual(postclick[postclick.index('--version') + 1], '4.32')
+
+    def test_version_with_several_skills_is_refused_before_anything_runs(self):
+        with unittest.mock.patch.object(cyc, '_run') as run, redirect_stdout(io.StringIO()):
+            code = cyc.cmd_close(['a', 'b'], None, False, False, None, '4.32')
+
+        self.assertEqual(code, 2)
+        run.assert_not_called()
+
+    def test_c4_a_blank_version_is_passed_through_so_postclick_refuses_it(self):
+        code, calls = self._close(0, version='')
+
+        postclick = next(c for c in calls if 'postclick' in c)
+        self.assertEqual(postclick[postclick.index('--version') + 1], '')
+
+    def test_c5_a_blank_baseline_is_passed_through_so_postclick_refuses_it(self):
+        code, calls = self._close(0, baseline='')
+
+        postclick = next(c for c in calls if 'postclick' in c)
+        self.assertEqual(postclick[postclick.index('--baseline') + 1], '')
+
+    def _close_clearing(self, repo_version, cache_version):
+        calls = []
+
+        def fake_run(args, echo=True):
+            calls.append([str(a) for a in args])
+            return subprocess.CompletedProcess(args, 0, stdout='', stderr='')
+
+        out = io.StringIO()
+        with unittest.mock.patch.object(cyc, '_run', fake_run), \
+                unittest.mock.patch.object(cyc._rcor, '_version_at', lambda root, s: repo_version), \
+                unittest.mock.patch.object(cyc._rcor, '_cache_version', lambda s: cache_version), \
+                unittest.mock.patch.object(cyc, 'REPO', Path(tempfile.mkdtemp(
+                    prefix='reimport_correlate_test_'))) as repo, redirect_stdout(out):
+            self.addCleanup(_rmtree, repo)
+            code = cyc.cmd_close(['demo-skill'], None, True, False)
+        return code, calls, out.getvalue()
+
+    def test_c1_close_keeps_the_ledger_entry_when_the_repo_moved_on(self):
+        code, calls, out = self._close_clearing('4.30', '4.29')
+
+        self.assertEqual(code, 0, out)
+        self.assertTrue(any(c[0] == str(cyc.APPEND) for c in calls))      # install still logged
+        self.assertFalse(any('clear' in c for c in calls), calls)
+        self.assertIn('ledger NOT cleared: repo is v4.30', out)
+
+    def test_c1_close_clears_when_the_repo_matches(self):
+        code, calls, out = self._close_clearing('4.29', '4.29')
+
+        self.assertEqual(code, 0, out)
+        self.assertTrue(any('clear' in c for c in calls), calls)
+
+    def test_c1_close_clears_when_the_repo_declares_no_version(self):
+        code, calls, out = self._close_clearing(None, '4.29')
+
+        self.assertTrue(any('clear' in c for c in calls), calls)
+
+    def test_c3_close_keeps_the_entry_when_the_installed_version_is_unknown(self):
+        # postclick can name the expected version; close cannot, so unknown + versioned repo
+        # must keep the entry (the safe side) rather than clear it.
+        code, calls, out = self._close_clearing('4.30', None)
+
+        self.assertEqual(code, 0, out)
+        self.assertFalse(any('clear' in c for c in calls), calls)
+        self.assertIn('ledger NOT cleared', out)
 
     def test_consumes_after_a_successful_append(self):
         code, calls = self._close(0)
@@ -1164,6 +1236,673 @@ class PostclickNoExpectedVersionWarns(PostclickTests):
         self.assertEqual(code, 0, out)
         self.assertIn('version not verified', out)
         self.assertIn('no expected version', out)
+
+
+class PostclickPackageVersion(PostclickTests):
+    """Follow-up to #139 (its "Known limitation"): with no --version, the expected version
+    followed the checkout running postclick, so v4.32 packaged in a worktree + v4.31
+    installed + close run from a primary still on v4.31 logged a false CONFIRMED. `baseline
+    --package` records the PACKAGED SKILL.md version; postclick compares the cache to that."""
+
+    def _pkg(self, version_line, name='demo-skill.skill'):
+        pkg = self.tmp / name
+        fm = f'---\nname: demo-skill\ndescription: d\n{version_line}---\n\n# Demo\n'
+        _make_pkg(pkg, 'demo-skill', {'demo-skill/SKILL.md': fm.encode()})
+        return pkg
+
+    def _cache_md(self, ver):
+        _write(self.cache / 'demo-skill' / 'SKILL.md',
+               f'---\nname: demo-skill\ndescription: d\n---\n\n# Demo (v{ver})\n')
+
+    def _repo_md(self, ver):
+        _write(self.repo / 'demo-skill' / 'SKILL.md',
+               f'---\nname: demo-skill\ndescription: d\n---\n\n# Demo (v{ver})\n')
+
+    def _baseline_json(self):
+        return json.loads(rc._baseline_path('demo-skill').read_text())
+
+    def _arm(self, packaged, installed, checkout):
+        """A baseline taken from a package, then an install that moves the cache."""
+        self._cache_md('0.0')
+        code, out = self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg(f'version: {packaged}\n')))
+        self.assertEqual(code, 0, out)
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({**self._baseline_json(), 'creation_time': '2020-01-01T00:00:00'}))
+        self._cache_md(installed)
+        self._repo_md(checkout)
+        ts = rc._creation_time('demo-skill').strftime('%Y-%m-%d %H:%M:%S')
+        _write(self.local_log,
+               f'{ts} [info] [SkillsPlugin] Delta: 1 to download\n'
+               f'{ts} [info] [SkillsPlugin] Sync complete: 1 downloaded, 0 failed\n')
+
+    def test_baseline_package_records_the_packaged_version(self):
+        (self.cache / 'demo-skill').mkdir()
+        code, out = self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.32\n')))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self._baseline_json()['expected_version'], '4.32')
+
+    def test_false_match_v432_packaged_v431_installed_checkout_on_v431(self):
+        self._arm(packaged='4.32', installed='4.31', checkout='4.31')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+        self.assertNotIn('demo-skill: CONFIRMED', out)
+        self.assertFalse(self.calls.exists())
+        self.assertTrue(rc._baseline_path('demo-skill').exists())
+
+    def test_package_version_confirms_when_checkout_is_behind(self):
+        self._arm(packaged='4.32', installed='4.32', checkout='4.31')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, False)
+        self.assertEqual(code, 0, out)
+        self.assertIn('demo-skill v4.32 reimport confirmed', self.calls.read_text())
+
+    def test_explicit_version_beats_the_baseline(self):
+        self._arm(packaged='4.32', installed='4.31', checkout='4.30')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.31', True, False)
+        self.assertEqual(code, 0, out)
+
+    def test_baseline_beats_the_repo_checkout(self):
+        self._arm(packaged='4.31', installed='4.31', checkout='4.99')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+        self.assertEqual(code, 0, out)
+
+    def test_baseline_without_expected_version_still_falls_back_to_the_repo(self):
+        self._confirmable()                      # legacy baseline: no expected_version key
+        self._cache_md('4.31')
+        self._repo_md('4.32')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+
+    def test_unversioned_package_does_not_fall_back_to_the_repo(self):
+        # The package was inspected and declares no version: a versioned checkout must not
+        # stand in for it (that is the false match this change removes).
+        self._arm(packaged='4.32', installed='4.31', checkout='4.31')
+        _write(self.cache / 'demo-skill' / 'SKILL.md',
+               '---\nname: demo-skill\ndescription: d\n---\n\n# Demo, no version\n')
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({**self._baseline_json(), 'expected_version': None}))
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+        self.assertEqual(code, 0, out)
+        self.assertIn('version not verified', out)
+        self.assertIn('no expected version', out)
+
+    def test_unversioned_package_with_a_versioned_cache_is_a_mismatch(self):
+        # A package declaring no version cannot have produced a cache that declares one.
+        self._arm(packaged='4.32', installed='4.31', checkout='4.31')
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({**self._baseline_json(), 'expected_version': None}))
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+
+    def test_malformed_expected_version_never_confirms_a_versioned_cache(self):
+        for bad in (0, False, '', '   ', [4, 32], {'v': 1}):
+            with self.subTest(bad=bad):
+                self._arm(packaged='4.32', installed='4.31', checkout='4.31')
+                _write(rc._baseline_path('demo-skill'),
+                       json.dumps({**self._baseline_json(), 'expected_version': bad}))
+                code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+                self.assertEqual(code, 1, out)
+                self.assertIn('VERSION-MISMATCH', out)
+
+    def test_record_expected_version_does_not_resurrect_a_consumed_baseline(self):
+        (self.cache / 'demo-skill').mkdir()
+        rc.cmd_baseline(['demo-skill'])
+        path = rc._baseline_path('demo-skill')
+        real_read = rc._read_baseline
+        calls = []
+
+        def read_then_consume(pth):
+            text = real_read(pth)
+            calls.append(1)
+            if len(calls) == 1:          # a consume claims the file after precheck read it
+                path.unlink()
+            return text
+
+        with unittest.mock.patch.object(rc, '_read_baseline', read_then_consume):
+            rc._record_expected_version('demo-skill', '4.32')
+        self.assertFalse(path.exists())
+
+    def test_unreadable_package_writes_no_baseline(self):
+        (self.cache / 'demo-skill').mkdir()
+        bad = self.tmp / 'bad.skill'
+        bad.write_bytes(b'not a zip')
+        code, out = self._run(rc.cmd_baseline, ['demo-skill'], str(bad))
+        self.assertEqual(code, 1, out)
+        self.assertFalse(rc._baseline_path('demo-skill').exists())
+        code, out = self._run(rc.cmd_baseline, ['demo-skill'], str(self.tmp / 'ghost.skill'))
+        self.assertEqual(code, 1, out)
+        self.assertFalse(rc._baseline_path('demo-skill').exists())
+
+    def test_package_without_skill_md_writes_no_baseline(self):
+        (self.cache / 'demo-skill').mkdir()
+        pkg = self.tmp / 'demo-skill.skill'
+        _make_pkg(pkg, 'demo-skill', {'demo-skill/other.md': b'x'})
+        code, out = self._run(rc.cmd_baseline, ['demo-skill'], str(pkg))
+        self.assertEqual(code, 1, out)
+        self.assertFalse(rc._baseline_path('demo-skill').exists())
+
+    def test_package_with_several_skills_is_refused(self):
+        code, out = self._run(rc.cmd_baseline, ['demo-skill', 'other'],
+                              str(self._pkg('version: 1.0\n')))
+        self.assertEqual(code, 2, out)
+        self.assertFalse(rc._baseline_path('demo-skill').exists())
+
+    def test_cli_package_flag_reaches_cmd_baseline(self):
+        (self.cache / 'demo-skill').mkdir()
+        pkg = self._pkg('version: 4.32\n')
+        with unittest.mock.patch.object(sys, 'argv',
+                                        ['rc', 'baseline', 'demo-skill', '--package', str(pkg)]):
+            code, out = self._run(rc.main)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self._baseline_json()['expected_version'], '4.32')
+
+    def test_precheck_records_the_package_version_on_capture_and_on_keep(self):
+        # Entry point A takes its baseline in precheck, so precheck must record it too.
+        pkg = self._pkg('version: 4.32\n')
+        _write(self.repo / 'demo-skill' / 'SKILL.md',
+               '---\nname: demo-skill\ndescription: d\nversion: 4.32\n---\n\n# Demo\n')
+        with unittest.mock.patch.object(rc, '_plugin_of', lambda s: None):
+            code, out = self._run(rc.cmd_precheck, [str(pkg)])
+            self.assertEqual(code, 0, out)
+            self.assertEqual(self._baseline_json()['expected_version'], '4.32')
+            _write(rc._baseline_path('demo-skill'),
+                   json.dumps({'skill': 'demo-skill', 'creation_time': None}))   # kept, no version
+            code, out = self._run(rc.cmd_precheck, [str(pkg)])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self._baseline_json()['expected_version'], '4.32')
+
+
+class PostclickOverrideMode(PostclickPackageVersion):
+    """`close --baseline "<time>"` (prep ran in another session). The expected version must
+    come from the baseline whose CreationTime IS that override -- any session's -- or from
+    --version. Never from this session's unrelated file, never from the repo checkout:
+    that is #139's false-match path (REFUTE round 1, high + medium)."""
+
+    OVERRIDE = '2020-01-01 00:00:00'
+
+    def _put(self, session, creation, **extra):
+        _write(rc.BASELINE_DIR / 'demo-skill' / f'{session}.json',
+               json.dumps({'skill': 'demo-skill', 'creation_time': creation, **extra}))
+
+    def _installed(self, ver, checkout=None):
+        self._cache_md(ver)
+        if checkout:
+            self._repo_md(checkout)
+        ts = rc._creation_time('demo-skill').strftime('%Y-%m-%d %H:%M:%S')
+        _write(self.local_log,
+               f'{ts} [info] [SkillsPlugin] Delta: 1 to download\n'
+               f'{ts} [info] [SkillsPlugin] Sync complete: 1 downloaded, 0 failed\n')
+
+    def _close(self, version=None, session='sess-B', override=None):
+        with unittest.mock.patch.dict(os.environ, {'CLAUDE_CODE_SESSION_ID': session}):
+            return self._run(rc.cmd_postclick, 'demo-skill', version, True, False,
+                             override or self.OVERRIDE)
+
+    def _stopped_clean(self, code, out):
+        self.assertEqual(code, 1, out)
+        self.assertIn('pass --version', out)
+        self.assertNotIn('demo-skill: CONFIRMED', out)
+        self.assertFalse(self.calls.exists())
+        self.assertFalse(self.pending_calls.exists())
+
+    def test_no_baseline_at_all_stops_instead_of_trusting_the_checkout(self):
+        # #139's own scenario: v4.32 packaged elsewhere, v4.31 installed, this checkout on 4.31.
+        self._installed('4.31', checkout='4.31')
+        self._stopped_clean(*self._close())
+
+    def test_no_match_stops_even_when_the_repo_would_agree(self):
+        self._put('sess-B', '2019-06-06T00:00:00', expected_version='4.31')   # unrelated, local
+        self._installed('4.31', checkout='4.31')
+        self._stopped_clean(*self._close())
+
+    def test_explicit_version_still_works_in_override_mode(self):
+        self._installed('4.31', checkout='4.99')
+        code, out = self._close(version='4.31')
+        self.assertEqual(code, 0, out)
+        self.assertNotIn('pass --version', out)
+
+    def test_match_in_another_session_gives_the_packaged_version(self):
+        self._put('sess-A', '2020-01-01T00:00:00', expected_version='4.32')
+        self._installed('4.31', checkout='4.31')
+        code, out = self._close()
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+        self.assertNotIn('pass --version', out)
+        self._installed('4.32', checkout='4.31')
+        code, out = self._close()
+        self.assertEqual(code, 0, out)
+
+    def test_a_stale_local_baseline_does_not_beat_the_matching_one(self):
+        self._put('sess-B', '2019-06-06T00:00:00', expected_version='4.31')   # this session's, stale
+        self._put('sess-A', '2020-01-01T00:00:00', expected_version='4.32')
+        self._installed('4.31', checkout='4.31')
+        code, out = self._close(session='sess-B')
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+
+    def test_two_baselines_with_different_creation_times_are_told_apart(self):
+        self._put('sess-A', '2020-01-01T00:00:00', expected_version='4.32')
+        self._put('sess-C', '2021-03-03T00:00:00', expected_version='4.30')
+        self._installed('4.30')
+        code, out = self._close(override='2021-03-03 00:00:00')
+        self.assertEqual(code, 0, out)
+        code, out = self._close(override='2020-01-01 00:00:00')
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+
+    def test_matching_baseline_with_no_recorded_version_stops(self):
+        self._put('sess-A', '2020-01-01T00:00:00')                 # plain baseline, pre-change
+        self._installed('4.31', checkout='4.31')
+        self._stopped_clean(*self._close())
+
+    def test_conflicting_matching_baselines_stop(self):
+        self._put('sess-A', '2020-01-01T00:00:00', expected_version='4.32')
+        self._put('sess-C', '2020-01-01T00:00:00', expected_version='4.31')
+        self._installed('4.31')
+        self._stopped_clean(*self._close())
+
+    def test_agreeing_matching_baselines_are_fine(self):
+        self._put('sess-A', '2020-01-01T00:00:00', expected_version='4.31')
+        self._put('sess-C', '2020-01-01T00:00:00', expected_version='4.31')
+        self._installed('4.31')
+        code, out = self._close()
+        self.assertEqual(code, 0, out)
+
+    def test_unreadable_neighbour_baselines_are_ignored(self):
+        _write(rc.BASELINE_DIR / 'demo-skill' / 'junk.json', '{not json')
+        (rc.BASELINE_DIR / 'demo-skill' / 'bin.json').write_bytes(b'\xff\xfe\x00')
+        self._put('sess-A', '2020-01-01T00:00:00', expected_version='4.31')
+        self._installed('4.31')
+        code, out = self._close()
+        self.assertEqual(code, 0, out)
+
+    def test_override_stop_keeps_every_baseline(self):
+        self._put('sess-A', '2020-01-01T00:00:00', expected_version='4.32')
+        self._installed('4.31')
+        self._close()
+        self.assertTrue((rc.BASELINE_DIR / 'demo-skill' / 'sess-A.json').exists())
+
+    def test_cli_close_path_reaches_the_same_stop(self):
+        self._installed('4.31', checkout='4.31')
+        with unittest.mock.patch.object(sys, 'argv', ['rc', 'postclick', 'demo-skill',
+                                                      '--no-append', '--baseline', self.OVERRIDE]):
+            code, out = self._run(rc.main)
+        self.assertEqual(code, 1, out)
+        self.assertIn('pass --version', out)
+
+
+class PlainBaselineWritesNoRecordedVersion(PostclickPackageVersion):
+    """REFUTE round 2 (medium): a plain `baseline` that KEPT expected_version while the
+    CreationTime was unchanged let a stale package's version survive a repo bump. An
+    unchanged CreationTime says nothing was installed, not that the package is current. A
+    plain baseline therefore records NO version, and only --package / precheck do."""
+
+    def test_plain_baseline_overwrites_an_earlier_recorded_version(self):
+        (self.cache / 'demo-skill').mkdir()
+        self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.31\n')))
+        self._run(rc.cmd_baseline, ['demo-skill'])
+        self.assertNotIn('expected_version', self._baseline_json())
+
+    def test_absent_baseline_writes_none_either(self):
+        self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.31\n')))
+        self._run(rc.cmd_baseline, ['demo-skill'])
+        self.assertNotIn('expected_version', self._baseline_json())
+
+    def test_a_new_package_replaces_it(self):
+        (self.cache / 'demo-skill').mkdir()
+        self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.32\n')))
+        self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.33\n')))
+        self.assertEqual(self._baseline_json()['expected_version'], '4.33')
+
+    def test_stale_package_install_after_a_repo_bump_is_not_confirmed(self):
+        # baseline --package 4.31, no click; repo bumps to 4.32; the step-2 plain baseline;
+        # then the STALE 4.31 package is installed. Must not be CONFIRMED (c175941 did).
+        self._cache_md('0.0')
+        self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.31\n')))
+        self._repo_md('4.32')
+        self._run(rc.cmd_baseline, ['demo-skill'])
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({**self._baseline_json(), 'creation_time': '2020-01-01T00:00:00'}))
+        self._cache_md('4.31')
+        ts = rc._creation_time('demo-skill').strftime('%Y-%m-%d %H:%M:%S')
+        _write(self.local_log,
+               f'{ts} [info] [SkillsPlugin] Delta: 1 to download\n'
+               f'{ts} [info] [SkillsPlugin] Sync complete: 1 downloaded, 0 failed\n')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+        self.assertFalse(self.calls.exists())
+        self.assertFalse(self.pending_calls.exists())
+
+
+class VersionFlagValueIsValidated(PostclickTests):
+    """`postclick demo --version --no-append` swallowed --no-append as the version, and a blank
+    --version skipped the check entirely. Both are operator slips; refuse them (exit 2)."""
+
+    def _main(self, *argv):
+        with unittest.mock.patch.object(sys, 'argv', ['rc', *argv]):
+            return self._run(rc.main)
+
+    def test_flag_like_and_blank_versions_are_refused(self):
+        self._confirmable()
+        for bad in ('--no-append', '-x', '', '   '):
+            with self.subTest(bad=bad):
+                code, out = self._main('postclick', 'demo-skill', '--version', bad)
+                self.assertEqual(code, 2, out)
+                self.assertIn('--version needs a version', out)
+                self.assertFalse(self.calls.exists())
+
+    def test_a_real_version_still_passes(self):
+        self._confirmable()
+        code, out = self._main('postclick', 'demo-skill', '--version', 'v4.23', '--no-append')
+        self.assertEqual(code, 0, out)
+
+
+class ReviewRoundThreeFindings(PostclickPackageVersion):
+    """REFUTE round 3 (C1-C5), each a path to a false CONFIRMED or a wrong ledger clear."""
+
+    def _confirmable_install(self, ver):
+        self._cache_md(ver)
+        ts = rc._creation_time('demo-skill').strftime('%Y-%m-%d %H:%M:%S')
+        _write(self.local_log,
+               f'{ts} [info] [SkillsPlugin] Delta: 1 to download\n'
+               f'{ts} [info] [SkillsPlugin] Sync complete: 1 downloaded, 0 failed\n')
+
+    def _main(self, *argv):
+        with unittest.mock.patch.object(sys, 'argv', ['rc', *argv]):
+            return self._run(rc.main)
+
+    # C1 ------------------------------------------------------------------
+    def test_c1_precheck_failure_does_not_record_the_stale_packages_version(self):
+        self._repo_md('4.33')                           # repo moved on; the 4.32 package is stale
+        self._cache_md('0.0')
+        pkg = self._pkg('version: 4.32\n')
+        with unittest.mock.patch.object(rc, '_plugin_of', lambda s: None):
+            code, out = self._run(rc.cmd_precheck, [str(pkg)])
+        self.assertEqual(code, 1, out)
+        self.assertIn('PRECHECK FAIL', out)
+        self.assertNotIn('expected_version', self._baseline_json())
+
+    def test_c1_precheck_failure_drops_a_version_an_earlier_run_recorded(self):
+        self._repo_md('4.33')
+        self._cache_md('0.0')
+        self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.32\n')))
+        self.assertEqual(self._baseline_json()['expected_version'], '4.32')
+        with unittest.mock.patch.object(rc, '_plugin_of', lambda s: None):
+            self._run(rc.cmd_precheck, [str(self._pkg('version: 4.32\n'))])
+        self.assertNotIn('expected_version', self._baseline_json())
+
+    def test_c1_stale_install_after_a_failed_precheck_is_a_mismatch(self):
+        self._repo_md('4.33')
+        self._cache_md('0.0')
+        with unittest.mock.patch.object(rc, '_plugin_of', lambda s: None):
+            self._run(rc.cmd_precheck, [str(self._pkg('version: 4.32\n'))])
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({**self._baseline_json(), 'creation_time': '2020-01-01T00:00:00'}))
+        self._confirmable_install('4.32')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+        self.assertFalse(self.calls.exists())
+        self.assertFalse(self.pending_calls.exists())
+
+    # C2 ------------------------------------------------------------------
+    def test_c2_versions_that_normalize_to_empty_are_refused_by_main(self):
+        self._confirmable_install('4.31')
+        for bad in ('v', 'V', 'vv', 'vV', ' v '):
+            with self.subTest(bad=bad):
+                code, out = self._main('postclick', 'demo-skill', '--version', bad, '--clear-ledger')
+                self.assertEqual(code, 2, out)
+                self.assertFalse(self.calls.exists())
+                self.assertFalse(self.pending_calls.exists())
+
+    def test_c2_cmd_postclick_refuses_them_too(self):
+        # A direct caller (reimport_cycle passes the value through) is covered, not just main().
+        self._confirmable_install('4.31')
+        for bad in ('v', 'V', 'vv', '', '   ', '--no-append'):
+            with self.subTest(bad=bad):
+                code, out = self._run(rc.cmd_postclick, 'demo-skill', bad, False, True)
+                self.assertEqual(code, 2, out)
+                self.assertFalse(self.calls.exists())
+                self.assertFalse(self.pending_calls.exists())
+
+    # C3 ------------------------------------------------------------------
+    def test_c3_malformed_expected_version_stops_even_with_an_unversioned_cache(self):
+        self._arm(packaged='4.32', installed='4.31', checkout='4.31')
+        _write(self.cache / 'demo-skill' / 'SKILL.md',
+               '---\nname: demo-skill\ndescription: d\n---\n\n# Demo, no version\n')
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({**self._baseline_json(), 'expected_version': 4.32}))
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+        self.assertFalse(self.calls.exists())
+        self.assertFalse(self.pending_calls.exists())
+
+    # C5 ------------------------------------------------------------------
+    def test_c5_blank_baseline_is_refused_by_main_and_cmd_postclick(self):
+        self._confirmable_install('4.31')
+        for bad in ('', '   '):
+            with self.subTest(bad=bad):
+                code, out = self._main('postclick', 'demo-skill', '--baseline', bad, '--version', '4.31')
+                self.assertEqual(code, 2, out)
+                code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.31', True, False, bad)
+                self.assertEqual(code, 2, out)
+        self.assertFalse(self.calls.exists())
+
+
+class ReviewRoundFourLows(ReviewRoundThreeFindings):
+    """REFUTE round 4 lows (C2-C4)."""
+
+    def _recorded_then(self, pkg_path):
+        self._cache_md('0.0')
+        self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.28\n')))
+        self.assertEqual(self._baseline_json()['expected_version'], '4.28')
+        with unittest.mock.patch.object(rc, '_plugin_of', lambda s: None):
+            return self._run(rc.cmd_precheck, [str(pkg_path)])
+
+    def test_c2_missing_package_drops_a_recorded_version(self):
+        code, out = self._recorded_then(self.tmp / 'elsewhere' / 'demo-skill.skill')
+        self.assertEqual(code, 1, out)
+        self.assertNotIn('expected_version', self._baseline_json())
+
+    def test_c2_corrupt_package_drops_a_recorded_version(self):
+        bad = self.tmp / 'elsewhere' / 'demo-skill.skill'
+        bad.parent.mkdir()
+        bad.write_bytes(b'not a zip')
+        code, out = self._recorded_then(bad)
+        self.assertEqual(code, 1, out)
+        self.assertIn('FAIL', out)
+        self.assertNotIn('expected_version', self._baseline_json())
+
+    def test_c2_package_without_skill_md_drops_a_recorded_version(self):
+        pkg = self.tmp / 'elsewhere' / 'demo-skill.skill'
+        pkg.parent.mkdir()
+        _make_pkg(pkg, 'demo-skill', {'demo-skill/other.md': b'x'})
+        code, out = self._recorded_then(pkg)
+        self.assertEqual(code, 1, out)
+        self.assertNotIn('expected_version', self._baseline_json())
+
+    def test_c3_flag_equals_value_tokens_are_refused(self):
+        self._confirmable_install('4.30')
+        self._repo_md('4.30')
+        for tok in ('--version=4.29', '--version=', '--baseline=2026-01-01 00:00:00', '--bogus'):
+            with self.subTest(tok=tok):
+                code, out = self._main('postclick', 'demo-skill', tok, '--no-append')
+                self.assertEqual(code, 2, out)
+                self.assertNotIn('CONFIRMED', out)
+
+    def test_c4_override_is_compared_to_the_second_not_within_one_second(self):
+        self._installed = None
+        _write(rc.BASELINE_DIR / 'demo-skill' / 'sess-A.json',
+               json.dumps({'skill': 'demo-skill', 'creation_time': '2026-10-01T11:59:59.600000',
+                           'expected_version': '4.29'}))
+        v, why = rc._override_expected_version('demo-skill', datetime(2026, 10, 1, 12, 0, 0))
+        self.assertIsNone(v)
+        self.assertIn('no baseline records', why)
+        _write(rc.BASELINE_DIR / 'demo-skill' / 'sess-A.json',
+               json.dumps({'skill': 'demo-skill', 'creation_time': '2026-10-01T12:00:00.900000',
+                           'expected_version': '4.29'}))
+        v, why = rc._override_expected_version('demo-skill', datetime(2026, 10, 1, 12, 0, 0))
+        self.assertEqual((v, why), ('4.29', None))
+
+
+class LedgerClearGuard(PostclickPackageVersion):
+    """REFUTE round 4 (C1): the install of v4.29 is real, but the ledger clears by skill NAME,
+    so clearing it after the repo moved to v4.30 wipes the pending v4.30 reimport. The true
+    install is still logged; the ledger entry is kept."""
+
+    def test_install_logged_but_ledger_kept_when_the_repo_moved_on(self):
+        self._arm(packaged='4.29', installed='4.29', checkout='4.30')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 0, out)
+        self.assertIn('demo-skill v4.29 reimport confirmed', self.calls.read_text())
+        self.assertIn('ledger NOT cleared: repo is v4.30', out)
+        self.assertFalse(self.pending_calls.exists())
+
+    def test_ledger_cleared_when_the_repo_matches_the_install(self):
+        self._arm(packaged='4.29', installed='4.29', checkout='4.29')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn('ledger NOT cleared', out)
+        self.assertIn('clear demo-skill', self.pending_calls.read_text())
+
+    def test_ledger_cleared_when_the_repo_declares_no_version(self):
+        self._arm(packaged='4.29', installed='4.29', checkout='4.29')
+        _write(self.repo / 'demo-skill' / 'SKILL.md',
+               '---\nname: demo-skill\ndescription: d\n---\n\n# Demo, no version\n')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(self.pending_calls.exists())
+
+    def test_explicit_version_installed_is_compared_to_the_repo_too(self):
+        self._arm(packaged='4.29', installed='4.29', checkout='4.30')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.29', False, True)
+        self.assertIn('ledger NOT cleared: repo is v4.30', out)
+        self.assertFalse(self.pending_calls.exists())
+
+    def test_guard_helper_is_fail_open_only_when_the_repo_version_is_unreadable(self):
+        self._repo_md('4.30')
+        self.assertIn('v4.30', rc.ledger_clear_blocker('demo-skill', '4.29'))
+        self.assertIsNone(rc.ledger_clear_blocker('demo-skill', 'v4.30'))
+        self.assertIsNone(rc.ledger_clear_blocker('no-such-skill', '4.29'))
+
+
+class LedgerGuardRoundFive(PostclickPackageVersion):
+    """REFUTE round 5: the guard must look where the LEDGER lives (the primary checkout), and
+    an installed version that is unknown must not read as 'nothing to compare'."""
+
+    def _primary(self, version):
+        primary = self.tmp / 'primary'
+        _write(primary / 'demo-skill' / 'SKILL.md',
+               f'---\nname: demo-skill\ndescription: d\n---\n\n# Demo (v{version})\n')
+        p = unittest.mock.patch.object(rc, '_primary_checkout', lambda r: primary)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_c1_blocks_when_the_primary_is_ahead_of_the_running_checkout(self):
+        self._repo_md('4.28')            # the worktree running close
+        self._primary('4.30')            # where the ledger entry for v4.30 was written
+        self.assertIn('repo is v4.30', rc.ledger_clear_blocker('demo-skill', '4.28'))
+
+    def test_c1_blocks_when_the_running_checkout_is_ahead_of_the_primary(self):
+        self._repo_md('4.30')
+        self._primary('4.28')
+        self.assertIn('repo is v4.30', rc.ledger_clear_blocker('demo-skill', '4.28'))
+
+    def test_c1_clears_when_both_checkouts_agree_with_the_install(self):
+        self._repo_md('4.28')
+        self._primary('4.28')
+        self.assertIsNone(rc.ledger_clear_blocker('demo-skill', '4.28'))
+
+    def test_c1_postclick_keeps_the_entry_when_only_the_primary_moved_on(self):
+        self._arm(packaged='4.28', installed='4.28', checkout='4.28')
+        self._primary('4.30')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 0, out)
+        self.assertIn('demo-skill v4.28 reimport confirmed', self.calls.read_text())
+        self.assertIn('ledger NOT cleared: repo is v4.30', out)
+        self.assertFalse(self.pending_calls.exists())
+
+    def test_c2_unknown_installed_version_blocks_when_the_repo_is_versioned(self):
+        self._repo_md('4.30')
+        self.assertIn('repo is v4.30', rc.ledger_clear_blocker('demo-skill', None))
+
+    def test_c2_unknown_installed_and_unversioned_repo_still_clears(self):
+        _write(self.repo / 'demo-skill' / 'SKILL.md',
+               '---\nname: demo-skill\ndescription: d\n---\n\n# Demo, no version\n')
+        self.assertIsNone(rc.ledger_clear_blocker('demo-skill', None))
+
+    def test_c2_unversioned_package_and_cache_keep_the_entry_after_a_repo_bump(self):
+        self._arm(packaged='4.29', installed='4.29', checkout='4.30')
+        _write(self.cache / 'demo-skill' / 'SKILL.md',
+               '---\nname: demo-skill\ndescription: d\n---\n\n# Demo, no version\n')
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({**self._baseline_json(), 'expected_version': None}))
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 0, out)
+        self.assertIn('ledger NOT cleared', out)
+        self.assertFalse(self.pending_calls.exists())
+
+
+class SessionFixtureNeverReachesTheRealLedger(unittest.TestCase):
+    """REFUTE round 5 (latent): _SessionFixture must itself patch PENDING."""
+
+    def test_session_fixture_patches_pending(self):
+        t = PostclickRoundTwoGateFindings('test_postclick_honours_baseline_across_sessions')
+        t.setUp()
+        try:
+            self.assertNotEqual(Path(rc.PENDING).resolve(),
+                                Path(rc.__file__).resolve().parent / 'pending_reimport.py')
+        finally:
+            t.doCleanups()
+            t.tearDown()
+
+
+class CyclePrepPackagesBeforeBaseline(unittest.TestCase):
+    """reimport_cycle prep wrote the baseline FIRST, so a package_skills refusal (dirty
+    shared dep) left an unconsumed baseline that could confirm a later unrelated install."""
+
+    def _prep(self, package_rc):
+        calls = []
+        tmp = Path(tempfile.mkdtemp(prefix='reimport_correlate_test_'))
+        self.addCleanup(_rmtree, tmp)
+        out_dir = tmp / 'pkg'
+
+        def fake_run(args, echo=True):
+            calls.append([str(a) for a in args])
+            is_pkg = 'package_skills.py' in str(args[0])
+            if is_pkg and package_rc == 0:
+                for s in args[2:]:
+                    _make_pkg(out_dir / f'{s}.skill', s, {f'{s}/SKILL.md': b'---\nname: x\n---\n'})
+            return subprocess.CompletedProcess(args, package_rc if is_pkg else 0,
+                                               stdout='', stderr='')
+
+        fake_git = lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout='', stderr='')  # noqa: E731
+        with unittest.mock.patch.object(cyc, '_run', fake_run), \
+                unittest.mock.patch.object(cyc, 'gate_failures', lambda *a, **k: []), \
+                unittest.mock.patch.object(cyc.subprocess, 'run', fake_git), \
+                redirect_stdout(io.StringIO()):
+            code = cyc.cmd_prep(['demo-skill', 'demo-two'], out_dir)
+        return code, calls, out_dir
+
+    def test_packager_failure_leaves_no_baseline(self):
+        code, calls, _ = self._prep(package_rc=3)
+        self.assertEqual(code, 3)
+        self.assertFalse(any('reimport_correlate.py' in c[0] for c in calls), calls)
+
+    def test_baseline_follows_the_package_and_names_it(self):
+        code, calls, out_dir = self._prep(package_rc=0)
+        self.assertEqual(code, 0)
+        pkg_at = next(i for i, c in enumerate(calls) if 'package_skills.py' in c[0])
+        bases = [(i, c) for i, c in enumerate(calls) if 'reimport_correlate.py' in c[0]]
+        self.assertEqual(len(bases), 2)                          # one per skill
+        for (i, c), s in zip(bases, ['demo-skill', 'demo-two']):
+            self.assertGreater(i, pkg_at)
+            self.assertEqual(c[c.index('baseline') + 1], s)
+            self.assertEqual(c[c.index('--package') + 1], str(out_dir / f'{s}.skill'))
 
 
 class PostclickTestsNeverReachTheRealLedger(unittest.TestCase):

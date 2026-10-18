@@ -2,15 +2,15 @@
 """One-call wrapper for the package-and-stage-skill reimport cycle.
 
 Every standalone reimport runs the same sequence: step-0 plugin gate, step-1
-git-clean check, shared-dep direction gate, description budget, CreationTime
-baseline, ONE packager call, and -- after Gabriel clicks Save skill -- verify,
+git-clean check, shared-dep direction gate, description budget, ONE packager call,
+CreationTime baseline (recording the packaged version), and -- after Gabriel clicks Save skill -- verify,
 a single event-log append, ledger clear and the closing sweep. This script
 chains the existing tools; it adds no new source of truth.
 
 Usage
 -----
     python tools/reimport_cycle.py prep <skill> [<skill> ...] [--out DIR]
-        Gates, baseline, package. Stops (exit 1) before packaging if any skill
+        Gates, package, baseline. Stops (exit 1) before packaging if any skill
         is a plugin member, has a dirty tree, or is a shared-dep consumer whose
         dep reads CACHE-AHEAD / DIVERGENT / UNKNOWN. Default --out:
         _staging/<today>/pkg. Prints each package's SHA256 for the cloud-side
@@ -18,7 +18,7 @@ Usage
 
     python tools/reimport_cycle.py close <skill> [<skill> ...]
                                      [--note TEXT] [--no-clear] [--no-sweep]
-                                     [--baseline "YYYY-MM-DD HH:MM:SS"]
+                                     [--baseline "YYYY-MM-DD HH:MM:SS"] [--version X.Y]
         After the click(s). Runs `reimport_correlate.py postclick --no-append`
         per skill (log liveness + verify). ONLY if every skill is CONFIRMED:
         one combined event-log append via append-event-log.py --entry-file
@@ -48,6 +48,7 @@ APPEND = Path.home() / ".claude" / "maintenance" / "append-event-log.py"
 BAD_DEP_LABELS = ("CACHE-AHEAD", "DIVERGENT", "UNKNOWN")
 
 sys.path.insert(0, str(TOOLS))
+import reimport_correlate as _rcor  # noqa: E402
 
 
 def _run(args: list[str], echo: bool = True) -> subprocess.CompletedProcess:
@@ -102,15 +103,20 @@ def cmd_prep(skills: list[str], out: Path) -> int:
         print("prep: gate failed -- nothing packaged.")
         return 1
     _run([str(TOOLS / "description_budget.py"), *skills])
-    print("== baseline")
-    if _run([str(TOOLS / "reimport_correlate.py"), "baseline", *skills]).returncode:
-        return 1
     out.mkdir(parents=True, exist_ok=True)
     print(f"== package -> {out}")
     cp = _run([str(TOOLS / "package_skills.py"), str(out), *skills])
     if cp.returncode:
         print(f"PACKAGER_EXIT={cp.returncode} -- real defect, quote verbatim; do not work around.")
         return cp.returncode
+    # Baseline only AFTER a good package: a packager refusal (dirty shared dep) must not
+    # leave an unconsumed baseline behind, and each baseline records the version of the
+    # package it names so close compares the cache to THAT, not to the closing checkout.
+    print("== baseline")
+    for s in skills:
+        if _run([str(TOOLS / "reimport_correlate.py"), "baseline", s,
+                 "--package", str(out / f"{s}.skill")]).returncode:
+            return 1
     print("== packages")
     for s in skills:
         pkg = out / f"{s}.skill"
@@ -122,11 +128,16 @@ def cmd_prep(skills: list[str], out: Path) -> int:
 
 
 def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool,
-              baseline: str | None = None) -> int:
+              baseline: str | None = None, version: str | None = None) -> int:
+    if version is not None and len(skills) != 1:
+        print("close: --version names ONE skill's packaged version -- close skills one at a time.")
+        return 2
     failed = []
     for s in skills:
         print(f"== postclick {s}")
-        extra = ["--baseline", baseline] if baseline else []
+        extra = ["--baseline", baseline] if baseline is not None else []
+        if version is not None:
+            extra += ["--version", version]
         if _run([str(TOOLS / "reimport_correlate.py"), "postclick", s,
                  "--no-append", *extra]).returncode:
             failed.append(s)
@@ -152,6 +163,10 @@ def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool,
               f"{' '.join(skills)}` before the next reimport, or it will CONFIRM this one again.")
     if clear:
         for s in skills:
+            blocker = _rcor.ledger_clear_blocker(s, version or _rcor._cache_version(s))
+            if blocker:
+                print(f"{s}: {blocker}")
+                continue
             _run([str(TOOLS / "pending_reimport.py"), "clear", s])
     if sweep:
         print("== closing sweep")
@@ -184,10 +199,12 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--no-sweep", action="store_true")
     c.add_argument("--baseline", help='"YYYY-MM-DD HH:MM:SS" -- when prep ran in another '
                                       'session (baselines are session-scoped)')
+    c.add_argument("--version", help="packaged X.Y of ONE skill; required with --baseline when no "
+                                     "baseline of any session recorded that CreationTime")
     a = ap.parse_args(argv)
     if a.cmd == "prep":
         return cmd_prep(a.skills, a.out)
-    return cmd_close(a.skills, a.note, not a.no_clear, not a.no_sweep, a.baseline)
+    return cmd_close(a.skills, a.note, not a.no_clear, not a.no_sweep, a.baseline, a.version)
 
 
 if __name__ == "__main__":
