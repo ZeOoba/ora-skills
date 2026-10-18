@@ -1630,6 +1630,14 @@ class CodeOnlyUninstalledHelper(unittest.TestCase):
         with unittest.mock.patch.object(pr, 'CACHE_ROOT', self.cache):
             self.assertTrue(pr.code_only_uninstalled('codey'))
 
+    def test_unreachable_cache_root_is_not_read_as_never_installed(self):
+        # REFUTE low (J1): a cache root this session cannot see (Cowork bash sandbox,
+        # another machine) proves nothing about whether the skill is installed.
+        gone = self.tmp / 'no-such-cache-root'
+        self.assertFalse(pr.code_only_uninstalled('codey', cache_root=gone))
+        with unittest.mock.patch.object(pr, 'CACHE_ROOT', gone):
+            self.assertFalse(pr.code_only_uninstalled('codey'))
+
 
 class CmdRecordSkipsCodeOnly(CmdRecordDeliberatelyUnpublishedWarning):
     """The post-commit recorder wrote a ledger line for EVERY touched skill, including
@@ -1645,6 +1653,12 @@ class CmdRecordSkipsCodeOnly(CmdRecordDeliberatelyUnpublishedWarning):
                   unittest.mock.patch.object(pr, 'CODE_ONLY_SKILLS', frozenset({'codey'}))):
             p.start()
             self.addCleanup(p.stop)
+
+    def test_unreachable_cache_root_still_records_a_code_only_skill(self):
+        with unittest.mock.patch.object(pr, 'CACHE_ROOT', self.tmp / 'no-such-cache-root'):
+            sha = self._commit_skill('codey', 'name: codey\nv2\n', 'edit')
+            self._record(sha)
+        self.assertIn('codey', self.fake_ledger)
 
     def test_code_only_uninstalled_skill_is_not_recorded_and_says_so(self):
         sha = self._commit_skill('codey', 'name: codey\nv2\n', 'edit')
@@ -1720,6 +1734,14 @@ class ClearAcceptsCodeOnlyUninstalled(LogBeforeClearGuard):
         self.assertIn('REFUSED to clear third-skill', err)
         self.assertIn('cleared code-only-skill', out)
         self.assertNotIn('cleared code-only-skill, third-skill', out)
+
+    def test_unreachable_cache_root_keeps_the_guard_for_a_code_only_skill(self):
+        gone = self.cache / 'no-such-cache-root'
+        with unittest.mock.patch.object(pr, 'CACHE_ROOT', gone):
+            err, out, _ = self._clear(['code-only-skill'], self.UNRELATED,
+                                      known=['code-only-skill', 'other-skill'])
+        self.assertIn('REFUSED', err)
+        self.assertNotIn('cleared code-only-skill', out)
 
     def test_missing_event_log_blocks_ordinary_but_not_code_only(self):
         def attempt(skills):
