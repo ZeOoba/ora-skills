@@ -1646,6 +1646,62 @@ class ReviewRoundThreeFindings(PostclickPackageVersion):
         self.assertFalse(self.calls.exists())
 
 
+class ReviewRoundFourLows(ReviewRoundThreeFindings):
+    """REFUTE round 4 lows (C2-C4)."""
+
+    def _recorded_then(self, pkg_path):
+        self._cache_md('0.0')
+        self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.28\n')))
+        self.assertEqual(self._baseline_json()['expected_version'], '4.28')
+        with unittest.mock.patch.object(rc, '_plugin_of', lambda s: None):
+            return self._run(rc.cmd_precheck, [str(pkg_path)])
+
+    def test_c2_missing_package_drops_a_recorded_version(self):
+        code, out = self._recorded_then(self.tmp / 'elsewhere' / 'demo-skill.skill')
+        self.assertEqual(code, 1, out)
+        self.assertNotIn('expected_version', self._baseline_json())
+
+    def test_c2_corrupt_package_drops_a_recorded_version(self):
+        bad = self.tmp / 'elsewhere' / 'demo-skill.skill'
+        bad.parent.mkdir()
+        bad.write_bytes(b'not a zip')
+        code, out = self._recorded_then(bad)
+        self.assertEqual(code, 1, out)
+        self.assertIn('FAIL', out)
+        self.assertNotIn('expected_version', self._baseline_json())
+
+    def test_c2_package_without_skill_md_drops_a_recorded_version(self):
+        pkg = self.tmp / 'elsewhere' / 'demo-skill.skill'
+        pkg.parent.mkdir()
+        _make_pkg(pkg, 'demo-skill', {'demo-skill/other.md': b'x'})
+        code, out = self._recorded_then(pkg)
+        self.assertEqual(code, 1, out)
+        self.assertNotIn('expected_version', self._baseline_json())
+
+    def test_c3_flag_equals_value_tokens_are_refused(self):
+        self._confirmable_install('4.30')
+        self._repo_md('4.30')
+        for tok in ('--version=4.29', '--version=', '--baseline=2026-01-01 00:00:00', '--bogus'):
+            with self.subTest(tok=tok):
+                code, out = self._main('postclick', 'demo-skill', tok, '--no-append')
+                self.assertEqual(code, 2, out)
+                self.assertNotIn('CONFIRMED', out)
+
+    def test_c4_override_is_compared_to_the_second_not_within_one_second(self):
+        self._installed = None
+        _write(rc.BASELINE_DIR / 'demo-skill' / 'sess-A.json',
+               json.dumps({'skill': 'demo-skill', 'creation_time': '2026-10-01T11:59:59.600000',
+                           'expected_version': '4.29'}))
+        v, why = rc._override_expected_version('demo-skill', datetime(2026, 10, 1, 12, 0, 0))
+        self.assertIsNone(v)
+        self.assertIn('no baseline records', why)
+        _write(rc.BASELINE_DIR / 'demo-skill' / 'sess-A.json',
+               json.dumps({'skill': 'demo-skill', 'creation_time': '2026-10-01T12:00:00.900000',
+                           'expected_version': '4.29'}))
+        v, why = rc._override_expected_version('demo-skill', datetime(2026, 10, 1, 12, 0, 0))
+        self.assertEqual((v, why), ('4.29', None))
+
+
 class CyclePrepPackagesBeforeBaseline(unittest.TestCase):
     """reimport_cycle prep wrote the baseline FIRST, so a package_skills refusal (dirty
     shared dep) left an unconsumed baseline that could confirm a later unrelated install."""
