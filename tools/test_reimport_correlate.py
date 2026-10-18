@@ -1474,21 +1474,20 @@ class PostclickOverrideMode(PostclickPackageVersion):
         self.assertIn('pass --version', out)
 
 
-class PlainBaselineKeepsTheRecordedVersion(PostclickPackageVersion):
-    """A plain `baseline <skill>` (the form entry-point-b.md documents) after --package or
-    precheck rewrote the file without expected_version, bringing the repo fallback back."""
+class PlainBaselineWritesNoRecordedVersion(PostclickPackageVersion):
+    """REFUTE round 2 (medium): a plain `baseline` that KEPT expected_version while the
+    CreationTime was unchanged let a stale package's version survive a repo bump. An
+    unchanged CreationTime says nothing was installed, not that the package is current. A
+    plain baseline therefore records NO version, and only --package / precheck do."""
 
-    def test_plain_baseline_keeps_it_while_the_creation_time_is_unchanged(self):
+    def test_plain_baseline_overwrites_an_earlier_recorded_version(self):
         (self.cache / 'demo-skill').mkdir()
-        self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.32\n')))
+        self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.31\n')))
         self._run(rc.cmd_baseline, ['demo-skill'])
-        self.assertEqual(self._baseline_json()['expected_version'], '4.32')
+        self.assertNotIn('expected_version', self._baseline_json())
 
-    def test_plain_baseline_drops_it_once_an_install_moved_the_creation_time(self):
-        (self.cache / 'demo-skill').mkdir()
-        self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.32\n')))
-        _write(rc._baseline_path('demo-skill'),
-               json.dumps({**self._baseline_json(), 'creation_time': '2019-01-01T00:00:00'}))
+    def test_absent_baseline_writes_none_either(self):
+        self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.31\n')))
         self._run(rc.cmd_baseline, ['demo-skill'])
         self.assertNotIn('expected_version', self._baseline_json())
 
@@ -1498,10 +1497,25 @@ class PlainBaselineKeepsTheRecordedVersion(PostclickPackageVersion):
         self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.33\n')))
         self.assertEqual(self._baseline_json()['expected_version'], '4.33')
 
-    def test_absent_baseline_keeps_it_too(self):
-        self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.32\n')))
+    def test_stale_package_install_after_a_repo_bump_is_not_confirmed(self):
+        # baseline --package 4.31, no click; repo bumps to 4.32; the step-2 plain baseline;
+        # then the STALE 4.31 package is installed. Must not be CONFIRMED (c175941 did).
+        self._cache_md('0.0')
+        self._run(rc.cmd_baseline, ['demo-skill'], str(self._pkg('version: 4.31\n')))
+        self._repo_md('4.32')
         self._run(rc.cmd_baseline, ['demo-skill'])
-        self.assertEqual(self._baseline_json()['expected_version'], '4.32')
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({**self._baseline_json(), 'creation_time': '2020-01-01T00:00:00'}))
+        self._cache_md('4.31')
+        ts = rc._creation_time('demo-skill').strftime('%Y-%m-%d %H:%M:%S')
+        _write(self.local_log,
+               f'{ts} [info] [SkillsPlugin] Delta: 1 to download\n'
+               f'{ts} [info] [SkillsPlugin] Sync complete: 1 downloaded, 0 failed\n')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, 1, out)
+        self.assertIn('VERSION-MISMATCH', out)
+        self.assertFalse(self.calls.exists())
+        self.assertFalse(self.pending_calls.exists())
 
 
 class VersionFlagValueIsValidated(PostclickTests):
