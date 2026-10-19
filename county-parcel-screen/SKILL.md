@@ -26,7 +26,7 @@ Class B/C industrial / shallow-bay / flex / office-warehouse only. 10,000-80,000
 SF building (sweet spot 15-50K). Deal $1-10M; equity sleeve $0.75-5M at 65% LTV.
 Hard floors: >=25% discount to replacement (~$150/SF benchmark) AND >8% stabilized
 YoC. Instant disqualifiers: retail/office/multifamily, auto-use tenancy,
-institutional Class A pricing, outside ORA's nine clusters.
+institutional Class A pricing, outside ORA's eleven clusters.
 
 ## Workflow
 
