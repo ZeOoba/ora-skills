@@ -12,7 +12,7 @@ description: >
   broker batch routes to deal-flow-triage.
 ---
 
-# county-parcel-screen (v1.4)
+# county-parcel-screen (v1.5)
 
 Generate off-market industrial acquisition leads for Oxford Realty Advisors from
 public county property data. The screen finds owners with the CAPACITY to sell at
@@ -342,13 +342,30 @@ verification ranks quality. Attach a one-line pre-mortem (most likely reason
 the deal fails ORA underwriting) to every presented candidate - ORA project
 doctrine requires it.
 
+**Finalist loan-maturity check (v1.5, Gabriel 2026-10-18).** For each presented
+finalist only (tens of rows, never the universe), look up the most recent
+recorded mortgage/deed of trust on the county recorder's public index (e.g.
+MDLandRec in Maryland) by hand or by a permitted per-document query. Record
+recording date, lender name and lender type (bank / CMBS / life co / private /
+seller), and estimate a maturity window as recording date + 5, 7 and 10 years,
+tagged `[est]` (the index carries no maturity date). A window ending within 24
+months, or a 2016-2021 origination now inside its likely term, is a
+`MATURITY-WINDOW` lead flag: it moves the row up the call order (after estate and delinquent entity owners,
+before sellers-in-motion) and is passed to acquisition-underwriting as a
+Seller/Motivation signal. Lead input only - never a score component. This does
+NOT reverse the 2026-09-18 ruling in references/distress-feeds.md: bulk
+mortgage-maturity mining stays ruled out (no bulk recorder access in any ORA
+market). Honor every host's robots.txt and terms; a recorder that bars scripted
+access is browsed by a person. Also note any finalist that is owner-occupied by
+an operating business as a `SALE-LEASEBACK` candidate.
+
 ### 9. Deliver
 ORA-style workbooks (Oxford Navy 1B2A4A headers, Arial, zero formula errors,
 run the xlsx skill's recalc.py): YYYYMMDD_[Market]-Parcel-Screen_v0N.xlsx
 (ranked screen + README + QC failure-modes sheet) and, when distress data
 exists, YYYYMMDD_[Market]-Motivated-Leads_v0N.xlsx. Save to the Investment
 Candidates folder. Call-order doctrine: estate first, then delinquent entity
-owners, then sellers-in-motion, then absentee portfolios, then long-holds.
+owners, then `MATURITY-WINDOW` finalists (v1.5), then sellers-in-motion, then absentee portfolios, then long-holds.
 
 ## Engineering notes
 
@@ -387,6 +404,7 @@ volume + quarterly re-runs + signal-led call order is the strategy.
 - versions/CHANGELOG-v1.0-v1.3.md - full changelog text.
 
 ## Changelog
+- **v1.5 (2026-10-18):** Step 8 adds a finalist-only loan-maturity check (recorded mortgage + assumed 5/7/10-yr term, `[est]`) producing `MATURITY-WINDOW` and `SALE-LEASEBACK` lead flags; call order inserts `MATURITY-WINDOW` after delinquent entity owners. `workflows/parcel-screen-fanout.js` implements it: the verify agent records `recordedMortgage` / `maturityWindow` / `saleLeasebackCandidate`, and ranking uses a `maturity-window` bucket. The 2026-09-18 bulk-mining ruling stands. Parity with acquisition-underwriting v4.33 Seller/Motivation signals. No scored constant changed.
 - **v1.4 (2026-10-02):** Added references/distress-feeds.md (foreclosure and tax-lien sources for Franklin OH, Maryland, Jackson MO) and a step 7 pointer; county-endpoints.md: Jackson DLT cancellation/petition source, Wyandotte count refresh, Maryland `CONVEY1=4` decoded, recording-lag re-check flagged. Docs only. No scored constant changed.
 - **v1.3 (2026-09-18):** Hold/tenure scoring becomes a graduated curve (tau 8 yrs, cap 20 at 38 yrs); 16-point UNKNOWN-HOLD default RETIRED (coverage test, `HOLD-UNKNOWN` / `Hold ceiling`, >20% drops the component); `HOLD-PRE-NOMINAL` fallback; sibling-parcel consolidation closes F6 (`Relationships` sheet, graduated `multi`); hold-data-availability table by market; Maryland hold gap closed (`TRADATE`); Franklin re-scored (mean delta -4.1). **MOVES SCORES.** Full text: versions/CHANGELOG-v1.0-v1.3.md
 - **v1.2 (2026-09-18):** Sub-bands pinned from the Franklin OH pilot; Howard MD / Jackson MO missing-component rescales documented; counterparty floor made FAIL-LOUD on the canonical absolute guard path; Franklin `IsValid` and Jackson paging corrections in `county-endpoints.md`. No scored constant changed. Full text: versions/CHANGELOG-v1.0-v1.3.md

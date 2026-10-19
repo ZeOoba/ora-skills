@@ -3,7 +3,7 @@ name: loi-generation
 description: "Use when the user mentions: draft LOI, generate LOI, letter of intent, offer letter, or non-binding proposal to purchase; when an OM, broker package or listing is uploaded with intent to make an offer; or when an acquisition-underwriting evaluation advances to an offer. Also trigger on: revise LOI, update LOI, compare LOI to a prior version, send LOI to a broker. SOLE path for Oxford Realty Advisors letters of intent -- never document-assembly's generic template or legal-intelligence. Refuses to draft without the ORA walk price from acquisition-underwriting. Handles STANDARD/CONDENSED, state overlays, 1031, entity-interest purchase."
 ---
 
-# LOI Generation — Oxford Realty Advisors (v1.10)
+# LOI Generation — Oxford Realty Advisors (v1.11)
 
 You are operating as the lead acquisitions counsel-substitute for Oxford Realty Advisors. This skill produces a complete, broker-ready, buyer-protective letter of intent from an OM, broker package, or upstream `acquisition-underwriting` evaluation. The output is a condensed, plain-English LOI on ORA letterhead — not a contract, not legalese, but every dollar-material protection Gabriel needs at the LOI stage.
 
@@ -33,7 +33,7 @@ When ambiguous, default to **DRAFT** and ask one clarifying question only if a m
 - Purchase Price
 - Earnest Money Deposit
 - Seller broker name, firm, address
-- **`Walk Price`** — the ORA walk price from `acquisition-underwriting` (the lowest price clearing **all** binding Stage 1 floors: Basis, Yield, and IRR). If no walk price exists for this deal, **run `acquisition-underwriting` first — do not draft.** An LOI is an offer; ORA does not make offers at prices it has not tested. Absence of a walk price is the single most common way a floor-breaching offer reaches a counterparty, because nothing downstream can catch what was never computed.
+- **`Walk Price`** — the ORA walk price from `acquisition-underwriting` (the lowest price clearing **all** binding Stage 1 floors: Basis, Yield, and IRR — the IRR floor is 10-yr unlevered and rate-linked since acquisition-underwriting v4.33, so cite the UST10 value and date the walk price was solved at; a walk price solved before v4.33 must be re-solved). If no walk price exists for this deal, **run `acquisition-underwriting` first — do not draft.** An LOI is an offer; ORA does not make offers at prices it has not tested. Absence of a walk price is the single most common way a floor-breaching offer reaches a counterparty, because nothing downstream can catch what was never computed.
 
 **Highly preferred (will pull from connectors or use ORA defaults if absent):**
 - Tenancy status (vacant / single-tenant / multi-tenant)
@@ -343,6 +343,7 @@ Notion (`notion-search`/`notion-fetch`/`notion-update-page` — Pipeline Tracker
 
 ## VERSIONING
 
+- v1.11 — 2026-10-18, walk-price definition cites the acquisition-underwriting v4.33 IRR floor (10-yr unlevered, rate-linked): name the UST10 value and date a walk price was solved at; walk prices solved before v4.33 are re-solved. Wording only — no phase, gate or template changed.
 - v1.10 — 2026-09-23, outbound buyer-profile facts corrected (Gabriel, in-turn). **No numeric leverage in counterparty text:** the Buyer Information page's former numeric debt-and-LTV sentence becomes "The portfolio is conservatively leveraged, with the substantial majority of its value held as principal equity", and `references/ora-standards.md`'s cover-note numeric-LTV bullet becomes "Conservative leverage" with an explicit never-state-a-number rule. The verified 18.71% (Master Workbook `00_Home!G7`, 2026-09-23) stays internal. **Scale facts:** corrected to "twenty-six properties / 500,000+ SF / ~$57 million" (count, SF and markets per Gabriel's 2026-08-18 outbound canon shared with `acquisition-proposal-generation`; value from the live workbook $56.67M). Cover-note markets are narrowed to the three core markets. Template text-only edit (2 runs; XSD validation PASS, paragraph count 430→430). **No conditional block, state overlay, QC Gate item, token or governor constant changed.**
 - v1.9 — 2026-09-10, retention rule adopted (ORA Automation Audit R24-11). This skill was the 3rd-largest in the catalog at 7,208 words and carried **no growth bound of any kind** — the full v1.0–v1.8 history sat inline and had never been extracted. Added the 6-entry count cap and the ~2,000-char per-entry cap below, and performed the extraction the count rule demanded in the same pass (v1.3/v1.2/v1.1/v1.0 → `versions/CHANGELOG-v1.0-v1.3.md`). **No conditional block, state overlay, QC Gate item, walk-price precondition or token changed** — documentation discipline only.
 
