@@ -1,5 +1,5 @@
 ---
-name: acquisition-underwriting
+name: "acquisition-underwriting"
 description: "Use when evaluating, screening, pricing, or underwriting an industrial/flex acquisition for Oxford Realty Advisors — the single funnel for deal evaluation (Buy Box & Scorecard rev 1.1; modes SCREEN · SNAPSHOT · UNDERWRITE · COMPS · FULL). Trigger on: underwriting, deal analysis, acquisition, screen this deal, LOI, PSA, due diligence, cap rate, pro forma, IRR model, yield on cost, replacement cost, broker package, offering memorandum, OM, buy box, scorecard, expected score, P(exec), evaluating a purchase, Crexi, LoopNet listing. Also trigger on: industrial/flex market research (Columbus, Cincinnati, Kansas City, Indianapolis, Maryland, Madison, Grand Rapids, Richmond, Des Moines, Louisville KY, Chicago/Cook County IL), broker package or OM upload. Trigger also on: carrying cost, operating expense, OpEx per SF, property tax reassessment, reassessed taxes, transfer tax, controlling-interest, abatement, PILOT, drop-and-swap (reassessment matrix incl. IL/Cook)."
 ---
 
