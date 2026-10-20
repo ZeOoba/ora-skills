@@ -156,9 +156,10 @@ runs(re_p, "RE:\tLetter of Intent (“LOI”) to purchase {{PROPERTY_STREET_ADDR
 para("Dear {{SELLER_BROKER_SALUTATION}},", after=11)
 
 J = WD_ALIGN_PARAGRAPH.JUSTIFY
-para("Oxford Realty Advisors (est. 2005) owns twenty-six properties totaling more than 500,000 square feet in "
-     "Maryland, Columbus, Ohio, and Kansas City, Missouri, valued at approximately $57 million. It invests only principal "
-     "capital, transacts all-cash, and has closed substantially all transactions placed under contract since inception.",
+para("Oxford Realty Advisors is a privately held, family-owned real estate investment firm founded in 2005. It owns "
+     "and operates twenty-six properties, primarily shallow-bay industrial and flex, totaling more than 500,000 square "
+     "feet in Maryland, Columbus, Ohio, and Kansas City, Missouri, with approximately 140 tenants. It invests only its "
+     "own capital, with no outside investors, and closes all-cash.",
      after=9, align=J)
 
 para("Oxford Realty Advisors, or its assigns (the “Buyer”), submits this non-binding letter of intent (except as "
