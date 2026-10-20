@@ -32,6 +32,7 @@ The STANDARD format is unchanged and still available on request. Record the form
 - "Proof of funds available upon request." centered italic grey 9 pt directly below the acceptance block.
 - Footer on every page: grey bold 9 pt `9510 Persimmon Tree Road, Suite 200 │ Potomac, MD 20854 │ 301.512.6125 │` + hyperlinked `www.oxfordra.net`, ORA block mark right-aligned. No page numbers (Lucern form).
 - No Template Metadata page, no State Overlay Appendix, no Execution Page, no Buyer Information page — the credentials sentence on page 1 replaces the Buyer Information page.
+- Credentials paragraph (Gabriel, 2026-10-20): verifiable firm facts from `references/ora-standards.md` Portfolio context only — family-owned / family capital, founded 2005, property count, square footage, product mix, markets, tenant count, no outside investors, all-cash. Never state portfolio value or a closing-record claim ("closed substantially all…") in a SHORT LOI or its cover note.
 - Target length: **two pages filled.** Tested 2026-10-20 (soffice, Liberation Serif metrics = Times New Roman), all at 2 pages: Ohio multi-tenant with estoppel sentence; vacant with preservation covenant; arm's-length single-tenant with tenant disclosure; multi-tenant with dominant-tenant disclosure; multi-tenant plus a roof known-condition carveout. Headroom is about one line beyond those cases: stacking two extra lines of deal text (e.g. a non-Ohio transfer-tax sentence plus a single-tenant disclosure plus a long LP seller name) renders 3 pages — report under #17. Terms may break across pages (widow/orphan control on). Do not restore PSA-deferred clauses (Gabriel, 2026-10-20: none restored).
 
 ## Term order (fixed)
@@ -97,7 +98,7 @@ Every other item of `references/qc-gate.md` applies unchanged, including the har
 | 8 | Signatory check reads the signature block (no Execution Page in SHORT): Gabriel Goldberg / Authorized Representative / Oxford Realty Advisors (or override) |
 | 9 | `301.512.6125` appears in the footer on every page (grep count = page count); `301.983.8000` returns zero |
 | 10 | Footer reads the Persimmon Tree address │ Potomac │ phone │ `www.oxfordra.net` with the block mark; no page numbers required |
-| 12 | Credentials sentence reads "twenty-six properties totaling more than 500,000 square feet … approximately $57 million"; no numeric LTV, debt, or leverage figure anywhere (v1.10 rule) |
+| 12 | Credentials sentence reads "privately held, family-owned … founded in 2005 … twenty-six properties, primarily shallow-bay industrial and flex, totaling more than 500,000 square feet … approximately 140 tenants … only its own capital, with no outside investors … all-cash". It states NO portfolio value, NO closing/track-record claim, and no numeric LTV, debt, or leverage figure (Gabriel, 2026-10-20; v1.10 rule) |
 | 14 | Acceptance block present; Seller line carries `{{SELLER_ENTITY_NAME}}`; Buyer signatory Gabriel Goldberg, Authorized Representative (or override) |
 | 17 | Page count = 2. If the filled letter runs to 3 pages, tighten deal-specific phrases (tenant disclosure, zoning) — never delete a survivor clause; if still 3, report it rather than shrinking fonts or margins |
 | 22 | Vacant deals: the preservation covenant is the Operations conditional sentence (no casualty-threshold check in SHORT) |
