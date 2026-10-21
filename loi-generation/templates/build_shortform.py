@@ -151,7 +151,7 @@ re_p.paragraph_format.left_indent = Inches(0.75)
 re_p.paragraph_format.first_line_indent = Inches(-0.75)
 re_p.paragraph_format.tab_stops.add_tab_stop(Inches(0.75))
 re_p.paragraph_format.space_after = Pt(11)
-runs(re_p, "RE:\tLetter of Intent (“LOI”) to purchase {{PROPERTY_STREET_ADDRESS}}, {{PROPERTY_CITY}}, {{PROPERTY_STATE_FULL}} {{PROPERTY_ZIP}} (the “Property”)")
+runs(re_p, "RE:\tAll-Cash Letter of Intent (“LOI”) to purchase {{PROPERTY_STREET_ADDRESS}}, {{PROPERTY_CITY}}, {{PROPERTY_STATE_FULL}} {{PROPERTY_ZIP}} (the “Property”)")
 
 para("Dear {{SELLER_BROKER_SALUTATION}},", after=11)
 
@@ -162,7 +162,7 @@ para("Oxford Realty Advisors is a privately held, family-owned real estate inves
      "own capital, with no outside investors, and closes all-cash.",
      after=9, align=J)
 
-para("Oxford Realty Advisors, or its assigns (the “Buyer”), submits this non-binding letter of intent (except as "
+para("Oxford Realty Advisors, or its assigns (the “Buyer”), submits this all-cash, non-binding letter of intent (except as "
      "stated below) to purchase from {{SELLER_ENTITY_NAME}} (the "
      "“Seller”) the Property — a {{PROPERTY_TENANCY_PHRASE}} {{PROPERTY_USE_TYPE}} building of "
      "approximately {{PROPERTY_SF}} square feet on approximately {{PROPERTY_ACRES}} acres "
@@ -170,8 +170,8 @@ para("Oxford Realty Advisors, or its assigns (the “Buyer”), submits this non
      after=9, align=J)
 
 term("Purchase Price",
-     "${{PURCHASE_PRICE_NUMERIC}} to be paid to Seller in cash at Closing in exchange for free and clear title. "
-     "Closing is not contingent on financing.")
+     "${{PURCHASE_PRICE_NUMERIC}}, all cash, paid to Seller in immediately available funds at Closing in exchange for "
+     "free and clear title. Buyer’s obligation to close is not contingent on financing or appraisal.")
 
 term("Deposit Terms",
      "${{EMD_NUMERIC}} initial earnest money will be deposited by Buyer with a title company of Buyer’s choosing "
@@ -189,9 +189,8 @@ term("Due Diligence",
      "physical-condition documents and allow Buyer access to the Property.")
 
 term("Closing",
-     "{{CLOSING_DAYS_WORDS}} days after expiration of the Due Diligence Period. Buyer is entitled to one (1) fifteen (15) "
-     "day extension of the Closing date by written notice to Seller and posting an additional deposit of "
-     "${{EXTENSION_DEPOSIT_NUMERIC}}, refundable on the same terms as the initial earnest money and credited towards the Purchase Price. Seller will convey title by {{DEED_FORM}}, free and clear of all liens and encumbrances other than those Buyer approves in writing.")
+     "{{CLOSING_DAYS_WORDS}} days after expiration of the Due Diligence Period. Seller will convey title by "
+     "{{DEED_FORM}}, free and clear of all liens and encumbrances other than those Buyer approves in writing.")
 
 term("Property Condition",
      "The Purchase Price assumes the Property is free of environmental, physical, and other material defects, "
@@ -201,8 +200,8 @@ term("Property Condition",
 
 term("Costs",
      "{{TRANSFER_TAX_SENTENCE}} Seller will pay for the owner\u2019s title policy and the release of any liens. Buyer "
-     "will pay deed recording fees, title endorsements, any new survey, and all costs of its due diligence and any "
-     "financing. Taxes, rents, and operating expenses will be prorated as of Closing by the method customary in "
+     "will pay deed recording fees, title endorsements, any new survey, and all costs of its due diligence. "
+     "Taxes, rents, and operating expenses will be prorated as of Closing by the method customary in "
      "{{PROPERTY_COUNTY}}, {{PROPERTY_STATE_FULL}}. Each party will pay its own attorney\u2019s fees. All other costs "
      "will be divided in accordance with local custom.")
 

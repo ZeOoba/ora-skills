@@ -39,7 +39,9 @@ The STANDARD format is unchanged and still available on request. Record the form
 
 Purchase Price · Deposit Terms · Due Diligence · Closing · Property Condition · Costs · Operations · Exclusivity · Other Conditions · Confidentiality · Offer & Acceptance (carries the binding-provisions sentence).
 
-**Survivors — never cut from SHORT:** Phase I→II auto-extension (Due Diligence — triggers on a REC or a recommendation for further investigation; refundability extends with it); defect-free assumption (Property Condition); designee vesting / direct deeding (Other Conditions); deposit due-window from `{{EMD_DUE_DAYS_WORDS}}`; "Closing is not contingent on financing."
+**Survivors — never cut from SHORT:** Phase I→II auto-extension (Due Diligence — triggers on a REC or a recommendation for further investigation; refundability extends with it); defect-free assumption (Property Condition); designee vesting / direct deeding (Other Conditions); deposit due-window from `{{EMD_DUE_DAYS_WORDS}}`; "Buyer’s obligation to close is not contingent on financing or appraisal."; the all-cash statement in the RE line ("All-Cash Letter of Intent"), intent paragraph ("all-cash, non-binding") and Purchase Price ("all cash, paid … in immediately available funds")
+
+**No buyer closing-extension option (Gabriel, 2026-10-20):** Closing is fixed at `{{CLOSING_DAYS_WORDS}}` days after the Due Diligence Period; do not add Lucern's extension-for-added-deposit right back. Costs does not mention Buyer financing.
 
 **Deliberately omitted (PSA-deferred, Gabriel 2026-10-20):** casualty / risk of loss, title-objection cure mechanics, closing-deliverables list, governing law and venue, capex cap, Bill of Sale detail (personal property still conveys under Property Condition), affiliated-tenant disclosures, ROFR waiver.
 
@@ -54,7 +56,6 @@ All other tokens follow `references/token-reference.md`. `_WORDS` tokens keep th
 | `{{DEED_FORM}}` | From the state table below | `general warranty deed` |
 | `{{TRANSFER_TAX_SENTENCE}}` | From the state table below; one full sentence ending in a period | `Seller will pay all conveyance, transfer, or similar taxes payable upon the transfer of the Property.` |
 | `{{OPERATIONS_CONDITIONAL_SENTENCE}}` | Tenanted: the estoppel sentence. Vacant: the preservation covenant. Empty string only if neither applies (never both empty for a vacant deal) | see below |
-| `{{EXTENSION_DEPOSIT_NUMERIC}}` | 0.25% of Purchase Price, rounded up to the nearest $5,000, minimum $25,000; digits with `.00` | `25,000.00` |
 | `{{PSA_DRAFT_DAYS_WORDS}}` | Includes the unit word | `ten (10) business` |
 | `{{CLOSING_DAYS_WORDS}}` | Starts the sentence — capitalize the first word | `Fifteen (15)` |
 | `{{PROPERTY_COUNTY}}` | Includes "County" | `Franklin County` |
