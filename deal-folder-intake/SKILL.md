@@ -1,11 +1,11 @@
 ---
 name: "deal-folder-intake"
-description: "Use when the user says: store this deal, archive this package, save these files for [property], file this broker package, set up a deal folder, keep this for the record, or uploads a multi-file acquisition package (OM, leases, tax bills, site plan, Argus/CoStar exports, models, IC memos) without asking for an underwrite — archives it into a permanent, hash-verified Oxford Realty Advisors deal folder. Does NOT underwrite, screen, or price — that is acquisition-underwriting; does NOT pre-screen a single target — that is verified-deal-recon. Run it AFTER an underwrite to make the package permanent, or standalone to park a package that has not been underwritten yet."
+description: "Archive an uploaded or received acquisition document package into a permanent, hash-verified ORA deal folder, then reconcile the Property Register against the closing documents."
 ---
 
-# DEAL FOLDER INTAKE — ORA acquisition package archiving (v1.0)
+# DEAL FOLDER INTAKE — ORA acquisition package archiving
 
-Turns a pile of uploaded deal documents into a permanent, verifiable deal folder: **structure → hash-verify → manifest → mirror → memory pointer.** Session upload folders are ephemeral; anything not archived is lost when the session ends.
+Turns a pile of uploaded deal documents into a permanent, verifiable deal folder: **structure → hash-verify → manifest → mirror → memory pointer → register reconciliation.** Session upload folders are ephemeral; anything not archived is lost when the session ends.
 
 ## SCOPE
 
@@ -112,9 +112,23 @@ The folder is worthless if the next session cannot find it.
 
 ---
 
+## STAGE 6B — PROPERTY REGISTER RECONCILIATION (v1.1)
+
+Runs when the package contains a settlement statement, deed, ALTA/HUD statement, PSA or closing statement for a CLOSED ORA property. Skip for unclosed or passed deals. Added after the retro-underwrite found blank purchase prices and conflicting dates in the Notion Property Register that the original settlement statements would have resolved.
+
+1. Fetch the deal's row in the Notion Property Register (query by address; the row URL goes in the manifest).
+2. Compare four fields against the closing documents: **Purchase Price** (100% settlement price), **Purchase Date** (settlement date, not PSA effective date, assignment date or recording date; record the recording date separately), **Total SF**, **Year Built** if a survey or appraisal states it.
+3. **Ownership basis:** the closing documents give price at 100%. If ORA's share is below 100% (JV), enter price at 100% and state the share in Notes; never enter a share-adjusted price into the price field.
+4. If a field is blank or disagrees with the closing document, write the document value and log Source A / Source B / value used in the manifest's Open items (or a Provenance table). A settlement statement beats a review memo, an OM and the NOI sheet.
+5. **Do not overwrite a field that the page itself documents as an unresolved conflict** (a verification log saying "left unchanged, awaiting settlement statement") unless the package contains that exact statement. If it does, resolve the note and cite the file.
+6. A price that cannot be split across register rows (portfolio purchases) stays blank; put the portfolio price and allocation basis in Notes.
+7. Report each change in the hand-off as field, old value, new value, source file. Never change a field the user told you to leave alone.
+
+---
+
 ## STAGE 7 — QC GATE
 
-Do not report completion until all twelve pass:
+Do not report completion until all thirteen pass:
 
 1. Every uploaded file is archived — including unparseable binaries.
 2. File counts match, source vs archive vs mirror.
@@ -128,6 +142,7 @@ Do not report completion until all twelve pass:
 10. Sources-not-held section is populated (or explicitly "none").
 11. Mirror verified at the destination, or its absence explained.
 12. Deal memory and `MEMORY.md` index both updated.
+13. Register reconciliation (Stage 6B) done or explicitly not applicable, with each change listed.
 
 Then present the manifest and the dossier (if any) via the file-sharing tool, and state in two sentences: what was archived, and what remains open.
 
@@ -141,4 +156,4 @@ Then present the manifest and the dossier (if any) via the file-sharing tool, an
 - **Archiving the files but not the live sources** — the GIS pull, the broker e-mail, the market report. Six weeks later nobody can reconstruct where a figure came from.
 - **A second folder for the same asset** — two partial archives, neither authoritative. Always search first.
 - **Treating an OCR copy as a replacement** — keep both the image-only original and the OCR copy; the original is the executed instrument.
-
+- **Register left blank or stale after closing** — prices, dates and share basis drift from the settlement statement and later feed the back-test with wrong inputs. Run Stage 6B.
