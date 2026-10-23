@@ -69,13 +69,13 @@ These positions matter but Gabriel will accept fallbacks if Seller pushes:
 ## Portfolio context for use in cover note or supporting language
 
 - 26 properties / 500,000+ SF
-- ~$57M aggregate portfolio value
+- ~$57M aggregate portfolio value — **INTERNAL ONLY: never in any LOI, Buyer Information page, or cover note (Gabriel, 2026-10-20)**
 - ~140 tenants
 - Markets: three core markets — Maryland (HQ), Columbus OH (~40%), Kansas City MO
 - Conservative leverage; all-cash close capability — **never state a numeric LTV, debt total or leverage percentage in any cover note, LOI or counterparty text** (Gabriel, 2026-09-23)
 - 45-day close commitment from PSA execution (subject to DD)
 - Family capital — no LPs, no fund vehicles, no capital call process
-- Track record: substantially all transactions executed under contract since 2005 inception have closed
+- Track record: substantially all transactions executed under contract since 2005 inception have closed — **INTERNAL ONLY: never state a closing-record claim in any LOI or cover note (Gabriel, 2026-10-20)**
 
 Sources (2026-09-23): count / SF / tenants / markets = Gabriel-confirmed outbound canon (2026-08-18, same as `acquisition-proposal-generation`), consistent with the Master Workbook roster (513,158 SF); value = Master Workbook `00_Home!B7` $56,668,952, live read. Re-verify value against the live workbook before each revision; do not update any figure here from the public site.
 
