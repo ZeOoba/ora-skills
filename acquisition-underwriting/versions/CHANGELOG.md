@@ -1,0 +1,45 @@
+# Acquisition Underwriting: Changelog (single index, newest first)
+
+Created 2026-10-23 (v4.35). The body of SKILL.md is authoritative; this file is provenance. Entries v4.31 to v4.34 below are copied VERBATIM from the former inline header of SKILL.md (lossless). Older ranges remain in their archive files.
+
+## Version index
+| Version | Date | Ratifier | Summary (200 chars max) | Constants changed | Evidence ID |
+|---|---|---|---|---|---|
+| v4.35 | 2026-10-23 | Gabriel, in-turn | Rule Evidence field and admission rule; single changelog index; Basis-at-RCT-LOW/POINT/HIGH sensitivity line (reporting only). | none | RE-4.35-1, RE-4.35-2 |
+| v4.34 | 2026-10-19 | Gabriel, in-turn | Two-tier return thresholds recorded: 10% acquisition IRR floor vs 8% portfolio hurdle; Stage 1 IRR text corrected. Wording only. | none | RE-4.34-1 |
+| v4.33 | 2026-10-18 | Gabriel, in-turn | Audit package items 2-8: unlevered IRR floor; Rollover & Credit Block; FORT Basis multiplier; MD/DC exit cap 7.25%; seller signals; variance review; PAS role. | IRR floor basis; MD/DC exit cap; credit loss; renewal rates; FORT multipliers | RE-4.33-1..7 |
+| v4.32 | 2026-10-18 | naming only | LTV naming reconciliation: all-cash portfolio-aggregate LTV (governor) vs with-refi portfolio LTV (informational). | none | RE-4.32-1 |
+| v4.31 | 2026-10-17 | Gabriel, in-turn | Informational with-refi portfolio-LTV line added to IC memo section 7; never gating. | none | RE-4.31-1 |
+| v4.30 | 2026-10-17 | [per archive] | Ancillary-income lease abstraction (Rule 9) and ground-lease valuation ladder. | none | RE-4.30-1 |
+| v4.29 | 2026-10-16 | Gabriel | All-cash portfolio-aggregate LTV test: modeled refi debt excluded from the governor numerator. | basis of the 40% test | [per archive] |
+| v4.23-v4.28 | see archives | | `versions/CHANGELOG-v4.23.md` through `-v4.28.md` | | |
+| v3.2-v4.22 | see archive | | `versions/CHANGELOG-v3.2-v4.22.md` | | |
+
+## Rule Evidence ledger (retro-tagged 2026-10-23)
+Fields per the RULE EVIDENCE section of SKILL.md. Values not in the original entry text are marked [per archive] and must be completed from the archive or by the entry's author.
+
+| Evidence ID | Entry | Incidents | Expected loss | Class | Testable via |
+|---|---|---|---|---|---|
+| RE-4.35-1 | Rule Evidence field and admission rule | 0 | n/a (process) | RATIFIED-JUDGMENT (Gabriel, in-turn, 2026-10-23) | Fill rate of the field on new entries |
+| RE-4.35-2 | Basis at RCT LOW / POINT / HIGH line | 0 deals; computed: at all-in = 30% of RCT LOW a +/-10% RCT error moves Basis 3.8 to 17.6 pts of 25 | [UNQUANTIFIED] | THEORY (computed) | BackTestDataset Basis component; deflator test |
+| RE-4.34-1 | Two-tier thresholds | 0 (wording only) | n/a | RATIFIED-JUDGMENT (2026-10-19) | Share of deals where the 10% IRR floor binds before the 8% yield floor |
+| RE-4.33-1 | Unlevered IRR floor | 0; structural (aggregate LTV ~19% vs 65% test) | [UNQUANTIFIED] | RATIFIED-JUDGMENT | As above; audit note: 8.0% YoC implies ~10.4-11.6% unlevered IRR under smooth 2.5-3% growth |
+| RE-4.33-2 | Suite-Level Rollover & Credit Block | 0 | [UNQUANTIFIED] | EXTERNAL-ANCHORED (EastGroup FY2025 retention 74.6%) | Variance_Review: renewal, downtime, credit loss, TI/LC |
+| RE-4.33-3 | FORT Basis multiplier | 0 | [UNQUANTIFIED] | RATIFIED-JUDGMENT (out-of-cycle) | Retro FORT run; Combined (FORT-adjusted) |
+| RE-4.33-4 | MD/DC exit cap 7.25% | 0 | [UNQUANTIFIED] | EXTERNAL-ANCHORED (Baltimore vacancy 8.4% Newmark / 9.3% C&W, Q2 2026, BLENDED; +25 bps [EST]) | Maryland clearing prices and realized caps |
+| RE-4.33-5 | Seller signals (loan maturity, sale-leaseback) | 0 | [UNQUANTIFIED] | THEORY | BackTest Seller vs P(exec) outcome |
+| RE-4.33-6 | Closed-deal variance review | 0 | n/a | RATIFIED-JUDGMENT | Variance_Review fill rate |
+| RE-4.33-7 | PAS role limited to cure CapEx and BDS-4 | 1 internal datapoint (7267 Park Circle, broker-asserted [est]) | [UNQUANTIFIED] | THEORY | Rent vs service amps/SF regression on own rent roll |
+| RE-4.32-1 | LTV naming | 1 (adversarial review of v4.29/v4.31) | n/a | ORA-OBSERVED | none |
+| RE-4.31-1 | With-refi LTV disclosure | 0 | [UNQUANTIFIED] | RATIFIED-JUDGMENT (2026-10-17) | Disclosure only |
+| RE-4.30-1 | Ancillary-income abstraction (Rule 9) | 1: 8625 Troost Ave, 2026-10-17 (AT&T lease 5 + 17 x 5 yrs; model stopped at 2037) | [UNQUANTIFIED] | ORA-OBSERVED, EVIDENCE: SINGLE-INCIDENT | Next ancillary-income deal |
+
+## Full entries (verbatim from the former inline header)
+
+**v4.34 (2026-10-19):** **Two-tier return thresholds recorded** (Gabriel, in-turn, 2026-10-19, option (a) of the v4.33 follow-up). The 10.0% unlevered IRR acquisition floor (v4.33) and the 8.0% unlevered portfolio capital-allocation hurdle (`capital_config` v1, ratified 2026-06-22 — v4.33 wrongly called it PROPOSED) are kept deliberately different; Stage 1 IRR floor text corrected. Wording only: **no floor, weight, exit cap or governor constant (DSCR 1.25x / per-property LTV 65% / portfolio-aggregate LTV 40%) changed.** v4.30 entry archived to `versions/CHANGELOG-v4.30.md` under R24-11.
+
+**v4.33 (2026-10-18):** **Underwriting-audit package, items 2–8** (Gabriel, in-turn, 2026-10-18; out-of-cycle ratification of changes the 2026-10-18 audit had staged for the December back-test, which re-confirms them). (1) **IRR floor is now unlevered:** 10-yr unlevered IRR ≥ the greater of 10.0% and the 10-yr UST + 550 bps; levered 5/10-yr IRR is reported only (retired floor ≥15%/≥12%); DSCR is the only levered floor. (2) **Suite-Level Rollover & Credit Block** (new convention): renewal probability, downtime and re-leasing cost by suite size, 1.25% credit loss below the unchanged 5% structural vacancy, market rent growth split from contractual escalators. (3) **FORT-adjusted Basis:** once Stage 2.8 has run, Basis pts × 1.00 (A to B–) / 0.75 (C+, C) / 0.50 (D+, D); floors and walk price unchanged. (4) **Markets:** Maryland/DC exit cap 7.00% → 7.25%; Stage 2.3 Part B thresholds ratified as flags; cluster freeze until a scale threshold is set; Columbus, Indianapolis and Kansas City are priority clusters. (5) **Seller signals:** loan maturity ≤24 months (finalist recorder check, `county-parcel-screen` v1.5) and occupying owner-user sale-leaseback. (6) **Closed-deal variance review** at 12/24/36 months feeds the back-test. (7) **PAS role:** electrical cure CapEx and BDS-4 input only, never a scorecard line. **Unchanged:** reserves $0.15/SF (audit item 1, excluded by Gabriel), Yield and Basis floors, vintage ramp, RCT v03, Ruling 5, and every governor constant (DSCR 1.25x / per-property LTV 65% / portfolio-aggregate LTV 40%). Sibling edits: `deal-comparison` v1.5, `county-parcel-screen` v1.5, `loi-generation` v1.11, `target-markets.json` v1.13 (freeze note). v4.29 entry archived to `versions/CHANGELOG-v4.29.md` under R24-11.
+
+**v4.32 (2026-10-18):** **LTV naming reconciliation — naming-only change, no doctrine change.** Adversarial review of v4.29/v4.31 found "pro-forma portfolio LTV" naming BOTH the gating governor figure and the informational with-refi line. Fixed: the governor figure is now **all-cash portfolio-aggregate LTV** (STAGE 2.3 Part A, the flag line, `references/doctrine-rationale-and-incidents.md`); the informational line is **with-refi portfolio LTV**, non-gating (`references/ic-memo-structure.md` §7); "pro-forma" stays reserved for other uses. Part A now also states that the all-cash figure sees only debt already booked (a closed refi enters through the next live workbook read) and that enforcement before a refi closes (a refi-time aggregate-LTV gate) is an OPEN follow-up; no such gate exists yet. The two-basis convention was approved by Gabriel in-turn on 2026-10-17 and is unchanged; the 'open follow-up' sentences only state what main lacks, not new doctrine. **No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).** Authored with Claude Opus 5.5. v4.28 entry archived to `versions/CHANGELOG-v4.28.md` under the R24-11 four-entry cap.
+
+**v4.31 (2026-10-17):** **Informational with-refi portfolio-LTV disclosure** (Gabriel, in-turn, 2026-10-17, from the v4.29 review: the all-cash test cannot see refis that are modeled but not yet closed, so several deals could each pass while their refis together would breach 40%). IC memo §7 now ALSO states a pro-forma portfolio LTV that adds this deal's modeled post-close refi (and any other modeled-not-closed refis in the active pipeline, if known). **Disclosure only, never gating:** the STAGE 2.3 governor test, its pass/flag and the 40% ceiling remain the all-cash figure of v4.29; the with-refi line takes no part in any floor, score, P(exec), offer or walk price. Edited: STAGE 2.3 Part A (one sentence), `references/ic-memo-structure.md` §7, `references/doctrine-rationale-and-incidents.md`. **No governor constant (DSCR 1.25x / per-property LTV 65% / portfolio-aggregate LTV 40%) changed.** v4.27 entry archived to `versions/CHANGELOG-v4.27.md` under the R24-11 four-entry cap.
