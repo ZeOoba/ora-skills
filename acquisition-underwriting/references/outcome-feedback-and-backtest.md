@@ -33,3 +33,15 @@ The back-test compares score components with realized YoC; it does not test the 
 - **Sources:** the deal's own UNDERWRITE workbook (Inputs and Pro Forma tabs, as closed — never a later re-score), PM-portal P&L and delinquency exports (`pm-portal-pnl-export`, `pm-portal-delinquency-export`), QuickBooks actuals, and the Capex & Contractor Pricing Ledger. Every actual is source-tagged; a missing actual is `[DATA-GAP]`, never estimated.
 - **Output:** one variance row per line per deal (underwritten · actual · Δ · Δ% · source) appended to the back-test workbook.
 - **Routing:** a standing default whose variance has the same sign and exceeds **20%** on **≥3 closed deals** `[EST]` becomes a QUESTIONS FOR GABRIEL item proposing the specific change. Never a self-edit (POST-RUN LESSON CAPTURE rule).
+
+---
+
+## Retro-underwrite calibration dataset (standing input; v4.35, Gabriel in-turn 2026-10-23)
+
+`ORA. BackTestDataset_Portfolio_<MMDDYYYY>.xlsx` holds ORA's own acquisitions scored retroactively against the current scorecard and their realized outcomes. It is read at every December session BEFORE weights are discussed.
+
+- **Pre-December checklist:** (1) refresh Realized marks from the live Master Workbook and update the as-of date; (2) enter the construction-cost deflator by purchase year on Inputs; (3) fill Scores for every deal from at-acquisition documents; (4) fill Variance_Review for deals that crossed 12/24/36 months; (5) add rows for deals closed since.
+- **Reading rules:** BackTest shows Spearman rho per component on seasoned deals only (held 2+ years). Below n = 10 the banner reads INSUFFICIENT SAMPLE and no weight change may cite the statistic. At n >= 10 it is supporting evidence only; weights still move by Gabriel's ratification.
+- **Restate each year:** constants-as-of bias (RCT is a 2025 cost basis), hold-length confound, internal marks derived from cap-rate assumptions, survivorship (add passed and lost deals as a second sheet).
+- **Variance routing:** the Variance_Review tab applies the v4.33 rule (same sign, over 20%, on 3 or more closed deals) and prints ROUTE when met.
+- **Evidence loop:** record CONFIRMED / REFUTED / INCONCLUSIVE against each Evidence ID whose Testable metric now has data (see RULE EVIDENCE in SKILL.md).

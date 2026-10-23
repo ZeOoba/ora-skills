@@ -62,6 +62,12 @@ irreducible rather than a research gap (finding 4 — E Fulton's Tenancy & Lease
 
 ## Procedure
 
+**Step -1 — patch-time skip gate (added 2026-10-23, v4.35 session).** Every session that edits `acquisition-underwriting/SKILL.md` runs the gate BEFORE reporting done, against the pre-edit backup it took when it checked the base hash (v4.8 stamp rule):
+```
+python lib/doctrine_skip_gate.py --prior <pre-edit backup> --current <acquisition-underwriting>/SKILL.md
+```
+Exit 0 = SKIP: state "harness skipped: change confined to the changelog/intro" in the hand-off. Exit 10 = RUN: either run Steps 0-5 now or record "harness RUN pending" in the hand-off so the scheduled poll's hash check picks it up. A reporting-only line placed in the body still returns RUN (v4.35 did); the gate is never overridden by judgment. Put reporting-only additions in a `references/` file where possible, not under a `## ` heading of SKILL.md.
+
 **Step 0 — provenance.** Capture the current `acquisition-underwriting/SKILL.md` git commit hash
 (the hash of the most recent commit that touched this file, not a git blob hash) so the
 snapshot can be attributed to an exact doctrine revision:
