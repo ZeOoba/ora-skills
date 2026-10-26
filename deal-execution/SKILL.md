@@ -3,7 +3,7 @@ name: deal-execution
 description: 'Use when the user mentions: PSA, purchase and sale agreement, generate PSA, draft PSA, due diligence, DD checklist, redline analysis, seller response, seller redlines, closing checklist, title review, under contract, closing statement, post-closing, review PSA draft, PSA vs LOI, LOI conformance, lease-chain integrity, estoppel DD conformance (drafting a certificate routes to estoppel-request-generation). Also before SENDING any draft: send the PSA, pre-send check, clear to send. Covers executed LOI through closing; pre-LOI work routes to acquisition-underwriting, LOIs to loi-generation. Workflow 2A is the funnel for ANY inbound PSA draft or redline, incl. Litera/Workshare compares; Workflow 2B gates every OUTBOUND draft.'
 ---
 
-# Deal Execution — Oxford Realty Advisors (v1.10)
+# Deal Execution — Oxford Realty Advisors (v1.11)
 
 You are operating as deal execution counsel and advisor for Oxford Realty Advisors (ORA). You handle everything from PSA generation through post-closing integration. The acquisition-underwriting skill covers pre-LOI work; this skill picks up at executed LOI.
 
@@ -196,6 +196,8 @@ Run the 6 Mandatory Buyer-Protective Provisions check and the review-relevant 46
 
 **Independent conformance pass.** Before finalizing the ranked output, dispatch the `psa-redline-checker` agent (read-only; pin the dispatch model) on the draft plus the executed LOI, `DEAL-TERMS-REGISTER.md` and the Standard Positions canon — give it NO prior review memo so it re-derives conformance cold. Reconcile its deviations against your conformance table; any deviation you did not catch is a Tier 1 candidate. It is a sub-step of this workflow, not a replacement for it (psa-reconciliation's Fact Table cascade is separate).
 
+**Pending sale or loan on the LTV worksheet (INTERIM; v1.11).** When a PSA that sells an ORA asset is signed, or when a PSA carries a loan (financing contingency, assumed loan, seller carry-back note, surviving property-entity mortgage), prompt that it be listed on the `debt-management` INTERIM netting worksheet as a pending sale or pending loan (`debt-management/references/ltv-interim-netting-checklist.md`, rule 5). A loan-bearing PSA also takes its own `debt-management` Refinance Evaluation step 5 test before it is accepted; LTV-FLAGGED (portfolio) needs Gabriel's sign-off — flag, not kill. Not listed or not tested → STOP and ask Gabriel. Formula not restated here.
+
 **Every review memo produced under this workflow is an input to Workflow 2B.** Write recommendations so they can be checked mechanically later: cite the § being changed, and state the change as a concrete before/after, not as advice. A recommendation phrased as "consider strengthening the remedies section" cannot be verified in an outbound draft; "§11.3.2 — add willful-default carve-out permitting actual damages" can.
 
 ---
@@ -336,6 +338,7 @@ Post-closing operational setup (`re-operations` retired 2026-08-05, redundant wi
  8. HubSpot deal marked Closed Won; Notion pipeline updated to Closed (set Stage = Closed Won **and `Last Activity` = today**)
  9. Physical key and access credential transfer
 10. Lender notification (if existing debt assumed)
+11. LTV worksheet (INTERIM; v1.11): attach the signing documents (signed PSA, loan documents) and the closing documents (closing statement, payoff letter, recorded assignment) to the deal's `debt-management` netting worksheet in the deal folder (`debt-management/references/ltv-interim-netting-checklist.md`). Only an attached closing or payoff document lets a later test credit a reduction or drop a pending entry once the live Master Workbook books it (checklist rule 4 and trap 6).
 
 ---
 
@@ -365,6 +368,7 @@ Both are stdlib-only; run from the skill directory. `scripts/extract_revisions.p
 
 ## Changelog
 
+- v1.11 (2026-10-26): **INTERIM aggregate-LTV pointers** (Gabriel, in-turn, 2026-10-26). Workflow 2A Step 5 prompts that a signed PSA selling an asset, or a loan-bearing PSA, be listed on the `debt-management` INTERIM netting worksheet as a pending sale or loan (checklist rule 5), with a loan-bearing PSA taking its own step-5 test; Post-Closing item 11 attaches the signing and closing documents to that worksheet in the deal folder. Pointer only; formula not restated. Companion: debt-management v1.6, acquisition-underwriting v4.36. **No DD checklist item, buyer protection or 46-Point Gate check changed. No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).**
 - v1.10 (2026-10-16): **ENTITY VERIFICATION added to Workflow 3** (full procedure in `references/dd-checklist.md`). Every party that signs or is named — Seller, each tenant entity and trade name, entity guarantors, and ORA's own buyer/assignee and municipal-filing entities — is checked against the state business-entity registry before the first PSA draft, before estoppels, and within 30 days of closing. 46-Point Gate seller-name item now requires the registry record; one Pre-Closing item added; Tenant DD "business verification" points to the new block. Origin: 754 Old State, 2026-10-15 (Godesana/goDesana, 3Waters trade name, PD applicant "Oxford Financial Partners, LLC"). No buyer protection or other gate item changed; description unchanged.
 - v1.9 (2026-09-30): **independent agent passes wired in.** Workflow 2A gains an independent conformance pass and Workflow 2B a new Check F, both dispatching the read-only `psa-redline-checker` agent (no prior review memo in 2A/2B; dispatch model pinned; a deviation it finds that Checks A-E missed is a STOP). **No DD checklist item, buyer protection, or 46-Point Gate check changed.**
 - v1.8 (2026-09-10): **retention rule adopted (ORA Automation Audit R24-11).** This skill was the 4th-largest in the catalog at 6,943 words with **no growth bound of any kind** — a `## Changelog` with no cap and no extraction file. Added the 6-entry count cap and the ~2,000-char per-entry cap below, and archived v1.2 in the same pass so adding this entry did not breach the rule it introduces. **No workflow, DD checklist item, buyer protection or 46-Point Gate check changed** — documentation discipline only. Known grandfathered outlier: v1.3 is 2,027 chars, 27 over the cap; the caps bind entries written from here on rather than rewriting history.
