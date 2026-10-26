@@ -11,11 +11,11 @@ When a legal document is uploaded, immediately classify it as one of:
 
 - **Lease** — commercial, industrial, retail, office, ground, or solar
 - **Purchase and Sale Agreement (PSA)**
-- **Loan document** — promissory note, deed of trust, guaranty, loan application (a final loan document, assumption agreement, carry-back note or lender consent also takes the `debt-management` Term-Sheet Redline step 0 re-test on the final principal before signature, per the INTERIM checklist and Gabriel's pending-position ledger in `debt-management/references/ltv-interim-netting-checklist.md`; an executed payoff letter or closing statement is the document Gabriel cites when he enters a reduction or marks a row booked)
+- **Loan document** — promissory note, deed of trust, guaranty, loan application (a final loan document takes the `debt-management` Term-Sheet step 0 re-test under the INTERIM aggregate-LTV procedure in `debt-management/references/ltv-interim-netting-checklist.md`)
 - **Estoppel certificate**
 - **SNDA** — Subordination, Non-Disturbance, and Attornment agreement
 - **Vendor/service contract**
-- **Amendment or addendum** to an existing agreement (an operating-agreement amendment, contribution agreement or other agreement that sells, contributes or changes Oxford's share of an asset also takes the `debt-management` INTERIM aggregate-LTV test before signature and a proposed pending-position ledger row, per `debt-management/references/ltv-interim-netting-checklist.md`)
+- **Amendment or addendum** to an existing agreement (before an agreement that sells, contributes or changes Oxford's share of an asset is signed, ask Gabriel the INTERIM aggregate-LTV signing question in `debt-management/references/ltv-interim-netting-checklist.md`)
 - **Letter of Intent (LOI)**
 - **Title commitment / title insurance policy** — handled HERE (this skill) at the clause level, with `deal-execution` coordinating closing context when the commitment surfaces inside an active DD workflow. Review structure: verify Schedule A (insured, estate, amount, effective date, vesting) against the PSA; cross-walk every Schedule B-I requirement to a responsible party and cure path; classify each Schedule B-II exception as CTC (clear to close), NEG (negotiate/endorse over), or WALK (deal-threatening); and assemble the ALTA endorsement-request list. Output: XLSX exception matrix + DOCX endorsement-request letter per ORA institutional standards. *(v1.1, 2026-06-11: the former deferral to a `title-commitment-redline` skill is removed — that skill was scaffolded 2026-05-15 but never installed on any surface; verified absent 2026-06-09 audit and re-verified 2026-06-11.)*
 
@@ -218,7 +218,7 @@ Counsel COMMENTS are a fourth case and are equally invisible to a tracked-change
 
 ## Changelog
 
-- v1.4 (2026-10-26): Module 1 loan-document bullet points to the `debt-management` v1.6 Term-Sheet step 0 final-principal aggregate-LTV re-test under the INTERIM checklist and pending-position ledger, and names the payoff letter or closing statement as the document Gabriel cites for a reduction or booking; the amendment bullet sends share-changing agreements (operating-agreement amendments, contribution agreements) to the same test (pointer only; no review rule changed). No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).
+- v1.4 (2026-10-26): Module 1 pointers: a final loan document takes the `debt-management` v1.6 Term-Sheet step 0 re-test under the INTERIM aggregate-LTV procedure, and a share-changing agreement prompts its signing question (pointer only; no review rule changed). No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).
 - v1.3 (2026-08-21, adversarial review): "estoppel"/"SNDA" triggers (frontmatter description and TRIGGER PHRASES)
   narrowed to clause-analysis-only, with an explicit pointer to `estoppel-request-generation` for drafting/generating a
   certificate — the two skills previously claimed the identical bare trigger words with no tie-break, risking a "draft
