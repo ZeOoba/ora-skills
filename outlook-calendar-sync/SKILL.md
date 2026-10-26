@@ -3,7 +3,7 @@ name: "outlook-calendar-sync"
 description: "Use to add or refresh dated items (deadlines, to-dos, hearings) on Gabriel's Outlook calendar via desktop Outlook COM when the M365 connector cannot write calendar events."
 ---
 
-# Outlook calendar sync (COM)
+# Outlook calendar sync (COM) (v1.1)
 
 Writes events to the default Outlook calendar of ggoldberg@oxfordra.net through the desktop Outlook COM object, on the linked Windows computer. Use it when the user says: add this to my calendar, sync the dashboard dates, put these deadlines on my calendar. The M365 connector's outlook_create_event fails with a missing Calendars.ReadWrite scope until an admin grants consent; try it first only if the user says consent was granted, otherwise go straight to COM.
 
@@ -28,7 +28,7 @@ JSON array, one object per event: `{k, s, a, e, allday, busy, loc, b}`.
 
 STALE lines are events in the calendar whose key is no longer in the file (the item was removed or completed). The script never deletes. Report them to the user and delete only on request.
 
-## Script (tested 10/23/2026: 20 events created, second pass unchanged=20)
+## Script (v1.0 tested 10/23/2026: 20 events created, second pass unchanged=20; v1.1 change below NOT yet run on Windows: dry-run with -WhatIf first)
 ```powershell
 param([Parameter(Mandatory=$true)][string]$EventsFile, [switch]$WhatIf, [string]$Category = 'ORA Power')
 $ErrorActionPreference = 'Stop'
@@ -51,11 +51,11 @@ foreach ($e in $ev) {
   $ap = $byKey[$e.k]
   if (-not $ap) { $ap = $legacy | Where-Object { $_.Subject -eq $e.s -and $_.Start.Date -eq $start.Date } | Select-Object -First 1 }
   if ($ap) {
-    $diff = ($ap.Subject -ne $e.s) -or ($ap.Start -ne $start) -or ($ap.End -ne $end) -or (($ap.Body -replace '\s', '') -ne ($body -replace '\s', '')) -or (-not $ap.UserProperties.Find('OraKey'))
+    $diff = ($ap.Subject -ne $e.s) -or ($ap.Start -ne $start) -or ($ap.End -ne $end) -or ($ap.AllDayEvent -ne [bool]$e.allday) -or ($ap.BusyStatus -ne [int]$e.busy) -or ($ap.Location -ne [string]$e.loc) -or (($ap.Body -replace '\s', '') -ne ($body -replace '\s', '')) -or (-not $ap.UserProperties.Find('OraKey'))
     if (-not $diff) { $same++; continue }
     "UPDATE $($e.k)"
     if (-not $WhatIf) {
-      $ap.Subject = $e.s; $ap.AllDayEvent = [bool]$e.allday; $ap.Start = $start; $ap.End = $end; $ap.Body = $body; $ap.Location = $e.loc
+      $ap.Subject = $e.s; $ap.AllDayEvent = [bool]$e.allday; $ap.Start = $start; $ap.End = $end; $ap.Body = $body; $ap.Location = [string]$e.loc; $ap.BusyStatus = [int]$e.busy
       if (-not $ap.UserProperties.Find('OraKey')) { $u = $ap.UserProperties.Add('OraKey', 1); $u.Value = $e.k }
       $ap.Save()
     }
@@ -84,3 +84,7 @@ A recurring sync needs Outlook desktop open and a session that can read the dash
 - Keep subjects prefixed `ORA Power:` and the category `ORA Power` so events are findable and removable as a set.
 - Never delete or move existing events that lack the `ORA Power` category.
 - Mark any estimated date [FORECAST] in the body.
+
+## Changelog
+- v1.1: UPDATE now detects and applies changes to `busy` (BusyStatus), `loc` (Location) and `allday`; previously a change to any of them in the events file was silently ignored (the change check compared subject, start, end and body only, and BusyStatus was never reapplied). Added this version marker and changelog.
+- v1.0: captured verbatim from the Cowork runtime cache (ora-skills #158).
