@@ -1,98 +1,136 @@
-# INTERIM — Manual pre-close aggregate-LTV netting checklist (until a pending-debt register exists)
+# INTERIM — Manual pre-close aggregate-LTV checklist and pending-position ledger (until a pending-debt register exists)
 
-**INTERIM procedure, in force until a pending-debt register exists and replaces it.** Approved by Gabriel 2026-10-26 to land as interim doctrine. It closes the gap that the acquisition-underwriting STAGE 2.3 Part A all-cash governor sees only debt already booked in the live Master Workbook, so a signed-but-unbooked refi or assumed loan is invisible to it. The gap is closed by PROCEDURE: one hand-filled worksheet per test, no script and no register.
+**INTERIM procedure, in force until a pending-debt register exists and replaces it.** Approved by Gabriel 2026-10-26 to land as interim doctrine, then redesigned at his direction 2026-10-26 to use ONE pending-position ledger he owns. It closes the gap that the acquisition-underwriting STAGE 2.3 Part A all-cash governor sees only debt already booked in the live Master Workbook, so a signed-but-unbooked refi, assumed loan, sale or share change is invisible to it. The gap is closed by PROCEDURE: a ledger Gabriel keeps by hand and a per-test worksheet, with no script and no register.
 
 Governor constants are unchanged and are not restated beyond the existing ones: DSCR 1.25x; portfolio-aggregate LTV 40% (flagged only strictly above); per-property 65%. Flag-not-kill: acquisition-underwriting Calibration Ruling 5 — a breach is a flag that needs Gabriel's sign-off, never an automatic block.
 
-## When it runs
+## 1. The pending-position ledger (the ONLY source of pending items)
 
-- `debt-management` Refinance Evaluation step 5: before recommending, accepting or signing any refi, or any new, assumed or seller-financed loan an ORA entity owes (secured, unsecured or parent-level, including a property-entity mortgage that survives an entity-interest purchase).
-- `debt-management` Term-Sheet Redline step 0: again on the FINAL principal in the document about to be signed (including when the document reaches review through `legal-intelligence`).
-- `deal-execution` Workflow 2A Step 5: a signed PSA that sells an asset files its own SALE worksheet at signing (rule 5); a loan-bearing PSA takes its own test on a loan worksheet.
-- `disposition-analysis` Step 6: a SELL or 1031 ruling that proceeds to a signed PSA files its own SALE worksheet at signing (rule 5).
+**Location (one, canonical):** `C:\Users\Owner\OneDrive - Oxford Capital Partners\Claude_Workspace\01_Workspace\LTV_Pending\LTV_Pending_Ledger.xlsx` (Claude_Workspace, the free working surface under Hard Invariant 5, alongside `deal-folder-intake`'s `01_Workspace\Deals\` mirror; created by Gabriel on first use). Test worksheets are filed beside it in `LTV_Pending\Worksheets\`. A copy anywhere else is never read and never governs.
 
-## Owner and filing
+**Gabriel owns it. Sessions never write it.** A session that finds a pending item PROPOSES a row in its test output (worksheet line 14); Gabriel enters it. Nothing is discovered from other worksheets, deal folders, the Acquisition Pipeline Tracker or memory: if it is not a ledger row, a test does not count it, which is why each test asks Gabriel the signing question (rule 2).
 
-- **Owner:** the session running the refi or loan evaluation fills the worksheet. Gabriel signs any netting in-turn (rule 6); the session never signs for him.
-- **One canonical location:** every worksheet, for every deal and every held-asset refi, lives in ONE flat folder: `C:\Users\Owner\OneDrive - Oxford Capital Partners\Claude_Workspace\01_Workspace\LTV_Worksheets\` (Claude_Workspace, the free working surface under Hard Invariant 5, alongside `deal-folder-intake`'s `01_Workspace\Deals\` mirror; created on first use). Rule 10 scans ONLY this folder; a scan that cannot cover it is a rule-9 STOP. A copy anywhere else (a deal folder or a business folder) is optional, is never scanned, never governs, and needs Gabriel's permission.
-- **File OPEN first:** the worksheet is filed in the canonical location with status **OPEN** at the START of the test, before the workbook is read, so a concurrent test of another loan sees it (rule 10). After creating it, re-list the folder: if another file has the same name and `v##`, take the next number and re-run the rule-10 re-read.
-- **Status:** OPEN → SIGNED → CLOSED, or OPEN or SIGNED → WITHDRAWN. SIGNED is set by the session at its rule-10 pre-signature re-read once the loan or PSA is signed, or by `deal-execution` at signing. CLOSED is set by `deal-execution` Post-Closing item 11 (for a SALE worksheet, when the payoff document is attached). WITHDRAWN is set by Gabriel, including when a re-test of a signed item replaces the old SIGNED worksheet (trap 3). A worksheet left OPEN with no activity stays counted until Gabriel withdraws it. A closed or withdrawn worksheet is marked so and kept, never deleted.
-- **Name:** `LTVNettingWorksheet_[Property]_[LoanId]_[MMDDYYYY]_v##` (deal-file naming); a signed sale uses the token `SALE` in place of `[LoanId]`. `v##` increments with every test of that loan or sale, including a re-test the same day; a new test is a new file and never overwrites an earlier one or its sign-off.
-- **SALE worksheet:** a signed PSA that sells an asset (including a 1031 sale) files its OWN worksheet at signing: line 6 = the asset's value, line 8a = 0, its debt kept in line 2 or 5, status SIGNED until the payoff document is attached, then CLOSED.
-- **Attachments:** every document the worksheet relies on is attached (copied beside it in the canonical folder, or linked by path): lender statement or facility agreement (undrawn), payoff letter, closing statement, recorded assignment, executed amendment or assumption agreement, signed PSA. `deal-execution` Post-Closing item 11 attaches the signing and closing documents to the worksheet of that loan's LAST SIGNED test (if none is SIGNED, the highest non-WITHDRAWN `v##`), or for a sale-only event the payoff document to its SALE worksheet.
-- **Pending-deals list:** with no register, the pending items in lines 5 and 6 come from every OPEN or SIGNED worksheet in the canonical location (loan and SALE worksheets) and the Acquisition Pipeline Tracker rows under a signed PSA or signed loan; `memory/disposition-ledger.md` SELL/1031 rows under a signed PSA are a cross-check only. If the list cannot be established, that is a STOP (rule 9).
+**One row per pending item:**
 
-## 1. Rules (read top to bottom; each rule only ever raises the figure unless a document is in hand)
+| Field | Content |
+|---|---|
+| Row id | Unique, never reused |
+| Kind | `LOAN` · `SALE` · `SHARE-INCREASE` · `SHARE-DECREASE` |
+| Asset | Workbook asset id and address |
+| Loan id | The loan the row concerns (LOAN; the loan kept on a SALE or SHARE-DECREASE; each loan on the asset for a SHARE-INCREASE) |
+| Oxford share before / after | Percent, before and after the event |
+| Face | LOAN: full face incl. documented undrawn, at the after share |
+| Asset value removed | SALE and SHARE-DECREASE: value at exit cap × (before share − after share) |
+| Value and loans restated | SHARE-INCREASE: incremental value at exit cap × (after − before share), and each booked or pending loan on the asset × (after − before share) |
+| Credit (optional) | Gabriel-entered only, with its document: the booked balance a LOAN replaces (refi payoff, modification, surviving mortgage) or the payoff of the loan a SALE kept |
+| Status | `PENDING` · `BOOKED-VERIFIED` · `WITHDRAWN` |
+| Signed document | Reference and date (PSA, loan document, amendment, assumption agreement) |
+| Entered by / entered at | Gabriel; timestamp |
+| BOOKED-VERIFIED evidence | The workbook read time that shows the item booked, and the document that shows it (closing statement, payoff letter, recorded assignment) |
 
-1. Start from the live Master Workbook (read order per the firm's source-of-record canon), not a mirror, and not `00_Home!G7` alone. Note the read time. A workbook read older than the last closing, payoff or signing you know of is stale: re-read.
-2. Numerator = booked debt (Oxford-share balance of every borrower-side loan, including unsecured and parent-level loans) PLUS every pending loan at its FULL face (balance plus any committed-undrawn availability you can document from the lender statement or facility agreement). The workbook has no commitment or undrawn column, and Original Principal is NOT a commitment; undrawn availability comes only from the loan document. Undrawn you cannot document counts as 0 and is written on the worksheet as "undrawn not documented". This pre-close test counts every booked loan, including unsecured and parent-level loans, so its figure can sit above the STAGE 2.3 Part A all-cash figure (which reads secured debt as booked); the two are different tests, not a contradiction, and both are reported (rule 7).
-3. Denominator = booked portfolio value at each asset's market exit cap (acquisition-underwriting UNDERWRITING CONVENTIONS), Oxford share. A pending acquisition's value does NOT count until it is booked, except the deal under test, which counts its own underwritten value for its own test only.
-4. NO reduction is credited without a document in hand: a payoff, paydown, retirement, sell-down or share cut counts only when the document (payoff letter, closing statement, recorded assignment, executed amendment) is attached to the worksheet with its date. A workbook cell that looks lower is not a document. A verbal or emailed "it closed" is not a document.
-5. Pending sales are projected out of the denominator the moment a PSA is signed: remove the asset's value, keep its debt in the numerator until the payoff document is in hand. This can only raise the figure. Unsigned sale talk is not projected; a signed sale is. `deal-execution` Workflow 2A Step 5 and `disposition-analysis` Step 6 are the triggers that file a signed sale's own SALE worksheet; a 1031 exchange sale is handled the same way. Every later test lists each OPEN or SIGNED SALE worksheet on its line 6. A share DECREASE (recap, sell-down) is a sale under this rule: value out at signing, debt kept until its document (line 7).
-6. Refi netting (the loan under test's own payoff, or, for a modification, upsize, assumption or surviving mortgage of a booked loan, that loan's booked balance, which line 8a replaces) is allowed in the test of that loan only, only against its document (payoff letter, or the executed amendment or assumption agreement), and only with Gabriel's in-turn sign-off. Echo the figure back to him on the worksheet ("netted: old loan <id>, <amount>, document <name, date>") and record his sign-off text and time. The sign-off covers that test only; it is not carried to a later test, a re-test, or another loan. If any term changes, ask again.
-7. Two-basis convention stays (acquisition-underwriting STAGE 2.3 Part A): the STAGE 2.3 governor is the ALL-CASH figure (an all-cash acquisition adds no debt); the IRR model, levered IRR, DSCR and IC memo carry the post-close refi, and the IC memo's with-refi portfolio LTV line stays informational. This checklist is the SEPARATE pre-close test for any refi or any new, assumed or seller-financed loan. Report both numbers; never merge them.
-8. Result: at or below 40% passes; strictly above 40% is **LTV-FLAGGED (portfolio)**. Compare the unrounded figure; never round down. A flag goes to Gabriel with the figure, the binding loan(s) and the headroom; he signs off or the loan is not accepted. Never kill.
-9. Any step you cannot complete (unknown id, unreadable workbook, missing document for a claimed reduction, pending-deals list not established) is a STOP to Gabriel, not a zero and not a pass.
-10. Concurrency: line 5 includes the loans on every OTHER worksheet in the canonical location that is OPEN or SIGNED, not only signed ones, de-duplicated by loan id (keep the highest non-WITHDRAWN `v##`); line 6 includes every OPEN or SIGNED SALE worksheet. Immediately before Gabriel signs off and again immediately before the loan or PSA is signed, re-read the workbook, the Acquisition Pipeline Tracker and the canonical location, add any newly OPEN worksheet's loan or sale, and recompute. A figure computed before that re-read never clears a signature.
-11. Share INCREASE only: when the test raises Oxford's share of a booked asset (a JV buy-out or any share increase), line 8d restates every booked loan on it OTHER than the loan under test (already on line 8a at the post-close share) at the post-close share, pending loans on it go on line 5 at that share, and line 8c is the incremental value only. This overrides trap 5 for that asset in that test. Lines 8c and 8d are never negative; a share decrease goes through rule 5 and line 7.
+**Status:** a row is entered PENDING when the PSA or loan is signed (Gabriel enters it, then signs; rule 3). It leaves the count ONLY when Gabriel marks it BOOKED-VERIFIED with the workbook read time and the document that shows it booked, or WITHDRAWN. Nothing else removes it: not a CLOSED label, a payoff letter, a closing statement, or a workbook cell that looks updated. Rows are never deleted.
 
-## 2. Worksheet (one per test)
+## 2. Rules
 
-The loan under test appears on line 8a ONLY. Line 5 lists the OTHER pending loans and must never include the loan under test, so its face is counted once. If the loan under test is a modification, upsize, assumption or surviving mortgage of a booked loan, line 8a replaces that loan's booked balance: enter the booked balance on line 8b (rule 6).
+1. **Workbook.** Read the live Master Workbook (read order per the firm's source-of-record canon), not a mirror, and not `00_Home!G7` alone. Note the read time. Booked debt counts every borrower-side loan at its Oxford-share balance, including unsecured and parent-level loans, so this figure can sit above the STAGE 2.3 Part A all-cash figure (which reads secured debt as booked); the two are different tests, not a contradiction, and both are reported. Booked value is each asset at its market exit cap (acquisition-underwriting UNDERWRITING CONVENTIONS), Oxford share.
+2. **Ledger read and the signing question.** Read the ledger and record its last-modified time, row count and SHA-256 on the worksheet header. Then ask Gabriel: "Any PSA or loan signed since the last ledger entry?" and record his answer. A yes with no row entered is a STOP until he enters it. A ledger that cannot be read is a STOP.
+3. **Counting rule: every PENDING row counts at FULL.**
+   - LOAN: its full face in the numerator, at the after share. A pending acquisition's value never counts (only its loans do), except the deal under test, for its own test only.
+   - SALE: its asset value leaves the denominator from the day the row is entered; its loan stays in the numerator.
+   - SHARE-INCREASE: its incremental value AND every booked or pending loan on the asset restated at the after share, in every later test, until BOOKED-VERIFIED.
+   - SHARE-DECREASE: treated as a sale (value removed, loan kept).
+   - Double count is resolved only by BOOKED-VERIFIED: while a row is PENDING it counts at full even if the workbook already shows its booked counterpart. That over-states; it is flagged, never killed.
+4. **Reductions.** No reduction is credited without a document in hand AND Gabriel's entry on the ledger (the row's Credit field). A credit applies only while the loan it reduces still appears in this workbook read at that balance; if the workbook no longer shows it, the credit is not applied and the row is a STOP until Gabriel marks it BOOKED-VERIFIED (a credit must never be taken twice). Likewise a SALE or SHARE-DECREASE whose asset no longer appears in the workbook read is a STOP until he marks it.
+5. **In-test netting (the only other path).** The loan under test's own payoff, or for a modification, upsize, assumption or surviving mortgage of a booked loan the booked balance it replaces, nets in the test of that loan only, only against its document, and only with Gabriel's in-turn sign-off. Echo the figure back on the worksheet ("netted: old loan <id>, <amount>, document <name, date>") and record his sign-off text and time. It is never stored on a ledger row as a test result and never carried to a later test or re-test; if any term changes, ask again.
+6. **Loan under test appears once.** It is on worksheet line 8a only. If it already has a PENDING ledger row (a signed loan being re-tested), that row is not also counted on line 4: line 8a takes the LARGER of the row's face and the tested face until Gabriel withdraws or replaces the row. A booked loan under test that is restated by a share increase is on line 8a at the after share and excluded from line 8d.
+7. **Share increases only on line 8c/8d.** When the test raises Oxford's share of a booked asset (a JV buy-out), line 8c is the incremental value only and line 8d restates every OTHER booked or pending loan on it at the after share. Neither is ever negative; a share decrease is a sale (SHARE-DECREASE row).
+8. **Re-read before signature.** Immediately before Gabriel signs off on the result AND immediately before the loan or PSA is signed (after Gabriel has entered its row), re-read the ledger and the workbook. If the ledger's last-modified time, row count or hash, or the workbook, changed since the test's read in any way other than this loan's own new row, re-run the test. A figure computed before that re-read never clears a signature.
+9. **Result.** At or below 40% passes; strictly above 40% is **LTV-FLAGGED (portfolio)**. Compare the unrounded figure; never round down. A flag goes to Gabriel with the figure, the binding row(s) or loan(s) and the headroom; he signs off or the loan is not accepted. Never kill.
+10. **Two-basis convention stays** (acquisition-underwriting STAGE 2.3 Part A): the STAGE 2.3 governor is the ALL-CASH figure; the IRR model, levered IRR, DSCR and IC memo carry the post-close refi, and the IC memo's with-refi portfolio LTV line stays informational. This checklist is the SEPARATE pre-close test for any refi or any new, assumed or seller-financed loan. Report both numbers; never merge them.
+11. **STOP, never zero.** Any step you cannot complete (unreadable ledger or workbook, unknown id, missing document, unanswered signing question, a credit or sale whose item is no longer in the workbook) is a STOP to Gabriel, not a zero and not a pass.
+
+## 3. Who proposes rows, and when
+
+| Trigger | Action |
+|---|---|
+| `debt-management` Refinance Evaluation step 5 / Term-Sheet Redline step 0 (incl. via `legal-intelligence`) | Runs the test; proposes a LOAN row (with any Credit and SHARE-INCREASE row the loan implies) on worksheet line 14. Gabriel enters it when he signs, before signing; rule 8 re-read follows. |
+| `deal-execution` Workflow 2A Step 5 (inbound PSA accepted) and Workflow 2B Output (CLEAR TO SEND of the execution version) | Prompts Gabriel: on execution of a PSA that sells an asset, enter a SALE (or SHARE-DECREASE) row; on execution of a loan-bearing PSA, enter its LOAN row (after its own step-5 test). There is no dedicated signing-time step in `deal-execution`, so Gabriel enters the row when he signs, and every test's signing question (rule 2) catches a missed entry. |
+| `deal-execution` Post-Closing item 11 | Prompts Gabriel, once the live workbook shows the closing, to mark the row BOOKED-VERIFIED with that workbook read time and the closing document. Until he does, the row keeps counting. |
+| `disposition-analysis` Step 6 | A SELL or 1031 ruling proposes a SALE row; it counts only once the PSA is signed and Gabriel has entered it. An unsigned sale is not counted. |
+
+## 4. Worksheet (one per test; the test RECORD, never a source)
+
+Filed in `LTV_Pending\Worksheets\` as `LTVNettingWorksheet_[Property]_[LoanId]_[MMDDYYYY]_v##` (a new file per test; never overwrite).
 
 | # | Line | Entry |
 |---|---|---|
-| 0 | File name, status (OPEN / SIGNED / CLOSED / WITHDRAWN) and the time it was filed OPEN | |
-| 1 | Workbook read time and source | |
-| 2 | Booked debt, Oxford share (all borrower-side loans), from the line-1 read | |
-| 3 | Booked value, Oxford share, at exit cap, from the line-1 read | |
-| 4 | Booked ratio (line 2 / line 3); compare to `00_Home!G7` and explain any gap | |
-| 5 | OTHER pending loans at full face, excluding the loan under test, including every OTHER OPEN or SIGNED worksheet's loan in the canonical location, one entry per loan id (list: id, lender, face, documented undrawn, post-close Oxford share, document or worksheet name); total | |
-| 6 | Pending sales signed: every OPEN or SIGNED SALE worksheet (asset, value removed, loan kept in line 2 or 5, PSA date, worksheet name); total value removed | |
-| 7 | Reductions credited (document, date, amount): only documented reductions the line-1 read has not yet booked; normally none; total | |
-| 8a | Loan under test: full face incl. documented undrawn, at post-close Oxford share; document | |
-| 8b | Loan under test: own payoff to net (refi), or the booked balance it replaces (modification, upsize, assumption, surviving mortgage), and its document | |
-| 8c | Own value: for a pending acquisition, its underwritten value, this test only; for a share INCREASE of a booked asset, the incremental value only (asset value × (post-close share − booked share)); otherwise 0; never negative | |
-| 8d | Share restatement (rule 11, increases only): for each booked loan on that asset OTHER than the loan under test, face × (post-close share − booked share); pending loans on it go on line 5 at the post-close share; otherwise 0; never negative | |
+| H | Ledger read time, last-modified time, row count, SHA-256; workbook read time; Gabriel's answer to the signing question | |
+| 1 | Booked debt, Oxford share, all borrower-side loans | |
+| 2 | Booked value, Oxford share, at exit cap | |
+| 3 | Booked ratio (line 1 / line 2); compare to `00_Home!G7` and explain any gap | |
+| 4 | PENDING LOAN rows at full face (after share), excluding the loan under test's own row; list row ids; total | |
+| 5 | PENDING SALE and SHARE-DECREASE rows: asset value removed; list row ids; total | |
+| 6a | PENDING SHARE-INCREASE rows: incremental value; total | |
+| 6b | PENDING SHARE-INCREASE rows: restated loans (after − before share), excluding the loan under test; total | |
+| 7 | Gabriel-entered Credits on PENDING rows, each with its document and only while the loan still appears in the line-1 read; total | |
+| 8a | Loan under test: full face incl. documented undrawn, at after share (the larger of row and tested face, rule 6) | |
+| 8b | Loan under test: own payoff, or the booked balance it replaces, and its document | |
+| 8c | Own value: pending acquisition under test, its underwritten value; share increase under test, the incremental value; else 0 | |
+| 8d | Share increase under test: other booked or pending loans on the asset × (after − before share); else 0 | |
 | 9 | Gabriel's in-turn netting sign-off (text, time) and the echoed figure | |
-| 10 | Gross figure = (line 2 − line 7 + line 5 + line 8a + line 8d) / (line 3 − line 6 + line 8c) | |
-| 11 | Netted figure, only with line 9 = (line 2 − line 7 + line 5 + line 8a + line 8d − line 8b) / (line 3 − line 6 + line 8c); otherwise "not netted" | |
-| 12 | Result: line 11 if signed, else line 10, vs 40%; binding loan(s); headroom | |
-| 13 | STOPs / unconfirmed items; pre-signature re-read time and its result (rule 10) | |
+| 10 | Gross = (line 1 + line 4 + line 6b − line 7 + line 8a + line 8d) / (line 2 − line 5 + line 6a + line 8c) | |
+| 11 | Netted, only with line 9 = (gross numerator − line 8b) / same denominator; otherwise "not netted" | |
+| 12 | Result: line 11 if signed, else line 10, vs 40%; binding row(s); headroom | |
+| 13 | STOPs; pre-signature re-read times and result (rule 8) | |
+| 14 | Proposed ledger row(s) for Gabriel to enter | |
 
-## 3. Worked synthetic example (invented numbers, not firm figures)
+## 5. Worked examples (invented numbers, not firm figures)
 
-Booked (line 2 / line 3): debt 70, value 200, ratio 35.00%. Each bullet is a separate test from that booked base.
+Base unless stated: booked debt 70, value 200 (35.00%).
 
-- **Cash-out refi of one property** (old loan 20 is booked in line 2; new loan face 24). Line 5 = 0 (no other pending loans; the new loan goes on line 8a only), line 8a = 24, line 8b = 20, line 8c = 0. Gross (line 10): (70 + 24) / 200 = 94 / 200 = 47.00%, flagged. With the old loan's payoff letter attached and Gabriel's in-turn sign-off echoed ("netted 20.0, old loan, payoff letter dated"), netted (line 11): (70 + 24 − 20) / 200 = 74 / 200 = 37.00%, pass. Without the sign-off the answer stays 47.00%. Listing the new loan on line 5 as well would have read (70 + 24 + 24) / 200 = 59.00%: that is the double count the line-5 exclusion prevents.
-- **Signed PSA selling an asset worth 30 that carries a loan of 10** (a re-read with no new loan: line 8a = 0). Line 6 = 30; the loan of 10 stays in line 2 until the payoff document arrives: 70 / (200 − 30) = 70 / 170 = 41.18%, flagged (the unprojected 35.00% would have understated it). After the payoff document (line 7 = 10): (70 − 10) / 170 = 60 / 170 = 35.29%.
-- **Signed acquisition, asset 20 with an assumed loan 8, not yet booked.** Its own test: line 8a = 8, line 8c = 20: (70 + 8) / (200 + 20) = 78 / 220 = 35.45%, pass. A LATER test of a different loan lists the assumed loan on line 5 (8) with no own value for it: (70 + 8) / 200 = 39.00% before the later loan's own face is added, until the acquisition is booked.
-- **Two such pending acquisitions** on a later test read (70 + 16) / 200 = 43.00%, flagged, though the true post-close ratio is 86 / 240 = 35.83%. That over-flag is the intended cost of the conservative rule; the remedy is the document trail, not a lower figure.
-- **Modification of a booked loan** (booked loan 20 modified to 24). Line 8a = 24, line 8b = 20 (the booked balance it replaces). Gross: (70 + 24) / 200 = 47.00%, flagged; netted with the executed amendment attached and Gabriel's sign-off: (70 + 24 − 20) / 200 = 74 / 200 = 37.00%, pass.
-- **Signed sale with no loan test, then a later loan test** (sale of an asset worth 30 carrying a loan of 10; later loan face 6). The sale files its own SALE worksheet at signing: 70 / 170 = 41.18%, flagged. The later test reads that SALE worksheet on line 6: (70 + 6) / 170 = 76 / 170 = 44.71%, flagged. Without the SALE worksheet it would have read 76 / 200 = 38.00%, a false pass.
-- **Two concurrent tests** (loan A face 6 and loan B face 6, tested in separate sessions). Each alone reads (70 + 6) / 200 = 38.00%, pass. With both worksheets filed OPEN, the second sees the first on line 5, and the first's pre-signature re-read sees the second (rule 10): (70 + 6 + 6) / 200 = 82 / 200 = 41.00%, flagged.
+| Case | Worksheet entries | Figure |
+|---|---|---|
+| Cash-out refi, own test (old 20 booked, new 24) | 8a 24, 8b 20 | gross 94/200 = 47.00% flag; netted with payoff letter and sign-off 74/200 = 37.00% pass |
+| Modification of a booked loan, 20 → 24 | 8a 24, 8b 20 (executed amendment) | 47.00% gross; 37.00% netted |
+| Signed sale entered (asset 30, loan 10 kept) | line 5 = 30 | 70/170 = 41.18% flag |
+| Later loan 6 after that sale row | line 5 = 30, 8a 6 | 76/170 = 44.71% flag (a test that missed the sale would read 76/200 = 38.00%) |
+| Refi closed but row not yet BOOKED-VERIFIED (row 24 PENDING; Gabriel entered the old loan 20's payoff as a Credit); later loan 7 | line 4 = 24, line 7 = 20, 8a 7 | 81/200 = 40.50% flag; without the Credit 101/200 = 50.50%; a dropped "CLOSED" row would have read 77/200 = 38.50% |
+| Sale closed, row PENDING, its loan 10 payoff entered as a Credit; later loan 9 / later loan 18 | line 5 = 30, line 7 = 10, 8a 9 / 18 | 69/170 = 40.59% flag / 78/170 = 45.88% flag |
+| Recap 100% → 50% (asset 40, entity loan 10) | SHARE-DECREASE row, line 5 = 20, loan kept | 70/180 = 38.89%; crediting the halved loan before a document would read 65/180 = 36.11% (barred) |
+| Two concurrent tests, loans A 6 and B 6 | A alone 8a 6; B's rule-8 re-read after Gabriel enters A's row: line 4 = 6, 8a 6 | 76/200 = 38.00%, then 82/200 = 41.00% flag |
+| Re-test at 22 while the signed row of 24 is PENDING | 8a = max(24, 22) = 24, row not on line 4 | 94/200 = 47.00% until Gabriel withdraws the 24 row; then 92/200 = 46.00% (counting both would be 116/200) |
+| Assumed loan 8 on a pending acquisition (asset 20) | own test 8a 8, 8c 20; later test line 4 = 8 | 78/220 = 35.45% own test; 78/200 = 39.00% later |
+| Two pending acquisitions, loans 8 + 8 | line 4 = 16 | 43.00% flag, though the true post-close ratio is 86/240 = 35.83%: the intended cost of the conservative rule |
 
-### Second worked example: JV buy-out (share increase, rule 11)
+**JV buy-outs (share increase, rule 7):**
 
-- **Buy-out with no mortgage on the JV asset.** Separate base: booked debt 60, value 150, which holds the JV asset at its 50% share (20; 100% = 40). New buy-out loan face 12. Line 8a = 12, line 8c = 40 × (100% − 50%) = 20, line 8d = 0. Gross: (60 + 12) / (150 + 20) = 72 / 170 = 42.35%, flagged. Using the whole value on line 8c would have read 72 / 190 = 37.89%, a false pass.
-- **Buy-out where the JV asset carries a booked mortgage.** Booked debt 55 includes a JV mortgage of 20 booked at 50% (10); value 170 holds the JV asset at 50% (20; 100% = 40). Buy-out funded by a parent loan of 12. Line 8a = 12, line 8c = 20, line 8d = 20 × (100% − 50%) = 10. Gross: (55 + 12 + 10) / (170 + 20) = 77 / 190 = 40.53%, flagged. Without line 8d it would have read 67 / 190 = 35.26%, a false pass.
-- **Buy-out where the loan under test is the surviving JV mortgage.** Booked debt 60 includes the JV mortgage of 20 booked at 50% (10); value 170 holds the JV asset at 50% (20; 100% = 40). The mortgage survives at 100% and is the loan under test. Line 8a = 20 (post-close share), line 8b = 10 (the booked balance it replaces), line 8c = 20, line 8d = 0 (the loan under test is excluded). Gross: (60 + 20) / 190 = 80 / 190 = 42.11%, flagged; netted with the executed assumption or consent document and Gabriel's sign-off: (60 + 20 − 10) / 190 = 70 / 190 = 36.84%, pass. Counting the mortgage on line 8d too would have read 90 / 190 = 47.37% gross and 80 / 190 = 42.11% netted, a false flag.
-- **Share decrease (recap 100% to 50%) with an entity loan of 10** (base 70/200; the asset's 100% value 40). Not rule 11: under rule 5 the 20 of value sold leaves at signing and the loan stays until its document: 70 / 180 = 38.89%, pass here. Crediting the loan's halving before any document (a negative line 8d of −5) would have read 65 / 180 = 36.11%, which is barred until the document is in hand (line 7).
+| Case | Worksheet entries | Figure |
+|---|---|---|
+| A: base 60/150, JV asset at 50% = 20 (100% = 40), no mortgage; buy-out loan 12 | 8a 12, 8c 20, 8d 0 | 72/170 = 42.35% flag (whole value on 8c would read 72/190 = 37.89%, a false pass) |
+| B: base 55/170 incl. JV mortgage 20 booked at 50% (10); parent loan 12 | 8a 12, 8c 20, 8d 10 | 77/190 = 40.53% flag (without 8d 67/190 = 35.26%) |
+| B carry-over: once B is signed (rows LOAN 12 and SHARE-INCREASE: value 20, mortgage +10), a later loan 6 | line 4 12, 6a 20, 6b 10, 8a 6 | 83/190 = 43.68% flag (dropping the restated mortgage would read 73/190 = 38.42%) |
+| C: base 60/170 incl. JV mortgage 20 booked at 50% (10); the surviving mortgage is the loan under test | 8a 20, 8b 10, 8c 20, 8d 0 (excluded, rule 6) | gross 80/190 = 42.11%; netted with the executed assumption or consent and sign-off 70/190 = 36.84% pass (counting it on 8d too: 90/190 and 80/190) |
+| C carry-over: SHARE-INCREASE row (value 20, mortgage +10), later loan 6 | 6a 20, 6b 10, 8a 6 | 76/190 = 40.00% pass (not strictly above 40%) |
 
-## 4. Traps (check each by hand)
+## 6. Traps (check each by hand)
 
-Learned from the adversarial review of an unlanded register implementation; the case figures are that review's synthetic cases.
+Learned from the adversarial reviews of an unlanded register implementation and of this checklist's drafts; the case figures are synthetic.
 
-1. **Stale share.** A closing that raises Oxford's share of the collateral (a JV buy-out from 50% to 100%) must be weighted at the POST-close share. Counting an assumed loan of 6.0 at the old 50% (3.0) while the value side is already at 100% lowered the numerator with no payoff (36.67% pass vs a true 41.67% flag). Weight loan and asset at the same, final share (lines 8c and 8d, rule 11).
-2. **JV buy-out and other pending debt.** Before testing a buy-out, list every OTHER pending loan on that asset; each must also be weighted at the post-buy-out share. Otherwise the buy-out credits 100% of the value while the other loan still counts at half (27.00% vs a true 44.00%). If two events touch the same asset, sequence them: finish one, then test the other.
-3. **Re-testing a signed item.** Once a PSA or loan is signed, a later change is a NEW test with the old one explicitly closed or withdrawn by Gabriel. A re-test must not restore an asset that a signed sale removed, and must not drop a leg the signed deal carried; both lowered the figure in review (52.5% to 42.0%, and a 40.00% pass where 50.00% flagged).
-4. **Unknown or mistyped ids.** A sale or paydown aimed at an asset or loan id that does not exist in the workbook does nothing and silently passes (40.00% vs 48.00%). Match every id to the live workbook by eye (address, entity, loan number), not by memory.
-5. **Unsecured and parent-level loans** have no collateral share to cross-check. A typed share below the workbook share on an upsize hid the increase (15.00% pass vs 50.00% flag). Use the workbook share for booked loans; change it only with a document. Exception: when the test itself changes Oxford's share of the asset, restate on line 8d at the post-close share (rule 11).
-6. **Re-keyed booking.** When the workbook books a closed deal under a new loan or asset id, the pending entry and the booked entry both exist for a while. Remove the pending entry only when the booked one is verified against the closing document, never merely because both exist; otherwise value is double counted (40.00% vs a true 41.00%).
-7. **Amortization and commitments.** The workbook does not show commitments; do not infer undrawn availability or a "reduction" from a balance that has fallen. A lower booked balance counts; a higher committed amount counts too, but only from the loan document.
-8. **Whitespace-only or "looks signed" evidence.** A sign-off or document link that is blank or invisible text is not a document. If you cannot open it, it does not count.
+1. **Stale share.** Weight every loan and the asset at the same, final share (rows SHARE-INCREASE; lines 6a/6b, 8c/8d). Counting an assumed loan at the old 50% while the value is at 100% read 36.67% pass vs a true 41.67% flag.
+2. **Other debt on a JV asset.** Every booked or pending loan on an asset whose share rises is restated, in its own test (8d) and in every later test (6b), until BOOKED-VERIFIED. Missing one read 27.00% vs a true 44.00%. If two events touch the same asset, sequence them.
+3. **Re-testing a signed item.** A changed term after signature is a new test; the signed row keeps counting at its face until Gabriel withdraws or replaces it (rule 6).
+4. **Unknown or mistyped ids.** A row aimed at an asset or loan id that is not in the workbook is a STOP, never a silent zero (40.00% vs 48.00%). Match ids by address, entity and loan number.
+5. **Unsecured and parent-level loans** have no collateral share to cross-check. Use the workbook share for booked loans; change it only through a ledger row Gabriel entered (15.00% pass vs 50.00% flag in review).
+6. **Re-keyed booking.** When the workbook books a closed item under a new id, the PENDING row and the booked entry both exist until Gabriel marks the row BOOKED-VERIFIED. That over-states; it never under-states, and a Credit whose loan has left the workbook is a STOP (rule 4).
+7. **Amortization and commitments.** Do not infer undrawn availability or a reduction from a fallen balance. Undrawn counts only from the loan document; Original Principal is not a commitment; undocumented undrawn counts as 0 and is written "undrawn not documented".
+8. **Whitespace-only or "looks signed" evidence.** A sign-off, ledger entry or document link that is blank, invisible or cannot be opened does not count.
 
-## 5. Sources and status
+## 7. Cost of the design
+
+- **Over-flagging while rows are PENDING.** Every pending row counts at full until Gabriel marks it BOOKED-VERIFIED, so tests flag more often than the true post-close ratio warrants (two pending acquisitions: 43.00% vs 35.83%). The remedy is the document trail and Gabriel's ledger entry, never a lower figure.
+- **Dependence on Gabriel's entries.** The ledger is only as complete as his entries. A test cannot see a signing he has not entered, which is why every test asks the signing question and STOPs on an unreadable ledger or an unentered signing. A signing he forgets to mention is still invisible: the residual risk of an interim manual procedure.
+
+## 8. Sources and status
 
 - Governor and conventions: acquisition-underwriting STAGE 2.3 Part A (all-cash governor; with-refi line informational), CAPITAL STRUCTURE CONTEXT (two governors, two levels), Calibration Ruling 5 (flag, not kill), UNDERWRITING CONVENTIONS (exit caps; per-property 65% / 1.25x DSCR refi sizing). Hard Invariant 4. Nothing numeric here is new.
-- This file is INTERIM. When a pending-debt register lands, it replaces this checklist and every pointer to it is updated in the same change.
+- This file is INTERIM. When a pending-debt register lands, it replaces this checklist and the ledger, and every pointer to it is updated in the same change.
