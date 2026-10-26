@@ -3,7 +3,7 @@ name: legal-intelligence
 description: "Use when the user mentions: lease review, PSA review, contract analysis, redline, clause comparison, compare two versions, blackline, Litera, Workshare, indemnification, default provisions, personal guaranty, estoppel clause / SNDA analysis (NOT certificate drafting — that's estoppel-request-generation), CAM clause, assignment and subletting, loan document, solar lease, vendor contract, or any request to analyze, compare, draft or negotiate a legal document, or an uploaded lease, contract, PSA or loan agreement. PSA drafts and redlines enter via deal-execution Workflow 2A; this skill is its redline sub-step. Oxford Realty Advisors legal analysis, clause library and contract intelligence."
 ---
 
-# Legal Intelligence — Oxford Realty Advisors (v1.3)
+# Legal Intelligence — Oxford Realty Advisors (v1.4)
 
 ## MODULE 1: DOCUMENT CLASSIFICATION
 
@@ -11,7 +11,7 @@ When a legal document is uploaded, immediately classify it as one of:
 
 - **Lease** — commercial, industrial, retail, office, ground, or solar
 - **Purchase and Sale Agreement (PSA)**
-- **Loan document** — promissory note, deed of trust, guaranty, loan application
+- **Loan document** — promissory note, deed of trust, guaranty, loan application (a final loan document, assumption agreement, carry-back note or lender consent also takes the `debt-management` Term-Sheet Redline step 0 re-test on the final principal before signature, using the INTERIM netting worksheet in `debt-management/references/ltv-interim-netting-checklist.md`; an executed payoff letter or closing statement is attached to that worksheet as the document for any reduction)
 - **Estoppel certificate**
 - **SNDA** — Subordination, Non-Disturbance, and Attornment agreement
 - **Vendor/service contract**
@@ -218,6 +218,7 @@ Counsel COMMENTS are a fourth case and are equally invisible to a tracked-change
 
 ## Changelog
 
+- v1.4 (2026-10-26): Module 1 loan-document bullet points to the `debt-management` v1.6 Term-Sheet step 0 final-principal aggregate-LTV re-test on the INTERIM netting worksheet, and names the payoff letter or closing statement as the document attached for any reduction (pointer only; no review rule changed). No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).
 - v1.3 (2026-08-21, adversarial review): "estoppel"/"SNDA" triggers (frontmatter description and TRIGGER PHRASES)
   narrowed to clause-analysis-only, with an explicit pointer to `estoppel-request-generation` for drafting/generating a
   certificate — the two skills previously claimed the identical bare trigger words with no tie-break, risking a "draft

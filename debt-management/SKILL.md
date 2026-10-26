@@ -3,7 +3,7 @@ name: "debt-management"
 description: "Use when the user mentions: refinance, refi, term sheet, lender selection, loan negotiation, DSCR, debt yield, LTV, debt covenant, lender call, prepayment, defeasance, swap, rate cap, hedge, balloon, maturity, loan reserves, lender package, capital stack, recap, mezzanine, preferred equity — ORA debt and capital-markets skill. Also on an uploaded term sheet, commitment letter, lender proposal or amortization schedule. SOLE path for PAYOFF STATEMENTS in either direction: payoff letter or figure, per diem, title company payoff request or authorization, seller-financed note payoff or release, auditing a payoff quoted TO us. Strategic hold/refi/1031/sell decisions route to disposition-analysis first."
 ---
 
-# Debt Management (v1.5)
+# Debt Management (v1.6)
 
 Manage and optimize ORA's debt across the loan lifecycle: origination, monitoring, covenant compliance, refinance evaluation, lender relationships — and payoff statements on notes ORA **holds** as well as notes ORA **owes**.
 
@@ -154,9 +154,11 @@ Report variances with the arithmetic shown; do not accept a lender's total on it
 2. Calculate breakeven refi rate including prepay penalty, defeasance, points, legal.
 3. Build NPV comparison: hold-current vs. refi-now vs. refi-at-maturity.
 4. Survey market: 3+ lender quotes. Use HubSpot lender-relationship database for outreach.
-5. Output: refi-decision memo (DOCX, ORA Style) with NPV table, sensitivity to rate moves, and recommended action.
+5. **Pre-close portfolio-aggregate LTV test (INTERIM; Hard Invariant 4; v1.6).** Before recommending, accepting or signing any refi or any new, assumed or seller-financed loan an ORA entity owes (secured, unsecured or parent-level, incl. a property-entity mortgage that survives an entity-interest purchase), fill one worksheet per `references/ltv-interim-netting-checklist.md` (INTERIM until a pending-debt register exists): live Master Workbook read, every pending loan and signed pending sale, the loan under test on its own line. This session owns the worksheet; the loan's own payoff nets only behind Gabriel's in-turn sign-off; file it in the deal folder with its documents attached. Above 40% → **LTV-FLAGGED (portfolio)**: flag, never kill (acquisition-underwriting Calibration Ruling 5); Gabriel's sign-off is required before the loan is accepted. Any STOP goes to Gabriel. Formula not restated here; constants unchanged.
+6. Output: refi-decision memo (DOCX, ORA Style) with NPV table, sensitivity to rate moves, the step-5 aggregate-LTV pass/flag line, and recommended action.
 
 ### Term-Sheet Redline
+0. **Re-test on the final principal (INTERIM; v1.6).** Before any term sheet, commitment letter or loan document (incl. an assumption agreement, a seller carry-back note, or a lender consent or loan modification over a surviving mortgage) is signed or accepted, re-run Refinance Evaluation step 5 on the FINAL principal in that document, on a fresh worksheet. Once a loan or PSA is signed, any changed term is a NEW test, and Gabriel closes or withdraws the old one (`references/ltv-interim-netting-checklist.md`, trap 3). This applies however the document reaches review, including through `legal-intelligence`.
 1. Compare against ORA Standard Lender Provisions library (Notion Knowledge Base).
 2. Flag any deviation in: prepayment rights, debt-yield/DSCR triggers, recourse scope, reserves, transfer/assumption, springing recourse, environmental indemnity.
 3. Produce redline DOCX with comments using legal-intelligence skill conventions.
@@ -175,6 +177,7 @@ Report variances with the arithmetic shown; do not accept a lender's total on it
 
 ## Outputs
 
+- Refinance Evaluation step 5 / Term-Sheet step 0: the filled INTERIM netting worksheet (`references/ltv-interim-netting-checklist.md`), filed in the deal folder with its documents and any sign-off text attached
 - DOCX deliverables follow ORA Institutional Style Guide v1.0+
 - File naming: `YYYYMMDD_[Property-or-Topic]_[DocType]_[v##].docx`
 - Mirror to SharePoint `/Loans/Analysis/`
@@ -196,9 +199,11 @@ Report variances with the arithmetic shown; do not accept a lender's total on it
 - xlsx skill (for sensitivity models)
 - docx skill (for memo and payoff-letter deliverables)
 - `ora-loan-terms-reconciliation` scheduled task (monthly register-vs-instrument drift check)
+- `references/ltv-interim-netting-checklist.md` (INTERIM pre-close aggregate-LTV worksheet, step 5 and step 0) and the live Master Workbook
 
 ## Changelog
 
+- v1.6 (2026-10-26): **INTERIM pre-close portfolio-aggregate LTV test** (Gabriel, in-turn, 2026-10-26: land as interim until a pending-debt register exists). New Refinance Evaluation step 5 and Term-Sheet step 0 point to the new `references/ltv-interim-netting-checklist.md`: manual worksheet (booked debt plus pending loans at full face; signed pending sales out of the denominator; reductions only with a document; the loan's own payoff netted only behind Gabriel's in-turn sign-off; flag, never kill), owned by the session running the evaluation and filed in the deal folder. The worksheet's gross line counts the loan under test once (line 5 lists only OTHER pending loans). Closes by procedure the gap that the STAGE 2.3 all-cash governor sees only booked debt. No script or register. **No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).**
 - v1.5 (2026-10-17): Corrected the A3 30/360 day count (the old formula had no year term and returned −316 for Dec 1 → Jan 15; correct is 44) and added `scripts/daycount.py` with tests (Bond Basis, US/SIA end-of-February, 30E/360; NASD refused). No governor constant, trigger vocabulary or QC gate touched.
 - v1.4 (2026-09-07): ORA Automation Audit R23-9-adjacent — a full pairwise trigger sweep found "refinance" shared with disposition-analysis (strategic hold/refi/1031/sell decision vs. this skill's execution). Added a one-clause deferral: strategic refi-vs-other-exit calls route to disposition-analysis first. Reciprocal clause added there. No procedure, QC gate, or trigger vocabulary otherwise changed.
 - v1.3 (2026-08-17): Added the PAYOFF STATEMENTS section — Step 0 direction check, Workflow A (issuing, ORA as Lender), Workflow B (auditing a payoff received), and a 13-point payoff QC gate. Encodes four errors made while hand-building the 5600 Sunnyside / Restoration Church payoff three times: (1) an installment double-counted on top of un-reduced principal plus full accrued interest, overstating by $16,713.65; (2) a total rounded from unrounded inputs instead of footing the displayed column, off by $0.01; (3) a letter dated from file timestamps rather than the current date, which falsely asserted a past-due installment as not yet due; (4) a register-sourced late-charge grace period (15 days) used instead of the executed Note's actual term (5 days). Adds the A6 Path A/Path B consistency cross-check that catches the double-count class arithmetically. Scope widened to seller-financed notes where an ORA SPV is Lender.
