@@ -10,7 +10,7 @@ description: "Use when the user mentions: lease review, PSA review, contract ana
 When a legal document is uploaded, immediately classify it as one of:
 
 - **Lease** — commercial, industrial, retail, office, ground, or solar
-- **Purchase and Sale Agreement (PSA)**
+- **Purchase and Sale Agreement (PSA)** (one that sells or changes Oxford's share of an asset, or carries a loan: follow the INTERIM aggregate-LTV checklist in `debt-management/references/ltv-interim-netting-checklist.md`)
 - **Loan document** — promissory note, deed of trust, guaranty, loan application (follow the INTERIM aggregate-LTV checklist in `debt-management/references/ltv-interim-netting-checklist.md`)
 - **Estoppel certificate**
 - **SNDA** — Subordination, Non-Disturbance, and Attornment agreement
@@ -218,7 +218,7 @@ Counsel COMMENTS are a fourth case and are equally invisible to a tracked-change
 
 ## Changelog
 
-- v1.4 (2026-10-26): Module 1 pointers: any loan document, and any agreement (amendment or new) that sells, contributes or changes Oxford's share of an asset or increases a loan's principal or commitment, follow the `debt-management` v1.6 INTERIM aggregate-LTV checklist (pointer only; no review rule changed). No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).
+- v1.4 (2026-10-26): Module 1 pointers: any loan document, any PSA that sells, changes Oxford's share or carries a loan, and any agreement (amendment or new) that sells, contributes or changes Oxford's share of an asset or increases a loan's principal or commitment, follow the `debt-management` v1.6 INTERIM aggregate-LTV checklist (pointer only; no review rule changed). No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).
 - v1.3 (2026-08-21, adversarial review): "estoppel"/"SNDA" triggers (frontmatter description and TRIGGER PHRASES)
   narrowed to clause-analysis-only, with an explicit pointer to `estoppel-request-generation` for drafting/generating a
   certificate — the two skills previously claimed the identical bare trigger words with no tie-break, risking a "draft

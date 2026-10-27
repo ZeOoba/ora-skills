@@ -338,7 +338,7 @@ Post-closing operational setup (`re-operations` retired 2026-08-05, redundant wi
  8. HubSpot deal marked Closed Won; Notion pipeline updated to Closed (set Stage = Closed Won **and `Last Activity` = today**)
  9. Physical key and access credential transfer
 10. Lender notification (if existing debt assumed)
-11. LTV ledger (INTERIM; v1.11): once the live workbook shows a ledger item of the deal booked, prompt Gabriel to mark it BOOKED-VERIFIED per `debt-management/references/ltv-interim-netting-checklist.md`.
+11. LTV ledger (INTERIM; v1.11): follow the INTERIM checklist in `debt-management/references/ltv-interim-netting-checklist.md` (BOOKED-VERIFIED).
 
 ---
 
