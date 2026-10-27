@@ -3,7 +3,7 @@ name: "debt-management"
 description: "Use when the user mentions: refinance, refi, term sheet, lender selection, loan negotiation, DSCR, debt yield, LTV, debt covenant, lender call, prepayment, defeasance, swap, rate cap, hedge, balloon, maturity, loan reserves, lender package, capital stack, recap, mezzanine, preferred equity — ORA debt and capital-markets skill. Also on an uploaded term sheet, commitment letter, lender proposal or amortization schedule. SOLE path for PAYOFF STATEMENTS in either direction: payoff letter or figure, per diem, title company payoff request or authorization, seller-financed note payoff or release, auditing a payoff quoted TO us. Strategic hold/refi/1031/sell decisions route to disposition-analysis first."
 ---
 
-# Debt Management (v1.5)
+# Debt Management (v1.6)
 
 Manage and optimize ORA's debt across the loan lifecycle: origination, monitoring, covenant compliance, refinance evaluation, lender relationships — and payoff statements on notes ORA **holds** as well as notes ORA **owes**.
 
@@ -154,9 +154,11 @@ Report variances with the arithmetic shown; do not accept a lender's total on it
 2. Calculate breakeven refi rate including prepay penalty, defeasance, points, legal.
 3. Build NPV comparison: hold-current vs. refi-now vs. refi-at-maturity.
 4. Survey market: 3+ lender quotes. Use HubSpot lender-relationship database for outreach.
-5. Output: refi-decision memo (DOCX, ORA Style) with NPV table, sensitivity to rate moves, and recommended action.
+5. **Portfolio-aggregate LTV test (INTERIM; Hard Invariant 4; v1.6).** For any refi or any new, assumed or seller-financed loan an ORA entity owes, follow the INTERIM checklist in `references/ltv-interim-netting-checklist.md` (until a pending-debt register exists); a recap, contribution or share change with no loan also follows it. Result per the checklist (rule 3); a flag is never a kill (acquisition-underwriting Calibration Ruling 5).
+6. Output: refi-decision memo (DOCX, ORA Style) with NPV table, sensitivity to rate moves, the step-5 aggregate-LTV pass/flag line, and recommended action.
 
 ### Term-Sheet Redline
+0. **Aggregate-LTV re-test (INTERIM; v1.6).** For any term sheet, commitment letter or loan document under review (including through `legal-intelligence`), follow the INTERIM checklist in `references/ltv-interim-netting-checklist.md` (rule 7 for changed terms).
 1. Compare against ORA Standard Lender Provisions library (Notion Knowledge Base).
 2. Flag any deviation in: prepayment rights, debt-yield/DSCR triggers, recourse scope, reserves, transfer/assumption, springing recourse, environmental indemnity.
 3. Produce redline DOCX with comments using legal-intelligence skill conventions.
@@ -175,9 +177,10 @@ Report variances with the arithmetic shown; do not accept a lender's total on it
 
 ## Outputs
 
+- Refinance Evaluation step 5 / Term-Sheet step 0: the INTERIM test worksheet (a record only), filed where `references/ltv-interim-netting-checklist.md` names
 - DOCX deliverables follow ORA Institutional Style Guide v1.0+
-- File naming: `YYYYMMDD_[Property-or-Topic]_[DocType]_[v##].docx`
-- Mirror to SharePoint `/Loans/Analysis/`
+- File naming: `YYYYMMDD_[Property-or-Topic]_[DocType]_[v##].docx` (except the INTERIM LTV test worksheet: name and location per the checklist)
+- Mirror to SharePoint `/Loans/Analysis/` (except the INTERIM LTV test worksheet and ledger: location per the checklist)
 - Notion update to debt schedule and Operations Hub
 
 ## Boundaries
@@ -196,9 +199,11 @@ Report variances with the arithmetic shown; do not accept a lender's total on it
 - xlsx skill (for sensitivity models)
 - docx skill (for memo and payoff-letter deliverables)
 - `ora-loan-terms-reconciliation` scheduled task (monthly register-vs-instrument drift check)
+- `references/ltv-interim-netting-checklist.md` (INTERIM aggregate-LTV test, step 5 and step 0), Gabriel's ledger it names (read only), and the live Master Workbook
 
 ## Changelog
 
+- v1.6 (2026-10-26): **INTERIM portfolio-aggregate LTV test** (Gabriel, in-turn, 2026-10-26; simplified at his direction the same day to a minimal, Gabriel-run, fail-closed procedure). New Refinance Evaluation step 5 and Term-Sheet step 0 point to the new `references/ltv-interim-netting-checklist.md` and its Gabriel-owned pending ledger, closing by procedure the gap that the STAGE 2.3 all-cash governor sees only booked debt. No script or register. **No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).**
 - v1.5 (2026-10-17): Corrected the A3 30/360 day count (the old formula had no year term and returned −316 for Dec 1 → Jan 15; correct is 44) and added `scripts/daycount.py` with tests (Bond Basis, US/SIA end-of-February, 30E/360; NASD refused). No governor constant, trigger vocabulary or QC gate touched.
 - v1.4 (2026-09-07): ORA Automation Audit R23-9-adjacent — a full pairwise trigger sweep found "refinance" shared with disposition-analysis (strategic hold/refi/1031/sell decision vs. this skill's execution). Added a one-clause deferral: strategic refi-vs-other-exit calls route to disposition-analysis first. Reciprocal clause added there. No procedure, QC gate, or trigger vocabulary otherwise changed.
 - v1.3 (2026-08-17): Added the PAYOFF STATEMENTS section — Step 0 direction check, Workflow A (issuing, ORA as Lender), Workflow B (auditing a payoff received), and a 13-point payoff QC gate. Encodes four errors made while hand-building the 5600 Sunnyside / Restoration Church payoff three times: (1) an installment double-counted on top of un-reduced principal plus full accrued interest, overstating by $16,713.65; (2) a total rounded from unrounded inputs instead of footing the displayed column, off by $0.01; (3) a letter dated from file timestamps rather than the current date, which falsely asserted a past-due installment as not yet due; (4) a register-sourced late-charge grace period (15 days) used instead of the executed Note's actual term (5 days). Adds the A6 Path A/Path B consistency cross-check that catches the double-count class arithmetically. Scope widened to seller-financed notes where an ORA SPV is Lender.
