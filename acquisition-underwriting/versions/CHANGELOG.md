@@ -5,6 +5,7 @@ Created 2026-10-23 (v4.35). The body of SKILL.md is authoritative; this file is 
 ## Version index
 | Version | Date | Ratifier | Summary (200 chars max) | Constants changed | Evidence ID |
 |---|---|---|---|---|---|
+| v4.36 | 2026-10-26 | Gabriel, in-turn | STAGE 2.3 Part A: LTV enforcement for refis, loans and sales is the INTERIM manual procedure run by Gabriel in debt-management, replacing 'OPEN follow-up'. | none | RE-4.36-1 |
 | v4.35 | 2026-10-23 | Gabriel, in-turn | Rule Evidence field and admission rule; single changelog index; Basis-at-RCT-LOW/POINT/HIGH sensitivity line (reporting only). | none | RE-4.35-1, RE-4.35-2 |
 | v4.34 | 2026-10-19 | Gabriel, in-turn | Two-tier return thresholds recorded: 10% acquisition IRR floor vs 8% portfolio hurdle; Stage 1 IRR text corrected. Wording only. | none | RE-4.34-1 |
 | v4.33 | 2026-10-18 | Gabriel, in-turn | Audit package items 2-8: unlevered IRR floor; Rollover & Credit Block; FORT Basis multiplier; MD/DC exit cap 7.25%; seller signals; variance review; PAS role. | IRR floor basis; MD/DC exit cap; credit loss; renewal rates; FORT multipliers | RE-4.33-1..7 |
@@ -20,6 +21,7 @@ Fields per the RULE EVIDENCE section of SKILL.md. Values not in the original ent
 
 | Evidence ID | Entry | Incidents | Expected loss | Class | Testable via |
 |---|---|---|---|---|---|
+| RE-4.36-1 | INTERIM manual aggregate-LTV checklist (pointer) | 0 deals; design gap (all-cash governor blind to signed-but-unbooked debt) found in adversarial review of an unlanded register implementation | [UNQUANTIFIED]; quantified by the count of loans or sales signed before booking and the LTV delta each would have shown | RATIFIED-JUDGMENT (Gabriel, in-turn, 2026-10-26) | Gabriel's LTV_Pending ledger and test worksheets: flags raised vs the booked-only figure; sunset when a pending-debt register lands |
 | RE-4.35-1 | Rule Evidence field and admission rule | 0 | n/a (process) | RATIFIED-JUDGMENT (Gabriel, in-turn, 2026-10-23) | Fill rate of the field on new entries |
 | RE-4.35-2 | Basis at RCT LOW / POINT / HIGH line | 0 deals; computed: at all-in = 30% of RCT LOW a +/-10% RCT error moves Basis 3.8 to 17.6 pts of 25 | [UNQUANTIFIED] | THEORY (computed) | BackTestDataset Basis component; deflator test |
 | RE-4.34-1 | Two-tier thresholds | 0 (wording only) | n/a | RATIFIED-JUDGMENT (2026-10-19) | Share of deals where the 10% IRR floor binds before the 8% yield floor |
@@ -33,6 +35,10 @@ Fields per the RULE EVIDENCE section of SKILL.md. Values not in the original ent
 | RE-4.32-1 | LTV naming | 1 (adversarial review of v4.29/v4.31) | n/a | ORA-OBSERVED | none |
 | RE-4.31-1 | With-refi LTV disclosure | 0 | [UNQUANTIFIED] | RATIFIED-JUDGMENT (2026-10-17) | Disclosure only |
 | RE-4.30-1 | Ancillary-income abstraction (Rule 9) | 1: 8625 Troost Ave, 2026-10-17 (AT&T lease 5 + 17 x 5 yrs; model stopped at 2037) | [UNQUANTIFIED] | ORA-OBSERVED, EVIDENCE: SINGLE-INCIDENT | Next ancillary-income deal |
+
+## Full entries (v4.36 onward)
+
+**v4.36 (2026-10-26):** **Aggregate-LTV enforcement for refis, loans and sales is an INTERIM manual procedure run by Gabriel** (Gabriel, in-turn, 2026-10-26; simplified at his direction the same day). STAGE 2.3 Part A, its mirror in `references/doctrine-rationale-and-incidents.md` (Part A and the UNDERWRITING CONVENTIONS refi paragraph) and the CAPITAL STRUCTURE CONTEXT pointer no longer call it an OPEN follow-up: enforcement for a refi, any other loan and a sale is the procedure in `debt-management/references/ltv-interim-netting-checklist.md` (debt-management v1.6; prompts in `deal-execution` v1.11, `disposition-analysis` v1.4, `legal-intelligence` v1.4, `deal-retirement` v1.6). Part A's source sentence is now scoped to this governor's source (the INTERIM test reads the live workbook only), identical in SKILL.md and the mirror. Pointer and wording only: the STAGE 2.3 governor remains the all-cash figure, the with-refi line remains informational, and no score, floor, weight or verdict changes. The checklist's test counts unsecured and parent-level loans and pending items, so it can sit above the Part A figure; the two are reported separately. Rule Evidence: RE-4.36-1. Eval harness doctrine skip gate returned RUN; golden-set replay pending (no Stage 2.3 verdict fields in the golden set). **No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).** Edits authored by Claude Opus 5.5 (implementer); orchestrated and committed by Claude Sonnet 5.5.
 
 ## Full entries (verbatim from the former inline header)
 

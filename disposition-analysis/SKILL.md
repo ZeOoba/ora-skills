@@ -4,7 +4,7 @@ name: disposition-analysis
 description: Use when the user mentions: should we sell, hold or sell, disposition, dispose of, exit an asset, recycle or prune the portfolio, 1031, like-kind exchange, replace an asset, refinance vs sell, harvest gains, cash out, when to sell, keeping vs selling a property, depreciation recapture, or estate step-up — the Oxford Realty Advisors hold / refinance / 1031 / sell decision engine. Defaults to HOLD + cash-out refinance for liquidity (ORA generational-hold doctrine); when capital is recycled the default exit is a 1031 exchange; a taxable sale is the rare exception that must clear a high bar. Refi execution (term sheets, lender selection) routes to debt-management.
 ---
 
-# Disposition Analysis — Oxford Realty Advisors (v1.3)
+# Disposition Analysis — Oxford Realty Advisors (v1.4)
 
 You are evaluating whether ORA should HOLD, REFINANCE, 1031-EXCHANGE, or make a TAXABLE SALE of an asset. ORA is a generational-hold family office; the burden of proof is on selling, and recycling is almost always done via 1031. Every analysis carries the tax overlay — a sale's "true" cost is the headline price minus the tax a hold would have avoided.
 
@@ -42,7 +42,7 @@ Side by side, after-tax to ORA:
 - Basis carries over (minus boot, plus new cash) → the replacement inherits a low basis and continues the old depreciation; factor this into the replacement's after-tax model.
 
 ### Step 6 — Recommendation
-State HOLD / REFI / 1031 / SELL with the tax-charged numbers and the one-line reason. Default to the most tax-deferring path that meets the trigger; only recommend a taxable sale when it clears the hold-and-1031 benchmark after the full tax charge. Flag any boot, §461(l)/timing interaction, and the estate consequence.
+State HOLD / REFI / 1031 / SELL with the tax-charged numbers and the one-line reason. Default to the most tax-deferring path that meets the trigger; only recommend a taxable sale when it clears the hold-and-1031 benchmark after the full tax charge. Flag any boot, §461(l)/timing interaction, and the estate consequence. A SELL or 1031 PSA follows Gabriel's `debt-management` INTERIM aggregate-LTV checklist (`debt-management/references/ltv-interim-netting-checklist.md`).
 
 ### Step 7 — Log the ruling (2026-07-29)
 Append one row to `memory/disposition-ledger.md` — the post-acquisition lifecycle ledger (Date | Property | Event | Terms/Amount | Rationale | Source). Event = the ruling (HOLD / REFI / 1031 / SELL); for a HOLD, Terms/Amount is "No transaction" plus the live refi lever if quantified. This is a DIFFERENT file from `memory/deal-decision-ledger.md`, which is scoped to PRE-acquisition pipeline decisions (PASS/SKIP/DROP/PARK/CLOSE) only — never write a disposition ruling there. If this is the property's first-ever row in disposition-ledger.md, also add the ACQUIRED baseline row (purchase price, date, source) before the new ruling row, so the ledger is self-contained per property.
@@ -58,6 +58,7 @@ acquisition-underwriting (replacement-asset underwrite for 1031 targets) · deal
 
 ## Changelog
 
+- v1.4 (2026-10-26): Step 6 pointer: a SELL or 1031 PSA follows the `debt-management` v1.6 INTERIM aggregate-LTV checklist. Pointer only; no model, tax treatment, or trigger vocabulary changed. No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).
 - v1.3 (2026-09-07): ORA Automation Audit R23-9-adjacent — reciprocal to debt-management v1.4. Added a one-clause deferral: once refi is chosen, EXECUTION (term sheets, lender selection) routes to debt-management. This skill keeps ownership of the strategic hold/refi/1031/sell call itself. No model, tax treatment, or trigger vocabulary otherwise changed.
 - v1.2 (2026-08-24): Description trimmed to restore headroom (was 1001/1024,
   headroom 23 -- close-out work-order item 4). Dropped the implementation-detail
