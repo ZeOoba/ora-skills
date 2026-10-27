@@ -40,7 +40,7 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 > 2026-07-14, rebuilt from the Cushman & Wakefield 2025 Industrial Construction Cost
 > Guide. **Floor = linear vintage ramp: 65% discount at ≤1995 → 60% at ≥2005.**
 > Basis = **all-in** (price + 2% closing + CapEx + lease-up carry), not price alone.
-> **Construction type (acquisition-underwriting v4.37):** the LOW above is the construction-type-adjusted LOW (RCT POINT × multiplier + adders, LOW re-derived at 0.9). Take it from the `acquisition-underwriting` screen; never recompute from the bare table for a PEMB, masonry or brick building. A screen that predates v4.37 is flagged `[RCT: pre-v4.37, type not applied]`.
+> **Construction type (acquisition-underwriting v4.37):** the LOW above is the construction-type-adjusted LOW (RCT POINT × multiplier + adders, LOW re-derived at 0.9). Take it from the `acquisition-underwriting` screen; never recompute from the bare table for a non-tilt-up building (PEMB, masonry, brick, precast or hybrid). A screen that predates v4.37 is flagged `[RCT: pre-v4.37, type not applied]`.
 >
 > ⚠️ Do NOT use: the retired RCT v02 constants, the retired C&W-hard "operative
 > benchmark" briefly in `target-markets.json`, or the old $140/$170/$150/$130 scan

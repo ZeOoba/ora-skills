@@ -5,7 +5,7 @@ description: "Use whenever the user mentions: flood zone, FEMA, SFHA, NFHL, floo
 
 ## Changelog (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
 
-v1.5 (2026-08-24: added Jefferson County KY / Louisville block to references/endpoints.md — LOJIC ArcGIS REST services, verified live against both Knopp Ave and Cane Run Rd) · v1.4 (2026-08-24: Step 6A added - Planned Development (PD/PUD) parcels carry no by-right use table; run the minor-vs-major amendment tier test and capture the post-closing change-of-use trigger) · v1.3 (2026-07-24: mandatory geocode-vs-parcel validation added after a confirmed off-parcel geocode/empty-zoning-result incident; endpoints verified 2026-06-09; batch-write safety rule added 2026-07-12; cross-linked county-parcel-screen's endpoint registry for parcel-geometry lookups 2026-07-20)
+v1.6 (2026-10-27: Step 5A ordinance-PDF fallback, Step 6 special-exception RE-LEASING FRICTION, Lebanon County / South Londonderry endpoints) · v1.5 (2026-08-24: added Jefferson County KY / Louisville block to references/endpoints.md — LOJIC ArcGIS REST services, verified live against both Knopp Ave and Cane Run Rd) · v1.4 (2026-08-24: Step 6A added - Planned Development (PD/PUD) parcels carry no by-right use table; run the minor-vs-major amendment tier test and capture the post-closing change-of-use trigger) · v1.3 (2026-07-24: mandatory geocode-vs-parcel validation added after a confirmed off-parcel geocode/empty-zoning-result incident; endpoints verified 2026-06-09; batch-write safety rule added 2026-07-12; cross-linked county-parcel-screen's endpoint registry for parcel-geometry lookups 2026-07-20)
 
 # ORA Flood & Zoning DD-Critical Resolution (v1.6)
 
