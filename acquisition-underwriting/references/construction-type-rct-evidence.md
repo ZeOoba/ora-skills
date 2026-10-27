@@ -1,4 +1,4 @@
-# Construction-Type RCT Multiplier: Evidence File (v4.36)
+# Construction-Type RCT Multiplier: Evidence File (v4.37)
 
 Backs the **Construction-Type Multiplier Schedule** in `SKILL.md` (Replacement Cost Table). Compiled from the 2026-10-27 research task for 211 Piper Circle (Annville PA). Figures below are as reported by that research; they were **not re-fetched** when the schedule was merged. Every multiplier is `[EST]` and calibration-pending (see "Open item").
 

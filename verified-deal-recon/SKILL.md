@@ -58,5 +58,5 @@ If `.claude/agents/deal-recon.md` is later edited on the Code surface, re-inline
 
 ## Changelog
 
-- **v1.3 (2026-10-27):** recon checklist item 5 also pulls the last recorded sale; seller acquired within 24 months → ask vs. seller basis in the brief (parity with `acquisition-underwriting` v4.36 Stage -1 item 10).
+- **v1.3 (2026-10-27):** recon checklist item 5 also pulls the last recorded sale; seller acquired within 24 months → ask vs. seller basis in the brief (parity with `acquisition-underwriting` v4.37 Stage -1 item 10).
 - **v1.2 (2026-08-22):** cross-surface port — runs on Cowork and Code (detail under Port notes above).
