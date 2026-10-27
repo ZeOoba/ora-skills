@@ -1,5 +1,7 @@
 # 23-Point QC Gate — LOI Pre-Transmission Checklist
 
+> **v1.13:** every LOI is SHORT form. The operative gate is the table in SKILL.md Phase 5 plus the SHORT rows in `references/short-form.md`, automated by `templates/qc_shortform.py`. The table and `qc_gate.py` helper below describe the retired CONDENSED master and apply only if Gabriel explicitly revives it in-turn; item 23 (Offer ≤ Walk Price) and the strike list apply to every LOI.
+
 This gate runs after document assembly and before the file is presented or shipped. Every item must pass; if any fails, fix and re-run. Do not present a failing file.
 
 | # | Check | How to verify |
