@@ -179,8 +179,8 @@ Report variances with the arithmetic shown; do not accept a lender's total on it
 
 - Refinance Evaluation step 5 / Term-Sheet step 0: the INTERIM test worksheet (a record only), filed where `references/ltv-interim-netting-checklist.md` names
 - DOCX deliverables follow ORA Institutional Style Guide v1.0+
-- File naming: `YYYYMMDD_[Property-or-Topic]_[DocType]_[v##].docx` (except the LTV test worksheet: name and location per the checklist)
-- Mirror to SharePoint `/Loans/Analysis/` (except the LTV test worksheet and ledger: location per the checklist)
+- File naming: `YYYYMMDD_[Property-or-Topic]_[DocType]_[v##].docx` (except the INTERIM LTV test worksheet: name and location per the checklist)
+- Mirror to SharePoint `/Loans/Analysis/` (except the INTERIM LTV test worksheet and ledger: location per the checklist)
 - Notion update to debt schedule and Operations Hub
 
 ## Boundaries
