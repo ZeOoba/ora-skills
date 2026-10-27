@@ -154,7 +154,7 @@ Report variances with the arithmetic shown; do not accept a lender's total on it
 2. Calculate breakeven refi rate including prepay penalty, defeasance, points, legal.
 3. Build NPV comparison: hold-current vs. refi-now vs. refi-at-maturity.
 4. Survey market: 3+ lender quotes. Use HubSpot lender-relationship database for outreach.
-5. **Portfolio-aggregate LTV test (INTERIM; Hard Invariant 4; v1.6).** For any refi or any new, assumed or seller-financed loan an ORA entity owes, follow the INTERIM checklist in `references/ltv-interim-netting-checklist.md` (until a pending-debt register exists); a recap, contribution or share change with no loan also follows it. Above 40% → **LTV-FLAGGED (portfolio)**: flag, never kill (acquisition-underwriting Calibration Ruling 5).
+5. **Portfolio-aggregate LTV test (INTERIM; Hard Invariant 4; v1.6).** For any refi or any new, assumed or seller-financed loan an ORA entity owes, follow the INTERIM checklist in `references/ltv-interim-netting-checklist.md` (until a pending-debt register exists); a recap, contribution or share change with no loan also follows it. Result per the checklist (rule 3); a flag is never a kill (acquisition-underwriting Calibration Ruling 5).
 6. Output: refi-decision memo (DOCX, ORA Style) with NPV table, sensitivity to rate moves, the step-5 aggregate-LTV pass/flag line, and recommended action.
 
 ### Term-Sheet Redline
