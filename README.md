@@ -126,6 +126,8 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `ora-flood-zoning-dd` — FEMA flood + zoning/permitted-use due-diligence determinations
 - ~~`census-acs-extract`~~ — retired 2026-08-05 (zero use across git history, event_log, and Notion; no doctrine dependency). Archived script still runnable at `_archive/census-acs-extract_retired-2026-08-05/census_acs_extract.py`
 - `ora-millage-lookup` — resolves a parcel's property-tax rate/taxable base from verified government endpoints; companion to acquisition-underwriting STAGE 2.5
+- `cost-seg-tax-layer` — after-tax returns for an ORA underwrite: cost-segregation allocation by property type (industrial/flex default, retail override), class-by-class recapture, per-state tax layer (WI, OH, IN, MD, MO, KS, TN)
+- `municipal-permit-portal-recon` — permit and certificate-of-occupancy diligence: pulls the Auditor permit list and county permit portal, reconciles, flags gaps, builds the register
 - `market-monitor` — industrial market conditions, vacancy, rent growth, supply pipeline tracking
 - ~~`rent-comp`~~ — retired 2026-08-05; its comp-grid discipline was absorbed into `acquisition-underwriting` on 2026-08-12 (the retirement record wrongly credited `market-monitor` — see the 2026-08-12 event_log entry)
 - `submarket-spatial-analysis` — drive-time, demographics, and locational scoring
@@ -133,6 +135,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `loi-generation` — the sole letter-of-intent drafting path
 - `acquisition-proposal-generation` — seller-facing two-page, non-legalistic business-terms Acquisition Proposal; the short principal-to-principal alternative to `loi-generation`'s formal LOI
 - `deal-execution` — PSA negotiation through closing (redlines, DD checklist, closing statement)
+- `exhibit-package-builder` — signature-ready Combined PDF: front instrument + exhibit contents sheet + every source instrument, stamped Exhibit A-n of N and verified page-by-page against source
 - `psa-reconciliation` — PSA fact extraction/cascade reconciliation against the LOI
 - `title-exam-abstraction` — abstracts title exams, commitments, preliminary reports and recorded instruments, turning every encumbrance into a tracked deal-terms-register item
 - `settlement-basis-extraction` — extracts HUD-1/ALTA settlement statements into a capitalizable-basis register (CHARGE_DETAIL, BASIS_REGISTER, EXCHANGE_1031) at every acquisition/disposition closing
@@ -145,6 +148,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - ~~`maintenance-analytics`~~ — retired 2026-08-05 (zero use for CapEx/maintenance forecasting output); no successor — `capex-budgeting` now sources failure horizons manually
 - `tenant-intelligence` — tenant risk scoring, renewal probability, portfolio health metrics
 - `rent-roll-qc` — final QC/polish pass on rent rolls before external delivery
+- `pm-portal-pnl-export` — bulk-downloads historical monthly P&L Excel exports from Yardi Voyager or Rent Manager Owner Web Access, renames and merges them; also produces first-12-month NOI for the underwriting back-test
 - `rent-roll-reconciliation` — reconciles the Notion Tenant DB against an authoritative rent-roll export
 - `lease-abstraction-pipeline` — single or batch lease abstraction / rent-roll extraction
 - `estoppel-request-generation` — builds tenant estoppel certificate requests from abstracted lease data, pre-filling every certified fact and putting each known defect to the tenant (draft only)
@@ -185,6 +189,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `artifact-to-docx-report` — turns a published Claude artifact (dashboard/review page with embedded data) into an ORA-styled Word report with charts, KPI tiles and a 90-day action plan; bundles the extract, chart, docx-build and render-check scripts
 - `evidence-dossier-drafting` — multi-agent drafting pipeline: a numbered facts dossier, an inline citation on every claim, and an adversarial refuter that kills uncited or mis-cited claims before anything publishes
 - `daily-brief` — daily CRE news/market/portfolio intelligence brief
+- `outlook-calendar-sync` — adds or refreshes dated items (deadlines, to-dos, hearings) on Gabriel's Outlook calendar via desktop Outlook COM when the M365 connector cannot write calendar events
 - ~~`conversation-archival`~~ — retired 2026-08-05 (its entire Notion footprint was evidence-checked, not merely absent)
 
 **Systems, automation & infrastructure**
@@ -202,8 +207,12 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `package-and-stage-skill` — packaging/staging helper for this repo itself
 - `dirty-tree-triage` — triages uncommitted working trees across ORA's shared checkouts: attributes changes to sessions with evidence, settles them by mtime, isolates and commits only what is safe
 - `isolated-commit` — lands your own reviewed change in a shared ORA checkout that other sessions may be editing (claim, stage by pathspec, independent review, push)
+- `adversarial-merge-gate` — second-reviewer gate before merge for blast-radius changes (hooks, config, governance, financial or security-gate code), multi-session branches, or PRs whose commit message makes verification claims
+- `branch-catchup` — brings a long-lived branch up to date with origin/main safely in a shared, dirty checkout (worktree-isolated; per-conflict resolution by which side is the reviewed superset)
 - `file-reconciliation` — hash-diff dedupe/reconciliation between file trees
 - `repo-architecture-review` — cross-repo architecture-diagram audit (unbounded loops, off-fleet automation, dual-write drift, disconnected build steps, dead links, missing financial-code gates); read-only, hands off fixes to normal lane triage
+- `repo-architecture` — navigation guide to Gabriel's 7 most-active repos: purpose, layout, data flow, deploy path, gotchas, files to read first (point-in-time snapshot; verify against the repo)
+- `xlsx-warehouse-importer` — scaffold for loading a spreadsheet/JSON extract into the oxford-command-center SQLite warehouse: validation rules, property-id crosswalk, idempotency, test checklist
 - `external-artifact-intake` — evaluates an external AI artifact (prompt, repo, skill, plugin, process proposal) against the current setup and decides adoption
 - `ora-setup-audit` — formal audit of the Claude Code/Cowork setup (skills, plugins, MCP connectors, hooks, dual scheduled-task fleet) scored for accuracy, performance and token spend, with a keep/fix/combine/delete call per finding
 - `security-and-hardening` — dedicated security review or hardening pass (auth, data storage, integrations, untrusted input) once security is the explicit ask
