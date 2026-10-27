@@ -5,6 +5,7 @@ Created 2026-10-23 (v4.35). The body of SKILL.md is authoritative; this file is 
 ## Version index
 | Version | Date | Ratifier | Summary (200 chars max) | Constants changed | Evidence ID |
 |---|---|---|---|---|---|
+| v4.36 | 2026-10-27 | Gabriel, in-turn | Refi = 10-yr UST + 200 bps (shock +100); Stage -1 items 10-11; Construction-Type RCT multiplier schedule (tilt-up baseline; PEMB 0.90). No governor change. | refi rate basis; RCT construction-type multiplier | RE-4.36-1..4 |
 | v4.35 | 2026-10-23 | Gabriel, in-turn | Rule Evidence field and admission rule; single changelog index; Basis-at-RCT-LOW/POINT/HIGH sensitivity line (reporting only). | none | RE-4.35-1, RE-4.35-2 |
 | v4.34 | 2026-10-19 | Gabriel, in-turn | Two-tier return thresholds recorded: 10% acquisition IRR floor vs 8% portfolio hurdle; Stage 1 IRR text corrected. Wording only. | none | RE-4.34-1 |
 | v4.33 | 2026-10-18 | Gabriel, in-turn | Audit package items 2-8: unlevered IRR floor; Rollover & Credit Block; FORT Basis multiplier; MD/DC exit cap 7.25%; seller signals; variance review; PAS role. | IRR floor basis; MD/DC exit cap; credit loss; renewal rates; FORT multipliers | RE-4.33-1..7 |
@@ -20,6 +21,10 @@ Fields per the RULE EVIDENCE section of SKILL.md. Values not in the original ent
 
 | Evidence ID | Entry | Incidents | Expected loss | Class | Testable via |
 |---|---|---|---|---|---|
+| RE-4.36-1 | Refi rate = 10-yr UST + 200 bps | 1: 211 Piper Circle (2026-10-27); the 6.50% default had no market link | [UNQUANTIFIED] | RATIFIED-JUDGMENT (Gabriel, in-turn, 2026-10-27) | DSCR / binding-constraint shift across rebased live workbooks; Dec back-test |
+| RE-4.36-2 | Stage -1 item 10 recent-acquisition check | 1: 211 Piper Circle ($2.45M sale 10/1/2025 vs $2.95M ask) | [UNQUANTIFIED] | ORA-OBSERVED, EVIDENCE: SINGLE-INCIDENT | Next deals with a <=24-month seller basis; P(exec) vs outcome |
+| RE-4.36-3 | Stage -1 item 11 C&W file lookup before proxy | 1: 211 Piper Circle (PENN CORRIDOR in file, proxy unnecessary) | n/a (workflow) | ORA-OBSERVED, EVIDENCE: SINGLE-INCIDENT | Count of [PROXY] rows avoidable by lookup |
+| RE-4.36-4 | Construction-Type RCT multiplier | 1: 211 Piper Circle PEMB 26,800 SF (basis walk $2,399,818 -> $2,154,977) | [UNQUANTIFIED] | EXTERNAL-ANCHORED (Marshall & Swift via Michigan Assessor's Manual; Moore Precision Cost 2013; C&W 2026), vintage-mixed, all [EST] | December back-test after one current MVS Sec. 14 / RSMeans 2026 page set |
 | RE-4.35-1 | Rule Evidence field and admission rule | 0 | n/a (process) | RATIFIED-JUDGMENT (Gabriel, in-turn, 2026-10-23) | Fill rate of the field on new entries |
 | RE-4.35-2 | Basis at RCT LOW / POINT / HIGH line | 0 deals; computed: at all-in = 30% of RCT LOW a +/-10% RCT error moves Basis 3.8 to 17.6 pts of 25 | [UNQUANTIFIED] | THEORY (computed) | BackTestDataset Basis component; deflator test |
 | RE-4.34-1 | Two-tier thresholds | 0 (wording only) | n/a | RATIFIED-JUDGMENT (2026-10-19) | Share of deals where the 10% IRR floor binds before the 8% yield floor |
@@ -35,6 +40,8 @@ Fields per the RULE EVIDENCE section of SKILL.md. Values not in the original ent
 | RE-4.30-1 | Ancillary-income abstraction (Rule 9) | 1: 8625 Troost Ave, 2026-10-17 (AT&T lease 5 + 17 x 5 yrs; model stopped at 2037) | [UNQUANTIFIED] | ORA-OBSERVED, EVIDENCE: SINGLE-INCIDENT | Next ancillary-income deal |
 
 ## Full entries (verbatim from the former inline header)
+
+**v4.36 (2026-10-27):** **Financing at UST + 200 bps; Stage -1 items 10-11; Construction-Type RCT multiplier.** (1) Refi rate = 10-yr UST (same FRED DGS10 30-day-average cell as the IRR floor) + 200 bps, always; the 6.50% default, its band and the +/-25 bp adjusters are retired; refi-shock = base + 100 bps [est]; binding-constraint sentence rewritten (DSCR binds below an exit cap of 0.65 x 1.25 x debt constant, ~7.0% at a 5.2% UST). (2) Stage -1 item 10: seller acquired <=24 months ago -> ask vs seller basis reported, recorded sale is a comp, not a motivation signal. (3) Stage -1 item 11: look up the C&W cost file before any [PROXY]. (4) Construction-Type Multiplier Schedule on the RCT (tilt-up 1.00 baseline; PEMB 0.90 with size tilt; applied to the full POINT before adders; basis floor/points/walk use adjusted LOW) with `references/construction-type-rct-evidence.md`. Origin: 211 Piper Circle, Annville PA (2026-10-27). **No governor constant (DSCR 1.25x / per-property LTV 65% / aggregate LTV 40%), floor, scorecard weight or RCT v03 market value changed.** Consumer sweep: `parcel-data-recovery`, `deal-comparison`, `verified-deal-recon`, `config/replacement-cost.v1.json` and the eval-harness golden set carry the multiplier or a stale-flag note; frozen golden fixtures untouched and to be re-baselined at the next harness run. Numbering note: the staged patch was written as v4.35 against v4.34, but v4.35 (#156) landed first, so this ships as v4.36 on the single-index changelog.
 
 **v4.34 (2026-10-19):** **Two-tier return thresholds recorded** (Gabriel, in-turn, 2026-10-19, option (a) of the v4.33 follow-up). The 10.0% unlevered IRR acquisition floor (v4.33) and the 8.0% unlevered portfolio capital-allocation hurdle (`capital_config` v1, ratified 2026-06-22 — v4.33 wrongly called it PROPOSED) are kept deliberately different; Stage 1 IRR floor text corrected. Wording only: **no floor, weight, exit cap or governor constant (DSCR 1.25x / per-property LTV 65% / portfolio-aggregate LTV 40%) changed.** v4.30 entry archived to `versions/CHANGELOG-v4.30.md` under R24-11.
 
