@@ -40,7 +40,7 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 > 2026-07-14, rebuilt from the Cushman & Wakefield 2025 Industrial Construction Cost
 > Guide. **Floor = linear vintage ramp: 65% discount at ≤1995 → 60% at ≥2005.**
 > Basis = **all-in** (price + 2% closing + CapEx + lease-up carry), not price alone.
-> **Construction type (acquisition-underwriting v4.37):** the LOW above is the construction-type-adjusted LOW (RCT POINT × multiplier + adders, LOW re-derived at 0.9). Take it from the `acquisition-underwriting` screen; never recompute from the bare table for a non-tilt-up building (PEMB, masonry, brick or hybrid; precast is ×1.00). A screen that predates v4.37 carries no construction-type adjustment: note "pre-v4.37 screen" and re-derive from the current schedule.
+> **Construction type (acquisition-underwriting v4.37):** the LOW above is the construction-type-adjusted LOW (RCT POINT × multiplier + adders, LOW re-derived at 0.9). Take it from the `acquisition-underwriting` screen; never recompute from the bare table for a non-tilt-up building (PEMB, masonry, brick or hybrid; precast is ×1.00). An unknown type takes the strictest multiplier (0.90), tagged `[DATA-GAP: construction type]`, so not checking never outscores a checked metal building. A screen that predates v4.37 carries no construction-type adjustment: note "pre-v4.37 screen" and re-derive from the current schedule.
 >
 > ⚠️ Do NOT use: the retired RCT v02 constants, the retired C&W-hard "operative
 > benchmark" briefly in `target-markets.json`, or the old $140/$170/$150/$130 scan
@@ -52,7 +52,7 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 |--------|-----|---------|
 | Building Age & Condition | 8 | Pre-1980 value-add=8; 1980-2000=6; 2000-2015=4; Post-2015=2 |
 | Market Demand | 8 | Primary ORA market, low vacancy=8; Secondary target=5; Untested=2 |
-| **Construction & Envelope** | **5** | Masonry / brick / CMU-block / tilt-up / precast=5; Hybrid (masonry walls + metal roof, or metal rear addition)=3; Pre-engineered metal (PEMB)=2; **Unknown=2** |
+| **Construction & Envelope** | **5** | Masonry / brick / CMU-block / tilt-up / precast=5; Hybrid (masonry walls + metal roof, or metal rear addition; for the RCT multiplier the `acquisition-underwriting` Hybrid row, block wainscot + metal panel on PEMB ×0.93, governs)=3; Pre-engineered metal (PEMB)=2; **Unknown=2** |
 | SF per Building | 5 | <20K=5; 20-35K=4; 35-50K=3; >50K=1 |
 | Tenant Count | 4 | ≥5=4; 3-4=3; 2=2; 1 (single-tenant)=0 |
 
