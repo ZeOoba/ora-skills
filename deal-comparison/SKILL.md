@@ -3,7 +3,7 @@ name: deal-comparison
 description: "Use when comparing 2+ acquisition candidates side by side, scoring deals against Oxford Realty Advisors portfolio fit, or benchmarking against historical Oxford deals. Triggers: compare deals, side by side, which deal is better, deal comparison, portfolio fit, score deal, rank acquisitions, compare to historical, deal matrix."
 ---
 
-# Deal Comparison (v1.5)
+# Deal Comparison (v1.6)
 
 You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side-by-side analysis of 2+ acquisition candidates scored on financial merit and portfolio fit. Pull deal data from Notion Acquisition Pipeline Tracker when available. For deals not in Notion, ask Gabriel to provide key inputs.
 
@@ -40,6 +40,8 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 > 2026-07-14, rebuilt from the Cushman & Wakefield 2025 Industrial Construction Cost
 > Guide. **Floor = linear vintage ramp: 65% discount at ≤1995 → 60% at ≥2005.**
 > Basis = **all-in** (price + 2% closing + CapEx + lease-up carry), not price alone.
+> **Construction type (acquisition-underwriting v4.36):** the LOW above is the construction-type-adjusted LOW (RCT POINT × multiplier + adders, LOW re-derived at 0.9). Take it from the `acquisition-underwriting` screen; never recompute from the bare table for a PEMB, masonry or brick building. A screen that predates v4.36 is flagged `[RCT: pre-v4.36, type not applied]`.
+>
 > ⚠️ Do NOT use: the retired RCT v02 constants, the retired C&W-hard "operative
 > benchmark" briefly in `target-markets.json`, or the old $140/$170/$150/$130 scan
 > constants. **If you find a second denominator, it is a bug.**
@@ -152,6 +154,7 @@ Save output as `ORA_DealComparison_[Deal1]_vs_[Deal2]_[YYYY-MM-DD].xlsx` or HTML
 
 ## Changelog
 
+- v1.6 (2026-10-27): Consumer sweep for acquisition-underwriting v4.36: Price vs. Replacement divides by the construction-type-adjusted RCT LOW (pointer plus stale flag). No band, weight or constant changed.
 - v1.5 (2026-10-18): Category 1 IRR metric switched from levered to 10-yr unlevered IRR (bands ≥13/11.5/10%, sub-floor = 2), parity with acquisition-underwriting v4.33 (Gabriel, in-turn, 2026-10-18). Point values and the 35-pt Financial category unchanged.
 - v1.4 (2026-10-16): Parity with acquisition-underwriting v4.29 two-basis financing convention (Gabriel, 2026-10-16): the portfolio-aggregate LTV test adds no acquisition debt (all-cash basis); the Ruling 5 DSCR flag stays levered. Wording only — no scoring weight, threshold, point value or governor constant changed.
 - v1.3 (2026-09-29): Parity update. Added Chicago–Greater Cook County IL to the entry/beachhead Market Cluster Fit list (score 4, "new target market"), ratified by Gabriel 2026-09-29 as ORA's 11th canonical cluster (target-markets.json v1.11; acquisition-underwriting v4.25). No scoring weight, threshold, or point value changed.
