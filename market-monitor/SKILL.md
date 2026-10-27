@@ -3,7 +3,7 @@ name: market-monitor
 description: "Use when researching industrial real estate market conditions across Oxford Realty Advisors target markets, comparing markets, tracking demand drivers, or preparing market intelligence reports. Triggers: market update, market conditions, vacancy rate, industrial market, rent growth, supply pipeline, absorption, market comparison, submarket analysis, cap rate trends."
 ---
 
-# Market Monitor (v1.7)
+# Market Monitor (v1.8)
 
 You are the Oxford Realty Advisors market intelligence engine. You monitor industrial real estate conditions across all ORA target markets, track demand drivers, and produce actionable market intelligence for acquisition decisions.
 
@@ -218,7 +218,7 @@ On every full market run, diff the live print against the corresponding standing
 | Market exit cap (UNDERWRITING CONVENTIONS table) | CoStar / CBRE / JLL / Colliers / Lee & Associates quarterly print | **50 bps** |
 | Average asking rent NNN (Submarket Intelligence Reference) | same | **10%** |
 | Average sale price/SF, ORA's 20–75K SF band | same | **15%** |
-| RCT v03 per-market all-in $/SF | a **local** GC or insurance-replacement quote only | any sourced local quote outside the LOW–HIGH band |
+| RCT v03 per-market all-in $/SF | a **local** GC or insurance-replacement quote only | any sourced local quote outside the construction-type-adjusted LOW–HIGH band (POINT × multiplier + adders, ±10%; `acquisition-underwriting` v4.37) |
 
 **Reporting only.** Weights and table values move solely at the annual December back-test (OUTCOME FEEDBACK, v1.1-E); this section changes no constant and must never be read as authority to change one. Its job is to ensure the back-test convenes with a list of known divergences rather than discovering them one deal at a time. Output a `DOCTRINE-DRIFT` block naming each constant, the doctrine value, the live value, the divergence, and the source with date. Where a market carries a `[PROXY]` tag in RCT v03, state that the proxy remains unvalidated and name the two local contacts most recently attempted.
 
@@ -228,6 +228,7 @@ On every full market run, diff the live print against the corresponding standing
 
 ## Changelog
 
+- v1.8 (2026-10-27): consumer sweep for `acquisition-underwriting` v4.37: the DOCTRINE-DRIFT RCT comparison uses the construction-type-adjusted LOW–HIGH band so a PEMB quote near 0.90 × POINT is not a false drift hit. No other change.
 - v1.6 (2026-09-29): parity — Chicago–Greater Cook County IL entry-phase profile added (11th canonical cluster; target-markets.json v1.11, acquisition-underwriting v4.25). Baseline from CoStar Near South Cook (BLENDED; comparison-table cells marked [VAL] like the other entry markets); "ten" → "eleven" in the Market Comparison Table lead-in, the comparison table gained a Chicago-Cook column, and the drift-sweep residual-gap note. No scoring weight, cap-rate assumption or workflow changed.
 - v1.7 (2026-10-16): reconciles cache-only v1.6 (2026-09-28, rescued 20260929T022536106000Z-ora-skills) with repo 8420c45. Louisville KY profile refreshed with sourced Q2 2026 prints (C&W: vacancy 4.6%, rent $6.95, YTD absorption +1.0M SF, 5.0M SF UC; four-submarket table) and a CBRE Q1 2026 cross-check, replacing the prior "not sourced yet" gap; prints flagged BLENDED per Stage 2.1 and bear-mode left UNKNOWN for the sub-50K product. Added the run-triggered SUBMARKET CACHE PROTOCOL (no scheduled task, per the 2026-08-22 decision). Cache-side origin: a Cane Run Road (Riverport/Shively) listing screen on 2026-09-28 found Louisville's vacancy/absorption fields empty. `target-markets.json` Louisville nulls NOT updated by this change — parity gap flagged. No target-market scoring, cluster classification, exit cap, or governor changed.
 - v1.5 (2026-08-22): Added the DOCTRINE-DRIFT REPORT section above — run-triggered (never scheduled) reconciliation of this skill's live market prints against `acquisition-underwriting`'s standing exit-cap/rent/sale-price/RCT constants, reporting-only. Origin: a single Madison WI deal (3700 REDACTED-158 Blvd, 2026-08-22) surfaced three stale constants simultaneously — exit cap doctrine 7.25% vs. verified Q2 2026 8.90% (165 bps, widening), RCT v03 all-in $229–280/SF vs. bottom-up $180–235/SF (~20% overstated), and the Submarket Reference's $148–176/SF owner-user pricing band refuted against $76–102/SF for ORA's 20–75K SF size band — none caught by the existing annual-only cadence. No target-market data, scoring weight, or governor changed.
