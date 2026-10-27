@@ -9,6 +9,7 @@ export const meta = {
   ],
 }
 
+// v1.3 (2026-10-27) — recon item 5 also pulls the last recorded sale (ask vs seller basis if bought within 24 months); item 6 notes construction type. Parity with acquisition-underwriting v4.37.
 // v1.2 (2026-08-22) — CROSS-SURFACE PORT. Two changes from v1.1, both required to run on Cowork:
 //   1. Phase 1 no longer uses agentType:'deal-recon'. Custom subagents live in .claude/agents/,
 //      which has no sync path to Cowork (only .claude/skills/ syncs). The deal-recon system
