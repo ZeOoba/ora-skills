@@ -40,7 +40,7 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 > 2026-07-14, rebuilt from the Cushman & Wakefield 2025 Industrial Construction Cost
 > Guide. **Floor = linear vintage ramp: 65% discount at ≤1995 → 60% at ≥2005.**
 > Basis = **all-in** (price + 2% closing + CapEx + lease-up carry), not price alone.
-> **Construction type (acquisition-underwriting v4.37):** the LOW above is the construction-type-adjusted LOW (RCT POINT × multiplier + adders, LOW re-derived at 0.9). Take it from the `acquisition-underwriting` screen; never recompute from the bare table for a non-tilt-up building (PEMB, masonry, brick or hybrid; precast is ×1.00). A screen that predates v4.37 is flagged `[DATA-GAP: construction type]`.
+> **Construction type (acquisition-underwriting v4.37):** the LOW above is the construction-type-adjusted LOW (RCT POINT × multiplier + adders, LOW re-derived at 0.9). Take it from the `acquisition-underwriting` screen; never recompute from the bare table for a non-tilt-up building (PEMB, masonry, brick or hybrid; precast is ×1.00). A screen that predates v4.37 carries no construction-type adjustment: note "pre-v4.37 screen" and re-derive from the current schedule.
 >
 > ⚠️ Do NOT use: the retired RCT v02 constants, the retired C&W-hard "operative
 > benchmark" briefly in `target-markets.json`, or the old $140/$170/$150/$130 scan
@@ -71,9 +71,12 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 > **OVERSTATES its discount to replacement**: it looks cheap partly because it was
 > cheap to build, not because it is mispriced. Metal is flattered twice. When
 > comparing a masonry and a metal building at the same $/SF, **they are not the same
-> deal** — the masonry one is genuinely better. Flag any PEMB clearing the basis floor
-> by <15% as SUSPECT. We do not yet have a sourced PEMB $/SF, so no numeric adjustment
-> is applied — flag it, do not fabricate a multiplier.
+> deal** — the masonry one is genuinely better. The distortion is now
+> corrected in the denominator by the Construction-Type Multiplier
+> (`acquisition-underwriting` v4.37: PEMB ×0.90 `[EST]`, confidence Low), so Price vs.
+> Replacement already uses the adjusted LOW. The former "PEMB clearing the basis floor by
+> <15% is SUSPECT" flag is withdrawn (Gabriel, in-turn 2026-10-27); the Construction &
+> Envelope credit above is separate and unchanged.
 
 ### Category 3 — Risk Factors (20 pts)
 
@@ -154,7 +157,7 @@ Save output as `ORA_DealComparison_[Deal1]_vs_[Deal2]_[YYYY-MM-DD].xlsx` or HTML
 
 ## Changelog
 
-- v1.6 (2026-10-27): Consumer sweep for acquisition-underwriting v4.37: Price vs. Replacement divides by the construction-type-adjusted RCT LOW (pointer plus stale flag). No band, weight or constant changed.
+- v1.6 (2026-10-27): Consumer sweep for acquisition-underwriting v4.37: Price vs. Replacement divides by the construction-type-adjusted RCT LOW (pointer); the PEMB <15% SUSPECT flag is withdrawn. No band, weight or constant changed.
 - v1.5 (2026-10-18): Category 1 IRR metric switched from levered to 10-yr unlevered IRR (bands ≥13/11.5/10%, sub-floor = 2), parity with acquisition-underwriting v4.33 (Gabriel, in-turn, 2026-10-18). Point values and the 35-pt Financial category unchanged.
 - v1.4 (2026-10-16): Parity with acquisition-underwriting v4.29 two-basis financing convention (Gabriel, 2026-10-16): the portfolio-aggregate LTV test adds no acquisition debt (all-cash basis); the Ruling 5 DSCR flag stays levered. Wording only — no scoring weight, threshold, point value or governor constant changed.
 - v1.3 (2026-09-29): Parity update. Added Chicago–Greater Cook County IL to the entry/beachhead Market Cluster Fit list (score 4, "new target market"), ratified by Gabriel 2026-09-29 as ORA's 11th canonical cluster (target-markets.json v1.11; acquisition-underwriting v4.25). No scoring weight, threshold, or point value changed.
