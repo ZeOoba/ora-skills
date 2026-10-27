@@ -196,7 +196,7 @@ Run the 6 Mandatory Buyer-Protective Provisions check and the review-relevant 46
 
 **Independent conformance pass.** Before finalizing the ranked output, dispatch the `psa-redline-checker` agent (read-only; pin the dispatch model) on the draft plus the executed LOI, `DEAL-TERMS-REGISTER.md` and the Standard Positions canon — give it NO prior review memo so it re-derives conformance cold. Reconcile its deviations against your conformance table; any deviation you did not catch is a Tier 1 candidate. It is a sub-step of this workflow, not a replacement for it (psa-reconciliation's Fact Table cascade is separate).
 
-**INTERIM aggregate-LTV ledger (v1.11).** For a PSA that sells an asset, changes ORA's share or carries a loan, follow the INTERIM checklist in `debt-management/references/ltv-interim-netting-checklist.md` (Gabriel's test and ledger row, or a STOP for his manual calculation); for a terminated PSA, prompt Gabriel to mark its row WITHDRAWN per the same checklist.
+**INTERIM aggregate-LTV ledger (v1.11).** For a PSA that sells an asset, changes ORA's share or carries a loan, follow the INTERIM checklist in `debt-management/references/ltv-interim-netting-checklist.md`; for a terminated PSA, prompt Gabriel to mark its row WITHDRAWN per the same checklist.
 
 **Every review memo produced under this workflow is an input to Workflow 2B.** Write recommendations so they can be checked mechanically later: cite the § being changed, and state the change as a concrete before/after, not as advice. A recommendation phrased as "consider strengthening the remedies section" cannot be verified in an outbound draft; "§11.3.2 — add willful-default carve-out permitting actual damages" can.
 
