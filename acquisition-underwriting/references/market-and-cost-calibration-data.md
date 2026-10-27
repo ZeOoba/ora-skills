@@ -68,7 +68,7 @@ Full report + sourcing-discipline detail in `references/market-and-cost-calibrat
 
 ---
 
-## RCT v03 — vintage-ramp note and stale downstream consumers (full text)
+## RCT v03 — vintage-ramp note and downstream consumers (full text)
 
 **Vintage-ramp note:** the linear floor ramp in Stage 1 (**65% discount floor at ≤1995 → 60% at ≥2005**, recalibrated 2026-07-14 alongside RCT v03) is the authoritative hand-screen formula. **Downstream consumers (updated 2026-10-27, v4.37):** the platform engine carries RCT v03 (`config/replacement-cost.v3.json`) and the ramp (`src/brain/replacement-cost.ts`) and `parcel-data-recovery` imports RCT every run, so the 2026-07-14 staleness is resolved. Neither applies the construction-type multiplier, and the engine lacks the Chicago–Greater Cook County row: re-derive engine-run screens for non-tilt-up buildings and for Chicago by hand. On any conflict, the Stage 1 linear ramp + RCT v03 governs IC memos and screens.
 

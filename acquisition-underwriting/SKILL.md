@@ -11,7 +11,7 @@ You are the lead acquisitions analyst for Oxford Realty Advisors (ORA). This ski
 
 | Version | Date | Ratifier | Summary (200 chars max) | Constants changed | Evidence ID |
 |---|---|---|---|---|---|
-| v4.37 | 2026-10-27 | Gabriel, in-turn | Refi = 10-yr UST + 200 bps (shock +100); Stage -1 items 10-11; Construction-Type RCT multiplier schedule (tilt-up baseline; PEMB 0.90). No governor change. | refi rate basis; RCT construction-type multiplier | RE-4.37-1..5 |
+| v4.37 | 2026-10-27 | Gabriel, in-turn | Refi = 10-yr UST + 200 bps (shock +100); Stage -1 items 10-11; Construction-Type RCT multiplier schedule (tilt-up baseline; PEMB 0.90). No governor change. | refi rate basis; RCT construction-type multiplier | RE-4.37-1..6 |
 | v4.36 | 2026-10-26 | Gabriel, in-turn | STAGE 2.3 Part A: LTV enforcement for refis, loans and sales is the INTERIM manual procedure run by Gabriel in debt-management, replacing 'OPEN follow-up'. | none | RE-4.36-1 |
 | v4.35 | 2026-10-23 | Gabriel, in-turn | Rule Evidence field and admission rule; single changelog index; Basis-at-RCT-LOW/POINT/HIGH sensitivity line (reporting only). | none | RE-4.35-1, RE-4.35-2 |
 | v4.34 | 2026-10-19 | Gabriel, in-turn | Two-tier return thresholds recorded: 10% acquisition IRR floor vs 8% portfolio hurdle; Stage 1 IRR text corrected. Wording only. | none | RE-4.34-1 |
@@ -289,10 +289,10 @@ Every gate/floor exception MUST carry a one-sentence compensating factor, logged
 | Hybrid: block wainscot + metal panel on PEMB | 0.93 `[EST]` | 0.90–0.96 | Low |
 | PEMB / steel frame + metal panel | 0.90 | 0.87–0.92 | Low (derivation not reproducible until the MVS/RSMeans purchase) |
 
-**PEMB size tilt `[EST]` (PEMB only; no size tilt for any other type):** under ~20,000 SF **0.88** · 20,000 to under 40,000 SF **0.90** · 40,000–50,000 SF **0.92**.
+**PEMB size tilt `[EST]` (PEMB only; no size tilt for any other type):** under ~20,000 SF **0.88** · 20,000 to under 40,000 SF **0.90** · 40,000–50,000 SF **0.92** · above 50,000 SF the tilt is undefined: use 0.92 (the largest band) tagged `[EST: outside band]`.
 
 - **Apply to the full POINT**, not a shell-only share: the Marshall & Swift Class S vs. Class C differentials are whole-building ratios with non-shell costs held constant.
-- **Source of type:** the OM, cross-checked against the county CAMA or photos. A mixed façade (e.g., brick office front on a PEMB warehouse) is weighted by façade share. Unknown → **1.00** with `[DATA-GAP: construction type]`.
+- **Source of type:** the OM, cross-checked against the county CAMA or photos. A mixed façade (e.g., brick office front on a PEMB warehouse) is weighted by façade share. Unknown → **1.00**, tagged `[DATA-GAP: construction type]`, and the verdict is **capped at T2 WATCH** until the type is confirmed (1.00 is the looser floor for every row below 1.00, so an unknown type must not clear on it).
 - **Report** the multiplier and its source on every screen beside the RCT citation, e.g. "RCT v03 · PEMB ×0.90".
 - **Calibration:** every multiplier is `[EST]`. Re-confirm at the December back-test after buying one current Marshall Valuation Service Section 14 page set or an RSMeans 2026 Square Foot Costs warehouse model (open purchase item, carried in QUESTIONS FOR GABRIEL until bought).
 - **Durability (reported, not scored; context for FORG/BDS only):** Marshall & Swift typical life is 35 yrs for Class S Average vs. 40 for Class C Average (industrial shell). MBMA Insurance Bulletin 9: a metal building (ISO Class 3) carries about a 23% higher building loss cost than block with a metal roof (ISO Class 4).
