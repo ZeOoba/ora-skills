@@ -1,11 +1,11 @@
 ---
-name: loi-generation
-description: "Use when the user mentions: draft LOI, generate LOI, letter of intent, offer letter, or non-binding proposal to purchase; when an OM, broker package or listing is uploaded with intent to make an offer; or when an acquisition-underwriting evaluation advances to an offer. Also trigger on: revise LOI, update LOI, compare LOI to a prior version, send LOI to a broker. SOLE path for Oxford Realty Advisors letters of intent -- never document-assembly's generic template or legal-intelligence. Refuses to draft without the ORA walk price from acquisition-underwriting. Handles SHORT (2-page default)/CONDENSED/STANDARD, state overlays, 1031, entity-interest purchase."
+name: "loi-generation"
+description: "Use when the user mentions: draft LOI, generate LOI, letter of intent, offer letter, or non-binding proposal to purchase; when an OM, broker package or listing is uploaded with intent to make an offer; or when an acquisition-underwriting evaluation advances to an offer. Also trigger on: revise LOI, update LOI, compare LOI to a prior version, send LOI to a broker. SOLE path for Oxford Realty Advisors letters of intent -- never document-assembly's generic template or legal-intelligence. Refuses to draft without the ORA walk price from acquisition-underwriting. Handles STANDARD/CONDENSED, state overlays, 1031, entity-interest purchase."
 ---
 
 # LOI Generation — Oxford Realty Advisors (v1.12)
 
-You are operating as the lead acquisitions counsel-substitute for Oxford Realty Advisors. This skill produces a complete, broker-ready, buyer-protective letter of intent from an OM, broker package, or upstream `acquisition-underwriting` evaluation. The output is a two-page SHORT-form LOI by default (CONDENSED/STANDARD on the triggers in Rule 0b) on ORA letterhead — not a contract, not legalese, but every dollar-material protection Gabriel needs at the LOI stage.
+You are operating as the lead acquisitions counsel-substitute for Oxford Realty Advisors. This skill produces a complete, broker-ready, buyer-protective letter of intent from an OM, broker package, or upstream `acquisition-underwriting` evaluation. The output is a condensed, plain-English LOI on ORA letterhead — not a contract, not legalese, but every dollar-material protection Gabriel needs at the LOI stage.
 
 This skill OWNS the LOI-stage drafting decision. Do not delegate to `document-assembly` (template-fill only) or `legal-intelligence` (clause-level review). Use this skill end-to-end.
 
@@ -34,6 +34,8 @@ When ambiguous, default to **DRAFT** and ask one clarifying question only if a m
 - Earnest Money Deposit
 - Seller broker name, firm, address
 - **`Walk Price`** — the ORA walk price from `acquisition-underwriting` (the lowest price clearing **all** binding Stage 1 floors: Basis, Yield, and IRR — the IRR floor is 10-yr unlevered and rate-linked since acquisition-underwriting v4.33, so cite the UST10 value and date the walk price was solved at; a walk price solved before v4.33 must be re-solved). If no walk price exists for this deal, **run `acquisition-underwriting` first — do not draft.** An LOI is an offer; ORA does not make offers at prices it has not tested. Absence of a walk price is the single most common way a floor-breaching offer reaches a counterparty, because nothing downstream can catch what was never computed.
+
+- **`Parcel Record`** — the county auditor/assessor record of the subject parcel(s), pulled and dated this session per Rule 0d. Refuse to draft without it; a parcel record older than 14 days is re-pulled.
 
 **Highly preferred (will pull from connectors or use ORA defaults if absent):**
 - Tenancy status (vacant / single-tenant / multi-tenant)
@@ -70,13 +72,9 @@ Never ship "membership interests" against a corporate seller.
 
 **Template hook:** an INLINE `▶ CONDITIONAL ◀` within §13 keyed to `{{ENTITY_INTEREST_TYPE}}` — no numbered heading, never affects renumbering. Default DELETE: fire only when Seller holds the Property through a single-asset entity AND Buyer wants the entity-purchase option; never for a trust seller (deed conveyance, trustee on the Execution Page). **Read references/template-mechanics.md before evaluating the §13 inline conditional.**
 
-### 0b. Format selection — SHORT (default) vs CONDENSED vs STANDARD
+### 0b. Format selection — STANDARD vs CONDENSED (sophisticated seller)
 
-**SHORT is the default for every LOI (v1.12; Gabriel, 2026-10-20: seller signing speed and document simplicity come first).** Two pages, Lucern-derived layout, `templates/LOI_ShortForm_Template.docx`. **Read references/short-form.md before assembling a SHORT LOI** — layout, fixed term order, added tokens, state table, and the SHORT QC replacements live there.
-
-Fall back to CONDENSED when ANY of these is true: affiliated single-tenant / sale-leaseback; a lease carries a ROFR/ROFO/pre-emptive right; the entity-interest election (Rule 0) is wanted; a Phase II / VAP path is known or likely; Gabriel asks for the full form. STANDARD remains available on request. Within the full forms, the seller-profile split below still applies:
-
-| Seller profile | Format (full forms only) |
+| Seller profile | Format |
 |---|---|
 | Institutional / corporate / repeat-player (e.g., Casto-grade developer, REIT, bank REO, family office with in-house or standing counsel, major-brokerage-represented portfolio seller) | **CONDENSED** — 11-section, ~3-page letter + Execution Page + Buyer Information page (5 pages total) |
 | Private / individual / estate / unsophisticated seller | **STANDARD** — full condensed-master format (12–16 sections by conditionals) |
@@ -85,18 +83,32 @@ Rationale (Gabriel ruling 2026-06-10): references/template-mechanics.md.
 
 **CONDENSED merge map** (apply after conditional deletion/renumbering): **read references/template-mechanics.md (CONDENSED merge map) before assembling a CONDENSED-format LOI.** §1, §2, §4, §6, Process-and-Exclusivity and Miscellaneous compress per that map; §4's defect-free repricing hook is ALWAYS retained, and the PSA-deferred list ends with the Deposit due within two (2) business days after PSA execution.
 
-**Survivors — never cut in any format (SHORT included):** Phase I→Phase II auto-extension (environmental tail cap) and the Acquisition Structure designee-vesting/direct-deeding mechanics.
+**Survivors — never cut in either format:** Phase I→Phase II auto-extension (environmental tail cap) and the Acquisition Structure designee-vesting/direct-deeding mechanics.
 
 ### 0c. Exchange posture — 1031 cooperation DEFAULT vs concealment overlay
 
 **DEFAULT (template standard): RETAIN the mutual IRC §1031 cooperation clause in Miscellaneous.** It is reciprocal, costless, and ORA transacts via exchange routinely. Removing it is the exception, never the rule (Gabriel ruling 2026-06-10).
 
-**CONCEALMENT OVERLAY — apply ONLY when BOTH are true:** (a) seller is sophisticated/institutional (the institutional seller profile in the Rule 0b table — a seller attribute, not the format chosen), AND (b) ORA has live buyer-side exchange-timeline pressure (drop-and-swap, 45/180-day identification windows). Then:
+**CONCEALMENT OVERLAY — apply ONLY when BOTH are true:** (a) seller is sophisticated/institutional (Format = CONDENSED trigger profile), AND (b) ORA has live buyer-side exchange-timeline pressure (drop-and-swap, 45/180-day identification windows). Then:
 - Delete the mutual cooperation sentence from Miscellaneous.
 - Delete any "Buyer intends to complete a §1031 exchange" motive language.
 - Rely entirely on unnamed mechanics in Acquisition Structure: title may vest in one or more Buyer-designated affiliates or tenants-in-common (including any intermediary or accommodation titleholder designated by Buyer); assignment of LOI/PSA to designees by written notice pre-Closing; Seller cooperation with Buyer's closing structure including direct deeding and customary acknowledgments, at no additional cost, liability, or delay to Seller and without extending Closing.
 - **QC leak-check (mandatory):** final document contains ZERO occurrences of "1031", "exchange", or "drop-and-swap".
 This delivers full drop-and-swap capability without disclosing Buyer's tax posture or timeline pressure to the counterparty.
+
+### 0d. Parcel-record pre-flight (REQUIRED — 511 Industrial Mile lesson)
+
+Before any token is resolved, pull the parcel record from the county auditor/assessor of record (the county's own property-search site — e.g. Franklin County: property.franklincountyauditor.com; endpoint per `county-parcel-screen`'s registry where one exists). Broker packages, OMs and listing sites are NOT a substitute. Record these five fields, with parcel ID and the site's "data current as of" date:
+
+| # | Field | Rule |
+|---|---|---|
+| 1 | **Owner of record** | Must equal `{{SELLER_ENTITY_NAME}}` character-for-character (unusual spellings are preserved, not corrected). Mismatch → **STOP**: resolve against the deed/Secretary of State before drafting (recent transfer, trust, affiliate, or wrong parcel). |
+| 2 | **Land use code / property class** | Non-industrial code (anything outside the county's industrial / warehouse / manufacturing classes) → **USE-CLASSIFICATION FLAG** (field 3 rule applies). |
+| 3 | **Structure / occupancy type** | Non-industrial (e.g. "Health Spa", retail, office) on an industrial target → **USE-CLASSIFICATION FLAG**: the LOI must carry (a) a zoning closing condition surviving the Study Period and (b) a Seller disclosure of the last date of industrial/warehouse/contractor occupancy; route the zoning question to `ora-flood-zoning-dd`. |
+| 4 | **Last transfer** — date, price, instrument, parcel count | Supplies the auditor value for the Rule 5c HB 126 test (Ohio). Transfer within 24 months, multi-parcel transfer, or non-warranty instrument (quitclaim, sheriff, fiduciary) → note in chat; non-warranty → confirm Seller can give the deed the LOI promises. |
+| 5 | **Tax status** — current net annual tax, total paid, delinquency / lien / CDQ, pending BOR, abatement / TIF / CAUV | Delinquency, lien, CDQ, or total paid materially above annual billed (possible arrearage catch-up) → the Costs section must require Seller to credit **all** unpaid prior-year taxes, penalties and interest. Pending BOR → note in chat. Abatement / TIF / CAUV → confirm whether it survives transfer before underwriting relies on it. |
+
+Report the five fields as a dated **Parcel Pre-Flight** block in chat ahead of the draft, and write the parcel ID plus any flags to the Acquisition Pipeline row's `Next Action`. A flag never blocks drafting by itself (only a field-1 mismatch does); it obliges the clause named above or an explicit in-turn waiver from Gabriel, noted in chat.
 
 ### 1. Tenancy classification
 
@@ -191,6 +203,7 @@ Default: 7 calendar days from `{{LOI_DATE}}`, adjusted to the next business day 
 2. If a PDF/DOCX is attached, extract OM data: address, SF, acreage, asking price, tenant status, broker contact, photos, building age, rent roll if present.
 3. If property is already in Notion Acquisition Pipeline Tracker (`bcfe4a03`), pull existing fields.
 4. If broker email/contact missing, search HubSpot CRM for broker by name or firm.
+5. Run the Rule 0d parcel-record pre-flight and post the dated Parcel Pre-Flight block. A field-1 owner mismatch stops the run here.
 
 ### Phase 2 — Apply decision logic
 1. Classify tenancy (vacant / arm's-length / affiliated / multi-tenant).
@@ -199,6 +212,7 @@ Default: 7 calendar days from `{{LOI_DATE}}`, adjusted to the next business day 
 4. Resolve jurisdiction phrase for §2.
 5. Resolve known-condition carveout for §4 (or leave empty).
 6. Apply economic term defaults from ORA Standards for any unspecified term.
+7. Apply every Rule 0d flag: use-classification → zoning closing condition + last-industrial-occupancy disclosure; tax delinquency/arrearage → Seller credit for all unpaid prior-year taxes, penalties and interest.
 
 ### Phase 3 — Token resolution
 1. Build full token map.
@@ -206,9 +220,7 @@ Default: 7 calendar days from `{{LOI_DATE}}`, adjusted to the next business day 
 3. Convert numeric amounts to word form for `_WORDS` tokens. Format numerics with commas and trailing `.00`.
 
 ### Phase 4 — Document assembly (Python)
-**SHORT format:** open `templates/LOI_ShortForm_Template.docx`, replace every `{{TOKEN}}` (render resolved values in the body font — the gold DM Sans styling marks only unresolved tokens), resolve `{{DEED_FORM}}` / `{{TRANSFER_TAX_SENTENCE}}` / `{{OPERATIONS_CONDITIONAL_SENTENCE}}` per references/short-form.md, and skip steps 2–9 below (SHORT has no metadata page, appendix, conditional blocks, or renumbering). Step 10 and the PDF build still apply.
-
-**CONDENSED / STANDARD formats:** use `python-docx` to:
+Use `python-docx` to:
 1. Open `templates/LOI_Master_Template_Condensed.docx`.
 2. Delete the Template Metadata page (paragraphs 0 through the start of the LOI body at "VIA ELECTRONIC TRANSMISSION").
 3. Delete the State Overlay Appendix at the end (paragraphs from "APPENDIX  ·  DELETABLE" to end of document, excluding the closing letterhead table).
@@ -221,8 +233,6 @@ Default: 7 calendar days from `{{LOI_DATE}}`, adjusted to the next business day 
 10. Confirm `{{PROPERTY_ZONING_PHRASE}}` and (if the inline §13 conditional fires) `{{ENTITY_INTEREST_TYPE}}` are resolved — both are now live template tokens (2026-08-18 sync), not documentation-only.
 
 ### Phase 5 — QC Gate (refuse to save if any item fails)
-
-**SHORT format:** items 3, 4, 5, 8, 9, 10, 12, 14, 17 and 22 are replaced (and #15 carries one exception) by the SHORT versions in references/short-form.md; every other item — including hard-fail #23 — applies unchanged.
 
 | # | Check |
 |---|---|
@@ -249,6 +259,8 @@ Default: 7 calendar days from `{{LOI_DATE}}`, adjusted to the next business day 
 | 21 | DEPOSIT-TIMING CONSISTENCY: all Deposit due-window mentions resolve from {{EMD_DUE_DAYS_WORDS}} and are identical in the final text |
 | 22 | Vacant deals: preservation covenant present; casualty threshold "five percent (5%) of the Purchase Price" survived CONDENSED compression |
 | 23 | **Offer ≤ Walk Price (v1.8).** Compare `ORA Offer Price` against `Walk Price`. If the offer **exceeds** the walk price, **FAIL the gate and refuse to save the document.** Report: the offer, the walk price, the dollar and percentage gap, and which Stage 1 floor binds. The only permitted override is an **Exception Register** entry (per acquisition-underwriting's EXCEPTION REGISTER + TRIPWIRE) carrying a one-sentence compensating factor and Gabriel's explicit in-turn ratification — logged to the ranking workbook's Exception Register tab **and** the Notion row's "Exception Compensating Factor" field **before** the document is saved, not after. This gate is deliberately redundant with the Phase 6c consistency rule below: 6c catches the contradiction for the ledger, item 23 prevents the document. Two live incidents where 6c alone was insufficient — 511 Industrial Mile Road (Walk $930K / LOI $1.45M, loss permanently `UNCLASSIFIED` as a result) and 3700 Kinsman Blvd (Walk $2,661,000 / drafted LOI $3,800,000, caught only because a FULL underwrite was separately requested four days after the LOI was drafted). |
+
+| 24 | **Parcel pre-flight (v1.12).** Rule 0d block present and dated within 14 days; `{{SELLER_ENTITY_NAME}}` in the Seller block matches the auditor's owner of record exactly; every Rule 0d flag is answered by its required clause in the LOI text or by a Gabriel waiver noted in chat. FAIL on a missing pull, an owner mismatch, or an unanswered flag. |
 
 If any check fails, fix and re-run. Do not present a failing file.
 
@@ -351,7 +363,7 @@ Notion (`notion-search`/`notion-fetch`/`notion-update-page` — Pipeline Tracker
 
 ## VERSIONING
 
-- v1.12 — 2026-10-20, **SHORT two-page form becomes the default** (Gabriel, in-turn: adopt the Lucern Capital Partners buy-side LOI form — seller signing speed and document simplicity first). New `templates/LOI_ShortForm_Template.docx` (+ `build_shortform.py`) in Lucern's layout with ORA logo, buyer information and signatory; credentials moved to page 1 (Buyer Information page dropped for SHORT); carried from Lucern: buyer-chosen title company (Lucern's buyer closing extension against an added deposit was adopted, then removed the same day — Gabriel 2026-10-20: no buyer closing-extension option); ORA protections layered in: explicit all-cash statement (RE line, intent paragraph, Purchase Price: no financing or appraisal contingency), Phase I→II extension, defect-free assumption, lease/contract consent, fixed-term exclusivity with marketing stop, specific performance, designee vesting, 1031 cooperation, mutual confidentiality, named binding provisions, "Eastern Time" expiry wording. Re-trade ("price subject to review") and leasing/marketing-control language deliberately not adopted. CONDENSED retained as the fallback on the Rule 0b triggers. New tokens `{{DEED_FORM}}`, `{{TRANSFER_TAX_SENTENCE}}`, `{{OPERATIONS_CONDITIONAL_SENTENCE}}`; state table and SHORT QC replacements in `references/short-form.md`. Supersedes the never-merged 2026-10-17 concise-template ruling captured in PR #146. Walk-price precondition and QC #23 unchanged; no governor constant changed.
+- v1.12 — 2026-10-27, parcel-record pre-flight (Rule 0d) added: `Parcel Record` is a required input; Phase 1 step 5 pulls owner of record, land use, structure type, last transfer and tax status from the county auditor/assessor; Phase 2 step 7 maps each flag to its required clause; QC Gate item 24 fails the file on a missing pull, owner mismatch or unanswered flag. Origin: 511 Industrial Mile Rd — the Franklin County Auditor record (parcel 140-007352-00) showed structure type "Health Spa" / land use 499 on an industrial target and 2025 taxes paid ($33,373) well above the annual bill ($18,646), neither visible in the broker package; the use-classification risk surfaced only on a post-draft check. No template, token, state overlay or conditional block changed.
 - v1.11 — 2026-10-18, walk-price definition cites the acquisition-underwriting v4.33 IRR floor (10-yr unlevered, rate-linked): name the UST10 value and date a walk price was solved at; walk prices solved before v4.33 are re-solved. Wording only — no phase, gate or template changed.
 - v1.10 — 2026-09-23, outbound buyer-profile facts corrected (Gabriel, in-turn). **No numeric leverage in counterparty text:** the Buyer Information page's former numeric debt-and-LTV sentence becomes "The portfolio is conservatively leveraged, with the substantial majority of its value held as principal equity", and `references/ora-standards.md`'s cover-note numeric-LTV bullet becomes "Conservative leverage" with an explicit never-state-a-number rule. The verified 18.71% (Master Workbook `00_Home!G7`, 2026-09-23) stays internal. **Scale facts:** corrected to "twenty-six properties / 500,000+ SF / ~$57 million" (count, SF and markets per Gabriel's 2026-08-18 outbound canon shared with `acquisition-proposal-generation`; value from the live workbook $56.67M). Cover-note markets are narrowed to the three core markets. Template text-only edit (2 runs; XSD validation PASS, paragraph count 430→430). **No conditional block, state overlay, QC Gate item, token or governor constant changed.**
 - v1.9 — 2026-09-10, retention rule adopted (ORA Automation Audit R24-11). This skill was the 3rd-largest in the catalog at 7,208 words and carried **no growth bound of any kind** — the full v1.0–v1.8 history sat inline and had never been extracted. Added the 6-entry count cap and the ~2,000-char per-entry cap below, and performed the extraction the count rule demanded in the same pass (v1.3/v1.2/v1.1/v1.0 → `versions/CHANGELOG-v1.0-v1.3.md`). **No conditional block, state overlay, QC Gate item, walk-price precondition or token changed** — documentation discipline only.
@@ -381,11 +393,11 @@ Notion (`notion-search`/`notion-fetch`/`notion-update-page` — Pipeline Tracker
 ## OUTPUT GUARANTEES
 
 Every successful run of this skill produces:
-1. A DOCX file on ORA letterhead — 2 pages (SHORT) or 4–8 pages (CONDENSED/STANDARD, depending on conditionals retained)
+1. A DOCX file on ORA letterhead, 4–8 pages depending on conditionals retained
 2. A PDF preview with extractable text
 3. A presented file pair via `present_files`
 4. A Notion log entry on the Acquisition Pipeline Tracker
-5. Zero "shall" usage, zero banned phrases, full 23-point QC Gate pass
+5. Zero "shall" usage, zero banned phrases, full 24-point QC Gate pass
 6. Phone 301.512.6125 in both top and bottom letterhead
 7. Footer keyed to property street address
 8. "Proof of funds available upon request." centered italic at bottom of final page
