@@ -160,5 +160,5 @@ Then present the manifest and the dossier (if any) via the file-sharing tool, an
 
 ## Changelog
 
-- v1.2 (2026-10-28): the Stage header line marks a walk price that predates `acquisition-underwriting` v4.37 as needing a re-solve. No stage changed.
+- v1.2 (2026-10-28): the dossier's section 1 Header marks a walk price that predates `acquisition-underwriting` v4.37 as needing a re-solve. No stage changed.
 - v1.1: STAGE 6B property register reconciliation added (date not recorded; see git history).

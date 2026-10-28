@@ -66,7 +66,7 @@ A gate breach = prominent flag + screen/score as exception anyway; verdict label
 
 **Quality (price-independent, max 55 always)** = Product 20 + Market 12 + Seller 10 + Tenancy 7 + VA 6–13. **Vacant-deal arithmetic (Waukee IA audit finding, resolved):** the prior "62 if vacant" figure was wrong — it double-counted Tenancy's points instead of reallocating them. When 100% vacant, Tenancy scores 0 (no in-place tenant to score) and VA absorbs Tenancy's forfeited 7 pts 1:1 (VA 6 → 13, per the scorecard table row 7). Quality max is **55 in every case** — vacancy shifts points between Tenancy and VA, it never adds points — which is what makes Combined = Quality(55) + Economics(45) = 100 close correctly in both the occupied and vacant case.
 
-**Economics (price-dependent, max 45)** = Basis 25 + Yield 20, at the ORA-actionable price.
+**Economics (price-dependent, max 45)** = Basis 25 + Yield 20, at the ORA-actionable price (an unknown construction type scores Yield at the ×1.00 walk; Basis stays strict).
 
 **Combined = Quality + Economics** (identical to the v1.0 100-pt score). Unpriced deals rank primarily on Quality; show Economics as a band across the plausible price range.
 
