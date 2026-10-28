@@ -1,0 +1,21 @@
+{
+  "_doc": "Checks that may be red without stopping /land. Only entries listed here are informational; every other failing check stops the run. Match is exact on repo + check name. Add an entry only with evidence of a non-code cause, and remove it when the cause is fixed.",
+  "informational": [
+    {
+      "repo": "ZeOoba/Website",
+      "check": "Lighthouse budget (informational)",
+      "cause": "Hosted-runner billing block (job not started, zero steps). Mitigated 2026-10-27 by the CI_RUNNER repo variable (PR #187); PRs #187 and #188 pass. Kept so a recurrence is not re-diagnosed.",
+      "evidence": "gh api repos/ZeOoba/Website/check-runs/<job-id>/annotations says 'recent account payments have failed'",
+      "added": "2026-10-28"
+    }
+  ],
+  "deploy_on_merge": [
+    {"repo": "ZeOoba/Website", "why": "merge to main auto-deploys oxfordra.net (Invariant 2)"},
+    {"repo": "ZeOoba/ora-pm", "why": "merge to main runs the ci.yml deploy to Cloudflare Pages"}
+  ],
+  "blast_radius_globs": [
+    "hooks/**", "**/settings.json", "CLAUDE.md", "**/CLAUDE.md", "**/.env*", "**/*credentials*",
+    "**/confidential-terms.json", "_headers", "_redirects", "netlify.toml", ".github/workflows/**",
+    "**/scheduled-tasks.json"
+  ]
+}
