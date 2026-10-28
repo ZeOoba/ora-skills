@@ -32,7 +32,7 @@ flowchart TD
     subgraph Repo["ora-skills/ (git, origin github.com/ZeOoba/ora-skills)"]
         S["skill dirs (count: ls */SKILL.md)\nSKILL.md + references/ scripts/ templates/ assets/ tests/"]
         TM["target-markets.json\nshared data, version-gated"]
-        T["tools/ packaging, drift, mirror sync, tests\n+ hooks/ + skill_ci_gates.py + run_suite.sh + run_skill_suites.sh"]
+        T["tools/ packaging, drift, mirror sync, runtime-cache capture, tests\n+ hooks/ + skill_ci_gates.py + run_suite.sh + run_skill_suites.sh"]
         GH[".github/workflows\ntools-tests, skill-gates, claude-ci-fix"]
         P["plugins/ (README only, empty by design)"]
         A["_archive/ retired skills (majority of tracked files)\n.rgignore + linguist-generated"]
@@ -208,6 +208,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `dirty-tree-triage` — triages uncommitted working trees across ORA's shared checkouts: attributes changes to sessions with evidence, settles them by mtime, isolates and commits only what is safe
 - `isolated-commit` — lands your own reviewed change in a shared ORA checkout that other sessions may be editing (claim, stage by pathspec, independent review, push)
 - `adversarial-merge-gate` — second-reviewer gate before merge for blast-radius changes (hooks, config, governance, financial or security-gate code), multi-session branches, or PRs whose commit message makes verification claims
+- `merge-ready` — merge-readiness gate for one or several PRs: runs the standard gate order, then cleans up the worktree after merge.
 - `branch-catchup` — brings a long-lived branch up to date with origin/main safely in a shared, dirty checkout (worktree-isolated; per-conflict resolution by which side is the reviewed superset)
 - `file-reconciliation` — hash-diff dedupe/reconciliation between file trees
 - `repo-architecture-review` — cross-repo architecture-diagram audit (unbounded loops, off-fleet automation, dual-write drift, disconnected build steps, dead links, missing financial-code gates); read-only, hands off fixes to normal lane triage
@@ -269,7 +270,9 @@ flowchart TD
     Repo -->|"post-commit / post-merge"| Local["~/.claude/skills mirror (Code)"]
     CoworkEdit["Cowork create-skill / save_skill / cache edit"] -->|"no git trace"| AppData
     AppData -->|"repo_first_check: hash vs repo + git ancestry"| Rescue["_staging/repo-first-rescue + STORE_AHEAD_OF_REPO.md"]
-    Rescue -->|"manual reconcile"| Repo
+    AppData -->|"capture_runtime_cache.py (Task Scheduler, every 10 min)"| CapPR["capture/runtime-cache-* branch + DO-NOT-MERGE PR"]
+    CapPR --> Repo
+    Rescue -->|"manual reconcile (fallback)"| Repo
     Repo -->|"pending_reimport record"| Pend["_staging/PENDING_REIMPORT.md"]
     Pend --> Pkg["package_skills.py"] --> Zip[".skill"] --> Import["manual Cowork import"] --> AppData
     Logs["Claude main.log (Local + Roaming)"] -->|"reimport_correlate"| Pend
@@ -304,7 +307,7 @@ path is not documented here.
 `sync_local_skills_mirror.py`, `catch_up_main.py` (safe forward-merge of `origin/main` into the
 long-lived local `main`). Frontmatter and lint: `description_budget.py`, `desc_lengths.py`,
 `frontmatter_sweep.py`, `script_resource_lint.py`. Other: `ora_doc_qc.py` (shared QC harness),
-`pause_resume.py` (bounded-pause resume generator), `notion_fetch_digest.py`, `usage_ledger.py`.
+`pause_resume.py` (bounded-pause resume generator), `notion_fetch_digest.py`, `usage_ledger.py`. Runtime-cache capture: `capture_runtime_cache.py` + `register_capture_task.ps1` (Windows Task Scheduler job "ORA Skill Cache Capture", every 10 min, commits cache-only skills to a `capture/runtime-cache-*` branch and a DO-NOT-MERGE PR).
 
 **Tests and CI.** Every `tools/test_*.py` is a stdlib `unittest` file (one plain-assert script,
 `test_description_budget.py`, is exempt). `bash tools/run_suite.sh` runs them all and fails on any
