@@ -64,6 +64,7 @@ GATED_SKILL_SUITES = [
     'listing-agreement-qc/tests/test_*.py',
     'lease-generation/tests/test_*.py',
     'dirty-tree-triage/tests/test_*.py',
+    'land/tests/test_*.py',
     'rent-roll-reconciliation/tests/test_*.py',
     'website-perfection/tests/test_*.py',
     'masterlease-jurisdiction-rebase/scripts/test_*.py',
