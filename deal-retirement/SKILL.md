@@ -6,11 +6,13 @@ license: ORA Internal
 
 ## Changelog (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
 
+v1.7 (2026-10-28, Gabriel-directed — the retirement record's `Walk Price` stays the decision-time walk on every row; a walk re-solved under `acquisition-underwriting` v4.37 goes in `Notes / Flags` as `RE-SOLVED v4.37: $X`; blank-`Walk Price` and live-offer exception handling added; no other step changed. No governor constant changed.)
+
 v1.6 (2026-10-26, Gabriel-directed — Killed-workflow step 4b prompts Gabriel to mark a killed deal's row on the `debt-management` INTERIM aggregate-LTV ledger WITHDRAWN; pointer only, no other step changed. No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).)
 
 v1.5 (2026-09-19, Gabriel-directed — new Killed-workflow step 4a tags an ORA-side diligence exit after LOI/PSA as `LOI Outcome = TERMINATED-DILIGENCE` rather than `LOST`, so the row reaches `ora-passed-deal-tracker`'s new Step 4e diligence-exit classifier instead of Step 4b's clearing-price classifier, which has no operand where no competitor ever bid. Evidenced by `E Fulton St Portfolio` (Sourcing Log row `37a6ecd8-9e59-8156-912e-dd9680cb1660`): PSA executed $4.0M 2026-04-21, ORA terminated 2026-07-09 on its own AEI Phase II environmental finding, no competing bidder — routed to `LOST` on 2026-09-19 and would have produced a permanent unfillable `UNCLASSIFIED` every month. Spec: `Claude_Workspace/02_Outputs/2026-09-19_TrackerSpec_DiligenceExitArm_Proposal_v01.md` §3.2); v1.4 (2026-09-19, Gabriel-directed — three process gaps surfaced by the 808 Rhoads pass, evidenced in `Claude_Workspace/02_Outputs/2026-09-19_808Rhoads_PassRecord_v01.md` §5: (1) the Killed workflow's old step 3 pointed at a Notion Knowledge Base "Deals Passed" log that does not exist and that nothing reads — repointed to the Deal Sourcing Log row, which is now the named canonical passed-deal record; (2) the workflow wrote only the Pipeline Tracker and the memory ledger while `ora-passed-deal-tracker` sweeps only the Sourcing Log, so a Pipeline-only deal passed without an LOI fell out of the monthly trade sweep entirely — new step 3 makes the Sourcing Log row mandatory, with an existence check, the exact field mapping, and a close-out checklist; (3) no watch-date convention existed for a passed deal — new step 3d fixes one); v1.3 (2026-07-29: Closed Deal Retirement step 9 now appends an ACQUIRED baseline row to memory/disposition-ledger.md, the new post-acquisition lifecycle ledger); v1.2 (2026-07-18: proposes an inline ora-calibration-snapshot trigger, a PROPOSED underwriting-defaults delta vs standards.md Part A, and two proposed +6mo/+12mo actuals-check tasks — all proposals, nothing self-registers); v1.1 (2026-07-16: closing/kill appends to memory/deal-decision-ledger.md)
 
-# Deal Retirement (v1.6)
+# Deal Retirement (v1.7)
 
 Lifecycle hygiene skill that retires deal-bound artifacts, scheduled tasks, Notion staging records, and DD packages once a deal closes or is killed.
 
@@ -65,7 +67,7 @@ Triggered on deal lifecycle terminal states: CLOSED (acquisition completed) or K
    | `Status` | `Passed` |
    | `Verdict` | `PASS` |
    | `Go / No-Go` | `🔴 Pass` |
-   | `Walk Price` | the ratified walk price, as computed at screen/IC time |
+   | `Walk Price` | the ratified walk price, as computed at screen/IC time (the decision-time walk on every row: a walk re-solved under `acquisition-underwriting` v4.37 never overwrites it and is recorded in `Notes / Flags` as `RE-SOLVED v4.37: $X`; a blank `Walk Price` on a row holding an LOI-time `ORA Offer Price` or an `ORA Max Defensible Price` stays blank; a blank on a never-LOI'd row is filled only by a walk solved under v4.37 or later; a PENDING or under-PSA row whose offer exceeds the re-solved walk raises the `acquisition-underwriting` live-offer exception trigger) |
    | `Ask at First Sighting` | the ask when ORA first saw the deal |
    | `Total SF` · `Year Built` | as verified |
    | `Asset Type` · `Construction Type` | as verified |
