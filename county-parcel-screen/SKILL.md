@@ -12,7 +12,7 @@ description: >
   broker batch routes to deal-flow-triage.
 ---
 
-# county-parcel-screen (v1.5)
+# county-parcel-screen (v1.6)
 
 Generate off-market industrial acquisition leads for Oxford Realty Advisors from
 public county property data. The screen finds owners with the CAPACITY to sell at
@@ -25,7 +25,9 @@ and Cincinnati; per-county endpoints and quirks live in references/.
 Class B/C industrial / shallow-bay / flex / office-warehouse only. 10,000-80,000
 SF building (sweet spot 15-50K). Deal $1-10M; equity sleeve $0.75-5M at 65% LTV.
 Hard floors: >=25% discount to replacement (~$150/SF benchmark) AND >8% stabilized
-YoC. Instant disqualifiers: retail/office/multifamily, auto-use tenancy,
+YoC. (Legacy off-market screen frame; the $150 benchmark was retired 2026-07-14. Any deal
+that advances to SCREEN is tested on the acquisition-underwriting Stage 1 vintage-ramp
+floor against the construction-type-adjusted RCT LOW.) Instant disqualifiers: retail/office/multifamily, auto-use tenancy,
 institutional Class A pricing, outside ORA's eleven clusters.
 
 ## Workflow
@@ -97,7 +99,7 @@ Auditor-to-market factor = median SALEPRICE / appraised-value of in-universe
 arm's-length sales (>=$100K, <=3yr, ratio 0.5-4). Ohio post-2023-reappraisal
 runs ~1.6x (Franklin 1.65 n=57; Hamilton 1.61 n=182). Derive basis-score
 thresholds FROM the factor: 20 pts = >=40% modeled discount to replacement;
-14 = >=25% (the ORA floor); 6 = 10-25%; 0 below. Use ZIP-level ratios where
+14 = >=25% (legacy P1 band, not the Stage 1 floor); 6 = 10-25%; 0 below. Use ZIP-level ratios where
 n>=3 per ZIP - they range 1.0-2.0 within one county.
 
 ### 5. Fix the hold score
@@ -404,6 +406,7 @@ volume + quarterly re-runs + signal-led call order is the strategy.
 - versions/CHANGELOG-v1.0-v1.3.md - full changelog text.
 
 ## Changelog
+- **v1.6 (2026-10-27):** Added `lebanon_pa` (VERIFIED after a paged `where=1=1` pull the same day; non-canonical) to county-endpoints.v1.json and county-endpoints.md for single-target screens and the acquisition-underwriting v4.37 recent-acquisition check. No scan cycle, scoring rule or market list changed (the 25% / $150 text is annotated as a legacy frame, thresholds untouched).
 - **v1.5 (2026-10-18):** Step 8 adds a finalist-only loan-maturity check (recorded mortgage + assumed 5/7/10-yr term, `[est]`) producing `MATURITY-WINDOW` and `SALE-LEASEBACK` lead flags; call order inserts `MATURITY-WINDOW` after delinquent entity owners. `workflows/parcel-screen-fanout.js` implements it: the verify agent records `recordedMortgage` / `maturityWindow` / `saleLeasebackCandidate`, and ranking uses a `maturity-window` bucket. The 2026-09-18 bulk-mining ruling stands. Parity with acquisition-underwriting v4.33 Seller/Motivation signals. No scored constant changed.
 - **v1.4 (2026-10-02):** Added references/distress-feeds.md (foreclosure and tax-lien sources for Franklin OH, Maryland, Jackson MO) and a step 7 pointer; county-endpoints.md: Jackson DLT cancellation/petition source, Wyandotte count refresh, Maryland `CONVEY1=4` decoded, recording-lag re-check flagged. Docs only. No scored constant changed.
 - **v1.3 (2026-09-18):** Hold/tenure scoring becomes a graduated curve (tau 8 yrs, cap 20 at 38 yrs); 16-point UNKNOWN-HOLD default RETIRED (coverage test, `HOLD-UNKNOWN` / `Hold ceiling`, >20% drops the component); `HOLD-PRE-NOMINAL` fallback; sibling-parcel consolidation closes F6 (`Relationships` sheet, graduated `multi`); hold-data-availability table by market; Maryland hold gap closed (`TRADATE`); Franklin re-scored (mean delta -4.1). **MOVES SCORES.** Full text: versions/CHANGELOG-v1.0-v1.3.md

@@ -62,3 +62,12 @@ LOJIC (Louisville/Jefferson County Information Consortium) — keyless ArcGIS RE
 | Henrico VA | https://gis.henrico.gov | U | — |
 | Chesterfield VA | https://www.chesterfield.gov/gis | U | — |
 | Polk Co IA | https://gis.polkcountyiowa.gov | U | — |
+
+## Lebanon County PA — South Londonderry Twp (NON-CANONICAL; verified 2026-10-27)
+| Service | URL | Status | Notes |
+|---|---|---|---|
+| County parcel layer | utility.arcgis.com/usrsvcs/servers/7072ca11c43c43feb1ab453851e847b9/rest/services/LandRecords/TaxParcels/MapServer/0 | V | Polygon + owner, AV, last sale; use for Step 1 geocode validation |
+| Township zoning (one layer per district) | services.arcgis.com/ScrFRghegsvm14RG/arcgis/rest/services/<District>_view/FeatureServer/0 (e.g. Light_Industrial__view) | V | Point-intersect returnCountOnly per district; web map a567f75ed3d94182baeef2b2c7a0ba05 |
+| Zoning ordinance (2013 PDF, 378 pp, text layer) | southlondonderry.org/uploads/6/1/2/6/61268441/zoning_ordinance_south_londonderry_township.pdf | V | curl from workspace; WebFetch returns binary. LI = §230; commercial recreation §422; warehousing §485; nonconforming §600–609 (24-month abandonment) |
+| FEMA NFHL | hazards.fema.gov …/NFHL/MapServer/28 | V | Envelope query on the parcel bbox; FIRM panel 42075C0240E eff 2020-07-08 |
+| Geocoder | geocode.arcgis.com World/GeocodeServer/findAddressCandidates | V | Census geocoder returned no match for this address; ArcGIS returned a PointAddress inside the parcel bbox |
