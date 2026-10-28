@@ -16,7 +16,7 @@ Backs the **Construction-Type Multiplier Schedule** in `SKILL.md` (Replacement C
 ## How the multipliers were set
 
 - **Tilt-up 1.00** is the baseline because the C&W small tier behind RCT v03 is tilt-up/precast.
-- **PEMB 0.90 (0.87-0.92, confidence Low until the MVS/RSMeans purchase)** is the best-supported row, rated from the Marshall & Swift Class S vs. Class C whole-building differentials (source 1). The research notes do not restate the underlying ratio or how it was blended with the other sources, so the derivation is not reproducible from this file.
+- **PEMB 0.90 (0.87-0.92, confidence Low until the MVS/RSMeans purchase)** is the most-documented row, still rated Low confidence, rated from the Marshall & Swift Class S vs. Class C whole-building differentials (source 1). The research notes do not restate the underlying ratio or how it was blended with the other sources, so the derivation is not reproducible from this file.
 - **CMU 0.97, brick 1.10, hybrid 0.93** are ratified estimates; precast carries no adjustment (1.00, inside the tilt-up/precast baseline; the original 1.03 was withdrawn 2026-10-27); the Moore 2013 masonry-vs-tilt-up figure (about 0.92, source 3) sits at the low edge of the CMU range (0.92-1.00). Confidence Low to Moderate-low as listed in the schedule.
 - **PEMB size tilt** (0.88 under ~20,000 SF, 0.90 at 20,000-40,000, 0.92 at 40,000-50,000) is `[EST]` and has no direct source; it reflects the lower relative fixed cost of the structure at small footprints.
 - **Vendor claims ignored:** PEMB marketing of "half the cost of tilt-up" compares erected kits to complete buildings.
