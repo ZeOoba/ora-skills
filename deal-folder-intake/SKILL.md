@@ -112,7 +112,7 @@ The folder is worthless if the next session cannot find it.
 
 ---
 
-## STAGE 6B — PROPERTY REGISTER RECONCILIATION (v1.2)
+## STAGE 6B — PROPERTY REGISTER RECONCILIATION (v1.1)
 
 Runs when the package contains a settlement statement, deed, ALTA/HUD statement, PSA or closing statement for a CLOSED ORA property. Skip for unclosed or passed deals. Added after the retro-underwrite found blank purchase prices and conflicting dates in the Notion Property Register that the original settlement statements would have resolved.
 
@@ -157,3 +157,8 @@ Then present the manifest and the dossier (if any) via the file-sharing tool, an
 - **A second folder for the same asset** — two partial archives, neither authoritative. Always search first.
 - **Treating an OCR copy as a replacement** — keep both the image-only original and the OCR copy; the original is the executed instrument.
 - **Register left blank or stale after closing** — prices, dates and share basis drift from the settlement statement and later feed the back-test with wrong inputs. Run Stage 6B.
+
+## Changelog
+
+- v1.2 (2026-10-28): the Stage header line marks a walk price that predates `acquisition-underwriting` v4.37 as needing a re-solve. No stage changed.
+- v1.1: STAGE 6B property register reconciliation added (date not recorded; see git history).
