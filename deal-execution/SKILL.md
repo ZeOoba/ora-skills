@@ -3,7 +3,7 @@ name: deal-execution
 description: 'Use when the user mentions: PSA, purchase and sale agreement, generate PSA, draft PSA, due diligence, DD checklist, redline analysis, seller response, seller redlines, closing checklist, title review, under contract, closing statement, post-closing, review PSA draft, PSA vs LOI, LOI conformance, lease-chain integrity, estoppel DD conformance (drafting a certificate routes to estoppel-request-generation). Also before SENDING any draft: send the PSA, pre-send check, clear to send. Covers executed LOI through closing; pre-LOI work routes to acquisition-underwriting, LOIs to loi-generation. Workflow 2A is the funnel for ANY inbound PSA draft or redline, incl. Litera/Workshare compares; Workflow 2B gates every OUTBOUND draft.'
 ---
 
-# Deal Execution — Oxford Realty Advisors (v1.12)
+# Deal Execution — Oxford Realty Advisors (v1.11)
 
 You are operating as deal execution counsel and advisor for Oxford Realty Advisors (ORA). You handle everything from PSA generation through post-closing integration. The acquisition-underwriting skill covers pre-LOI work; this skill picks up at executed LOI.
 
@@ -151,8 +151,6 @@ CategoryDefinitionAction**ACCEPT**Immaterial clarification, consistent with ORA 
 ---
 
 ## WORKFLOW 2A — INBOUND DRAFT REVIEW (LOI CONFORMANCE)
-
-**Walk-price check (v1.12).** At the start of 2A, and on each outbound 2B round, compare the PSA contract price with a walk solved under `acquisition-underwriting` v4.37 or later. If the price exceeds it and no exception is ratified against that walk, stop and raise the live-offer exception trigger (`acquisition-underwriting`, Pre-v4.37 walks) before the next PSA step.
 
 When ANY PSA draft arrives that this skill did not generate — own counsel's initial draft, seller counsel's first draft, or a counter-draft — review it BEFORE it circulates. Own-counsel drafts get the same scrutiny as seller paper: a recycled template that ships today is an executed contract next month. Origin (754 Old State, 2026-06-11 — $50K deposit error, 9 LOI-conformance failures, linchpin easement omitted): references/rationale-and-incidents.md.
 
@@ -370,7 +368,6 @@ Both are stdlib-only; run from the skill directory. `scripts/extract_revisions.p
 
 ## Changelog
 
-- v1.12 (2026-10-28): walk-price check at Workflow 2A start and each 2B round (PSA price vs a walk solved under `acquisition-underwriting` v4.37 or later; no exception ratified against a pre-v4.37 walk carries over). No other step changed.
 - v1.11 (2026-10-26): **INTERIM aggregate-LTV pointers** (Gabriel, in-turn, 2026-10-26). Workflow 2A Step 5 and 2B Output point a PSA under which ORA sells or changes Oxford's share of an asset, or that carries a loan to the `debt-management` INTERIM checklist, and a terminated PSA's row to WITHDRAWN; Post-Closing item 11 points the deal's rows to BOOKED-VERIFIED under it. Pointer only. **No DD checklist item, buyer protection or 46-Point Gate check changed. No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).**
 - v1.10 (2026-10-16): **ENTITY VERIFICATION added to Workflow 3** (full procedure in `references/dd-checklist.md`). Every party that signs or is named — Seller, each tenant entity and trade name, entity guarantors, and ORA's own buyer/assignee and municipal-filing entities — is checked against the state business-entity registry before the first PSA draft, before estoppels, and within 30 days of closing. 46-Point Gate seller-name item now requires the registry record; one Pre-Closing item added; Tenant DD "business verification" points to the new block. Origin: 754 Old State, 2026-10-15 (Godesana/goDesana, 3Waters trade name, PD applicant "Oxford Financial Partners, LLC"). No buyer protection or other gate item changed; description unchanged.
 - v1.9 (2026-09-30): **independent agent passes wired in.** Workflow 2A gains an independent conformance pass and Workflow 2B a new Check F, both dispatching the read-only `psa-redline-checker` agent (no prior review memo in 2A/2B; dispatch model pinned; a deviation it finds that Checks A-E missed is a STOP). **No DD checklist item, buyer protection, or 46-Point Gate check changed.**
