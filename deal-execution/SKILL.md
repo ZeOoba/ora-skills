@@ -152,7 +152,7 @@ CategoryDefinitionAction**ACCEPT**Immaterial clarification, consistent with ORA 
 
 ## WORKFLOW 2A — INBOUND DRAFT REVIEW (LOI CONFORMANCE)
 
-**Walk-price check (v1.12).** At the start of Workflows 2A, 3 (DD) and 4 (closing), and on each outbound 2B round, compare the PSA contract price with the current walk (the `RE-SOLVED v4.37: $X` line in `Notes / Flags` if present, otherwise a `Walk Price` solved under v4.37 or later (re-solve if neither)). If the price exceeds it and no exception is ratified against a walk solved under v4.37 or later, stop and raise the live-offer exception trigger (`acquisition-underwriting`, Pre-v4.37 walks) before the next step.
+**Walk-price check (v1.12).** At the start of Workflows 2A, 3 (DD) and 4 (closing), and on each outbound 2B round, compare the PSA contract price with the current walk (the latest `RE-SOLVED v4.37: $X` line in `Notes / Flags` if present (the label covers a re-solve under v4.37 or any later version), otherwise the `Walk Price` if it carries a `WALK v4.37 solved YYYY-MM-DD` tag in `Notes / Flags` or its underwrite is dated 2026-10-27 or later (otherwise re-solve)). If the price exceeds it and no exception is ratified against a walk solved under v4.37 or later, stop and raise the live-offer exception trigger (`acquisition-underwriting`, Pre-v4.37 walks) before the next step.
 
 When ANY PSA draft arrives that this skill did not generate — own counsel's initial draft, seller counsel's first draft, or a counter-draft — review it BEFORE it circulates. Own-counsel drafts get the same scrutiny as seller paper: a recycled template that ships today is an executed contract next month. Origin (754 Old State, 2026-06-11 — $50K deposit error, 9 LOI-conformance failures, linchpin easement omitted): references/rationale-and-incidents.md.
 
@@ -205,6 +205,8 @@ Run the 6 Mandatory Buyer-Protective Provisions check and the review-relevant 46
 ---
 
 ## WORKFLOW 2B — OUTBOUND DRAFT GATE (run before ANY draft leaves ORA)
+
+**Walk-price check (v1.12):** run the check defined under Workflow 2A at the start of this workflow.
 
 Workflow 2A guards paper coming IN. Nothing guarded paper going OUT — and that is where the larger loss occurred.
 
@@ -262,6 +264,8 @@ A short pre-send memo — no more than a page — with a single verdict line: **
 
 ## WORKFLOW 3 — DUE DILIGENCE MANAGEMENT
 
+**Walk-price check (v1.12):** run the check defined under Workflow 2A at the start of this workflow.
+
 ORA's standard DD checklist has 156 items across 8 categories. When DD period opens:
 
 ### DD Checklist Generation
@@ -299,6 +303,8 @@ Flag any DD finding that should trigger price renegotiation:
 ---
 
 ## WORKFLOW 4 — CLOSING COORDINATION
+
+**Walk-price check (v1.12):** run the check defined under Workflow 2A at the start of this workflow.
 
 ### Pre-Closing Checklist (10 business days out)
 

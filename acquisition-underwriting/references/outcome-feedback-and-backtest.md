@@ -1,6 +1,6 @@
 # Outcome Feedback — Annual Back-Test Methodology & Passed-Deal Tracking
 
-Extracted verbatim from `acquisition-underwriting/SKILL.md` (2026-08-13, progressive-disclosure split) — content below is UNCHANGED from the original, only relocated. Only relevant to the once-a-year December back-test session, not any individual deal's score. The main SKILL.md keeps the score-immutability rule inline (fires every screen); this file holds the back-test methodology and passed-deal-tracking detail.
+Extracted verbatim from `acquisition-underwriting/SKILL.md` (2026-08-13, progressive-disclosure split) — content below is UNCHANGED from the original, only relocated (except the v4.37 walk-vintage note in the passed-deal tracking bullet). Only relevant to the once-a-year December back-test session, not any individual deal's score. The main SKILL.md keeps the score-immutability rule inline (fires every screen); this file holds the back-test methodology and passed-deal-tracking detail.
 
 ## Annual December back-test (full text)
 

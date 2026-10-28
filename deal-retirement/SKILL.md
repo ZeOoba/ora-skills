@@ -6,7 +6,7 @@ license: ORA Internal
 
 ## Changelog (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
 
-v1.7 (2026-10-28, Gabriel-directed — the retirement record's `Walk Price` stays the decision-time walk on every row; a walk re-solved under `acquisition-underwriting` v4.37 goes in `Notes / Flags` as `RE-SOLVED v4.37: $X`; blank-`Walk Price` handling, a re-solve before the live-offer exception trigger on PENDING and under-PSA rows; no other step changed. No governor constant changed.)
+v1.7 (2026-10-28, Gabriel-directed — the retirement record's `Walk Price` stays the decision-time walk on every row; a walk re-solved under `acquisition-underwriting` v4.37 goes in `Notes / Flags` as `RE-SOLVED v4.37: $X`; blank-`Walk Price` handling, no re-solve and no live-offer trigger at retirement; no other step changed. No governor constant changed.)
 
 v1.6 (2026-10-26, Gabriel-directed — Killed-workflow step 4b prompts Gabriel to mark a killed deal's row on the `debt-management` INTERIM aggregate-LTV ledger WITHDRAWN; pointer only, no other step changed. No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).)
 
@@ -67,7 +67,7 @@ Triggered on deal lifecycle terminal states: CLOSED (acquisition completed) or K
    | `Status` | `Passed` |
    | `Verdict` | `PASS` |
    | `Go / No-Go` | `🔴 Pass` |
-   | `Walk Price` | the ratified walk price, as computed at screen/IC time (the walk of the underwrite of record, solved at screen/IC time, any vintage; never overwritten: a walk re-solved under `acquisition-underwriting` v4.37 goes in `Notes / Flags` as `RE-SOLVED v4.37: $X`. A blank `Walk Price` means no decision-time walk was ever solved: write the underwrite-of-record walk if one exists, otherwise leave it blank and put any re-solve in Notes; on a row holding an LOI-time `ORA Offer Price` or an `ORA Max Defensible Price` a blank stays blank. For a PENDING or under-PSA row, re-solve the walk under v4.37 first, then run the `acquisition-underwriting` live-offer exception trigger) |
+   | `Walk Price` | the ratified walk price, as computed at screen/IC time (the walk of the underwrite of record, solved at screen/IC time, any vintage; never overwritten, and a retirement record keeps it without a re-solve: a re-solve already made under `acquisition-underwriting` v4.37 stays in `Notes / Flags` as `RE-SOLVED v4.37: $X`. A blank `Walk Price` means no decision-time walk is recorded: write the underwrite-of-record walk if one exists, otherwise leave it blank; on a row that held an LOI-time `ORA Offer Price` or an `ORA Max Defensible Price` a blank stays blank. The live-offer exception trigger is not run at retirement: the offer is being closed or withdrawn) |
    | `Ask at First Sighting` | the ask when ORA first saw the deal |
    | `Total SF` · `Year Built` | as verified |
    | `Asset Type` · `Construction Type` | as verified |
