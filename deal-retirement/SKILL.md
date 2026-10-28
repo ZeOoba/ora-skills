@@ -6,7 +6,7 @@ license: ORA Internal
 
 ## Changelog (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
 
-v1.7 (2026-10-28, Gabriel-directed — the retirement record's `Walk Price` is a re-solved walk when the screen predates `acquisition-underwriting` v4.37 (blanket pre-v4.37 walk rule); no other step changed. No governor constant changed.)
+v1.7 (2026-10-28, Gabriel-directed — the retirement record's `Walk Price` is a re-solved walk when the screen predates `acquisition-underwriting` v4.37 (blanket pre-v4.37 walk rule), except that a row holding an LOI-time offer keeps its decision-time walk and the re-solved walk goes in `Notes / Flags`; no other step changed. No governor constant changed.)
 
 v1.6 (2026-10-26, Gabriel-directed — Killed-workflow step 4b prompts Gabriel to mark a killed deal's row on the `debt-management` INTERIM aggregate-LTV ledger WITHDRAWN; pointer only, no other step changed. No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).)
 
@@ -67,7 +67,7 @@ Triggered on deal lifecycle terminal states: CLOSED (acquisition completed) or K
    | `Status` | `Passed` |
    | `Verdict` | `PASS` |
    | `Go / No-Go` | `🔴 Pass` |
-   | `Walk Price` | the ratified walk price, as computed at screen/IC time (a walk solved before `acquisition-underwriting` v4.37 is re-solved and re-dated before it is recorded) |
+   | `Walk Price` | the ratified walk price, as computed at screen/IC time (a walk solved before `acquisition-underwriting` v4.37 is re-solved and re-dated before it is recorded, unless the row already holds an LOI-time `ORA Offer Price` / `ORA Max Defensible Price`: then keep the decision-time walk here, record the re-solved walk as `RE-SOLVED v4.37: $X` in `Notes / Flags`, and never rewrite the LOI-arm fields) |
    | `Ask at First Sighting` | the ask when ORA first saw the deal |
    | `Total SF` · `Year Built` | as verified |
    | `Asset Type` · `Construction Type` | as verified |
