@@ -183,16 +183,29 @@ def undeclared_shared_deps(repo: Path = REPO, deps=None, exempt=None) -> list[st
     return errors
 
 
+def skills_missing_from_readme(repo: Path = REPO) -> list[str]:
+    """CLAUDE.md requires the README skill inventory to be updated whenever a skill is added; this makes
+    the rule mechanical. A skill counts as listed when its name appears in backticks anywhere in README.md."""
+    readme_path = repo / 'README.md'
+    if not readme_path.is_file():
+        return []
+    readme = readme_path.read_text(encoding='utf-8')
+    return [f'{d.name}: not listed in README.md (add it to the skill inventory, in backticks)'
+            for d in skill_dirs(repo) if f'`{d.name}`' not in readme]
+
+
 def cmd_frontmatter() -> int:
     dirs = [d for d in skill_dirs() if is_skill_dir(d.name)]
     fm = [e for d in dirs for e in validate_skill_frontmatter(d)]
     hy = check_tree_hygiene()
     sd = undeclared_shared_deps()
-    for e in fm + hy + sd:
+    rd = skills_missing_from_readme()
+    for e in fm + hy + sd + rd:
         print(e, file=sys.stderr)
     print(f'frontmatter: {len(dirs)} skills, {len(fm)} error(s); tree hygiene: {len(hy)} '
-          f'finding(s); shared-root-dep declarations: {len(sd)} finding(s)')
-    return 1 if (fm or hy or sd) else 0
+          f'finding(s); shared-root-dep declarations: {len(sd)} finding(s); '
+          f'README inventory: {len(rd)} finding(s)')
+    return 1 if (fm or hy or sd or rd) else 0
 
 
 # ---------------------------------------------------------------------------

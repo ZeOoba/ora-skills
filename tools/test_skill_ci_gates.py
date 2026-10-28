@@ -79,6 +79,24 @@ class SuiteCoverage(TempRepo):
         self.assertIn('lease-form-qc/tests/test_lease_qc.py', files)
 
 
+class ReadmeInventory(TempRepo):
+    def test_skill_missing_from_readme_is_flagged(self):
+        _skill(self.root, 'a')
+        _skill(self.root, 'b')
+        (self.root / 'README.md').write_text('- `a` -- listed\n', encoding='utf-8')
+        errors = g.skills_missing_from_readme(self.root)
+        self.assertEqual(len(errors), 1)
+        self.assertTrue(errors[0].startswith('b: not listed in README.md'))
+
+    def test_all_listed_passes(self):
+        _skill(self.root, 'a')
+        (self.root / 'README.md').write_text('- `a` -- listed\n', encoding='utf-8')
+        self.assertEqual(g.skills_missing_from_readme(self.root), [])
+
+    def test_real_repo_every_skill_is_in_the_readme(self):
+        self.assertEqual(g.skills_missing_from_readme(REPO), [])
+
+
 class UndeclaredSharedDeps(TempRepo):
     def test_skill_md_citation_without_declaration_is_flagged(self):
         _skill(self.root, 'a', body='reads target-markets.json at run time')
