@@ -1,6 +1,6 @@
 ---
 name: graph-app-registration
-description: Use when the user mentions: new Graph-backed integration, Azure AD app registration, Entra app registration, register an app in Azure, SharePoint site permission grant, Sites.Selected, Graph API access provisioning, wire up Microsoft Graph, or rotating/regenerating GRAPH_CLIENT_SECRET (24-month expiry — will recur ~2028). Runbook for registering a new Azure AD (Entra) application and wiring Microsoft Graph API access for a new integration, including admin consent and the separate Graph Explorer site-permission grant that gives the app write access to one specific SharePoint site.
+description: "Use when the user mentions: new Graph-backed integration, Azure AD app registration, Entra app registration, register an app in Azure, SharePoint site permission grant, Sites.Selected, Graph API access provisioning, wire up Microsoft Graph, or rotating/regenerating GRAPH_CLIENT_SECRET (24-month expiry — will recur ~2028). Runbook for registering a new Azure AD (Entra) application and wiring Microsoft Graph API access for a new integration, including admin consent and the separate Graph Explorer site-permission grant that gives the app write access to one specific SharePoint site."
 license: ORA Internal
 ---
 
