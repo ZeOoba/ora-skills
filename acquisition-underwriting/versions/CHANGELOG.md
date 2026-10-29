@@ -5,6 +5,7 @@ Created 2026-10-23 (v4.35). The body of SKILL.md is authoritative; this file is 
 ## Version index
 | Version | Date | Ratifier | Summary (200 chars max) | Constants changed | Evidence ID |
 |---|---|---|---|---|---|
+| v4.39 | 2026-10-29 | Gabriel, in-turn | Wording only: the same binding-constraint formula in the doctrine-rationale reference now uses a percentage, not a decimal, for the drift probe. No governor change. | none | RE-4.39-1 |
 | v4.38 | 2026-10-29 | Gabriel, in-turn | Wording only: the STAGE 2.3 binding-constraint formula writes the per-property refi ceiling as a percentage, not a decimal, so the drift probe stops misreading it. No governor change. | none | RE-4.38-1 |
 | v4.37 | 2026-10-27 | Gabriel, in-turn | Refi = 10-yr UST + 200 bps (shock +100); Stage -1 items 10-11; Construction-Type RCT multiplier schedule (tilt-up baseline; PEMB 0.90). No governor change. | refi rate basis; refi-shock +100 bps; RCT construction-type multiplier; R% denominator and allocation weights include adders; off-table proxy replaced by C&W row | RE-4.37-1..8 |
 | v4.36 | 2026-10-26 | Gabriel, in-turn | STAGE 2.3 Part A: LTV enforcement for refis, loans and sales is the INTERIM manual procedure run by Gabriel in debt-management, replacing 'OPEN follow-up'. | none | RE-4.36-1 |
