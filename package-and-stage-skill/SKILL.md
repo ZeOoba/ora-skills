@@ -1,6 +1,6 @@
 ---
 name: package-and-stage-skill
-description: Use when the user says: package a skill, stage a skill, repackage skill, re-upload skill, install pre-packaged .skill, or after a drift check reports "repo newer → re-upload needed" — the ORA skill packaging and staging helper, companion to ora-skill-store-drift-check, for getting a repo skill edit onto the Cowork/claude.ai platform as a validated, importable .skill via tools/package_skills.py (never Compress-Archive). Does NOT register — Gabriel clicks Save skill. Multi-file skills route to Cowork, not desktop Settings. Plugin-bundled skills rebuild the plugin instead of a standalone .skill.
+description: "Use when the user says: package a skill, stage a skill, repackage skill, re-upload skill, install pre-packaged .skill, or after a drift check reports \"repo newer → re-upload needed\" — the ORA skill packaging and staging helper, companion to ora-skill-store-drift-check, for getting a repo skill edit onto the Cowork/claude.ai platform as a validated, importable .skill via tools/package_skills.py (never Compress-Archive). Does NOT register — Gabriel clicks Save skill. Multi-file skills route to Cowork, not desktop Settings. Plugin-bundled skills rebuild the plugin instead of a standalone .skill."
 ---
 
 # package-and-stage-skill (v1.36)

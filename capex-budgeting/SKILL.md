@@ -1,6 +1,6 @@
 ---
 name: capex-budgeting
-description: Use when the user mentions: capex budget, capital plan (building-system reserves — for AUM deployment capacity use portfolio-growth), reserve study, multi-year capital, capex schedule, capex forecast, building system replacement, capital reserve, replacement reserve, capex line item, sinking fund, deferred maintenance financial plan, or any task that requires building a capital plan beyond reactive maintenance — multi-year capital expenditure planning and reserve studies for Oxford Realty Advisors, bridging reactive maintenance into financial planning.
+description: "Use when the user mentions: capex budget, capital plan (building-system reserves — for AUM deployment capacity use portfolio-growth), reserve study, multi-year capital, capex schedule, capex forecast, building system replacement, capital reserve, replacement reserve, capex line item, sinking fund, deferred maintenance financial plan, or any task that requires building a capital plan beyond reactive maintenance — multi-year capital expenditure planning and reserve studies for Oxford Realty Advisors, bridging reactive maintenance into financial planning."
 license: ORA Internal
 ---
 
