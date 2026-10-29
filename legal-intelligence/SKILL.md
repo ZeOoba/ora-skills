@@ -3,7 +3,7 @@ name: legal-intelligence
 description: "Use when the user mentions: lease review, PSA review, contract analysis, redline, clause comparison, compare two versions, blackline, Litera, Workshare, indemnification, default provisions, personal guaranty, estoppel clause / SNDA analysis (NOT certificate drafting — that's estoppel-request-generation), CAM clause, assignment and subletting, loan document, solar lease, vendor contract, or any request to analyze, compare, draft or negotiate a legal document, or an uploaded lease, contract, PSA or loan agreement. PSA drafts and redlines enter via deal-execution Workflow 2A; this skill is its redline sub-step. Oxford Realty Advisors legal analysis, clause library and contract intelligence."
 ---
 
-# Legal Intelligence — Oxford Realty Advisors (v1.4)
+# Legal Intelligence — Oxford Realty Advisors (v1.4.1)
 
 ## MODULE 1: DOCUMENT CLASSIFICATION
 
@@ -187,7 +187,7 @@ A marked-up document arrives in one of three encodings, and only the first is wh
 
 Counsel COMMENTS are a fourth case and are equally invisible to a tracked-change parse: they live in `word/comments.xml`, so a commented-but-unrevised draft reads as clean.
 
-**Detection is owned by the `deal-execution` skill.** Invoke its Workflow 2 Step 0 (`scripts/extract_revisions.py`), which detects all four cases, reports every encoding present when a document carries more than one, and hard-stops when a file reads clean but its name or content says it should not. Do not reimplement the detection here and do not reference the script by relative path — the two skills install independently, so `deal-execution`'s files are not reachable from this one at runtime. If `deal-execution` is not installed on the current surface, say so rather than guessing at the encoding by eye.
+**Detection is owned by the `deal-execution` skill.** Invoke its Workflow 2 Step 0 (`deal-execution/scripts/extract_revisions.py` in this repo; installed with `deal-execution`, not with this skill), which detects all four cases, reports every encoding present when a document carries more than one, and hard-stops when a file reads clean but its name or content says it should not. Do not reimplement the detection here and do not reference the script by relative path — the two skills install independently, so `deal-execution`'s files are not reachable from this one at runtime. If `deal-execution` is not installed on the current surface, say so rather than guessing at the encoding by eye.
 
 **Read the compare-tool summary block first when one is present.** It names the BASE document the counterparty compared against and gives the tool's own change tally. The base is what determines which provisions were *accepted* as opposed to merely uncommented — and if it names anything other than the draft ORA actually sent, the counterparty reviewed stale paper and the round must be re-based before any analysis. Cite the tool's tally externally, not the script's run counts; the two count differently and the tool's number is the one opposing counsel will quote.
 
@@ -218,6 +218,7 @@ Counsel COMMENTS are a fourth case and are equally invisible to a tracked-change
 
 ## Changelog
 
+- v1.4.1 (2026-10-29): Spelled out the cross-skill path of `extract_revisions.py`. This was a reference-path clarification only (wording; no change to procedures, scored or governor constants): NO change to scored or governor constants.
 - v1.4 (2026-10-26): Module 1 pointers: any loan document, any PSA that sells, changes Oxford's share or carries a loan, and any agreement (amendment or new) that sells, contributes or changes Oxford's share of an asset or increases a loan's principal or commitment, follow the `debt-management` v1.6 INTERIM aggregate-LTV checklist (pointer only; no review rule changed). No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).
 - v1.3 (2026-08-21, adversarial review): "estoppel"/"SNDA" triggers (frontmatter description and TRIGGER PHRASES)
   narrowed to clause-analysis-only, with an explicit pointer to `estoppel-request-generation` for drafting/generating a

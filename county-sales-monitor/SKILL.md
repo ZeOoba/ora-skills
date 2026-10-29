@@ -12,7 +12,7 @@ description: >
   acquisition-underwriting COMPS mode.
 ---
 
-# county-sales-monitor (v0.9)
+# county-sales-monitor (v0.9.1)
 
 Produce a recurring digest of recently recorded industrial sales and transfers
 across ORA's target-market counties, so Gabriel sees what actually traded — at
@@ -359,7 +359,7 @@ denominator — this skill reports observed $/SF, it does not re-derive a
 replacement-cost benchmark.
 
 ## Engineering notes (inherited — verify, don't re-learn the hard way)
-- bash sandbox: 45s per call. Use county-parcel-screen's `scripts/dl_resume.py`
+- bash sandbox: 45s per call. Use county-parcel-screen's `scripts/dl_resume.py` (`county-parcel-screen/scripts/dl_resume.py` in this repo; other skill, not bundled here)
   for files >40MB (Franklin `Transfer010.xlsx` is 43MB; Hamilton
   `HistoricSalesExport.xlsx` is 59MB; the Polk sales CSV ~13MB is fine direct).
   Unzip into a NEW subdirectory — the sandbox cannot overwrite files written by
@@ -449,6 +449,7 @@ valuation input); Baltimore Co assessments run ~64% below recent industrial
 sales, so ratio-based arm's-length tests must be per-county, never global.
 
 ## Changelog
+- v0.9.1 (2026-10-29): Spelled out the cross-skill path of `dl_resume.py`. This was a reference-path clarification only (wording; no change to procedures, scored or governor constants): NO change to scored or governor constants.
 - **v0.9 (2026-10-15):**
   Closes the open Worker defect recorded in v0.8. Step 3's government/exempt
   exclusion was implemented for Baltimore (`EXCLASS`) and Polk (DOR quality) but
