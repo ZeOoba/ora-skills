@@ -209,6 +209,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `isolated-commit` — lands your own reviewed change in a shared ORA checkout that other sessions may be editing (claim, stage by pathspec, independent review, push)
 - `adversarial-merge-gate` — second-reviewer gate before merge for blast-radius changes (hooks, config, governance, financial or security-gate code), multi-session branches, or PRs whose commit message makes verification claims
 - `merge-ready` — merge-readiness gate for one or several PRs: runs the standard gate order, then cleans up the worktree after merge.
+- `land` — readiness-to-merge-to-verified-pull chain for one PR in any ORA repo, with a checked-in allowlist of known external CI failures.
 - `branch-catchup` — brings a long-lived branch up to date with origin/main safely in a shared, dirty checkout (worktree-isolated; per-conflict resolution by which side is the reviewed superset)
 - `file-reconciliation` — hash-diff dedupe/reconciliation between file trees
 - `repo-architecture-review` — cross-repo architecture-diagram audit (unbounded loops, off-fleet automation, dual-write drift, disconnected build steps, dead links, missing financial-code gates); read-only, hands off fixes to normal lane triage
