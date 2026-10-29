@@ -3,7 +3,7 @@ name: repo-architecture
 description: Use when working in, or asking how to navigate, any of Gabriel's 7 most-active GitHub repos (ora-skills, ~/.claude/ora-claude-config, oxford-command-center, Website/website-canonical, AAOS, ora-county-sales-monitor, ora-pm) - purpose, layout, data flow, deploy path, gotchas, and which files to read first. Point-in-time snapshot; verify counts and paths against the repo.
 ---
 
-# Repo architecture map (v1.0)
+# Repo architecture map (v1.0.1)
 
 Selected by `pushedAt` (gh repo list). Local checkouts under `C:\Users\Owner`. All private except none. Counts drift - verify before quoting. Facts marked (unverified) were not checked against source.
 
@@ -33,8 +33,8 @@ Cross-repo rules that apply everywhere: shared checkouts are single-writer (fetc
 **Data flow:** Spine A = workbook -> parseWorkbook -> Zod PortfolioSnapshot -> reconcile -> REST/SSE -> UI. Spine B = P&L files -> `warehouse/ingest.ts` -> SQLite (34 numbered migrations, architect-owned) -> metrics/engines -> `/api/warehouse/*`. Mirror: `bake-mirror.ts` -> `public/snapshot.json` (confidential redacted) -> hourly Pages deploy. Spine A and B NOI are independent; never compare without basis-matching (`reconcile:noi-crosscheck`).
 **Gates:** `npm run gate` (11 steps), `gate:ci`; `check:refute` requires a Refute-Reviewed trailer; pre-push confidentiality scan.
 **Financial-decision code** (capital-allocation verdict, acquisition engine, debt scoring, `intel-config.ts` incl. hurdle) needs the adversarial refute workflow; `config/*.json` never silently edited.
-**Gotchas:** never touch `data/overlay.json`, `finance.sqlite`, `confidential-terms.json`; no DDL on the live DB; hooks block `git add -A`; check `status.json` before touching shared infra; CLAUDE.md merge-history table is stale; use `dev:server:once`; importers follow `scripts/import-insurance-data.ts` (see xlsx-warehouse-importer skill).
-**Read first:** `CLAUDE.md`, `architecture/system-overview.md`, `scripts/import-insurance-data.ts`.
+**Gotchas:** never touch `data/overlay.json`, `finance.sqlite`, `confidential-terms.json`; no DDL on the live DB; hooks block `git add -A`; check `status.json` before touching shared infra; CLAUDE.md merge-history table is stale; use `dev:server:once`; importers follow `scripts/import-insurance-data.ts` (oxford-command-center repo; see xlsx-warehouse-importer skill).
+**Read first:** `CLAUDE.md`, `architecture/system-overview.md`, `scripts/import-insurance-data.ts` (all paths in this section are in the oxford-command-center repo).
 
 ## 4. Website / website-canonical  (oxfordra.net)
 **Purpose:** static multi-page site on Netlify; Netlify Functions for forms/broker OM scoring; edge function `/api/chat` (Anthropic).
@@ -42,8 +42,8 @@ Cross-repo rules that apply everywhere: shared checkouts are single-writer (fetc
 **Config:** headers/redirects live in `_headers`/`_redirects` (not netlify.toml). CSP is hash-based (~21 inline scripts, no script `unsafe-inline`).
 **Deploy:** treat a merge to `main` as a deploy and the standing rule is per-deploy confirmation (Invariant 2). Netlify Git integration is not visible in-repo (confirm in dashboard). `netlify-guard.js` blocks indirect `--prod`. Use `netlify deploy --build`, never `--dir=.`. Afterward `node scripts/verify-live-csp.mjs`.
 **QC:** `npm run verify` (build, jsonld, unit, site, shim, functions); mutation, chat eval, Lighthouse separate.
-**Gotchas:** editing any inline `<script>` requires `node scripts/csp-hashes.mjs --write`; new third-party origin needs a `_headers` entry; new root files must be classified in `build-dist.mjs`; `submission-created` webhooks gate on `form_name`.
-**Read first:** `README.md`, `scripts/build-dist.mjs`, `_headers`.
+**Gotchas:** editing any inline `<script>` requires `node scripts/csp-hashes.mjs --write`; new third-party origin needs a `_headers` entry; new root files must be classified in `build-dist.mjs` (website repo `scripts/`); `submission-created` webhooks gate on `form_name`.
+**Read first:** `README.md`, `scripts/build-dist.mjs`, `_headers` (all paths in this section are in the website repo).
 
 ## 5. AAOS  (Agent-to-Agent Operating Substrate)
 **Purpose:** filesystem task queue + handoff protocol between local Claude Code and cloud Cowork. No server/DB; atomic write-rename, exclusive-create locks, lease TTLs, fail-closed conflicts.
@@ -72,4 +72,5 @@ Cross-repo rules that apply everywhere: shared checkouts are single-writer (fetc
 **Read first:** `README.md`, `server/index.ts`, `server/routes/cron.ts`.
 
 ## Changelog
+- v1.0.1 (2026-10-29): Marked which repo the `scripts/` paths in sections 3 and 4 belong to. This was a reference-path clarification only (wording; no change to procedures, scored or governor constants): NO change to scored or governor constants.
 - v1.0 (2026-10-13): initial map of the 7 most recently pushed repos, built from read-only per-repo surveys.

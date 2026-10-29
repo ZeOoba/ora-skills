@@ -5,7 +5,7 @@ user-invocable: true
 allowed-tools: Read Glob Grep Write WebSearch WebFetch mcp__c5f4869f-7d3a-4472-a66a-8e61315feb51__notion-search mcp__c5f4869f-7d3a-4472-a66a-8e61315feb51__notion-fetch mcp__a3e380ce-2ea9-4b42-92d9-37c588a4b760__search_crm_objects mcp__c0ea3c01-b8f1-4371-aa06-08a1449f59fc__outlook_email_search
 ---
 
-# Lease Renewal Pipeline (v1.3)
+# Lease Renewal Pipeline (v1.3.1)
 
 ## Instructions
 
@@ -22,7 +22,7 @@ Show all leases expiring in the next 6 months.
 ### Steps
 
 1. **Gather lease data:**
-   - **Canonical source:** Notion Tenant Database, queried via the **Notion MCP** (`notion-fetch` / `notion-search`). The former Composio query path (`NOTION_QUERY_DATABASE_WITH_FILTER` against the wrapper ID, with the prefixed-cursor workaround in `references/notion_paginator.py`) is **RETIRED 2026-06-11** — the Composio connector was removed; do not route through it. The paginator is archived under `_archive/lease-renewal-pipeline_pre-notionmcp_2026-06-11/` for history only.
+   - **Canonical source:** Notion Tenant Database, queried via the **Notion MCP** (`notion-fetch` / `notion-search`). The former Composio query path (`NOTION_QUERY_DATABASE_WITH_FILTER` against the wrapper ID, with the prefixed-cursor workaround in `references/notion_paginator.py`, now only at `_archive/lease-renewal-pipeline_pre-notionmcp_2026-06-11/references/notion_paginator.py`) is **RETIRED 2026-06-11** — the Composio connector was removed; do not route through it. The paginator is archived under `_archive/lease-renewal-pipeline_pre-notionmcp_2026-06-11/` for history only.
    - **ID routing:** `notion-fetch` and schema introspection → **data source ID** `b12f4cfd-a995-4755-8341-6435ae8173b4` (`collection://b12f4cfd-a995-4755-8341-6435ae8173b4`). Calling `notion-fetch` on the wrapper ID returns `validation_error: "Aggregation property not found in data source"` — a misleading routing quirk, not a data problem (resolved 2026-04-27; see Database ID Map in Knowledge Base). The **database wrapper ID** `8dbbaec0-611a-4617-be07-6a77d0d0307a` remains valid only for browser URLs (`notion.so/{id}`).
    - **Full portfolio scan:** `notion-fetch` on the data source ID, paginating until exhausted; filter client-side on Lease Status. For small targeted lookups (single tenant or property), `notion-search` is sufficient.
    - **Active scope:** Lease Status ∈ {Active, Month-to-Month, Notice Given, Expired}. Exclude Vacant, blank-status stubs, and rows whose Tenant Name contains `⛔` or `DUPLICATE`. Also exclude rows with `Row Retired` checked.
@@ -56,6 +56,7 @@ Markdown table for the pipeline, followed by draft renewal letters for any criti
 
 ## Changelog
 
+- v1.3.1 (2026-10-29): Pointed the retired `notion_paginator.py` reference at its archived location. This was a reference-path clarification only (wording; no change to procedures, scored or governor constants): NO change to scored or governor constants.
 - **v1.3 (2026-09-28):** added the lease-source check to STEP 1 and a source-status column, so renewal terms drawn from Notion are not stated as fact when they trace to an archive or unexecuted copy (archive copies can differ from the canonical Master Lease Database copy). Also excludes `Row Retired` rows from scope. First live case: Bakers Specialty Services, 1100 Rarig Unit K, term ending 10/31/2026, whose Notion terms were read from an archive draft. No detection logic, urgency tier, cadence or handoff behavior changed.
 - **v1.2 (2026-09-07):** ORA Automation Audit R23 follow-up — this skill had ZERO trigger phrases in its description, so it could never win a manual, name-based routing decision against tenant-intelligence or document-assembly; only its scheduled-task cron ever ran it. Added trigger vocabulary ("upcoming lease expirations", "renewal pipeline", "expiring leases this quarter", etc.) plus explicit deferrals for drafting (document-assembly) and risk scoring (tenant-intelligence), so it can. No detection logic, cadence, or handoff behavior changed.
 - **v1.1 (2026-08-14):** Fixed a live skill-routing collision (ORA Automation Audit Revision 8, `ora-setup-audit`) — Step 4 previously drafted renewal-letter prose directly with no format specified and no reference to CLAUDE.md's ratified comms-drafting tie-break, a silent third path around `document-assembly`/`tenant-email`. Now determines terms only and hands drafting to `document-assembly`, consistent with the tie-break's "tenant-directed formal letters (renewal offers, notices) route to document-assembly" rule. No change to lease-data sourcing or urgency logic.
