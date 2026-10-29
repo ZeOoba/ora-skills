@@ -1,6 +1,6 @@
 ---
 name: cash-position-monitor
-description: Use when the user mentions: cash position, cash balance, treasury, reserve adequacy, distribution headroom, cash forecast, weekly cash, daily cash, intercompany, sweep account, cash concentration, debt service coverage of cash, or any task requiring real-time consolidated cash visibility — multi-entity cash position consolidation across QuickBooks accounts. Powers the ora-cash-position-snapshot scheduled task and the ora-cash-position artifact.
+description: "Use when the user mentions: cash position, cash balance, treasury, reserve adequacy, distribution headroom, cash forecast, weekly cash, daily cash, intercompany, sweep account, cash concentration, debt service coverage of cash, or any task requiring real-time consolidated cash visibility — multi-entity cash position consolidation across QuickBooks accounts. Powers the ora-cash-position-snapshot scheduled task and the ora-cash-position artifact."
 license: ORA Internal
 ---
 

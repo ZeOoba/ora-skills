@@ -1,6 +1,6 @@
 ---
 name: orphaned-task-forensics
-description: Use when the user mentions: stale Notion page, this page stopped updating, what happened to [task name], recover a lost SKILL.md, a scheduled task went missing, silently dropped, trace this back to its producer, or after a health-guard/automation-health-monitor advisory flags a stale-data symptom — root-causes a stale or missing scheduled-task output (a Notion page, dashboard section, or downstream file that silently stopped updating) back to its producer task across the dual CC/MCP + LAMS/Cowork fleet, and separately recovers a scheduled task's own lost SKILL.md via session-transcript archaeology when the file itself has vanished.
+description: "Use when the user mentions: stale Notion page, this page stopped updating, what happened to [task name], recover a lost SKILL.md, a scheduled task went missing, silently dropped, trace this back to its producer, or after a health-guard/automation-health-monitor advisory flags a stale-data symptom — root-causes a stale or missing scheduled-task output (a Notion page, dashboard section, or downstream file that silently stopped updating) back to its producer task across the dual CC/MCP + LAMS/Cowork fleet, and separately recovers a scheduled task's own lost SKILL.md via session-transcript archaeology when the file itself has vanished."
 license: ORA Internal
 ---
 

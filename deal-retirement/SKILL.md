@@ -1,6 +1,6 @@
 ---
 name: deal-retirement
-description: Use when a deal closes or is killed and its deal-bound artifacts, scheduled tasks, and Notion staging records need retiring and the DD package archiving to SharePoint. Use when the user mentions: deal closed, deal killed, deal dead, post-closing cleanup, retire deal, archive deal, sunset deal artifacts, deal lifecycle, close-out, post-mortem, or any task related to retiring assets associated with a completed or terminated deal.
+description: "Use when a deal closes or is killed and its deal-bound artifacts, scheduled tasks, and Notion staging records need retiring and the DD package archiving to SharePoint. Use when the user mentions: deal closed, deal killed, deal dead, post-closing cleanup, retire deal, archive deal, sunset deal artifacts, deal lifecycle, close-out, post-mortem, or any task related to retiring assets associated with a completed or terminated deal."
 license: ORA Internal
 ---
 

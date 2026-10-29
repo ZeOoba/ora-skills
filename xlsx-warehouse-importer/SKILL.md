@@ -1,6 +1,6 @@
 ---
 name: xlsx-warehouse-importer
-description: Use when a spreadsheet or JSON extract (broker loss runs, PCA/capex register, assessor export, dec pages, any xlsx a Cowork session produced) must be loaded into the oxford-command-center SQLite warehouse as a new importer script — scaffold, validation rules, property-id crosswalk, idempotency and test checklist. Trigger on: import this xlsx into the warehouse, new importer script, warehouse:import, load the register into the warehouse, loss-run importer, PCA importer, ingest extraction register, importer template. Pattern source is scripts/import-insurance-data.ts. Does NOT cover the P&L/QuickBooks ingest (ingest.ts), migrations (architect-owned) or surfaces that read the data.
+description: "Use when a spreadsheet or JSON extract (broker loss runs, PCA/capex register, assessor export, dec pages, any xlsx a Cowork session produced) must be loaded into the oxford-command-center SQLite warehouse as a new importer script — scaffold, validation rules, property-id crosswalk, idempotency and test checklist. Trigger on: import this xlsx into the warehouse, new importer script, warehouse:import, load the register into the warehouse, loss-run importer, PCA importer, ingest extraction register, importer template. Pattern source is scripts/import-insurance-data.ts. Does NOT cover the P&L/QuickBooks ingest (ingest.ts), migrations (architect-owned) or surfaces that read the data."
 license: ORA Internal
 ---
 
