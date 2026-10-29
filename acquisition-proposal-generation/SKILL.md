@@ -1,6 +1,6 @@
 ---
 name: acquisition-proposal-generation
-description: Use when Gabriel needs to generate or revise Oxford Realty Advisors' seller-facing Acquisition Proposal — a two-page, non-legalistic business-terms offer document positioned as an alternative to a traditional LOI. Trigger on: acquisition proposal, offer document, business-terms offer, proposal to purchase, "not a legalistic LOI", make an offer, template offer letter, proposal template. Distinct from loi-generation (the formal conditional-block LOI with QC gate and state overlays) — use THIS skill when the deal calls for a short, principal-to-principal offer that pushes legal detail into the PSA rather than the offer document itself.
+description: "Use when Gabriel needs to generate or revise Oxford Realty Advisors' seller-facing Acquisition Proposal — a two-page, non-legalistic business-terms offer document positioned as an alternative to a traditional LOI. Trigger on: acquisition proposal, offer document, business-terms offer, proposal to purchase, \"not a legalistic LOI\", make an offer, template offer letter, proposal template. Distinct from loi-generation (the formal conditional-block LOI with QC gate and state overlays) — use THIS skill when the deal calls for a short, principal-to-principal offer that pushes legal detail into the PSA rather than the offer document itself."
 ---
 
 # Acquisition Proposal Generation (v3.3)

@@ -1,7 +1,7 @@
 ---
 
 name: disposition-analysis
-description: Use when the user mentions: should we sell, hold or sell, disposition, dispose of, exit an asset, recycle or prune the portfolio, 1031, like-kind exchange, replace an asset, refinance vs sell, harvest gains, cash out, when to sell, keeping vs selling a property, depreciation recapture, or estate step-up — the Oxford Realty Advisors hold / refinance / 1031 / sell decision engine. Defaults to HOLD + cash-out refinance for liquidity (ORA generational-hold doctrine); when capital is recycled the default exit is a 1031 exchange; a taxable sale is the rare exception that must clear a high bar. Refi execution (term sheets, lender selection) routes to debt-management.
+description: "Use when the user mentions: should we sell, hold or sell, disposition, dispose of, exit an asset, recycle or prune the portfolio, 1031, like-kind exchange, replace an asset, refinance vs sell, harvest gains, cash out, when to sell, keeping vs selling a property, depreciation recapture, or estate step-up — the Oxford Realty Advisors hold / refinance / 1031 / sell decision engine. Defaults to HOLD + cash-out refinance for liquidity (ORA generational-hold doctrine); when capital is recycled the default exit is a 1031 exchange; a taxable sale is the rare exception that must clear a high bar. Refi execution (term sheets, lender selection) routes to debt-management."
 ---
 
 # Disposition Analysis — Oxford Realty Advisors (v1.4)
