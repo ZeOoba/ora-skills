@@ -1,6 +1,6 @@
 ---
 name: settlement-basis-extraction
-description: Use when the user says: import settlement statements, build the basis register, extract closing costs, OCR the settlement PDFs, capitalize closing charges, reconcile a settlement to Schedule L, or points at a folder of HUD-1/ALTA settlement statements, deeds, or closing packages — extracting acquisition/disposition data from HUD-1/ALTA settlement statements into a capitalizable-basis register for Oxford Realty Advisors property entities. Also trigger when a new acquisition or disposition closes and the settlement package needs to be worked into the entity's basis and the portfolio's EXCHANGE_1031 tracking.
+description: "Use when the user says: import settlement statements, build the basis register, extract closing costs, OCR the settlement PDFs, capitalize closing charges, reconcile a settlement to Schedule L, or points at a folder of HUD-1/ALTA settlement statements, deeds, or closing packages — extracting acquisition/disposition data from HUD-1/ALTA settlement statements into a capitalizable-basis register for Oxford Realty Advisors property entities. Also trigger when a new acquisition or disposition closes and the settlement package needs to be worked into the entity's basis and the portfolio's EXCHANGE_1031 tracking."
 ---
 
 # Settlement-Basis Extraction — ORA (v1.4)
