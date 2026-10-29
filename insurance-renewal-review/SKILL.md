@@ -3,7 +3,7 @@ name: insurance-renewal-review
 description: "Use when the user says: review insurance policies, insurance renewal review, how has insurance changed, premium history, shop our insurance, self-insure, insurance declarations, coverage changes, deductible options, insurance dashboard — or points at a folder of insurance PDFs/declarations. Also trigger when a folder holds scanned carrier declarations (Erie, Selective, Westchester/Chubb, Mesa, Hartford) and the user asks for trends, comparisons, or a renewal decision, or asks whether the trackers and named insureds match the declarations. Oxford Realty Advisors property insurance renewal review."
 ---
 
-# Insurance Renewal Review — ORA (v2.0)
+# Insurance Renewal Review — ORA (v2.0.1)
 
 Codifies the extraction/compare/flag pass built 2026-08-13 and materially extended 2026-08-17 (adding a 7th property, correcting two analytical errors, and reconciling three source workbooks against the declarations).
 
@@ -148,7 +148,7 @@ Standard output set for a full review — **both artifacts, every cycle**:
    - **indexed premium vs. TIV vs. rate** for the like-for-like set — the chart that proves rate from exposure;
    - **small multiples** for per-property premium history. Past ~5 properties a single multi-series line chart fails: with 7 series the categorical palette runs into reserved status colors, and the label stack collides. Facet instead, one panel per property on a shared vertical scale;
    - concentration (premium share vs. value share), umbrella YoY (diverging), the retention ladder, and coverage-change polarity.
-   - Palette: validate with `dataviz`'s `scripts/validate_palette.js` in **both** light and dark against the actual surface colors. ORA navy/gold fail the chroma and lightness gates as *data* colors — keep them as chrome (masthead, rules, tile accents) and use the validated categorical palette for marks. Never assign a series the status red/amber/green.
+   - Palette: validate with the `dataviz` skill's `scripts/validate_palette.js` (a platform skill, not in ora-skills or this skill's folder) in **both** light and dark against the actual surface colors. ORA navy/gold fail the chroma and lightness gates as *data* colors — keep them as chrome (masthead, rules, tile accents) and use the validated categorical palette for marks. Never assign a series the status red/amber/green.
 3. **Rebuilt tracker XLSX** with a Conflicts Log tab and a Named Insured Audit tab (Step 9), as a NEW file — do not overwrite a user file in a non-Claude OneDrive business folder without permission.
 4. **Draft-only broker data requests, one per broker.** Never send without explicit in-turn confirmation, regardless of how routine. Lead with the time-sensitive items (an anniversary inside 90 days; an unauthorized coverage change). Include: native-text PDFs going forward (name the one native file as proof it is possible), SOVs, 5-year loss runs, underwriting applications, missing base declarations, declarations for every unreviewed entity, the Step 7 limits question, and every re-rate question from Steps 5–6. If a prior draft exists, supersede it explicitly and say which items are carried forward.
 5. **Housekeeping** — byte-identical duplicates move to a same-folder `/archive/` (never delete); ask permission first.
@@ -166,6 +166,7 @@ Standard output set for a full review — **both artifacts, every cycle**:
 
 ## Changelog
 
+- v2.0.1 (2026-10-29): Marked `validate_palette.js` as belonging to the external `dataviz` skill. This was a reference-path clarification only (wording; no change to procedures, scored or governor constants): NO change to scored or governor constants.
 - **v2.0 (2026-08-17):** Text-layer test promoted to Step 1 with a producer-string table (assuming OCR wasted a full render pass on a natively-searchable file). Step 7 rewritten around the `Option 1 - GL limits $2m/4m` header trap plus duplicate-row / partial-subtotal / cross-workbook-disagreement checks. New Step 8 (quoted vs. realized, like-for-like) documenting a corrected analytical error. Step 9 split into premium reconciliation and named-insured-by-location reconciliation, with the uninsured-asset check. Step 11 makes the HTML dashboard a standard deliverable and specifies its chart set, the small-multiples threshold, and the palette rule. Added openpyxl traps to Step 4 and an adversarial-verification requirement to QC. Book-coverage metric added to Step 4.
 - v1.1 (2026-08-15): size refactor — Steps 2–3 moved verbatim to `references/ocr-and-extraction-checklist.md`. Fixed a duplicate stacked YAML frontmatter block from v1.0.
 - v1.0 (2026-08-13): initial. Built from the Insurance Policies Historical + Current portfolio review.
