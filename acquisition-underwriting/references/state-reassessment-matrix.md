@@ -1,4 +1,4 @@
-# State Reassessment Matrix (post-sale property tax) — 11 footprint states
+# State Reassessment Matrix (post-sale property tax) — 12 footprint states
 
 Moved verbatim from `SKILL.md` UNDERWRITING CONVENTIONS on 2026-09-22 (v4.23). Load this file whenever a pro-forma reassessed property tax or total carrying cost ($/SF) is computed — the Stage 1 carrying-cost floor, STAGE 2.5 item 5, the OpEx & Carrying Cost tab, and any transfer-tax / entity-deal question. The governing rule stays in `SKILL.md`: property tax = pro-forma reassessed at ORA's purchase price, never the seller's in-place bill; carrying-cost target ≤ $4.00/SF.
 
@@ -16,6 +16,7 @@ Moved verbatim from `SKILL.md` UNDERWRITING CONVENTIONS on 2026-09-22 (v4.23). L
 | TN (Nashville/Memphis) | LOW — 4-yr cycle, NO sale reset, frozen between reappraisals | 40% (real) | 0.37% | No controlling-interest tax. |
 | KS (Wyandotte/Johnson) | LOW — already annual FMV; sale = just a comp | 25% | none | Non-disclosure (no SVQ on entity deal). IRB/EDX up to 100%/10yr. |
 | IL (Cook) | HIGH — triennial by region (South/West suburbs 2023/2026/2029 · North 2025/2028 · City 2024/2027); CCAO income approach (loaded cap from 2026); sale price is appeal evidence (price disclosed on any appeal within 5 yrs) | 25% of market (comm/ind) × state equalizer (TY2024 final 3.0355; TY2025 tentative 2.8683) × composite rate — derive per parcel: bill ÷ (AV × equalizer) | State $0.50 + County $0.25 per $500; municipal varies (Harvey/Dolton/Posen/South Holland $5 per $1,000; City of Chicago buyer tax [verify]) | Controlling-interest transfers taxed [verify with counsel]; entity purchase does not avoid reassessment |
+| KY (Jefferson/Louisville) | MED-annual — PVA revalues every parcel at 100% fair cash value each Jan 1 (KRS 132.690) and treats an accepted valid sale as the value for ~2 years | 100% FMV × combined rate per $100 (state + Metro + schools + fire district; Louisville Urban Service District adds its levy only inside the USD) | **0.10%** ($0.50 per $500), grantor-paid (KRS 142.050) | No controlling-interest tax found. Tier **LOW** when the current assessment is at or above the price. Added v4.40 (Gabriel 2026-10-29; origin REDACTED-131 Hwy: assessed $2,540,700 vs $2,500,000 ask; 2026 rate 1.1224 per $100, Pleasure Ridge Park fire district). PVA building data is paywalled (not subscribed): County Clerk deed search per deal. |
 
 Abatement/PILOT levers (Edge scan; abate improvements, not basis): KS IRB/EDX (strongest) · MO Ch.100/Ch.353 · TN IDB PILOT · OH CRA/EZ/TIF · IN ERA · MD/VA Enterprise Zone · Cook Class 6b/8 (10% level ×10 yrs → 15% → 20%; new construction, substantial rehab, or reoccupancy after ≥12 months abandoned + municipal resolution; occupied buildings do not qualify).
 
