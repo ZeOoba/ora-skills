@@ -1,10 +1,10 @@
 ---
 name: annual-cycle
-description: "Use when the user mentions: year-end, annual close, annual budget, year in review, tax planning, annual report, 1099 cycle, K-1 prep, audit prep, year-end distribution, fiscal year close, annual cycle, or any task related to the firm's annual rhythm — Oxford Realty Advisors' year-end and annual planning cycle, twin to monthly-close. Distinct from portfolio-reporting, which owns investor and portfolio reporting deliverables. Powers the ora-annual-budget-kickoff (Nov 1) and ora-year-end-review (Dec 15) scheduled tasks."
+description: "Use when the user mentions: year-end, annual close, annual budget, year in review, tax planning, annual report, 1099 cycle, K-1 prep, audit prep, year-end distribution, fiscal year close, annual cycle, or any task related to the firm's annual rhythm — Oxford Realty Advisors' year-end and annual planning cycle, twin to monthly-close. Distinct from portfolio-reporting, which owns investor and portfolio reporting deliverables. Powers the ora-annual-budget-kickoff (first business day of November) and ora-year-end-review (late February, prior fiscal year) scheduled tasks."
 license: ORA Internal
 ---
 
-# Annual Cycle (v1.1)
+# Annual Cycle (v1.2)
 
 Coordinate the firm's annual rhythm: budget kickoff, year-end review, tax planning, audit prep, K-1 cycle, LP year-end communications, and (v1.1) the principals' personal-1040 review that every entity K-1 flows into.
 
@@ -25,14 +25,14 @@ Annual budget assembly, year-in-review, year-end tax planning, K-1 distribution 
 | September | Tax planning prep: projected K-1 income by LP; distribution headroom for tax payments | manual / IR review |
 | September–October (on 1040 draft) | **Personal 1040 review**: K-1 tie-out + return lint, before e-file | manual: Personal 1040 Review workflow below |
 | October 31 | Cowork audit refresh recommended | quarterly cadence |
-| November 1 | Annual budget kickoff | ora-annual-budget-kickoff |
+| November, 1st business day | Annual budget kickoff | ora-annual-budget-kickoff |
 | November 30 | Vendor concentration audit, contract renewals review | manual via vendor-management |
 | December 1–14 | Year-end distribution decision; final operating budget review; Q4 estimate sized off the estimate check | manual |
-| December 15 | Year-in-review draft | ora-year-end-review |
 | December 31 | Fiscal year close | monthly-close + manual |
 | January 15 | 1099 prep deadline (mailing Jan 31) | accounting + vendor-management |
 | January | Prior-year REP hour summary to preparer; depreciation schedule roll-forward | ora-rep-hours-monthly (Jan run); manual |
 | February | LP K-1 prep with CPA; load entity K-1 figures into `k1_register.csv` | manual (investor-relations retired 2026-09-09) |
+| February, last business day on or before the 28th | Year-in-review of the prior fiscal year (preconditions-gated) | ora-year-end-review |
 | March 15 | K-1 issuance to LPs (extended via 7004 if needed) | manual (investor-relations retired 2026-09-09) |
 | April | LP communications post-K-1; tax-related Q&A | manual (investor-relations retired 2026-09-09) |
 
@@ -47,11 +47,12 @@ Annual budget assembly, year-in-review, year-end tax planning, K-1 distribution 
 6. Build per-property budget xlsx; consolidate to fund level.
 7. Output: FY[YYYY+1] Operating Budget (xlsx) with executive summary memo (DOCX).
 
-### Year-In-Review (December)
+### Year-In-Review (late February, prior fiscal year)
+Runs after the fiscal year closes, never in December: a December run reviews an incomplete year (anchor corrected 2026-04-28). `ora-year-end-review` checks first that full-year QuickBooks Desktop exports, the loan tracker, the CapEx log and closed-date pipeline data are in place, and sends a status memo instead of a review if any is missing.
 1. Full-year actuals vs. budget by property and consolidated.
 2. AUM trajectory: starting AUM, deals closed, NOI growth, ending AUM.
-3. Capital deployed YTD, capex completed.
-4. LP distributions YTD; capital calls completed.
+3. Capital deployed in the fiscal year, capex completed.
+4. LP distributions for the fiscal year; capital calls completed.
 5. Forward look: next-year pipeline, capital plan, target deployment.
 6. Output: Year-In-Review (DOCX, ORA Style) for LP communication and internal archive.
 
@@ -110,9 +111,10 @@ Tools live in `OneDrive…\Business\Taxes Estimated + Returns\_ora-tax-tools\` (
 - ~~investor-relations skill (LP communications)~~ — retired 2026-09-09, no replacement assigned
 - tax-appeal skill (tax assumptions)
 - cost-seg-tax-layer / disposition-analysis (after-tax rates; use the effective rental rate above)
-- register-scheduled-task (ora-quarterly-estimate-check, ora-rep-hours-monthly)
+- register-scheduled-task (ora-quarterly-estimate-check, ora-rep-hours-monthly, ora-annual-budget-kickoff, ora-year-end-review)
 - docx, xlsx, document-assembly skills
 
 ## Changelog
+- **v1.2 (2026-10-30):** Year-in-review moved from December 15 to the last business day on or before February 28, matching the 2026-04-28 correction recorded in the archived task spec: a December run cannot review a complete fiscal year. Budget kickoff is now the first business day of November. Both tasks were re-registered on the CC/MCP fleet the same day (they had been registered on neither fleet). No governor constant changed.
 - **v1.1 (2026-10-15):** Added the Personal 1040 Review workflow, using the K-1 tie-out script and a five-point lint built from the TY2025 findings. Also added the depreciation schedule roll-forward, the quarterly estimate and monthly REP checks in the calendar, and the effective-rate rule for tax planning.
 - **v1.0:** Initial annual cycle.
