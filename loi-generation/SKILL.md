@@ -4,6 +4,7 @@ description: "Use when the user mentions: draft LOI, generate LOI, letter of int
 ---
 
 # LOI Generation — Oxford Realty Advisors (v1.16)
+# LOI Generation — Oxford Realty Advisors (v1.15)
 
 You are operating as the lead acquisitions counsel-substitute for Oxford Realty Advisors. This skill produces a complete, broker-ready, buyer-protective letter of intent from an OM, broker package, or upstream `acquisition-underwriting` evaluation. The output is a SHORT-form LOI — the ORA house format (logo header, underlined labeled terms, address footer, acceptance block), two pages, three when a conditional term fires — — not a contract, not legalese, but every dollar-material protection Gabriel needs at the LOI stage.
 
@@ -71,6 +72,13 @@ The entity-purchase election (`{{ENTITY_INTEREST_SENTENCE}}`, Other Conditions) 
 Never ship "membership interests" against a corporate seller.
 
 **Template hook (v1.15):** `{{ENTITY_INTEREST_SENTENCE}}` in Other Conditions, built with `{{ENTITY_INTEREST_TYPE}}` (references/short-form.md). Default empty: fill only when Seller holds the Property through a single-asset entity AND Buyer wants the entity-purchase option (or Gabriel asks for it, e.g. an Ohio drop-and-swap); never for a trust seller (deed conveyance, trustee in the acceptance block).
+
+### 0b. Format — SHORT only (v1.15; CONDENSED and STANDARD retired)
+
+**Every LOI uses the SHORT form (Gabriel, 2026-10-27: "All LOIs generated should match the formatting in the attached document" — a SHORT-form LOI ORA sent on 10/20/2026).** Template `templates/LOI_ShortForm_Template.docx`, filled with `templates/fill_shortform.py`. **Read references/short-form.md before assembling** — layout, fixed term order, tokens, conditional terms, state table and the SHORT QC gate live there.
+
+The v1.12 fallbacks to CONDENSED are replaced by SHORT conditional terms (Rule 2): affiliated tenant / sale-leaseback and ROFR/ROFO → **Tenant Conditions**; tenant purchase option → **Purchase Option**; entity-interest election → `{{ENTITY_INTEREST_SENTENCE}}` in Other Conditions; a known or likely Phase II / VAP path → the Due Diligence auto-extension (now covering a Buyer-elected Phase II and any voluntary action program determination); open zoning item → **Zoning**. The CONDENSED master is retired to `templates/archive/LOI_Master_Template_Condensed_v1.1.docx` and never produces an outbound LOI — including a REVISE of an LOI first drafted in it, which is rebuilt in SHORT. If Gabriel explicitly asks for the old long form in-turn, say it is retired and confirm before using the archived master.
+
 
 ### 0b. Format — SHORT only (v1.15; CONDENSED and STANDARD retired)
 
@@ -393,6 +401,7 @@ Every successful run of this skill produces:
 3. A delivered file pair (Cowork `present_files`; chat `SendUserFile`)
 4. A Notion log entry on the Acquisition Pipeline Tracker
 5. Zero "shall" usage, zero banned phrases, `qc_shortform.py` exit 0, full 24-point QC Gate pass
+5. Zero "shall" usage, zero banned phrases, `qc_shortform.py` exit 0, full 23-point QC Gate pass
 6. Phone 301.512.6125 in the address footer on every page
 7. Oxford logo header on every page (large on page 1)
 8. "Proof of funds available upon request." centered italic directly below the acceptance block
