@@ -1,6 +1,6 @@
 ---
 name: land
-description: Use when Gabriel says land this PR, merge this PR, merge-readiness, is this ready to merge, squash-merge it, or push and open a PR then merge. Thin readiness-to-merge-to-verified-pull chain for one PR in any ORA repo, with a checked-in allowlist of known external CI failures (Lighthouse billing). NOT for deciding review depth (adversarial-merge-gate), NOT for committing or opening the PR (isolated-commit), NOT for deploy post-verify (/ship).
+description: Use ONLY when Gabriel explicitly says land this PR, squash-merge it, or push and open a PR then merge, for ONE PR. Thin readiness-to-merge-to-verified-pull chain for one PR in any ORA repo, with a checked-in allowlist of known external CI failures (Lighthouse billing). NOT for deciding review depth (adversarial-merge-gate), NOT for committing or opening the PR (isolated-commit), NOT for deploy post-verify (/ship). Readiness questions (is this ready to merge, merge-readiness), a bare merge PR N, several PRs, or post-merge cleanup route to merge-ready, which merges only on an in-turn yes.
 license: ORA Internal
 ---
 
