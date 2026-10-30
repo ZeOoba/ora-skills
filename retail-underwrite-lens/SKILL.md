@@ -1,4 +1,14 @@
 ---
+name: "retail-underwrite-lens"
+description: "Use when underwriting a retail strip or neighborhood center under ORA acquisition-underwriting FULL mode (Stage 2.9 alt-asset track) and the model needs the retail lens tabs: rent-basis cases, required-rent solve, rent grid, rent-normalization scenario, outlot option, comp-implied income value."
+---
+
+# Retail Underwrite Lens (template)
+
+**Gate first (v1.1, Gabriel 2026-10-29):** run this lens only when the retail asset qualifies under `acquisition-underwriting` Stage 0 Gate 6 — **land-heavy quasi-IOS with land ≥40% of all-in basis** — or when Gabriel explicitly asks for a full retail underwrite. Otherwise stop at SCREEN depth: report GATE-FLAGGED, the land share and its source, and deprioritize.
+
+**No ground leases (v1.2, Gabriel 2026-10-30):** ORA never acquires a ground lease. Before any lens work, confirm the sale is fee simple. A leasehold (improvements on ground-leased land) is excluded outright: do not run the lens, do not rank it, and list it only under exclusions. A listing whose sale conditions say "on ground lease" stays excluded until the broker or title confirms fee simple.
+
 name: retail-underwrite-lens
 description: "Use when underwriting a retail strip or neighborhood center under ORA acquisition-underwriting FULL mode (Stage 2.9 alt-asset track) and the model needs the retail lens tabs: rent-basis cases, required-rent solve, rent grid, rent-normalization scenario, outlot option, comp-implied income value."
 ---
@@ -31,6 +41,7 @@ When the roll is one credit tenant plus a large vacant suite, replace the Base /
 - Static values are allowed only as labelled cross-checks; any IRR quoted in a lens must come from a live engine.
 - Keep Base, Case A and Case K visible in the memo; never present only the most favorable.
 - Rent-roll footnotes (ROFR, ROFO, options) and landlord-pays vacancy codes go in the tenant table and the carry term.
+- Recalculate with 0 errors and zero ties before delivery; render the memo and scan for stale figures.
 - Recalculate with 0 errors and zero ties before delivery; render the memo and scan for stale figures.
 
 ## VERSIONING
