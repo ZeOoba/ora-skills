@@ -1,15 +1,6 @@
 ---
-name: county-parcel-screen
-description: >
-  Use when the user mentions: parcel screen, county screen, ring screen,
-  off-market sourcing, owner outreach list, cold call list, delinquent tax
-  leads, motivated sellers, estate owners, long-hold owners, assessor or auditor
-  parcel data, or off-market industrial candidates in ANY target market or new
-  county. Also "next market", "run the screen on X", or owner-level lead lists
-  from public property records. Recorded-sales tracking routes to
-  county-sales-monitor; a single already-identified target routes to
-  verified-deal-recon (deal-recon agent for a first look only); an inbound
-  broker batch routes to deal-flow-triage.
+name: "county-parcel-screen"
+description: "Use when the user mentions: parcel screen, county screen, ring screen, off-market sourcing, owner outreach list, cold call list, delinquent tax leads, motivated sellers, estate owners, long-hold owners, assessor or auditor parcel data, or off-market industrial candidates in ANY target market or new county. Also \"next market\", \"run the screen on X\", or owner-level lead lists from public property records. Recorded-sales tracking routes to county-sales-monitor; a single already-identified target routes to verified-deal-recon (deal-recon agent for a first look only); an inbound broker batch routes to deal-flow-triage.\n"
 ---
 
 # county-parcel-screen (v1.6)
