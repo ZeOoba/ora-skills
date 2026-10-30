@@ -12,7 +12,7 @@ description: >
   acquisition-underwriting COMPS mode.
 ---
 
-# county-sales-monitor (v0.9.1)
+# county-sales-monitor (v0.10)
 
 Produce a recurring digest of recently recorded industrial sales and transfers
 across ORA's target-market counties, so Gabriel sees what actually traded — at
@@ -28,7 +28,7 @@ codes only. **Building SF < 150,000**; where the county publishes no commercial
 SF, keep the row and mark SF `unpublished` — never drop it. Trailing window:
 **30 days, ratified by Gabriel 2026-08-15** (weekly was considered and
 rejected — recording lag makes a 7-day window too thin to trust, and 30 days
-gives enough volume for a real median $/SF). Geography at launch: the three
+gives enough volume for a real median $/SF). Geography: the
 Tier A counties only (below) — the other eight ORA clusters are Tier B/C,
 documented as the next expansion phase, not yet in scope. No minimum price,
 no maximum price, no value band.
@@ -48,7 +48,7 @@ Three tiers; the digest prints a per-county line for every county in every run,
 including the ones that produced nothing and the ones that structurally cannot.
 
 **Launch scope, ratified 2026-08-15: Tier A only.** Franklin OH, Baltimore Co
-MD, and Polk IA are the entire pilot. Tier B and Tier C are documented below
+MD, and Polk IA were the entire pilot; Cook IL joined Tier A in v0.10. Tier B and Tier C are documented below
 so the expansion path is clear, but nothing outside Tier A is built, verified,
 or scheduled in v0.2 — expanding to Tier B is a distinct future pass, each
 county verified individually before it's trusted in a real digest.
@@ -77,6 +77,27 @@ county verified individually before it's trusted in a real digest.
   (`gross_area` = building SF, occupancy). The best assessor source found to
   date and the only one with clean grantor/grantee back three decades.
 
+- **Cook IL** (Chicago–Greater Cook County; added v0.10, 2026-10-30, Gabriel
+  in-turn instruction) — Cook County Assessor open data on Socrata, no auth.
+  Parcel sales `datacatalog.cookcountyil.gov/resource/wvhk-k5uv.json`
+  (`sale_date`, `sale_price`, `doc_no` deed number, `num_parcels_sale`,
+  published `buyer_name` / `seller_name`, `deed_type` / `mydec_deed_type`, the
+  Assessor's `sale_filter_*` non-market flags; unfiltered since 2023-10-31).
+  Building SF, year built, address and market value from Commercial Valuation
+  `csik-bsws` (valuation groups: `keypin` + `pins`). Industrial building classes
+  only: **5-93, 5-83, 6-63, 6-73, 8-93** (Assessor `classcode.pdf`); land,
+  minor/ancillary improvements, special improvements and condo units excluded.
+  Live probe 2026-10-30: 440 in-scope sale rows in 12 months → 303 deeds → 276
+  under the SF cap → 206 clean $/SF comps (median $95.31), 27 RATIO-REVIEW.
+  SF is published only when every building PIN on the deed is valued and each
+  valuation group lies wholly inside the deed (a house or store on a mixed deed
+  blocks it). The reassessment year carries SF but no market value yet, so the
+  ratio denominator borrows the newest earlier year's value for an unchanged
+  PIN set. Sale dates lag
+  recording ~3 months (newest 2026-08-06 on 2026-10-30). The ratio test uses the
+  Assessor's market value (assessed level is 25%, so the raw assessed value is
+  never the denominator).
+
 **Tier C — CONFIRMED no usable public sale price (say so, every run):**
 - **Warren OH** (Cincinnati) — no public values, SF, or sales anywhere.
 - **Johnson Co KS + Platte Co MO** (Kansas City) — Missouri and Kansas are
@@ -96,7 +117,15 @@ NEW OWN1/2; Hamilton OH's `HistoricSalesExport.xlsx`; Clermont OH's
 with SDAT-scrubbed owner names; Henrico VA's
 `AssessorProValGPINRecTransPublish` with `val_code_1` arm's-length codes;
 Chesterfield VA `SaleDate`/`SalePrice`; Richmond City `LAST_SALE_DATE`/
-`LAST_SALE_PRICE`; Marion IN as a disclosure state; Dane WI only via the
+`LAST_SALE_PRICE`; Indiana via the statewide sales-disclosure file
+`stats.indiana.edu/sdfdata/SDF_<yr>.zip` (weekly, Fridays) — verified
+2026-10-30, adapter planned: price is published on 142 of 545 industrial-class
+(3xx) SDFs statewide in 2026; every unpriced one carries the filer's
+`G_Confidential_Finance` flag. Indianapolis cluster 2026 YTD: Marion 25 of 113
+priced, Boone 17/17, Hamilton 8/9, Hendricks/Johnson/Hancock 0. Price is in
+cents (`E1_Sales_Price` or, for Part G filings, `G1_Sales_Price`); buyer/seller
+in `SALECONTAC` on every row; median filing lag ~1 week. County names come in
+two formats ("Marion" vs "MARION COUNTY") — normalize before filtering; Dane WI only via the
 Madison **city** assessor conveyance pages, where grantor/grantee go blank from
 mid-2023 forward; Dallas IA sales layers that carry price but **no sale date
 and no parties**). None of that has been exercised as a *windowed recent-sales*
@@ -139,12 +168,12 @@ persisted key set, and surface late arrivals in a separate `LATE-POSTED` block
 with their true sale date. Key = county + parcel ID + sale date + price.
 
 ### 2. Pull the universe, per county
-Launch scope is Tier A only (Franklin OH, Baltimore Co MD, Polk IA) — the
+Scope is Tier A only (Franklin OH, Baltimore Co MD, Polk IA, Cook IL) — the
 mappings below for other counties are carried forward for the documented
 expansion phase, not exercised in v0.2. Industrial use codes only, taken from
 county-parcel-screen's already-resolved mapping — Ohio DTE 300-series (`CLASSCD`/`CLASS` 3xx); Jackson MO Ascend
 `landuse_cd` 3200-3299; Dane WI SLUCM `2xxx-3xxx` + `6371/6373/6376/6379/6381`;
-Polk IA occupancy 46/25C/20A/48/44/20B; Henrico VA 406/675/453/495/670/470/472/
+Polk IA occupancy 46/25C/20A/48/44/20B; Cook IL class 593/583/663/673/893 (letter suffixes included); Henrico VA 406/675/453/495/670/470/472/
 326/328; Chesterfield VA 510/511/512/660/270/380/390/370/275/700; Hanover VA by
 `ZONING_LIST IN ('M-1','M-2','M-3')` inference. Self-storage / mini-warehouse
 codes are **excluded** everywhere they exist as a distinct code (Dane 6375,
@@ -415,14 +444,14 @@ parcel, labelled as inferred, and is never a classification input.
   - `County Sales Comps (Worker)` — database `3ed6ecd8-9e59-8168-a367-df08b6ff6d3b`,
     data source `collection://28bae38c-f495-4c9e-9edc-b86c0ae2c413`. One row per
     transaction; upsert key `County|Parcel|SaleDate|Price`; County options are
-    `Franklin` / `Baltimore County` / `Polk` (the legacy DB uses `Franklin OH` /
+    `Franklin` / `Baltimore County` / `Polk` / `Cook` (the legacy DB uses `Franklin OH` /
     `Baltimore Co MD` / `Polk IA`). Adds `Comp Key`, `Parcel Count`,
     `First Seen`, `Days to First Seen`, `Last Synced`, `Convey Number`,
     `Instrument Type`, and the `SF-INCOMPLETE`, `MULTI-PARCEL-INFERRED` and
     `RATIO-REVIEW` flags.
   - `County Sales Coverage (Worker)` — database `3ed6ecd8-9e59-81b1-947b-dff540312cfc`,
     data source `collection://f26e704a-9191-436b-85cf-fd64258928be`. One row per
-    county per cycle (3 Tier A + 4 Tier C = 7).
+    county per cycle (4 Tier A + 4 Tier C = 8, after the v0.10 deploy).
   - Managed databases are read-only to everything but the worker; schema changes
     go through a worker redeploy and can drop data. Ops: pause with
     `ntn workers capabilities disable <sync>`; never delete the worker or the
@@ -449,6 +478,13 @@ valuation input); Baltimore Co assessments run ~64% below recent industrial
 sales, so ratio-based arm's-length tests must be per-county, never global.
 
 ## Changelog
+- **v0.10 (2026-10-30):** Cook IL promoted to Tier A (Worker adapter
+  `src/counties/cook.ts`, `ZeOoba/ora-county-sales-monitor` PR #7). Indiana's
+  statewide SDF file verified as a partial-price source (Tier B entry above;
+  adapter planned). Cook multi-PIN deeds group on the published `doc_no`; SF is summed per
+  valuation group only when every group lies wholly inside the deed, otherwise
+  unknown with the cap still applied. Takes effect on the Worker's next
+  supervised deploy. No change to scored or governor constants.
 - v0.9.1 (2026-10-29): Spelled out the cross-skill path of `dl_resume.py`. This was a reference-path clarification only (wording; no change to procedures, scored or governor constants): NO change to scored or governor constants.
 - **v0.9 (2026-10-15):**
   Closes the open Worker defect recorded in v0.8. Step 3's government/exempt
