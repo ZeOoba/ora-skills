@@ -1,9 +1,9 @@
 ---
 name: "listing-enrichment-gate"
-description: "Verify a broker listing's SF, year built, construction, owner and flip history against county/public sources before scoring; run on every new on-market deal."
+description: "Verify a broker listing's SF, year built, construction, use class, site coverage, owner and flip history against county/public sources before scoring; run on every new on-market deal before it is scored or logged T1, and for the ora-deal-sourcing-scan STEP 3D T1 verify pass (use code, footprint-to-parcel coverage, listing clear height). Trigger on: enrich this listing, verify listing SF, check the use code, is this really industrial, site coverage, flip history, certify the listing data. NOT a deal verdict — a pursue/pass pre-screen routes to verified-deal-recon and scoring to acquisition-underwriting SCREEN; off-market parcel SF/value gaps route to parcel-data-recovery; FEMA flood and zoning permitted-use determinations route to ora-flood-zoning-dd."
 ---
 
-# listing-enrichment-gate v1.3
+# listing-enrichment-gate (v1.4)
 
 Run BEFORE a listing is scored or logged as T1. Output is a PROVISIONAL or CERTIFIED record in the Deal Sourcing Log (collection://9a6ae219-85a3-4621-899c-c757fd062f8b). Dedupe against Deal Sourcing Log and Acquisition Pipeline (bcfe4a03) first.
 
@@ -12,11 +12,11 @@ Run BEFORE a listing is scored or logged as T1. Output is a PROVISIONAL or CERTI
 2. **Owner and transfer history.** Owner name, mail address, last transfer date/price. FLIP FLAG if last arms-length transfer <24 months or price < ask by >10%; note non-consideration transfers (MD CONVEY1=4) as tenure-unknown, not flips.
 3. **Year built (Rule 1).** County record; if unpublished, default 1995 and mark source NOT AVAILABLE.
 4. **Construction.** Only from a county field (MD SDAT DESCCNST) or verified imagery; otherwise NOT VERIFIED. Never accept listing wording as verified.
-5. **Use class / zoning (Rule 8).** County use class vs listing (auto-use, mixed-use, office class); flag conflicts on the specific parcel, not the address.
+5. **Use class / zoning (Rule 8).** County use class vs listing (auto-use, mixed-use, office, RETAIL, other); flag conflicts on the specific parcel, not the address. Output `USE-CODE: <code> | <source>` and an ASSET-CLASS result: INDUSTRIAL/FLEX VERIFIED · RETAIL/OFFICE/OTHER → FAIL, re-route to acquisition-underwriting Stage 2.9 (ALT-ASSET-TRACK) · MIXED/CONFLICT/UNVERIFIED → cap T2. (v1.4; origin 13500 E 40 Hwy, Gordmans anchor.)
 6. **Basis test.** Ceiling = floor $/SF x verified SF / 1.02, floor = RCT v03 LOW x (1 - ramp), ramp 65% at <=1995 to 60% at >=2005. Compare to assessed value; flag DENOMINATOR-SENSITIVE within +/-5 pts.
-7. **Height/power.** Footprint roof HEIGHT (m) is an indicator, not clear height. Power = UNKNOWN until electrician-verified.
+7. **Height/power/coverage.** Footprint roof HEIGHT (m) is an indicator, not clear height; record listing/OM clear height separately (mixed clear: record the minimum AND maximum bay) and test it at the scan's STEP 3A thresholds. **Site coverage = Σ in-parcel footprint SF ÷ parcel land SF** (both already pulled in step 1); >60% is a failed physical floor. Power = UNKNOWN until electrician-verified. (v1.4; origin 67 & 76 Washington Ave, ~86% coverage.)
 8. **Listing age.** >30 days or unverified date = STALE-LISTING.
-9. **Certification.** CERTIFIED only if year built, construction, SF, zoning and tax are ALL verified; else PROVISIONAL. Record score as [floor-ceiling].
+9. **Certification.** CERTIFIED only if year built, construction, SF, zoning, tax AND use class (step 5 INDUSTRIAL/FLEX VERIFIED) are ALL verified; else PROVISIONAL. Record score as [floor-ceiling]. Note: this PROVISIONAL is a data-certification state, distinct from the deal-sourcing scan's index-only PROVISIONAL listing rule.
 10. **Write** Enrichment Findings, Year Built Source, Construction Source, Enrichment Date, Data Certification, Power Status to Notion.
 
 ## Query transport (v1.2)
@@ -90,7 +90,7 @@ Trigger: Gabriel supplies a PVA property record (record card, CAMA export or ope
 5. **Re-run Procedure steps 1-6 on record data.** Assessor SF replaces footprint as the primary comparator in Rule 6 (footprint remains the cross-check); year built comes from the record (use effective year built for the ramp only where a documented renovation R% qualifies under Stage 1; otherwise actual); construction from the record's construction field; tax from the assessed value or tax bill. Recompute the ceiling and the [floor-ceiling] score.
 6. **Transfers.** A sale with blank or nominal consideration is tenure-unknown, not a flip (mirrors the MD CONVEY1=4 rule). FLIP FLAG rule unchanged.
 7. **Rule 8(ii) assessment anomaly.** Exempt coding, an absent or stale record, or an assessed value implausible for an industrial improvement of that size caps the verdict at T2 and goes to QUESTIONS FOR GABRIEL.
-8. **Certification.** CERTIFIED only when year built, construction, assessor SF, zoning (parcel-level LOJIC district plus the Rule 8 permitted-use check — EZ1 always needs it) and tax are ALL verified from a source. The county flood mirror and the FEMA determination letter stay DD-Critical pre-LOI items and do not gate CERTIFIED. Score snapshots are immutable: write a new dated row or fields and mark the earlier PROVISIONAL record superseded; never overwrite history.
+8. **Certification.** CERTIFIED only when year built, construction, assessor SF, zoning (parcel-level LOJIC district plus the Rule 8 permitted-use check — EZ1 always needs it), tax and use class (Procedure step 5 INDUSTRIAL/FLEX VERIFIED — v1.4) are ALL verified from a source. The county flood mirror and the FEMA determination letter stay DD-Critical pre-LOI items and do not gate CERTIFIED. Score snapshots are immutable: write a new dated row or fields and mark the earlier PROVISIONAL record superseded; never overwrite history.
 9. **Conflict Register (Rule 4).** Log every field where listing, footprint and record disagree (field / listing / footprint / record / value used / basis). County record wins on vintage and legal facts.
 
 Ingest schema (one object per parcel): parcel_id; lrsn; situs_address; record_source (PVA record, broker OM); record_date; property_class; year_built; effective_year_built; construction_type; structures (list of: description, gross_area_sf, finished_area_sf, stories); land_acres; owner_name; owner_mail_address; sales (list of: date, consideration, deed_type); assessed_land; assessed_improvements; assessed_total; assessment_year; last_tax_bill; sketch_on_file (yes/no). Every value also carries its source tag.
@@ -99,5 +99,6 @@ Ingest schema (one object per parcel): parcel_id; lrsn; situs_address; record_so
 Verified SF (listing / assessor / footprint, variance %), buildings and years, owner + mail, last transfer, use class/zoning, assessed value vs ceiling, flags, next action, certification, [floor-ceiling] score.
 
 ## Changelog
+- v1.4 (2026-10-30): Step 5 outputs an ASSET-CLASS result (retail/office/other → re-route; mixed/unverified → cap T2); step 7 computes site coverage from footprint ÷ parcel and records clear height; step 9 (and PVA ingest step 8) adds use class to CERTIFIED and disambiguates PROVISIONAL. Description expanded with trigger vocabulary and routing tie-breaks per repo convention. Companion to ora-deal-sourcing-scan v2.9 (Gabriel-approved 2026-10-30). No floor, ramp, RCT value, DSCR, LTV or score weight changed. Origin: 2026-10-30 verified-deal-recon of the 2026-10-27 T1 set. First repo-tracked version (v1.3 was store-only).
 - v1.3 (2026-09-28): Added the PVA record ingest step (identity match, schema, tie-outs, re-run on record data, certification rule, immutable-snapshot write-back) so a Louisville listing can reach CERTIFIED once a PVA record or broker OM is supplied. Includes everything from v1.2 below. No floor, ramp, or threshold changed.
 - v1.2 (2026-09-28): Louisville registry gap narrowed — address-point PARCELID, parcel polygon, zoning/overlay and county-hosted FEMA flood mirror all queryable from LOJIC; PVA-only fields remain the gap. Added Query transport rule (POST from Bash for long GIS queries; never for blocked hosts), footprint-vs-GBA caution in step 1, and the tested script. Origin: 3900, 8301, 8340 and 7508 Cane Run Rd screens.
