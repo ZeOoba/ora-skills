@@ -1,7 +1,11 @@
 """Build templates/LOI_ShortForm_Template.docx (loi-generation v1.12 SHORT form).
 
 Usage: python build_shortform.py <oxford-logo-512.png> <output.docx>   (requires python-docx and Pillow)
+       python build_shortform.py --cropped <logo_full.png> <logo_mark.png> <output.docx>
+         (reuse already-cropped logos, e.g. word/media/image1.png and image2.png unzipped from the current template)
 Logo source: website-canonical/images/oxford-logo-512.png (also served at oxfordra.net/images/).
+v1.15: SHORT is the only LOI format. Optional terms (Zoning, Purchase Option, Tenant Conditions) are paragraphs
+whose body is a single {{..._TERM}} token — when the token resolves empty, delete that whole paragraph.
 Layout follows the Lucern Capital Partners buy-side LOI adopted 2026-10-20; see references/short-form.md.
 """
 import re, sys
@@ -15,14 +19,19 @@ from docx.oxml import OxmlElement
 import os, tempfile
 from PIL import Image, ImageOps
 
-SRC, OUT = sys.argv[1], sys.argv[2]
 D = tempfile.mkdtemp()
-_im = Image.open(SRC).convert("RGB")
-_ink = ImageOps.invert(_im.convert("L")).point(lambda v: 255 if v > 20 else 0)
-_b = _ink.getbbox()  # full lockup
-_im.crop((_b[0] - 6, _b[1] - 6, _b[2] + 6, _b[3] + 6)).save(os.path.join(D, "logo_full.png"))
-_m = _ink.crop((0, 0, _im.width, int(_im.height * 0.53))).getbbox()  # block mark only (above wordmark)
-_im.crop((_m[0] - 4, _m[1] - 4, _m[2] + 4, _m[3] + 4)).save(os.path.join(D, "logo_mark.png"))
+if sys.argv[1] == "--cropped":
+    _full, _mark, OUT = sys.argv[2], sys.argv[3], sys.argv[4]
+    Image.open(_full).convert("RGB").save(os.path.join(D, "logo_full.png"))
+    Image.open(_mark).convert("RGB").save(os.path.join(D, "logo_mark.png"))
+else:
+    SRC, OUT = sys.argv[1], sys.argv[2]
+    _im = Image.open(SRC).convert("RGB")
+    _ink = ImageOps.invert(_im.convert("L")).point(lambda v: 255 if v > 20 else 0)
+    _b = _ink.getbbox()  # full lockup
+    _im.crop((_b[0] - 6, _b[1] - 6, _b[2] + 6, _b[3] + 6)).save(os.path.join(D, "logo_full.png"))
+    _m = _ink.crop((0, 0, _im.width, int(_im.height * 0.53))).getbbox()  # block mark only (above wordmark)
+    _im.crop((_m[0] - 4, _m[1] - 4, _m[2] + 4, _m[3] + 4)).save(os.path.join(D, "logo_mark.png"))
 FONT = "Times New Roman"
 GOLD = RGBColor(0xC9, 0xA9, 0x6E)
 GREY = RGBColor(0x80, 0x80, 0x80)
@@ -183,10 +192,13 @@ term("Due Diligence",
      "Upon execution of the PSA, Buyer will have {{STUDY_PERIOD_WORDS}} days (the “Due Diligence Period”) to "
      "inspect all aspects of the Property (including invasive testing) and may terminate for any reason with a full "
      "refund of the earnest money. If Buyer\u2019s Phase I identifies a recognized environmental condition or recommends "
-     "further investigation, the Due Diligence Period (and full refundability) extends until thirty (30) days after "
-     "Buyer receives the Phase II results. Within five (5) business days after "
+     "further investigation, or Buyer elects a Phase II, the Due Diligence Period (and full refundability) extends "
+     "until thirty (30) days after Buyer receives the Phase II results (or any voluntary action program "
+     "determination). Within five (5) business days after "
      "acceptance of this LOI, Seller will deliver all title, survey, environmental, lease, operating, and "
-     "physical-condition documents and allow Buyer access to the Property.")
+     "physical-condition documents in its possession or control{{DD_DELIVERY_ADDITIONS}} and allow Buyer access to the Property.")
+
+term("Zoning", "{{ZONING_TERM}}")
 
 term("Closing",
      "{{CLOSING_DAYS_WORDS}} days after expiration of the Due Diligence Period. Seller will convey title by "
@@ -210,6 +222,10 @@ term("Operations",
      "terminate any lease or surviving service contract without Buyer’s written consent. "
      "{{OPERATIONS_CONDITIONAL_SENTENCE}}")
 
+term("Purchase Option", "{{PURCHASE_OPTION_TERM}}")
+
+term("Tenant Conditions", "{{TENANT_CONDITIONS_TERM}}")
+
 term("Exclusivity",
      "From Seller’s acceptance of this LOI through the earlier of PSA execution or {{EXCLUSIVITY_DAYS_WORDS}} days after acceptance, Seller will not solicit, "
      "negotiate, or accept any other offer to purchase, lease, or recapitalize the Property, and will cease marketing "
@@ -219,12 +235,12 @@ term("Other Conditions",
      "Buyer will deliver a PSA draft within {{PSA_DRAFT_DAYS_WORDS}} days after acceptance, with customary "
      "representations, warranties, and a specific-performance remedy for Buyer. Buyer may "
      "assign to affiliates, and title may vest in Buyer-designated entities, with Seller cooperating in direct deeding "
-     "at no added cost or delay to Seller. The parties will cooperate with any IRC \u00a71031 exchange at no cost to the "
+     "at no added cost or delay to Seller.{{ENTITY_INTEREST_SENTENCE}} The parties will cooperate with any IRC \u00a71031 exchange at no cost to the "
      "cooperating party. Seller will pay any commission owed to {{SELLER_BROKER_FIRM}}; Buyer has no broker.")
 
 term("Confidentiality",
      "Neither party will disclose the terms of this letter without the other\u2019s written consent, except to its "
-     "principals, counsel, accountants, lenders, and exchange intermediaries.")
+     "principals, counsel, accountants, lenders, and exchange intermediaries{{CONFIDENTIALITY_TENANT_CARVEOUT}}, and as required by law.")
 
 term("Offer & Acceptance",
      "If Seller agrees with these terms, please signify acceptance by countersigning in the space below. This offer "
