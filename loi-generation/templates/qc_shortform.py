@@ -1,4 +1,4 @@
-"""Automated SHORT-form QC for a filled LOI PDF (loi-generation v1.13; references/short-form.md).
+"""Automated SHORT-form QC for a filled LOI PDF (loi-generation v1.15; references/short-form.md).
 
 Usage: python qc_shortform.py <loi.pdf> <values.json>
 Exit 0 = every automated check passes. Judgment items (walk price #23, zoning verbatim #19,

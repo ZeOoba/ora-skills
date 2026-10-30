@@ -1,6 +1,6 @@
 ---
 name: repo-architecture-review
-description: Use when Gabriel says: review my repos, audit my architecture, review the diagrams in my repos, cross-repo review, how do my systems talk to each other, find inefficiencies across my apps — a cross-repo architecture-diagram audit of Oxford Realty Advisors' GitHub repos (mermaid in README/docs, .drawio, .puml, plus surrounding prose) screened against failure patterns already proven costly here. Produces a prioritized, evidence-cited punch list — does not implement fixes. Distinct from `ora-setup-audit` (audits the Claude Code/Cowork setup itself, not application repos).
+description: "Use when Gabriel says: review my repos, audit my architecture, review the diagrams in my repos, cross-repo review, how do my systems talk to each other, find inefficiencies across my apps — a cross-repo architecture-diagram audit of Oxford Realty Advisors' GitHub repos (mermaid in README/docs, .drawio, .puml, plus surrounding prose) screened against failure patterns already proven costly here. Produces a prioritized, evidence-cited punch list — does not implement fixes. Distinct from `ora-setup-audit` (audits the Claude Code/Cowork setup itself, not application repos)."
 license: ORA Internal
 ---
 

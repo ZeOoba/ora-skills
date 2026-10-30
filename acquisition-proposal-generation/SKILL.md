@@ -1,9 +1,9 @@
 ---
 name: acquisition-proposal-generation
-description: Use when Gabriel needs to generate or revise Oxford Realty Advisors' seller-facing Acquisition Proposal — a two-page, non-legalistic business-terms offer document positioned as an alternative to a traditional LOI. Trigger on: acquisition proposal, offer document, business-terms offer, proposal to purchase, "not a legalistic LOI", make an offer, template offer letter, proposal template. Distinct from loi-generation (the formal conditional-block LOI with QC gate and state overlays) — use THIS skill when the deal calls for a short, principal-to-principal offer that pushes legal detail into the PSA rather than the offer document itself.
+description: "Use when Gabriel needs to generate or revise Oxford Realty Advisors' seller-facing Acquisition Proposal — a two-page, non-legalistic business-terms offer document positioned as an alternative to a traditional LOI. Trigger on: acquisition proposal, offer document, business-terms offer, proposal to purchase, \"not a legalistic LOI\", make an offer, template offer letter, proposal template. Distinct from loi-generation (the formal conditional-block LOI with QC gate and state overlays) — use THIS skill when the deal calls for a short, principal-to-principal offer that pushes legal detail into the PSA rather than the offer document itself."
 ---
 
-# Acquisition Proposal Generation (v3.2)
+# Acquisition Proposal Generation (v3.3)
 
 ## What this produces
 
@@ -102,7 +102,7 @@ Current production filename: **Oxford Realty Advisors — Acquisition Proposal T
 
 Exactly 2 pages. Aptos-only confirmed via grep. Gold count = 2 via grep. Study Period is grid-only (no diligence paragraph). Why Sellers has exactly 5 items. No prohibited financial/strategic disclosure. Non-Binding and Definitive Agreement language present verbatim. Text is real and editable — confirm with `pandoc -t plain`.
 
-- **Purchase Price ≤ ORA Walk Price (v3.2).** Pull the walk price from `acquisition-underwriting`; if none exists, run it before producing the proposal. If the proposed price exceeds the walk price, **do not produce the document** — report the gap and the binding floor instead. A proposal is a real offer with a real expiry that a seller can accept; the fact that it is shorter and less legalistic than an LOI does not lower the pricing discipline behind it. Note the asymmetry deliberately: this document's whole design premise is that legal detail defers to the PSA — **price discipline does not defer to anything.** Incident: the 3700 REDACTED-158 Blvd proposal went out 2026-08-18 at $3,800,000, four days before any floor test existed against it (Walk $2,661,000, surfaced 2026-08-22 by a separately-requested FULL underwrite).
+- **Purchase Price ≤ ORA Walk Price (v3.2).** Pull the walk price from `acquisition-underwriting`; if none exists, run it before producing the proposal. A walk price solved before `acquisition-underwriting` v4.37 is stale: re-solve it first (v3.3). If the proposed price exceeds the walk price, **do not produce the document** — report the gap and the binding floor instead. A proposal is a real offer with a real expiry that a seller can accept; the fact that it is shorter and less legalistic than an LOI does not lower the pricing discipline behind it. Note the asymmetry deliberately: this document's whole design premise is that legal detail defers to the PSA — **price discipline does not defer to anything.** Incident: the 3700 REDACTED-158 Blvd proposal went out 2026-08-18 at $3,800,000, four days before any floor test existed against it (Walk $2,661,000, surfaced 2026-08-22 by a separately-requested FULL underwrite).
 
 **Font substitution risk is silent — do not trust the LibreOffice preview render for font-weight or spacing judgment.** This environment has no Aptos installed, so every `soffice`/`pdftoppm` preview substitutes a fallback font. It is fine for checking layout, page count, color, and copy — it is not evidence of the actual typeface or its true character spacing/weight rendering. The only reliable checks are the `grep -oE 'w:ascii="[^"]*"'` pass against the raw XML (confirms the document *specifies* Aptos) and opening the file in real Word on a machine that has Aptos installed (confirms how it actually renders). Do not describe a preview screenshot as confirming "Aptos looks correct."
 
@@ -112,6 +112,7 @@ Why Sellers cell padding lives in one named constant, `WHY_CELL_MARGINS` (twips;
 
 ## Changelog
 
+- **v3.3 (2026-10-28):** the walk price used by the QC gate must be solved on or after `acquisition-underwriting` v4.37 (blanket pre-v4.37 walk rule); a stale stored walk is re-solved before the document is produced. No template change.
 - **v3.2 (2026-08-22):** walk-price QC gate added — Purchase Price must clear the ORA walk price before the document is produced.
 - **v3.1 (date not recorded; see git history):** named-constant/QC-caveat cleanup.
 - **v3.0 (date not recorded; see git history):** final production revision.
