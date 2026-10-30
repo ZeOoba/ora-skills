@@ -504,7 +504,7 @@ sales, so ratio-based arm's-length tests must be per-county, never global.
   Hendricks, Johnson, Hancock) promoted to Tier A as a partial-price source. The
   Worker adapter is `src/counties/indiana.ts` + `src/sdf.ts`. Only priced
   disclosures are emitted; confidential ones are counted on coverage. Industrial
-  class list 330/340/345/346/350/370 is **pending Gabriel's ratification**.
+  class list 330/340/345/346/350/370 **ratified by Gabriel 2026-10-30**.
   Worker county labels carry the state suffix (`Marion IN` ...) to stay distinct
   from same-named counties elsewhere. No change to scored or governor constants.
 - **v0.10 (2026-10-30):** Cook IL promoted to Tier A (Worker adapter
