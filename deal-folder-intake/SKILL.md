@@ -3,7 +3,7 @@ name: "deal-folder-intake"
 description: "Use when the user says: store this deal, archive this package, save these files for [property], file this broker package, set up a deal folder, keep this for the record, or uploads a multi-file acquisition package (OM, leases, tax bills, site plan, Argus/CoStar exports, models, IC memos) without asking for an underwrite — archives it into a permanent, hash-verified Oxford Realty Advisors deal folder. Does NOT underwrite, screen, or price — that is acquisition-underwriting; does NOT pre-screen a single target — that is verified-deal-recon. Run it AFTER an underwrite to make the package permanent, or standalone to park a package that has not been underwritten yet."
 ---
 
-# DEAL FOLDER INTAKE — ORA acquisition package archiving (v1.1)
+# DEAL FOLDER INTAKE — ORA acquisition package archiving (v1.2)
 
 Turns a pile of uploaded deal documents into a permanent, verifiable deal folder: **structure → hash-verify → manifest → mirror → memory pointer → register reconciliation.** Session upload folders are ephemeral; anything not archived is lost when the session ends.
 
@@ -81,7 +81,7 @@ One markdown file at the folder root. This is what a future session reads first.
 
 Required sections:
 
-1. **Header** — address, county, date, deal status in one line (verdict, ask, walk price if underwritten; `NOT YET UNDERWRITTEN` if not), and the underwrite of record.
+1. **Header** — address, county, date, deal status in one line (verdict, ask, walk price if underwritten, re-solved if it predates `acquisition-underwriting` v4.37; `NOT YET UNDERWRITTEN` if not), and the underwrite of record.
 2. **Folder structure** — the tree, so nobody guesses.
 3. **File register** — a row per file: filename, bucket, *what it is and why it matters*, read/not-read status, bytes, SHA-256 prefix. "What it is" earns its place: `RET Bill_7458.pdf — PG County Tax Inquiry, acct 0959445, FY27 — the load-bearing verification` tells a future session where the deal turns. Flag any file whose content contradicts the rent roll or the OM.
 4. **Sources cited but NOT held as files** — broker e-mails, GIS pulls, assessor sites, market reports, anything consulted live. This section is the one people skip and the one that costs a re-underwrite. Name each source specifically enough to re-pull.
@@ -157,3 +157,8 @@ Then present the manifest and the dossier (if any) via the file-sharing tool, an
 - **A second folder for the same asset** — two partial archives, neither authoritative. Always search first.
 - **Treating an OCR copy as a replacement** — keep both the image-only original and the OCR copy; the original is the executed instrument.
 - **Register left blank or stale after closing** — prices, dates and share basis drift from the settlement statement and later feed the back-test with wrong inputs. Run Stage 6B.
+
+## Changelog
+
+- v1.2 (2026-10-28): the dossier's section 1 Header marks a walk price that predates `acquisition-underwriting` v4.37 as needing a re-solve. No stage changed.
+- v1.1: STAGE 6B property register reconciliation added (date not recorded; see git history).

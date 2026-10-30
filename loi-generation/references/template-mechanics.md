@@ -1,4 +1,4 @@
-> **v1.13:** this file describes the retired CONDENSED master (`templates/archive/LOI_Master_Template_Condensed_v1.1.docx`). Its jurisdiction-phrase and known-condition-carveout tables remain valid as value rules (SKILL.md Rules 4–5); everything else is history.
+> **v1.15:** this file describes the retired CONDENSED master (`templates/archive/LOI_Master_Template_Condensed_v1.1.docx`). Its jurisdiction-phrase and known-condition-carveout tables remain valid as value rules (SKILL.md Rules 4–5); everything else is history.
 
 # loi-generation — master-template mechanics
 

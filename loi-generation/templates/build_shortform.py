@@ -4,7 +4,7 @@ Usage: python build_shortform.py <oxford-logo-512.png> <output.docx>   (requires
        python build_shortform.py --cropped <logo_full.png> <logo_mark.png> <output.docx>
          (reuse already-cropped logos, e.g. word/media/image1.png and image2.png unzipped from the current template)
 Logo source: website-canonical/images/oxford-logo-512.png (also served at oxfordra.net/images/).
-v1.13: SHORT is the only LOI format. Optional terms (Zoning, Purchase Option, Tenant Conditions) are paragraphs
+v1.15: SHORT is the only LOI format. Optional terms (Zoning, Purchase Option, Tenant Conditions) are paragraphs
 whose body is a single {{..._TERM}} token — when the token resolves empty, delete that whole paragraph.
 Layout follows the Lucern Capital Partners buy-side LOI adopted 2026-10-20; see references/short-form.md.
 """
