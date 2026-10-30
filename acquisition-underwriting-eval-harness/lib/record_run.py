@@ -19,6 +19,68 @@ from datetime import datetime, timezone
 _UNSAFE_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*\s]+')
 
 
+# ONE home for run state. runs/ is machine-local, git-ignored history, so it must
+# live somewhere a skill re-install cannot touch. The two old defaults did not:
+# Step 4 passed run_dir="runs/" (relative to whatever the CWD was) and
+# parse_replays.py defaulted to "<this script's skill dir>/runs". A run launched
+# from the INSTALLED copy therefore wrote into the platform's skills cache, which
+# every Save-skill install tears down and recreates (2026-10-30: 12 snapshots found
+# there, 2 of them in no other copy). Override with ORA_EVAL_HARNESS_RUNS_DIR.
+# Deliberately NOT derived from __file__: run from the installed copy, __file__ IS
+# the runtime cache, which is the bug. The repo copy on the Windows host is the
+# home; on any other host (WSL, Linux) set ORA_EVAL_HARNESS_RUNS_DIR, or every
+# call raises rather than inventing a CWD-relative folder.
+_CANONICAL_HARNESS_DIR = r"C:\Users\Owner\ora-skills\acquisition-underwriting-eval-harness"
+_ENV = "ORA_EVAL_HARNESS_RUNS_DIR"
+
+# Path segments that identify the platform's runtime skills cache. Writing run
+# state there is always wrong: the next install deletes it without warning.
+_RUNTIME_CACHE_MARKERS = ("local-agent-mode-sessions", "skills-plugin")
+
+# The only relative spellings accepted (Step 4's historical run_dir="runs/"); any
+# other relative path is ambiguous about its base, so it is rejected.
+_RUNS_ALIASES = {"runs", "./runs", ".\\runs"}
+
+
+def default_run_dir():
+    """The canonical runs/ dir, read at CALL time so the env override (and tests)
+    take effect without re-importing. Raises ValueError when neither the override
+    nor the Windows repo copy is available."""
+    env = os.environ.get(_ENV)
+    if env:
+        if not os.path.isabs(env):
+            raise ValueError(f"{_ENV} must be an absolute path, got {env!r}")
+        return os.path.normpath(env)
+    if os.name == "nt" and os.path.isdir(_CANONICAL_HARNESS_DIR):
+        return os.path.normpath(os.path.join(_CANONICAL_HARNESS_DIR, "runs"))
+    raise ValueError(
+        f"no canonical runs/ dir on this host: {_CANONICAL_HARNESS_DIR} is not present "
+        f"(os.name={os.name!r}). Set {_ENV} to an absolute directory.")
+
+
+def resolve_run_dir(run_dir=None):
+    """The ONE place the runs/ location is decided.
+
+    None, or a `runs` alias -> default_run_dir(). An absolute path is kept. Any
+    other relative path raises: its base would be the CWD, which is how run state
+    landed in the cache. A path inside the runtime skills cache always raises.
+    """
+    if run_dir is None or str(run_dir).rstrip("\\/") in _RUNS_ALIASES:
+        path = default_run_dir()
+    elif os.path.isabs(run_dir):
+        path = os.path.normpath(run_dir)
+    else:
+        raise ValueError(
+            f"relative run_dir {run_dir!r} is ambiguous (it would follow the CWD). "
+            f"Omit run_dir, or pass an absolute path.")
+    parts = {p.lower() for p in re.split(r"[\\/]+", path)}
+    if all(m in parts for m in _RUNTIME_CACHE_MARKERS):
+        raise ValueError(
+            f"refusing to write run state inside the runtime skills cache ({path}); a skill "
+            f"re-install deletes it. Omit run_dir, or set {_ENV}.")
+    return path
+
+
 def _sanitize_run_label(run_label):
     if not run_label:
         return run_label
@@ -26,12 +88,14 @@ def _sanitize_run_label(run_label):
     return sanitized or None
 
 
-def record_run(results, run_dir, skill_sha=None, run_label=None, run_timestamp=None):
+def record_run(results, run_dir=None, skill_sha=None, run_label=None, run_timestamp=None):
     """Write a dated snapshot of a harness run.
 
     Args:
         results: list of diff_verdict() result dicts (one per golden deal).
-        run_dir: path to the harness's runs/ directory.
+        run_dir: optional; omit it. Resolved by resolve_run_dir(): None (or the
+            historical "runs/") means default_run_dir(); an absolute path is kept;
+            any other relative path, and the runtime skills cache, raise ValueError.
         skill_sha: optional short SHA / version string identifying the
             acquisition-underwriting SKILL.md revision this run was executed
             against (for provenance — lets a trend view attribute a score
@@ -79,6 +143,7 @@ def record_run(results, run_dir, skill_sha=None, run_label=None, run_timestamp=N
         "results": results,
     }
 
+    run_dir = resolve_run_dir(run_dir)
     os.makedirs(run_dir, exist_ok=True)
     snapshot_filename = f"{timestamp}{'_' + run_label if run_label else ''}.json"
     snapshot_path = os.path.join(run_dir, snapshot_filename)

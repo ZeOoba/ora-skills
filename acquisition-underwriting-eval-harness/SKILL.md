@@ -3,7 +3,7 @@ name: acquisition-underwriting-eval-harness
 description: "Use when a doctrine edit to acquisition-underwriting (a scorecard-weight amendment, a new QC-gate rule, a ruling/amendment, an RCT table revision) needs a regression check against the frozen SCREEN-mode golden set. Trigger on: eval harness, golden set, golden-set regression, replay the golden set, did the doctrine change move scores, rebaseline the goldens, harness run, scheduled-poll, doctrine skip gate. NOT a live deal-evaluation tool — never invoke this for an actual acquisition screen (that is acquisition-underwriting). PILOT — piloted on one skill only; runs as a daily-polling scheduled task."
 ---
 
-# Acquisition-Underwriting Eval Harness (v1.2 — pilot)
+# Acquisition-Underwriting Eval Harness (v1.3 — pilot)
 
 Companion to `acquisition-underwriting/SKILL.md`, not a replacement for it. This skill answers
 one question the firm previously had no way to answer: **after a doctrine edit, did the skill's
@@ -219,8 +219,12 @@ Port Sheldon in a single 3-replay run is NOT expected to be routine — treat it
 investigating, not as the known-noisy row it used to be.
 
 **Step 4 — snapshot.** Collect all `diff_verdict()` results into a list and call
-`lib.record_run.record_run(results, run_dir="runs/", skill_sha=<Step 0 hash>, run_label=<your
-choice, e.g. "baseline" or "post-<doctrine-change>">)`.
+`lib.record_run.record_run(results, skill_sha=<Step 0 hash>, run_label=<your
+choice, e.g. "baseline" or "post-<doctrine-change>">)`. Omit `run_dir`: `record_run.resolve_run_dir()`
+is the one place the location is decided: the repo copy's `runs/` on the Windows host, or
+`ORA_EVAL_HARNESS_RUNS_DIR` (absolute) anywhere else. It raises rather than guess: on a host with
+neither, for a relative path other than `runs/` (its base would be the CWD), and for any path inside
+the runtime skills cache, which every re-install wipes.
 
 **Step 5 — report.** Print a summary table (deal_id, status, scored, combined_golden,
 combined_observed, combined_delta, plus `n` and `combined_range` from the aggregate block) and
@@ -274,6 +278,7 @@ Standing limitations, each in force today. **Read `references/findings-and-limit
 
 ## Changelog
 
+- **v1.3 (2026-10-30):** `runs/` now has one home. `lib/record_run.resolve_run_dir()` decides it: the repo copy's `runs/` (override `ORA_EVAL_HARNESS_RUNS_DIR`). `record_run`'s `run_dir` is optional and `parse_replays.py --run-dir` defaults to the same resolver; it raises on a host with neither the repo copy nor the override, on any relative path but `runs/`, and on any path inside the runtime skills cache. Before this, Step 4's `run_dir="runs/"` followed the CWD and `parse_replays` followed the running copy, so a run launched from the installed copy wrote 12 snapshots into the platform cache, 2 of them in no other copy; a re-install would have wiped them. Those 12 were preserved to `ora-skills/_archive/2026-10-30_eval-harness-runs-from-installed-cache/` before any re-install.
 - **v1.2 (2026-10-27; construction-credit caveat 2026-10-28):** note on the `acquisition-underwriting` v4.37 construction-type multiplier added to the golden-set limitations (only `e-fulton-st-portfolio` carries a non-baseline type; its Basis and Combined do not move). The unknown-type PEMB construction credit is not replayed (confirm Combined for the three null-type goldens and E Fulton at the next run). No fixture, replay or diff logic changed.
 - **v1.1 (2026-09-22):** Progressive-disclosure split — data-quality narrative, golden-set history, REFUTE-pass findings and the self-test's caught-bug story moved verbatim to `references/findings-and-limitations.md`; Procedure Steps 0–5 (incl. Step 1.5 and the Steps 2–4 command), the Self-test procedure and every standing limitation kept inline. Description rewritten as a routing surface ("Use when…", dates and pilot registration date dropped, trigger vocabulary added); version marker moved to the H1. No procedure, tolerance, golden value or lib/ code changed (lib tests: 137 passed; self-test: FLAG as expected).
 - **v1.0 (2026-08-14):** Original 6-deal build, two same-day REFUTE passes, E Fulton enrichment, scheduled-task registration (`ora-acquisition-underwriting-eval-harness`, CC/MCP fleet, daily poll). 2026-08-15 fourth pass: ledger/SKILL.md leakage guards + full rebaseline. 2026-09-12/13: Step 1.5 completion attribution, `lib/parse_replays.py` one-command Steps 2–4, Hamilton rebaselined under acquisition-underwriting v4.21.

@@ -48,8 +48,28 @@ def split_skill_md(text: str) -> tuple[str, str]:
 
 def _unquote(s: str) -> str:
     if len(s) >= 2 and s[0] == s[-1] and s[0] in '"\'':
-        return s[1:-1]
+        inner = s[1:-1]
+        # A double-quoted YAML scalar escapes its inner quotes and backslashes; the
+        # plain/block form of the same value does not. Unescape only those two, so
+        # `"say \"x\""` and `say "x"` compare equal (2026-10-30: the platform
+        # stores merge-ready's description double-quoted with escaped inner quotes).
+        if s[0] == '"':
+            inner = (inner.replace('\\\\', '\x00').replace('\\"', '"')
+                     .replace('\\n', '\n').replace('\x00', '\\'))
+        return inner
     return s
+
+
+# FOLDED blocks only: `|` (literal) keeps line breaks that carry meaning, so it is
+# never folded. Chomping (`-`/`+`) only changes trailing newlines of prose.
+_FOLDED_INDICATORS = {'>', '>-', '>+'}
+# Only `description` is ever flattened by the platform (2026-10-30); every other
+# key keeps exact-value comparison.
+_FLATTENED_KEYS = {'description'}
+
+
+def _collapse_ws(s: str) -> str:
+    return ' '.join(s.split())
 
 
 def _normalize_frontmatter(fm: str) -> str:
@@ -65,21 +85,43 @@ def _normalize_frontmatter(fm: str) -> str:
     serialization as content is the same false-positive family as the CRLF flags
     this tool exists to kill.
 
-    Deliberately narrow: no YAML parser, no re-indentation. Only a top-level
-    `key: value` line has its value unquoted. A block-scalar indicator (`>`, `|`)
-    carries no quotes so it passes through untouched, and its indented
-    continuation lines are not top-level keys so they are never rewritten.
-    Both sides get the identical treatment, so this can only ever collapse a
-    difference that is purely quoting - never mask a changed value.
+    Deliberately narrow: no YAML parser. A top-level `key: value` line has its
+    value unquoted (inside double quotes the escapes \\" \\\\ and \\n are decoded).
+    For `description` only, a folded (`>`) block is joined onto its key line and
+    internal whitespace is collapsed (2026-10-30); `|` blocks are never folded.
+    Both sides get the identical treatment. Outside `description` this collapses
+    only quoting and escape differences; for `description` it also collapses
+    whitespace, line wrapping and folded-block chomping (see the comment in the
+    loop below). A changed word never compares equal.
     """
+    # Folded description (2026-10-30): the platform FLATTENS a `description: >`
+    # block into one double-quoted line on install (county-parcel-screen read
+    # DIVERGENT for exactly this). For the `description` key ONLY, a folded block
+    # is joined onto its key line and internal whitespace is collapsed, on BOTH
+    # sides. Accepted cost: for that one key, a change that is purely whitespace,
+    # line breaks or chomping compares equal. Any changed word still differs, and
+    # literal `|` blocks and every other key are compared exactly as before.
     out = []
-    for ln in fm.split('\n'):
+    lines = fm.split('\n')
+    i = 0
+    while i < len(lines):
+        ln = lines[i]
         m = _TOP_KEY_RE.match(ln)
+        if m and m.group(1) in _FLATTENED_KEYS and m.group(2).strip() in _FOLDED_INDICATORS:
+            body = []
+            i += 1
+            while i < len(lines) and (not lines[i].strip() or lines[i][:1] in ' \t'):
+                body.append(lines[i])
+                i += 1
+            out.append(f'{m.group(1)}: {_collapse_ws(" ".join(body))}')
+            continue
         if m and m.group(2).strip():
-            out.append(f'{m.group(1)}: {_unquote(m.group(2).strip())}')
+            val = _unquote(m.group(2).strip())
+            out.append(f'{m.group(1)}: {_collapse_ws(val) if m.group(1) in _FLATTENED_KEYS else val}')
         else:
             out.append(ln)
-    return '\n'.join(out)
+        i += 1
+    return '\n'.join(out).rstrip('\n')
 
 
 def _collapse_trailing_blank_lines(text: str) -> str:

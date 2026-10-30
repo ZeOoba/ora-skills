@@ -330,7 +330,10 @@ def main(argv=None):
     ap.add_argument("--agent-ids", nargs="+")
     ap.add_argument("--failed-agent-ids", nargs="+", default=[])
     ap.add_argument("--record", action="store_true", help="write the runs/ snapshot via record_run")
-    ap.add_argument("--run-dir", default=str(here.parent / "runs"))
+    # Default None -> record_run.resolve_run_dir() decides (the ONE home for runs/).
+    # Never "<this script's dir>/runs": run from the installed copy, that wrote run
+    # history into the runtime skills cache, which every re-install wipes.
+    ap.add_argument("--run-dir", default=None)
     ap.add_argument("--skill-sha")
     ap.add_argument("--run-label", default="scheduled-poll")
     args = ap.parse_args(argv)
