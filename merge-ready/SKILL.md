@@ -1,6 +1,6 @@
 ---
 name: merge-ready
-description: Use when Gabriel asks whether a PR is ready to merge, to merge one or several PRs, to check merge readiness, or to clean up after a merge ("merge PR 123", "is this mergeable", "merge readiness check", "land these PRs", "clean up the worktree after merge"). Runs the same gate order every time from real git/gh state, classifies red checks as real or known-external, then merges only on Gabriel's in-turn yes and runs the post-merge verification itself. NOT the review itself (adversarial-merge-gate), NOT syncing a stale branch (branch-catchup), NOT landing your own commit in a shared checkout (isolated-commit).
+description: Use when Gabriel asks whether a PR is ready to merge, to merge one or several PRs, to check merge readiness, or to clean up after a merge ("merge PR 123", "is this mergeable", "merge readiness check", "land these PRs", "clean up the worktree after merge"). Runs the same gate order every time from real git/gh state, classifies red checks as real or known-external, then merges only on Gabriel's in-turn yes and runs the post-merge verification itself. NOT the review itself (adversarial-merge-gate), NOT syncing a stale branch (branch-catchup), NOT landing your own commit in a shared checkout (isolated-commit). Tie-break with land: merge-ready owns every readiness question, merge this PR, a bare merge PR N, and every multi-PR request including the plural land these PRs; only an explicit single-PR land this PR, squash-merge it, or push and open a PR then merge routes to land.
 license: ORA Internal
 ---
 
