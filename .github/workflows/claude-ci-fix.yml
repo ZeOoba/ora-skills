@@ -10,8 +10,13 @@ on:
   pull_request_review_comment:
     types: [created]
 
+# contents: read (was write). The Claude steps pass no `github_token`, so the
+# action exchanges the OIDC token (id-token: write, kept) for a Claude GitHub
+# App installation token and pushes with that; the workflow GITHUB_TOKEN only
+# needs to read for checkout. Same design as ZeOoba/ora-claude-config. If a
+# `github_token:` input is ever added, contents must go back to write.
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
   issues: write
   checks: read
@@ -44,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (= v4.4.0, resolved via git ls-remote 2026-10-29)
         with:
           fetch-depth: 0
 
@@ -70,7 +75,7 @@ jobs:
       # Cases with an explicit instruction to inject: a failed check-suite, a
       # changes-requested review, or a CodeRabbit comment. These never need
       # an @claude mention to fire.
-      - uses: anthropics/claude-code-action@v1
+      - uses: anthropics/claude-code-action@58985842b834ed26087302ba27d07bc24ca8697a # v1.0.244 (tag commit verified via gh api 2026-10-30; floating v1 has since moved to v1.0.265)
         if: |
           github.event_name == 'check_suite' ||
           (github.event_name == 'pull_request_review' && github.event.review.state == 'changes_requested') ||
@@ -91,7 +96,7 @@ jobs:
       # itself is never interpolated here (the action reads it via the event
       # payload on its own, not through a prompt string this workflow builds),
       # so no untrusted-feedback.txt step is needed on this branch.
-      - uses: anthropics/claude-code-action@v1
+      - uses: anthropics/claude-code-action@58985842b834ed26087302ba27d07bc24ca8697a # v1.0.244 (tag commit verified via gh api 2026-10-30; floating v1 has since moved to v1.0.265)
         if: |
           (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment') &&
           github.event.comment.user.login != 'coderabbit[bot]'
