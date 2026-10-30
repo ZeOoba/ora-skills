@@ -1,4 +1,4 @@
-"""Fill templates/LOI_ShortForm_Template.docx from a JSON value map (loi-generation v1.13).
+"""Fill templates/LOI_ShortForm_Template.docx from a JSON value map (loi-generation v1.15).
 
 Usage: python fill_shortform.py <values.json> <output.docx> [template.docx]
 

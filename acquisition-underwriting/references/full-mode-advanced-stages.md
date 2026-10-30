@@ -37,7 +37,7 @@ Runs on every FULL evaluation; **recommended, not yet mandatory, on SCREEN** whe
 | 5 | Fire/Life-Safety (ESFR) Adequacy & Cure Cost | 10 | RCT v03's **+$4/SF** ESFR adder is a FLOOR, not a ceiling, whenever water supply (fire pump / storage tank) is unconfirmed |
 | 6 | Divisibility / Reconfigurability | 12 | Redemising flexibility — a distinct durability hedge from the upside Stage 2 row 7 already scores |
 | 7 | Site & Yard Functionality | 12 | The durability-hedge framing of the same facts Stage 2 row 7 scores as upside — since v4.33 the FORT tier scales Basis points, so these facts reach Combined twice in different forms — Stage 2 row 7 scores the upside, and BDS-7 only moves the tier (one input of eight, and a tier band step at most). Accepted as bounded; say so explicitly in the memo |
-| 8 | Construction Type & Structural Longevity | 12 | Extends the existing block/tilt-up/brick full-credit, **PEMB ≈ half-credit** convention with a forward retrofit-ceiling view |
+| 8 | Construction Type & Structural Longevity | 12 | Extends the existing block/tilt-up/brick full-credit, **PEMB ≈ half-credit** convention (an unknown construction type scores as PEMB) with a forward retrofit-ceiling view |
 
 **Part C — Land & Locational Offset Score (LOS, 100 pts):**
 

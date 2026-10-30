@@ -1,6 +1,6 @@
 ---
 name: submarket-spatial-analysis
-description: Use when the user mentions: submarket, spatial analysis, drive time, isochrone, intermodal proximity, highway access, last-mile, demographics, ring demographics, demographic study, IC memo demographic appendix, working-age population, employment density, population growth, MSA, micropolitan, traffic count, locational benchmark, location quality score, GIS, mapping, CoStar report ingest, submarket vs. peer set, or any task requiring geographic analysis of ORA properties or acquisition candidates relative to demand drivers.
+description: "Use when the user mentions: submarket, spatial analysis, drive time, isochrone, intermodal proximity, highway access, last-mile, demographics, ring demographics, demographic study, IC memo demographic appendix, working-age population, employment density, population growth, MSA, micropolitan, traffic count, locational benchmark, location quality score, GIS, mapping, CoStar report ingest, submarket vs. peer set, or any task requiring geographic analysis of ORA properties or acquisition candidates relative to demand drivers."
 license: ORA Internal
 ---
 

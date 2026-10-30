@@ -1,14 +1,14 @@
-# SHORT Form — the ORA house LOI (default since v1.12; the only format since v1.13)
+# SHORT Form — the ORA house LOI (default since v1.12; the only format since v1.15)
 
 **Origin (Gabriel, 2026-10-20, in-turn):** adopt the Lucern Capital Partners buy-side LOI form (Columbus Multi-Tenant Portfolio LOI dated 10/20/2026) as ORA's default, because "seller signing with speed and simplicity of document are the most important elements." Use all of Lucern's formatting; substitute ORA's letterhead logo, buyer information and signatory; carry the improvements agreed in the same session. This supersedes the never-merged 2026-10-17 "single concise template (v2)" ruling captured in PR #146 (Gabriel, 2026-10-20: the Lucern short form governs).
 
-**v1.13 (Gabriel, 2026-10-27, in-turn): "All LOIs generated should match the formatting in the attached document"** — a SHORT-form LOI ORA sent on 10/20/2026 that added Purchase Option and Tenant Conditions terms. SHORT is now the only format; the CONDENSED fallbacks below are replaced by conditional terms.
+**v1.15 (Gabriel, 2026-10-27, in-turn): "All LOIs generated should match the formatting in the attached document"** — a SHORT-form LOI ORA sent on 10/20/2026 that added Purchase Option and Tenant Conditions terms. SHORT is now the only format; the CONDENSED fallbacks below are replaced by conditional terms.
 
 Template: `templates/LOI_ShortForm_Template.docx`. Fill: `python templates/fill_shortform.py values.json out.docx`. QC: `python templates/qc_shortform.py out.pdf values.json`. Rebuild the template with `templates/build_shortform.py <oxford-logo-512.png> <out.docx>` (logo source `website-canonical/images/oxford-logo-512.png`) or `--cropped <logo_full.png> <logo_mark.png> <out.docx>` using `word/media/image1.png` and `image2.png` unzipped from the current template (pixel-identical).
 
 ---
 
-## Conditional terms (v1.13 — replace the former CONDENSED fallbacks)
+## Conditional terms (v1.15 — replace the former CONDENSED fallbacks)
 
 | Situation | SHORT mechanism | Verbatim pattern (adapt names and periods) |
 |---|---|---|
@@ -37,7 +37,7 @@ Empty values delete optional terms and leave inline tokens blank. Gabriel may st
 - Footer on every page: grey bold 9 pt `9510 Persimmon Tree Road, Suite 200 │ Potomac, MD 20854 │ 301.512.6125 │` + hyperlinked `www.oxfordra.net`, ORA block mark right-aligned. No page numbers (Lucern form).
 - No Template Metadata page, no State Overlay Appendix, no Execution Page, no Buyer Information page — the credentials sentence on page 1 replaces the Buyer Information page.
 - Credentials paragraph (Gabriel, 2026-10-20): verifiable firm facts from `references/ora-standards.md` Portfolio context only — family-owned / family capital, founded 2005, property count, square footage, product mix, markets, tenant count, no outside investors, all-cash. Never state portfolio value or a closing-record claim ("closed substantially all…") in a SHORT LOI or its cover note.
-- Target length: **two pages filled; three when a conditional term fires** (v1.13 tests: vacant OH + Zoning + entity sentence = 3; tenanted MO + Purchase Option + Tenant Conditions = 3; the 10/20/2026 reference LOI = 3). Tested 2026-10-20 (soffice, Liberation Serif metrics = Times New Roman), all at 2 pages: Ohio multi-tenant with estoppel sentence; vacant with preservation covenant; arm's-length single-tenant with tenant disclosure; multi-tenant with dominant-tenant disclosure; multi-tenant plus a roof known-condition carveout. Headroom is about one line beyond those cases: stacking two extra lines of deal text (e.g. a non-Ohio transfer-tax sentence plus a single-tenant disclosure plus a long LP seller name) renders 3 pages — report under #17. Terms may break across pages (widow/orphan control on). Do not restore PSA-deferred clauses (Gabriel, 2026-10-20: none restored).
+- Target length: **two pages filled; three when a conditional term fires** (v1.15 tests: vacant OH + Zoning + entity sentence = 3; tenanted MO + Purchase Option + Tenant Conditions = 3; the 10/20/2026 reference LOI = 3). Tested 2026-10-20 (soffice, Liberation Serif metrics = Times New Roman), all at 2 pages: Ohio multi-tenant with estoppel sentence; vacant with preservation covenant; arm's-length single-tenant with tenant disclosure; multi-tenant with dominant-tenant disclosure; multi-tenant plus a roof known-condition carveout. Headroom is about one line beyond those cases: stacking two extra lines of deal text (e.g. a non-Ohio transfer-tax sentence plus a single-tenant disclosure plus a long LP seller name) renders 3 pages — report under #17. Terms may break across pages (widow/orphan control on). Do not restore PSA-deferred clauses (Gabriel, 2026-10-20: none restored).
 
 ## Term order (fixed)
 
@@ -47,7 +47,7 @@ Purchase Price · Deposit Terms · Due Diligence · [Zoning] · Closing · Prope
 
 **No buyer closing-extension option (Gabriel, 2026-10-20):** Closing is fixed at `{{CLOSING_DAYS_WORDS}}` days after the Due Diligence Period; do not add Lucern's extension-for-added-deposit right back. Costs does not mention Buyer financing.
 
-**Deliberately omitted (PSA-deferred, Gabriel 2026-10-20):** casualty / risk of loss, title-objection cure mechanics, closing-deliverables list, governing law and venue, capex cap, Bill of Sale detail (personal property still conveys under Property Condition). Affiliated-tenant disclosures and ROFR waivers are no longer omitted — they ride in **Tenant Conditions** when triggered (v1.13).
+**Deliberately omitted (PSA-deferred, Gabriel 2026-10-20):** casualty / risk of loss, title-objection cure mechanics, closing-deliverables list, governing law and venue, capex cap, Bill of Sale detail (personal property still conveys under Property Condition). Affiliated-tenant disclosures and ROFR waivers are no longer omitted — they ride in **Tenant Conditions** when triggered (v1.15).
 
 ---
 
@@ -63,7 +63,7 @@ All other tokens follow `references/token-reference.md`. `_WORDS` tokens keep th
 | `{{PSA_DRAFT_DAYS_WORDS}}` | Includes the unit word | `ten (10) business` |
 | `{{CLOSING_DAYS_WORDS}}` | Starts the sentence — capitalize the first word | `Fifteen (15)` |
 | `{{PROPERTY_COUNTY}}` | Includes "County" | `Franklin County` |
-| `{{ZONING_TERM}}` / `{{PURCHASE_OPTION_TERM}}` / `{{TENANT_CONDITIONS_TERM}}` | Whole term body, or `""` to delete the term (v1.13) | see Conditional terms |
+| `{{ZONING_TERM}}` / `{{PURCHASE_OPTION_TERM}}` / `{{TENANT_CONDITIONS_TERM}}` | Whole term body, or `""` to delete the term (v1.15) | see Conditional terms |
 | `{{ENTITY_INTEREST_SENTENCE}}` | Leading space, or `""` | see Conditional terms |
 | `{{DD_DELIVERY_ADDITIONS}}` | Leading and trailing comma, or `""` | see Conditional terms |
 | `{{CONFIDENTIALITY_TENANT_CARVEOUT}}` | Leading comma, or `""` | see Conditional terms |
@@ -116,7 +116,7 @@ Item 11 (proof-of-funds line) checks for the line directly below the acceptance 
 
 **#15 exception:** the acceptance line "Accepted, subject to the execution of a Purchase Agreement." is fixed template text and is exempt from the "Subject to" strike-list entry; any other occurrence still fails.
 
-**Helper script (v1.13):** `templates/qc_shortform.py <pdf> <values.json>` automates #1, #4 (including the conditional terms), #5, #9–#12, #14–#17 and #21; exit 0 required. The CONDENSED `qc_gate.py` in `references/qc-gate.md` no longer applies.
+**Helper script (v1.15):** `templates/qc_shortform.py <pdf> <values.json>` automates #1, #4 (including the conditional terms), #5, #9–#12, #14–#17 and #21; exit 0 required. The CONDENSED `qc_gate.py` in `references/qc-gate.md` no longer applies.
 
 **Page-break behaviour:** Offer & Acceptance, the signature block, the acceptance block and the proof-of-funds line are chained keep-with-next, so on overflow the last term moves to page 3 with the signatures (the Seller never signs a page carrying no terms). Any filled letter that still reaches 3 pages is reported under #17.
 
