@@ -161,6 +161,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `legal-intelligence` — lease/contract clause library and legal document analysis
 - `listing-agreement-qc` — pre-execution QC gate for broker listing agreements on counterparty paper where ORA is Owner (25 defects; run before any listing is signed)
 - `pma-qc` — pre-execution and pre-renewal QC gate for third-party property management agreements where ORA or an ORA entity is Owner
+- `retail-underwrite-lens` — retail strip / neighborhood-center lens tabs for `acquisition-underwriting` FULL mode (Stage 2.9 alt-asset track): rent-basis cases, required-rent solve, rent normalization, outlot option, comp-implied income value; runs only past the Gate 6 retail-only rule
 - `solar-lease-underwriting` — rooftop/community-solar lease underwriting: counterparty economics and rent-benchmarking for third-party rooftop energy leases
 - `tax-appeal` — property tax assessment analysis and appeal decision engine
 - `insurance-renewal-review` — property insurance renewal review: extracts carrier declarations, builds per-property premium history, separates rate from exposure, diffs each renewal; ships an XLSX and an HTML dashboard
