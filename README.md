@@ -141,6 +141,7 @@ Grouped by rough function (one-line purpose pulled from each skill's frontmatter
 - `settlement-basis-extraction` — extracts HUD-1/ALTA settlement statements into a capitalizable-basis register (CHARGE_DETAIL, BASIS_REGISTER, EXCHANGE_1031) at every acquisition/disposition closing
 - `deal-retirement` — retires deal artifacts/tasks on close or kill; appends the decision ledger
 - `verified-deal-recon` — adversarially-verified single-target pre-screen (the default before underwriting); hands off to `acquisition-underwriting`, never underwrites itself
+- `listing-enrichment-gate` — verifies a broker listing's SF, year built, construction, use class, site coverage, owner and flip history against county/public sources before scoring; certifies the record CERTIFIED/PROVISIONAL and feeds `ora-deal-sourcing-scan` STEP 3D
 - `deal-folder-intake` — archives a multi-file acquisition package into a permanent, hash-verified deal folder; does not underwrite or screen
 
 **Portfolio & asset operations**
