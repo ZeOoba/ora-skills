@@ -108,13 +108,6 @@ county verified individually before it's trusted in a real digest.
   2.0x assessment ratio. Ottawa MI publishes an annual ECF sales study PDF
   (parcel-level improved sales with Bldg SF and $/SF) but it is **annual, not
   continuous** — usable as a yearly comp backfill, not a weekly feed.
-- **Marion + Hamilton IN** (Indianapolis; moved from Tier B v0.10) — the
-  statewide sales-disclosure (SDF) file (`stats.indiana.edu/sdfdata/SDF_<yr>.zip`,
-  weekly) files commercial/industrial price **confidential**: 47 of 545
-  industrial-class (3xx) SDFs carried a price statewide in 2026 (probe
-  2026-10-30). Marion and Boone are absent from the state weekly file entirely
-  (third-party vendor counties). Buyer/seller names and dates are published, so
-  the file is a transfer-activity signal only, never a comp source.
 
 **Tier B — PROVISIONAL, needs a Step 0 verification pass before first use:**
 Every other county. `county-endpoints.md` documents sale-bearing fields for
@@ -124,7 +117,15 @@ NEW OWN1/2; Hamilton OH's `HistoricSalesExport.xlsx`; Clermont OH's
 with SDAT-scrubbed owner names; Henrico VA's
 `AssessorProValGPINRecTransPublish` with `val_code_1` arm's-length codes;
 Chesterfield VA `SaleDate`/`SalePrice`; Richmond City `LAST_SALE_DATE`/
-`LAST_SALE_PRICE`; Dane WI only via the
+`LAST_SALE_PRICE`; Indiana via the statewide sales-disclosure file
+`stats.indiana.edu/sdfdata/SDF_<yr>.zip` (weekly, Fridays) — verified
+2026-10-30, adapter planned: price is published on 142 of 545 industrial-class
+(3xx) SDFs statewide in 2026; every unpriced one carries the filer's
+`G_Confidential_Finance` flag. Indianapolis cluster 2026 YTD: Marion 25 of 113
+priced, Boone 17/17, Hamilton 8/9, Hendricks/Johnson/Hancock 0. Price is in
+cents (`E1_Sales_Price` or, for Part G filings, `G1_Sales_Price`); buyer/seller
+in `SALECONTAC` on every row; median filing lag ~1 week. County names come in
+two formats ("Marion" vs "MARION COUNTY") — normalize before filtering; Dane WI only via the
 Madison **city** assessor conveyance pages, where grantor/grantee go blank from
 mid-2023 forward; Dallas IA sales layers that carry price but **no sale date
 and no parties**). None of that has been exercised as a *windowed recent-sales*
@@ -450,7 +451,7 @@ parcel, labelled as inferred, and is never a classification input.
     `RATIO-REVIEW` flags.
   - `County Sales Coverage (Worker)` — database `3ed6ecd8-9e59-81b1-947b-dff540312cfc`,
     data source `collection://f26e704a-9191-436b-85cf-fd64258928be`. One row per
-    county per cycle (4 Tier A + 6 Tier C = 10, after the v0.10 deploy).
+    county per cycle (4 Tier A + 4 Tier C = 8, after the v0.10 deploy).
   - Managed databases are read-only to everything but the worker; schema changes
     go through a worker redeploy and can drop data. Ops: pause with
     `ntn workers capabilities disable <sync>`; never delete the worker or the
@@ -478,9 +479,9 @@ sales, so ratio-based arm's-length tests must be per-county, never global.
 
 ## Changelog
 - **v0.10 (2026-10-30):** Cook IL promoted to Tier A (Worker adapter
-  `src/counties/cook.ts`, `ZeOoba/ora-county-sales-monitor` PR #7); Marion + Hamilton IN moved to Tier C
-  (confidential commercial/industrial SDF price, Marion absent from the state
-  file). Cook multi-PIN deeds group on the published `doc_no`; SF is summed per
+  `src/counties/cook.ts`, `ZeOoba/ora-county-sales-monitor` PR #7). Indiana's
+  statewide SDF file verified as a partial-price source (Tier B entry above;
+  adapter planned). Cook multi-PIN deeds group on the published `doc_no`; SF is summed per
   valuation group only when every group lies wholly inside the deed, otherwise
   unknown with the cap still applied. Takes effect on the Worker's next
   supervised deploy. No change to scored or governor constants.
