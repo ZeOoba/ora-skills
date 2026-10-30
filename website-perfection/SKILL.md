@@ -3,7 +3,7 @@ name: website-perfection
 description: "Use when the user mentions: PageSpeed, Lighthouse, Core Web Vitals, website fixes, site performance, image optimization, SEO audit, meta tags, structured data, JSON-LD, sitemap, redirects, soft 404, duplicate URLs, analytics installation, GA4, LinkedIn pixel, AI search visibility, llms.txt, accessibility, WCAG, Netlify headers, CSP, CLS, LCP, TBT, oxfordra.net improvements, or any task related to auditing, optimizing, or improving the Oxford Realty Advisors website."
 ---
 
-# Website Perfection — Oxford Realty Advisors (v1.2.1)
+# Website Perfection — Oxford Realty Advisors (v1.2.2)
 
 **v1.2 (2026-09-30):** Added §4a Phase 0 (`scripts/seo_crawl.py`, a read-only live crawl against the §4.D invariants; `scripts/psi_check.py`, PageSpeed Insights via a keyed API; plus the monthly off-site data pull from GSC, Bing Webmaster Tools and Ahrefs Webmaster Tools) and a common-mistakes row on summarising fetch tools. Replaces evaluating third-party SEO plugins: SearchFit SEO and Manifold were SUPERSEDED by this skill plus the script. No financial or governor constants involved.
 **v1.1 (2026-09-13):** Rebased on the live site after the 2026-09-13 SEO audit (website-canonical PR #77). Removed stale v1.0 premises: the www host (the site is non-www), Indianapolis as a market (a false claim, removed from the site in PR #56), placeholder GA4/LinkedIn IDs, the "Score Your Deal" CTA, Google Fonts guidance (fonts are self-hosted), and a sample CSP that would have broken reCAPTCHA, the map tiles and SharePoint uploads. Added: repo/build/verify pipeline, the local vs. deploy-preview verification split, a live-state baseline, an AI-search section, and SEO invariants pinned by `tests/site/seo.test.mjs`. No financial or governor constants involved.
@@ -15,7 +15,7 @@ Senior full-stack / performance engineer on oxfordra.net: a static Netlify site 
 
 ## 0. Guardrails (read first)
 
-- **Invariant 2:** auditing (reading repo + live site) is free. **Editing** `website-canonical` requires Gabriel's in-turn go-ahead. **Production deploy** requires a separate per-deploy confirmation, even after a PR merges; merging is not deploying. Deploys route through `deploy-site` / `/ship`. Run the `site-qc-reviewer` agent before any deploy.
+- **Invariant 2:** auditing (reading repo + live site) is free. **Editing** `website-canonical` requires Gabriel's in-turn go-ahead. **Production deploy** requires a separate per-deploy confirmation, even after a PR merges; merging is not deploying. Deploys route through `deploy-site` / `/ship`. Run the `site-qc-reviewer` agent before any deploy, dispatched with `model: "opus"` explicitly: it is the confidential-leak gate (floor Opus 5.5), and a dispatch-time model overrides its frontmatter pin.
 - **Confidential deals:** never put an active confidential deal on any page (roster in `~/.claude/hooks/confidential-terms.json`).
 - **Never fabricate firm figures** (SF, building counts, tenants, markets, close speed). Copy on the site is the claim of record for the site. Changing a claim is Gabriel's decision: ask via `AskUserQuestion` (recommended option first), in audits and ad-hoc requests alike, and don't normalize silently.
 - **Content/IA changes** (new sections, headline copy, navigation, forms, portfolio) are flagged and confirmed before editing.
@@ -123,4 +123,5 @@ Catalog pages from `sitemap.xml` plus repo HTML, excluding `dist/`, `node_module
 | Treating a merged PR as live | Verify the served HTML/headers on oxfordra.net after the confirmed deploy. |
 
 ## Changelog
+- v1.2.2 (2026-10-30): Invariant 2 line now requires dispatching `site-qc-reviewer` with `model: "opus"` explicitly. The 30-day subagent-cost report showed all 6 dispatches on Sonnet despite the agent's Opus frontmatter pin (a dispatch-time model overrides it). Mirrors `commands/ship.md`. NO change to scored or governor constants.
 - v1.2.1 (2026-10-29): Marked `scripts/meta.md` (and the other `scripts/` build files) as website repo files, not ora-skills files. This was a reference-path clarification only (wording; no change to procedures, scored or governor constants): NO change to scored or governor constants.
