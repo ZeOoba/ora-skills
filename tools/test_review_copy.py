@@ -75,6 +75,23 @@ class ReviewCopyRoundTrip(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             rc.clone(self.bundle, self.sha, dest)
 
+    def test_local_branch_base_keeps_its_name(self):
+        git(self.repo, "branch", "basebr", "origin/main")
+        rc.bundle(self.sha, self.bundle, "basebr", str(self.repo))
+        dest = Path(self.tmp.name) / "lb"
+        rc.clone(self.bundle, self.sha, dest)
+        self.assertEqual(git(dest, "diff", "--name-only", "basebr..HEAD"), "a.txt")
+
+    def test_raw_sha_base_is_refused(self):
+        base_sha = git(self.repo, "rev-parse", "origin/main")
+        self.assertEqual(rc.main(["bundle", "--rev", self.sha, "--out", str(self.bundle),
+                                  "--base", base_sha, "--repo", str(self.repo)]), 1)
+
+    def test_clone_rev_head_is_refused(self):
+        rc.bundle(self.sha, self.bundle, None, str(self.repo))
+        with self.assertRaises(RuntimeError):
+            rc.clone(self.bundle, "HEAD", Path(self.tmp.name) / "h")
+
     def test_unknown_rev_fails_cleanly(self):
         self.assertEqual(rc.main(["bundle", "--rev", "deadbeef" * 5, "--out", str(self.bundle),
                                   "--repo", str(self.repo)]), 1)
