@@ -394,9 +394,9 @@ def main(argv=None):
             report["recorded"] = record_run(results, run_dir=args.run_dir,
                                             skill_sha=args.skill_sha, run_label=args.run_label)
         except (ValueError, OSError) as exc:
-            # The diff report is still valid; keep it and say the snapshot was NOT
-            # written (no resolvable runs/ dir, a relative --run-dir, the cache, or
-            # an OS-level write failure such as a read-only or missing parent).
+            # The diff report is still valid; keep it and say the run was NOT recorded
+            # (no resolvable runs/ dir, a relative --run-dir, the cache, or an OS-level
+            # write failure; record_run rolls back a snapshot whose CSV row failed).
             report["record_error"] = str(exc)
             code = max(code, EXIT_DEGRADED)
     report["exit_code"] = code
