@@ -557,8 +557,11 @@ def _fm_fields(skill_md: str) -> tuple[str | None, str | None]:
         return None, None
     b = m.group(1)
     nm = re.search(r'^name:\s*(\S+)\s*$', b, re.M)
-    d = re.search(r'^description:\s*"?(.*?)"?\s*$', b, re.M | re.S)
-    return (nm.group(1).strip('\'"') if nm else None, d.group(1) if d else None)
+    # Same definition the packager and pre-commit gate use (package_skills.
+    # frontmatter_description): the old one-line regex read a block-scalar
+    # `description: >` as the single character '>' (1/1024 vs the packager's 641).
+    from package_skills import frontmatter_description  # type: ignore
+    return (nm.group(1).strip('\'"') if nm else None, frontmatter_description(b))
 
 
 def _plugin_of(skill: str):
