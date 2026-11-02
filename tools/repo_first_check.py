@@ -100,9 +100,6 @@ RESCUE_DIR = STAGING / 'repo-first-rescue'
 
 ORIGIN_MAIN = 'origin/main'
 MAIN_BEHIND = 'MAIN-BEHIND-ORIGIN'
-# A cache-only file under RUNTIME_STATE_DIRS that the repo git-ignores: listed in
-# per_file so it stays visible, ranked with IN-SYNC so it never drives a verdict.
-RUNTIME_STATE = 'RUNTIME-STATE'
 # Unattended runs (daily guard, hooks) must fail fast on expired credentials rather
 # than stall on a Git Credential Manager prompt until the timeout.
 NONINTERACTIVE_GIT_ENV = {'GIT_TERMINAL_PROMPT': '0', 'GCM_INTERACTIVE': 'never'}
@@ -273,36 +270,6 @@ def _cache_only_rel_paths(cache_dir: Path, exclude: set[str]) -> list[str]:
     return sorted(rels)
 
 
-# Cache-only files may be excused ONLY when they sit under one of these runtime-
-# state dirs AND the repo's .gitignore covers them. Ignored alone is not enough:
-# a broad rule (*.xlsx, data/) would silently excuse a genuinely new reference
-# file added platform-side, with no warning and no rescue copy (review 2026-10-30).
-RUNTIME_STATE_DIRS = frozenset({'runs', '.pytest_cache', '__pycache__'})
-
-
-def _git_ignored(repo_root: Path, relpaths: list[str]) -> set[str]:
-    """Subset of repo-relative paths the repo's .gitignore rules cover. A cache-only
-    file under an ignored path is machine-local runtime state (eval-harness runs/,
-    .pytest_cache), never shipped content, so it cannot be a repo-first violation
-    (2026-10-30: 15 such files made acquisition-underwriting-eval-harness read
-    REPO-MISSING). NUL-separated in and out (-z): Windows text-mode stdin turns
-    '\n' into '\r\n', and git then reads each path with a trailing CR and matches
-    nothing. Fail-open to the empty set: if git cannot answer, nothing is excused
-    and the old verdict stands."""
-    if not relpaths:
-        return set()
-    try:
-        r = subprocess.run(['git', '-C', str(repo_root), 'check-ignore', '--no-index', '-z', '--stdin'],
-                           input=b'\0'.join(p.encode('utf-8') for p in relpaths) + b'\0',
-                           capture_output=True, timeout=60,
-                           env={**os.environ, **NONINTERACTIVE_GIT_ENV})
-    except (OSError, subprocess.TimeoutExpired):
-        return set()
-    if r.returncode not in (0, 1):     # 1 = none ignored; anything else = error
-        return set()
-    return {p.decode('utf-8', 'replace') for p in r.stdout.split(b'\0') if p}
-
-
 def classify_skill(skill: str, repo_root: Path = REPO, cache_root: Path = CACHE_ROOT):
     """-> (verdict, [(relpath, verdict), ...]). Worst verdict wins.
 
@@ -327,7 +294,7 @@ def classify_skill(skill: str, repo_root: Path = REPO, cache_root: Path = CACHE_
     # unverified state to the skill's headline verdict here would drive an automatic
     # ledger write and a rescue-copy side effect from a state where direction could
     # not even be determined -- see BAD_VERDICTS.
-    order = {'IN-SYNC': 0, RUNTIME_STATE: 0, 'REPO-AHEAD': 1, MAIN_BEHIND: 1, 'UNKNOWN': 2, 'CACHE-AHEAD': 3,
+    order = {'IN-SYNC': 0, 'REPO-AHEAD': 1, MAIN_BEHIND: 1, 'UNKNOWN': 2, 'CACHE-AHEAD': 3,
              'DIVERGENT': 4}
     order['REPO-MISSING'] = order['CACHE-AHEAD']
     per_file, worst = [], 'IN-SYNC'
@@ -359,17 +326,7 @@ def classify_skill(skill: str, repo_root: Path = REPO, cache_root: Path = CACHE_
         if order.get(verdict, 2) > order.get(worst, 0):
             worst = verdict
 
-    cache_only = _cache_only_rel_paths(cache_dir, set(repo_rels) | shared_deps)
-    # Top-level segment only, deliberately: a nested lib/__pycache__/ still reads
-    # REPO-MISSING. That errs toward a false positive (a warning), never toward
-    # excusing real content.
-    runtime = [r for r in cache_only if r.split('/', 1)[0] in RUNTIME_STATE_DIRS]
-    ignored = _git_ignored(repo_root, [f'{skill}/{r}' for r in runtime])
-    for rel in cache_only:
-        if f'{skill}/{rel}' in ignored:
-            # Machine-local runtime state, not content: reported, never hidden.
-            per_file.append((rel, RUNTIME_STATE))
-            continue
+    for rel in _cache_only_rel_paths(cache_dir, set(repo_rels) | shared_deps):
         cache_h = _hash_file(cache_dir / rel)
         if cache_h is None:
             verdict = 'UNKNOWN'

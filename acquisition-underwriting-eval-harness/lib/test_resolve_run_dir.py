@@ -77,9 +77,9 @@ class ResolveRunDir(unittest.TestCase):
         os.environ.pop("ORA_EVAL_HARNESS_RUNS_DIR", None)
         home = os.path.join(self.tmp.name, "harness")
         os.makedirs(home)
-        with mock.patch.object(rr.os, "name", "nt"), mock.patch.object(rr, "_CANONICAL_HARNESS_DIR", home):
+        with mock.patch.object(rr, "_is_windows", return_value=True), mock.patch.object(rr, "_CANONICAL_HARNESS_DIR", home):
             self.assertEqual(rr.default_run_dir(), os.path.normpath(os.path.join(home, "runs")))
-        with mock.patch.object(rr.os, "name", "nt"), \
+        with mock.patch.object(rr, "_is_windows", return_value=True), \
                 mock.patch.object(rr, "_CANONICAL_HARNESS_DIR", os.path.join(self.tmp.name, "absent")):
             with self.assertRaises(ValueError):
                 rr.default_run_dir()
@@ -133,7 +133,7 @@ class ParseReplaysUsesTheResolver(unittest.TestCase):
 
     def test_unresolvable_run_dir_keeps_the_report(self):
         os.environ.pop("ORA_EVAL_HARNESS_RUNS_DIR", None)
-        with mock.patch.object(rr.os, "name", "nt"), \
+        with mock.patch.object(rr, "_is_windows", return_value=True), \
                 mock.patch.object(rr, "_CANONICAL_HARNESS_DIR", os.path.join(self.tmp.name, "absent")):
             code, report = self._main({})
         self.assertEqual(code, 4, report)

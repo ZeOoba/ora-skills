@@ -42,6 +42,12 @@ _RUNTIME_CACHE_MARKERS = ("local-agent-mode-sessions", "skills-plugin")
 _RUNS_ALIASES = {"runs", "./runs", ".\\runs"}
 
 
+def _is_windows():
+    """Patchable platform check. Tests patch THIS, never os.name: patching the global
+    os.name made pathlib build WindowsPath on Linux and broke CI (PR #196 merge gate)."""
+    return os.name == "nt"
+
+
 def default_run_dir():
     """The canonical runs/ dir, read at CALL time so the env override (and tests)
     take effect without re-importing. Raises ValueError when neither the override
@@ -51,7 +57,7 @@ def default_run_dir():
         if not os.path.isabs(env):
             raise ValueError(f"{_ENV} must be an absolute path, got {env!r}")
         return os.path.normpath(env)
-    if os.name == "nt" and os.path.isdir(_CANONICAL_HARNESS_DIR):
+    if _is_windows() and os.path.isdir(_CANONICAL_HARNESS_DIR):
         return os.path.normpath(os.path.join(_CANONICAL_HARNESS_DIR, "runs"))
     raise ValueError(
         f"no canonical runs/ dir on this host: {_CANONICAL_HARNESS_DIR} is not present "

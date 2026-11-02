@@ -61,22 +61,34 @@ class NormalizerTreatsSerializationAsSame(unittest.TestCase):
         self.assertNotEqual(N('---\nname: x\nlicense: "MIT\\n"\n---\nb\n'),
                             N('---\nname: x\nlicense: MIT\n---\nb\n'))
 
+    def test_backslash_t_is_not_a_tab(self):
+        # merge-gate round 2, PR #196: '"x\\\\ty"' (backslash, t) equalled '"x\\ty"' (a tab)
+        for key in ('name', 'description', 'license'):
+            a = f'---\n{key}: "x\\\\ty"\n---\nb\n'
+            b = f'---\n{key}: "x\\ty"\n---\nb\n'
+            self.assertNotEqual(N(a), N(b), key)
+
+    def test_escape_forms_of_the_same_value_compare_equal(self):
+        self.assertEqual(N('---\nname: x\nlicense: "\\x41"\n---\nb\n'), N('---\nname: x\nlicense: A\n---\nb\n'))
+        self.assertEqual(N("---\nname: x\nlicense: 'it''s'\n---\nb\n"), N('---\nname: x\nlicense: "it\'s"\n---\nb\n'))
+        self.assertEqual(N('---\nname: x\nlicense: "a\\tb"\n---\nb\n'), N('---\nname: x\nlicense: a\tb\n---\nb\n'))
+
     def test_body_text_untouched(self):
         self.assertNotEqual(N(BLOCK), N(BLOCK.replace("body\n", "body  changed\n")))
 
 
 class ClassifyIgnoresRuntimeStateAndFormatting(FixtureTestCase):
-    def test_git_ignored_cache_only_files_are_skipped(self):
-        _commit(self.repo, '.gitignore', 'demo-skill/runs/\n.pytest_cache/\n', 'ignore')
+    def test_run_state_in_the_cache_is_never_bundled_so_never_flagged(self):
+        # no .gitignore needed: is_bundled() is the single definition of 'never ships'
         _commit(self.repo, 'demo-skill/SKILL.md', 'name: demo-skill\n', 'init')
         _write(self.cache / 'demo-skill' / 'SKILL.md', 'name: demo-skill\n')
         _write(self.cache / 'demo-skill' / 'runs' / '2026-10-30T000000Z_poll.json', '{}\n')
+        _write(self.cache / 'demo-skill' / 'runs' / 'summary.csv', 'a\n')
         _write(self.cache / 'demo-skill' / '.pytest_cache' / 'README.md', 'x\n')
+        _write(self.cache / 'demo-skill' / 'lib' / '.pytest_cache' / 'v' / 'cache' / 'nodeids', '[]\n')
         verdict, per_file = rfc.classify_skill('demo-skill', self.repo, self.cache)
         self.assertEqual(verdict, 'IN-SYNC')
-        # excused files stay VISIBLE as RUNTIME-STATE, never silently dropped
-        self.assertEqual(sorted(per_file), [('.pytest_cache/README.md', 'RUNTIME-STATE'), ('SKILL.md', 'IN-SYNC'),
-                                            ('runs/2026-10-30T000000Z_poll.json', 'RUNTIME-STATE')])
+        self.assertEqual(per_file, [('SKILL.md', 'IN-SYNC')])
 
     def test_ignored_file_outside_runtime_dirs_is_still_flagged(self):
         # a broad ignore rule must not excuse a genuinely new reference file (review 2026-10-30)
@@ -107,6 +119,17 @@ class ClassifyIgnoresRuntimeStateAndFormatting(FixtureTestCase):
         _write(self.cache / 'demo-skill' / 'SKILL.md', FLAT)
         verdict, _ = rfc.classify_skill('demo-skill', self.repo, self.cache)
         self.assertEqual(verdict, 'REPO-AHEAD')
+
+
+class IsBundledExcludesRunState(unittest.TestCase):
+    def test_run_state_never_ships(self):
+        for rel in ('runs/x.json', 'runs/summary.csv', 'runs/_superseded/y.json',
+                    '.pytest_cache/README.md', 'lib/.pytest_cache/v/cache/nodeids'):
+            self.assertFalse(ps.is_bundled(rel), rel)
+
+    def test_lookalikes_still_ship(self):
+        for rel in ('SKILL.md', 'references/runs.md', 'scripts/runs/x.py', 'lib/record_run.py'):
+            self.assertTrue(ps.is_bundled(rel), rel)
 
 
 class PrecheckMeasuresDescriptionLikeThePackager(unittest.TestCase):

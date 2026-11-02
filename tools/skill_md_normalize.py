@@ -46,23 +46,47 @@ def split_skill_md(text: str) -> tuple[str, str]:
     return '', text
 
 
+# YAML 1.2 double-quoted escapes (spec 5.7). Decoded in ONE pass: the earlier
+# two-step replace decoded \\\\ but not \\t, so "x\\\\ty" (backslash, t) and "x\\ty"
+# (a tab) both became x\\ty and compared equal (merge-gate round 2, PR #196).
+_DQ_ESCAPES = {'0': '\0', 'a': '\a', 'b': '\b', 't': '\t', '\t': '\t', 'n': '\n',
+               'v': '\v', 'f': '\f', 'r': '\r', 'e': '\x1b', ' ': ' ', '"': '"',
+               '/': '/', '\\': '\\', 'N': '\x85', '_': '\xa0', 'L': '\u2028', 'P': '\u2029'}
+_DQ_ESCAPE_RE = re.compile(r'\\(x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}|.)', re.S)
+_CONTROL_RE = re.compile('[\x00-\x1f\x7f\x85\u2028\u2029]')
+
+
+def _decode_double_quoted(inner: str) -> str:
+    def rep(m):
+        g = m.group(1)
+        if len(g) > 1:                 # \xHH, \uHHHH, \UHHHHHHHH (only full forms match)
+            try:
+                return chr(int(g[1:], 16))
+            except (ValueError, OverflowError):
+                return m.group(0)
+        return _DQ_ESCAPES.get(g, m.group(0))   # an unknown escape is kept verbatim
+    return _DQ_ESCAPE_RE.sub(rep, inner)
+
+
+def _protect_controls(s: str) -> str:
+    """Replace control and line-break characters with a NUL-delimited code point, which
+    a SKILL.md line cannot otherwise contain. A decoded newline therefore never looks
+    like a new `key:` line once the view is re-joined, and an escaped control
+    character and the same real character still compare equal."""
+    return _CONTROL_RE.sub(lambda m: f'\x00{ord(m.group()):x}\x00', s)
+
+
 def _unquote(s: str, decode_newlines: bool = False) -> str:
+    """The scalar value of one top-level YAML value as a compare key. Double quotes:
+    every escape decoded in one pass. Single quotes: '' becomes '. Plain: unchanged.
+    decode_newlines=False (every key except a flattened one) then protects control
+    characters; True leaves them, for callers that collapse whitespace anyway."""
     if len(s) >= 2 and s[0] == s[-1] and s[0] in '"\'':
         inner = s[1:-1]
-        # A double-quoted YAML scalar escapes its inner quotes and backslashes; the
-        # plain/block form of the same value does not. Unescape only those two, so
-        # `"say \"x\""` and `say "x"` compare equal (2026-10-30: the platform
-        # stores merge-ready's description double-quoted with escaped inner quotes).
-        if s[0] == '"':
-            inner = inner.replace('\\\\', '\x00').replace('\\"', '"')
-            # \n is decoded ONLY for flattened keys (description), where whitespace is
-            # collapsed anyway. Decoded elsewhere, "a\nb: c" in one key would compare
-            # equal to two real keys once the view is re-joined (merge-gate finding).
-            if decode_newlines:
-                inner = inner.replace('\\n', '\n')
-            inner = inner.replace('\x00', '\\')
-        return inner
-    return s
+        inner = _decode_double_quoted(inner) if s[0] == '"' else inner.replace("''", "'")
+    else:
+        inner = s
+    return inner if decode_newlines else _protect_controls(inner)
 
 
 # FOLDED blocks only: `|` (literal) keeps line breaks that carry meaning, so it is
@@ -91,7 +115,9 @@ def _normalize_frontmatter(fm: str) -> str:
     this tool exists to kill.
 
     Deliberately narrow: no YAML parser. A top-level `key: value` line has its
-    value unquoted (inside double quotes the escapes \\" \\\\ and \\n are decoded).
+    value unquoted: every YAML escape inside double quotes is decoded in one pass, ''
+    inside single quotes, and outside `description` control characters are protected
+    so a decoded newline can never forge a key line.
     For `description` only, a folded (`>`) block is joined onto its key line and
     internal whitespace is collapsed (2026-10-30); `|` blocks are never folded.
     Both sides get the identical treatment. Outside `description` this collapses

@@ -582,6 +582,15 @@ def is_bundled(rel_posix: str) -> bool:
         return False
     if parts[0] == 'tests':
         return False
+    # Machine-local run state, never skill content (2026-11-02, PR #196 merge gate).
+    # A top-level runs/ (eval-harness snapshots + summary.csv) and pytest's cache at
+    # any level were bundled from the working tree, git-ignored or not, so every
+    # package and every mirror sync carried run history into the installed copy;
+    # the next run then made that copy read CACHE-AHEAD. No skill tracks either.
+    if parts[0] == 'runs':
+        return False
+    if '.pytest_cache' in parts:
+        return False
     if '__pycache__' in parts:
         return False
     if parts[-1].endswith(('.pyc', '.pyo')):
