@@ -196,40 +196,65 @@ def record_run(results, run_dir=None, skill_sha=None, run_label=None, run_timest
         ) from e
     finally:
         # Only remove a tmp this call created; never another writer's in-flight file.
+        # Best effort: a failed cleanup (e.g. an AV lock on Windows) must never turn a
+        # completed snapshot write into an error (merge-gate PR #199).
         if created_tmp and os.path.exists(tmp_path):
-            os.remove(tmp_path)
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
     csv_path = os.path.join(run_dir, "summary.csv")
-    csv_is_new = not os.path.exists(csv_path)
-    with open(csv_path, "a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        if csv_is_new:
+    # An empty file counts as new so a header lost to an earlier failed append is
+    # rewritten; csv_size lets a failed append be truncated back (merge-gate PR #199).
+    csv_size = os.path.getsize(csv_path) if os.path.exists(csv_path) else 0
+    csv_is_new = csv_size == 0
+    try:
+        with open(csv_path, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            if csv_is_new:
+                writer.writerow(
+                    [
+                        "run_timestamp",
+                        "run_label",
+                        "skill_sha",
+                        "total_deals",
+                        "scored_deals",
+                        "informational_deals",
+                        "scored_pass",
+                        "scored_flag",
+                        "snapshot_file",
+                    ]
+                )
             writer.writerow(
                 [
-                    "run_timestamp",
-                    "run_label",
-                    "skill_sha",
-                    "total_deals",
-                    "scored_deals",
-                    "informational_deals",
-                    "scored_pass",
-                    "scored_flag",
-                    "snapshot_file",
+                    timestamp,
+                    run_label or "",
+                    skill_sha or "",
+                    len(results),
+                    len(scored),
+                    len(informational),
+                    len(scored_pass),
+                    len(scored_flag),
+                    snapshot_filename,
                 ]
             )
-        writer.writerow(
-            [
-                timestamp,
-                run_label or "",
-                skill_sha or "",
-                len(results),
-                len(scored),
-                len(informational),
-                len(scored_pass),
-                len(scored_flag),
-                snapshot_filename,
-            ]
-        )
+    except Exception:
+        # The snapshot is already linked in place; without its summary.csv row it
+        # would be an orphan the caller is told was never recorded (merge-gate
+        # PR #199). Undo a partial row (truncate to the pre-append size), roll back
+        # the snapshot this call created, then re-raise. Both steps are best effort.
+        try:
+            if os.path.exists(csv_path):
+                with open(csv_path, "r+b") as f:
+                    f.truncate(csv_size)
+        except OSError:
+            pass
+        try:
+            os.remove(snapshot_path)
+        except OSError:
+            pass
+        raise
 
     return {
         "snapshot_path": snapshot_path,

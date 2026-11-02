@@ -81,12 +81,40 @@ def _unquote(s: str, decode_newlines: bool = False) -> str:
     every escape decoded in one pass. Single quotes: '' becomes '. Plain: unchanged.
     decode_newlines=False (every key except a flattened one) then protects control
     characters; True leaves them, for callers that collapse whitespace anyway."""
-    if len(s) >= 2 and s[0] == s[-1] and s[0] in '"\'':
-        inner = s[1:-1]
+    end = _closing_quote(s)
+    if end is not None:
+        inner = s[1:end]
         inner = _decode_double_quoted(inner) if s[0] == '"' else inner.replace("''", "'")
     else:
         inner = s
     return inner if decode_newlines else _protect_controls(inner)
+
+
+def _closing_quote(s: str):
+    """Index of the quote that really closes a quoted scalar starting at s[0], or
+    None. A double-quoted scalar skips every backslash escape (so `\\"` never
+    closes it); a single-quoted one skips `''`. The scalar counts as quoted only
+    when nothing but whitespace or a `#` comment follows the closing quote, so
+    `"a\\"` (unterminated) and `"a" b "c"` stay plain instead of being unquoted
+    on a coincidental last character (merge-gate PR #196, round 3)."""
+    if len(s) < 2 or s[0] not in '"\'':
+        return None
+    q, i = s[0], 1
+    while i < len(s):
+        ch = s[i]
+        if q == '"' and ch == '\\':
+            i += 2
+            continue
+        if ch == q:
+            if q == "'" and s[i + 1:i + 2] == "'":
+                i += 2
+                continue
+            rest = s[i + 1:]
+            if not rest.strip(' \t') or (rest[:1] in ' \t' and rest.lstrip(' \t').startswith('#')):
+                return i
+            return None
+        i += 1
+    return None
 
 
 # FOLDED blocks only: `|` (literal) keeps line breaks that carry meaning, so it is

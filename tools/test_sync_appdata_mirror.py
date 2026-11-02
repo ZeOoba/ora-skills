@@ -302,8 +302,9 @@ class RealClassifierIntegrationTests(unittest.TestCase):
         self.assertIn('platform', (self.mirror / 'scripts' / 'old.py').read_text(encoding='utf-8'))
 
     def test_runtime_state_in_mirror_does_not_disable_syncs(self):
-        # merge-gate PR #196: run state in the mirror must never block the sync.
-        # is_bundled() excludes runs/ and .pytest_cache/, so the classifier never sees them.
+        # merge-gate PR #196: run state that exists ONLY in the mirror must never
+        # block the sync. The sync is additive and is_bundled() excludes runs/ and
+        # .pytest_cache/, so mirror-only run state is neither compared nor removed.
         (self.repo / '.gitignore').write_text('.pytest_cache/\nmy-skill/runs/\n', encoding='utf-8')
         self.git('add', '-A')
         self.git('commit', '-q', '-m', 'ignore run state')

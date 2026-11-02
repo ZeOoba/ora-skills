@@ -121,6 +121,53 @@ class ClassifyIgnoresRuntimeStateAndFormatting(FixtureTestCase):
         self.assertEqual(verdict, 'REPO-AHEAD')
 
 
+class UnquoteFindsTheRealClosingQuote(unittest.TestCase):
+    # merge-gate PR #196 round 3: _unquote trusted s[0] == s[-1].
+    def setUp(self):
+        from skill_md_normalize import _unquote
+        self.U = _unquote
+
+    def test_trailing_comment_after_closing_quote(self):
+        self.assertEqual(self.U('"abc" # note'), 'abc')
+        self.assertEqual(self.U("'abc'   # note"), 'abc')
+
+    def test_escaped_final_quote_is_not_a_closing_quote(self):
+        self.assertEqual(self.U('"abc\\"'), '"abc\\"')       # unterminated: stays plain
+
+    def test_two_quoted_runs_are_not_one_scalar(self):
+        self.assertEqual(self.U('"a" b "c"'), '"a" b "c"')
+        self.assertEqual(self.U("'a' b 'c'"), "'a' b 'c'")
+
+    def test_escapes_inside_still_decode(self):
+        self.assertEqual(self.U('"a\\"b"'), 'a"b')
+        self.assertEqual(self.U("'it''s'"), "it's")
+        self.assertEqual(self.U('"a""b"'), '"a""b"')          # '' skip is single-quote only
+        self.assertEqual(self.U("'it''" "'"), "it'")
+
+    def test_hash_without_space_is_not_a_comment(self):
+        self.assertEqual(self.U('"a"#b'), '"a"#b')
+        self.assertEqual(self.U('"a" \u3000#x'), '"a" \u3000#x')   # YAML whitespace is space/tab only
+
+    def test_unicode_escapes_decode(self):
+        self.assertEqual(self.U('"caf\\u00e9"'), 'café')
+        self.assertEqual(self.U('"\\U0001F600 ok"'), '\U0001F600 ok')
+        self.assertEqual(N('---\nname: x\ndescription: "caf\\u00e9"\n---\nb\n'),
+                         N('---\nname: x\ndescription: café\n---\nb\n'))
+
+    def test_unicode_escaped_control_is_protected_outside_description(self):
+        # \\u000a outside description must not become a real newline (key forging).
+        a = N('---\nname: "x\\u000alicense: Y"\n---\nb\n')
+        self.assertNotIn('\nlicense: Y', a)
+
+
+class DriftReportDescriptionDecodesControls(unittest.TestCase):
+    def test_tab_and_newline_escapes_decode_without_sentinel(self):
+        import skill_drift_report as sdr
+        got = sdr.description_of('name: x\ndescription: "a\\tb\\nc"\n')
+        self.assertEqual(got, 'a\tb\nc')
+        self.assertNotIn('\x00', got)
+
+
 class IsBundledExcludesRunState(unittest.TestCase):
     def test_run_state_never_ships(self):
         for rel in ('runs/x.json', 'runs/summary.csv', 'runs/_superseded/y.json',
