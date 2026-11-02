@@ -141,6 +141,16 @@ class ParseReplaysUsesTheResolver(unittest.TestCase):
         self.assertEqual(report["deals"]["deal-a"]["status"], "PASS")
         self.assertNotIn("recorded", report)
 
+    def test_os_error_while_writing_keeps_the_report(self):
+        # merge-gate PR #196 round 3: an OSError from the write escaped as a traceback.
+        import record_run as rr_mod
+        with mock.patch.object(rr_mod, "record_run", side_effect=PermissionError("read-only runs/")):
+            code, report = self._main({"ORA_EVAL_HARNESS_RUNS_DIR": self.runs})
+        self.assertEqual(code, 4, report)
+        self.assertIn("read-only runs/", report["record_error"])
+        self.assertEqual(report["deals"]["deal-a"]["status"], "PASS")
+        self.assertNotIn("recorded", report)
+
 
 if __name__ == "__main__":
     unittest.main()
