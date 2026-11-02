@@ -110,7 +110,7 @@ def _closing_quote(s: str):
                 i += 2
                 continue
             rest = s[i + 1:]
-            if not rest.strip() or (rest[:1] in ' \t' and rest.lstrip().startswith('#')):
+            if not rest.strip(' \t') or (rest[:1] in ' \t' and rest.lstrip(' \t').startswith('#')):
                 return i
             return None
         i += 1
