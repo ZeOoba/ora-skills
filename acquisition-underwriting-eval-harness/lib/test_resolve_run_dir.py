@@ -160,6 +160,28 @@ class ParseReplaysUsesTheResolver(unittest.TestCase):
         self.assertIn("record_error", report)
         self.assertEqual(sorted(os.listdir(self.runs)), ["summary.csv"])
 
+    def test_non_os_error_in_csv_write_rolls_back_and_truncates(self):
+        # merge-gate PR #199 round 2: a ValueError (e.g. UnicodeEncodeError) mid-row
+        # left the orphan JSON and a partial row.
+        os.makedirs(self.runs)
+        csv_path = os.path.join(self.runs, "summary.csv")
+        with open(csv_path, "w", encoding="utf-8", newline="") as f:
+            f.write("header\r\n")
+        res = [{"deal_id": "d", "status": "PASS", "scored": True}]
+        with self.assertRaises(UnicodeEncodeError):
+            rr.record_run(res, run_dir=self.runs, skill_sha="ab\udcff", run_timestamp="2026-11-02T000000Z")
+        self.assertEqual(sorted(os.listdir(self.runs)), ["summary.csv"])
+        with open(csv_path, encoding="utf-8", newline="") as f:
+            self.assertEqual(f.read(), "header\r\n")
+
+    def test_empty_csv_gets_its_header(self):
+        os.makedirs(self.runs)
+        open(os.path.join(self.runs, "summary.csv"), "w").close()
+        res = [{"deal_id": "d", "status": "PASS", "scored": True}]
+        rr.record_run(res, run_dir=self.runs, run_timestamp="2026-11-02T000000Z")
+        with open(os.path.join(self.runs, "summary.csv"), encoding="utf-8") as f:
+            self.assertTrue(f.readline().startswith("run_timestamp,"))
+
     def test_tmp_cleanup_failure_does_not_fail_a_completed_write(self):
         real_remove = os.remove
 

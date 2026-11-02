@@ -205,7 +205,10 @@ def record_run(results, run_dir=None, skill_sha=None, run_label=None, run_timest
                 pass
 
     csv_path = os.path.join(run_dir, "summary.csv")
-    csv_is_new = not os.path.exists(csv_path)
+    # An empty file counts as new so a header lost to an earlier failed append is
+    # rewritten; csv_size lets a failed append be truncated back (merge-gate PR #199).
+    csv_size = os.path.getsize(csv_path) if os.path.exists(csv_path) else 0
+    csv_is_new = csv_size == 0
     try:
         with open(csv_path, "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
@@ -236,10 +239,17 @@ def record_run(results, run_dir=None, skill_sha=None, run_label=None, run_timest
                     snapshot_filename,
                 ]
             )
-    except OSError:
+    except Exception:
         # The snapshot is already linked in place; without its summary.csv row it
         # would be an orphan the caller is told was never recorded (merge-gate
-        # PR #199). Roll back the snapshot this call created, then re-raise.
+        # PR #199). Undo a partial row (truncate to the pre-append size), roll back
+        # the snapshot this call created, then re-raise. Both steps are best effort.
+        try:
+            if os.path.exists(csv_path):
+                with open(csv_path, "r+b") as f:
+                    f.truncate(csv_size)
+        except OSError:
+            pass
         try:
             os.remove(snapshot_path)
         except OSError:
