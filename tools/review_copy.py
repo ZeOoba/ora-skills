@@ -38,11 +38,14 @@ def _git(*args, cwd=None):
 
 def bundle(rev, out, base="origin/main", repo="."):
     sha = _git("rev-parse", "--verify", f"{rev}^{{commit}}", cwd=repo)
-    ref = f"refs/review/{sha}"
+    ref = f"refs/review/{sha}-{os.getpid()}"  # per-process: concurrent runs never delete each other's ref
     refs = [ref]
     if base:
         _git("rev-parse", "--verify", base, cwd=repo)
-        refs.append(base)
+        full = _git("rev-parse", "--symbolic-full-name", base, cwd=repo)
+        if not full:
+            raise RuntimeError(f"--base {base!r} must be a ref name (a raw SHA cannot be bundled as a ref)")
+        refs.append(full)
     _git("update-ref", ref, sha, cwd=repo)
     try:
         out = Path(out).resolve()
@@ -51,7 +54,8 @@ def bundle(rev, out, base="origin/main", repo="."):
     finally:
         _git("update-ref", "-d", ref, cwd=repo)
     digest = hashlib.sha256(out.read_bytes()).hexdigest()
-    print(f"bundle {out} rev={sha} base={base or '-'} bytes={out.stat().st_size} sha256={digest}")
+    print(f"bundle {out} rev={sha} base={refs[1] if len(refs) > 1 else '-'} "
+          f"bytes={out.stat().st_size} sha256={digest}")
     return sha, digest
 
 
@@ -76,8 +80,12 @@ def clone(bundle_path, rev, dest, read_only=False):
     _git("config", "core.autocrlf", "false", cwd=dest)
     # every bundle ref under refs/review-bundle/, plus refs/remotes/* kept at their usual
     # names so `git diff origin/main..HEAD` works as on the host.
-    _git("fetch", "-q", str(Path(bundle_path).resolve()),
-         "refs/*:refs/review-bundle/*", "refs/remotes/*:refs/remotes/*", cwd=dest)
+    if rev == "HEAD" or rev.startswith("-"):
+        raise RuntimeError("clone --rev needs the pinned SHA the bundle step printed, not HEAD")
+    # local-branch bases keep their names too (`--base main` -> `git diff main..HEAD`)
+    _git("fetch", "-q", "--update-head-ok", str(Path(bundle_path).resolve()),
+         "refs/*:refs/review-bundle/*", "refs/remotes/*:refs/remotes/*", "refs/heads/*:refs/heads/*",
+         cwd=dest)
     _git("-c", "advice.detachedHead=false", "checkout", "-q", "--detach", rev, cwd=dest)
     head = _git("rev-parse", "HEAD", cwd=dest)
     want = _git("rev-parse", "--verify", f"{rev}^{{commit}}", cwd=dest)
@@ -109,7 +117,7 @@ def main(argv=None):
             bundle(a.rev, a.out, a.base or None, a.repo)
         else:
             clone(a.bundle, a.rev, a.dest, a.read_only)
-    except RuntimeError as e:
+    except (RuntimeError, OSError) as e:
         print(f"review_copy: {e}", file=sys.stderr)
         return 1
     return 0
