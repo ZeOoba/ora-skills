@@ -236,7 +236,9 @@ def description_of(frontmatter: str) -> str | None:
                     break  # dedented to a sibling key: the block is over
                 collected.append(cont.strip())
             return ('\n' if head.startswith('|') else ' ').join(collected).strip()
-        return _unquote(head)
+        # The description TEXT (reported, measured), not the compare-only view: decode
+        # escapes and leave control characters real (PR #196 merge gate, round 3).
+        return _unquote(head, decode_newlines=True)
     return None
 
 

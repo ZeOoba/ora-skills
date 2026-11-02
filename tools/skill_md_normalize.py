@@ -46,10 +46,59 @@ def split_skill_md(text: str) -> tuple[str, str]:
     return '', text
 
 
-def _unquote(s: str) -> str:
+# YAML 1.2 double-quoted escapes (spec 5.7). Decoded in ONE pass: the earlier
+# two-step replace decoded \\\\ but not \\t, so "x\\\\ty" (backslash, t) and "x\\ty"
+# (a tab) both became x\\ty and compared equal (merge-gate round 2, PR #196).
+_DQ_ESCAPES = {'0': '\0', 'a': '\a', 'b': '\b', 't': '\t', '\t': '\t', 'n': '\n',
+               'v': '\v', 'f': '\f', 'r': '\r', 'e': '\x1b', ' ': ' ', '"': '"',
+               '/': '/', '\\': '\\', 'N': '\x85', '_': '\xa0', 'L': '\u2028', 'P': '\u2029'}
+_DQ_ESCAPE_RE = re.compile(r'\\(x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}|.)', re.S)
+_CONTROL_RE = re.compile('[\x00-\x1f\x7f\x85\u2028\u2029]')
+
+
+def _decode_double_quoted(inner: str) -> str:
+    def rep(m):
+        g = m.group(1)
+        if len(g) > 1:                 # \xHH, \uHHHH, \UHHHHHHHH (only full forms match)
+            try:
+                return chr(int(g[1:], 16))
+            except (ValueError, OverflowError):
+                return m.group(0)
+        return _DQ_ESCAPES.get(g, m.group(0))   # an unknown escape is kept verbatim
+    return _DQ_ESCAPE_RE.sub(rep, inner)
+
+
+def _protect_controls(s: str) -> str:
+    """Replace control and line-break characters with a NUL-delimited code point, which
+    a SKILL.md line cannot otherwise contain. A decoded newline therefore never looks
+    like a new `key:` line once the view is re-joined, and an escaped control
+    character and the same real character still compare equal."""
+    return _CONTROL_RE.sub(lambda m: f'\x00{ord(m.group()):x}\x00', s)
+
+
+def _unquote(s: str, decode_newlines: bool = False) -> str:
+    """The scalar value of one top-level YAML value as a compare key. Double quotes:
+    every escape decoded in one pass. Single quotes: '' becomes '. Plain: unchanged.
+    decode_newlines=False (every key except a flattened one) then protects control
+    characters; True leaves them, for callers that collapse whitespace anyway."""
     if len(s) >= 2 and s[0] == s[-1] and s[0] in '"\'':
-        return s[1:-1]
-    return s
+        inner = s[1:-1]
+        inner = _decode_double_quoted(inner) if s[0] == '"' else inner.replace("''", "'")
+    else:
+        inner = s
+    return inner if decode_newlines else _protect_controls(inner)
+
+
+# FOLDED blocks only: `|` (literal) keeps line breaks that carry meaning, so it is
+# never folded. Chomping (`-`/`+`) only changes trailing newlines of prose.
+_FOLDED_INDICATORS = {'>', '>-', '>+'}
+# Only `description` is ever flattened by the platform (2026-10-30); every other
+# key keeps exact-value comparison.
+_FLATTENED_KEYS = {'description'}
+
+
+def _collapse_ws(s: str) -> str:
+    return ' '.join(s.split())
 
 
 def _normalize_frontmatter(fm: str) -> str:
@@ -65,21 +114,45 @@ def _normalize_frontmatter(fm: str) -> str:
     serialization as content is the same false-positive family as the CRLF flags
     this tool exists to kill.
 
-    Deliberately narrow: no YAML parser, no re-indentation. Only a top-level
-    `key: value` line has its value unquoted. A block-scalar indicator (`>`, `|`)
-    carries no quotes so it passes through untouched, and its indented
-    continuation lines are not top-level keys so they are never rewritten.
-    Both sides get the identical treatment, so this can only ever collapse a
-    difference that is purely quoting - never mask a changed value.
+    Deliberately narrow: no YAML parser. A top-level `key: value` line has its
+    value unquoted: every YAML escape inside double quotes is decoded in one pass, ''
+    inside single quotes, and outside `description` control characters are protected
+    so a decoded newline can never forge a key line.
+    For `description` only, a folded (`>`) block is joined onto its key line and
+    internal whitespace is collapsed (2026-10-30); `|` blocks are never folded.
+    Both sides get the identical treatment. Outside `description` this collapses
+    only quoting and escape differences; for `description` it also collapses
+    whitespace, line wrapping and folded-block chomping (see the comment in the
+    loop below). A changed word never compares equal.
     """
+    # Folded description (2026-10-30): the platform FLATTENS a `description: >`
+    # block into one double-quoted line on install (county-parcel-screen read
+    # DIVERGENT for exactly this). For the `description` key ONLY, a folded block
+    # is joined onto its key line and internal whitespace is collapsed, on BOTH
+    # sides. Accepted cost: for that one key, a change that is purely whitespace,
+    # line breaks or chomping compares equal. Any changed word still differs, and
+    # literal `|` blocks and every other key are compared exactly as before.
     out = []
-    for ln in fm.split('\n'):
+    lines = fm.split('\n')
+    i = 0
+    while i < len(lines):
+        ln = lines[i]
         m = _TOP_KEY_RE.match(ln)
+        if m and m.group(1) in _FLATTENED_KEYS and m.group(2).strip() in _FOLDED_INDICATORS:
+            body = []
+            i += 1
+            while i < len(lines) and (not lines[i].strip() or lines[i][:1] in ' \t'):
+                body.append(lines[i])
+                i += 1
+            out.append(f'{m.group(1)}: {_collapse_ws(" ".join(body))}')
+            continue
         if m and m.group(2).strip():
-            out.append(f'{m.group(1)}: {_unquote(m.group(2).strip())}')
+            val = _unquote(m.group(2).strip(), decode_newlines=m.group(1) in _FLATTENED_KEYS)
+            out.append(f'{m.group(1)}: {_collapse_ws(val) if m.group(1) in _FLATTENED_KEYS else val}')
         else:
             out.append(ln)
-    return '\n'.join(out)
+        i += 1
+    return '\n'.join(out).rstrip('\n')
 
 
 def _collapse_trailing_blank_lines(text: str) -> str:

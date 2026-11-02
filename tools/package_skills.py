@@ -178,6 +178,23 @@ def _description_has_unescaped_inner_quote(raw: str) -> bool:
     return False  # never closes -- unterminated scalar, not this defect class
 
 
+_DESCRIPTION_RE = re.compile(r"^description:\s*(.*?)(?=\n[a-zA-Z_-]+:|\Z)", re.S | re.M)
+
+
+def frontmatter_description(fm: str):
+    """The description text exactly as the 1024-char gate measures it, or None if absent.
+
+    The single definition shared by validate_skill_frontmatter() (packaging and the
+    pre-commit hook) and reimport_correlate.precheck, so the two can never report
+    different counts. Captures up to the next top-level key, so a block scalar
+    (`description: >` / `|`) is measured over its whole body, not as the single
+    character '>' a one-line regex reads (precheck reported 1/1024 for
+    county-parcel-screen while packaging reported 641/1024, 2026-10-30).
+    """
+    dm = _DESCRIPTION_RE.search(fm)
+    return dm.group(1).strip().strip("'\"") if dm else None
+
+
 def validate_skill_frontmatter(skill_dir: Path, *, read_text=None, md_files=None) -> list[str]:
     """Validate one skill dir's SKILL.md frontmatter plus every *.md's named-count headers.
 
@@ -216,7 +233,7 @@ def validate_skill_frontmatter(skill_dir: Path, *, read_text=None, md_files=None
     nm = re.search(r'^name:\s*(\S+)', fm, re.M)
     if not nm or nm.group(1).strip("'\"") != skill:
         errors.append(f"{skill}: frontmatter 'name' missing or != directory name")
-    dm = re.search(r"^description:\s*(.*?)(?=\n[a-zA-Z_-]+:|\Z)", fm, re.S | re.M)
+    dm = _DESCRIPTION_RE.search(fm)
     if not dm:
         errors.append(f"{skill}: frontmatter has no 'description'")
     else:
@@ -260,7 +277,7 @@ def validate_skill_frontmatter(skill_dir: Path, *, read_text=None, md_files=None
                 f"at the end of the description line and delete the orphaned quote from the body."
             )
             break
-        desc = raw_desc.strip("'\"")
+        desc = frontmatter_description(fm)
         if len(desc) > MAX_DESC:
             errors.append(
                 f"{skill}: description is {len(desc)} chars — exceeds the {MAX_DESC}-char "
@@ -564,6 +581,15 @@ def is_bundled(rel_posix: str) -> bool:
     if parts[0] == 'versions':
         return False
     if parts[0] == 'tests':
+        return False
+    # Machine-local run state, never skill content (2026-11-02, PR #196 merge gate).
+    # A top-level runs/ (eval-harness snapshots + summary.csv) and pytest's cache at
+    # any level were bundled from the working tree, git-ignored or not, so every
+    # package and every mirror sync carried run history into the installed copy;
+    # the next run then made that copy read CACHE-AHEAD. No skill tracks either.
+    if parts[0] == 'runs':
+        return False
+    if '.pytest_cache' in parts:
         return False
     if '__pycache__' in parts:
         return False

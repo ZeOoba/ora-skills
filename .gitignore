@@ -38,3 +38,5 @@ _staging/
 # protocol) and would have committed ~365 JSONs/yr. Machine-local run state,
 # not source of truth.
 acquisition-underwriting-eval-harness/runs/
+# pytest run state (repo_first_check treats ignored cache-only files as runtime state)
+.pytest_cache/

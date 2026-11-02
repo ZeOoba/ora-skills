@@ -72,6 +72,7 @@ GATED_SKILL_SUITES = [
     'acquisition-underwriting-eval-harness/lib/test_diff_verdict.py',
     'acquisition-underwriting-eval-harness/lib/test_doctrine_skip_gate.py',
     'acquisition-underwriting-eval-harness/lib/test_record_run.py',
+    'acquisition-underwriting-eval-harness/lib/test_resolve_run_dir.py',
     'debt-management/tests/test_*.py',
 ]
 
