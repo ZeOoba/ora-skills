@@ -151,6 +151,28 @@ class ParseReplaysUsesTheResolver(unittest.TestCase):
         self.assertEqual(report["deals"]["deal-a"]["status"], "PASS")
         self.assertNotIn("recorded", report)
 
+    def test_csv_failure_rolls_back_the_snapshot(self):
+        # merge-gate PR #199: a summary.csv append failure left an orphan snapshot JSON
+        # while the report said record_error (nothing recorded).
+        os.makedirs(os.path.join(self.runs, "summary.csv"))   # a dir where the CSV belongs
+        code, report = self._main({"ORA_EVAL_HARNESS_RUNS_DIR": self.runs})
+        self.assertEqual(code, 4, report)
+        self.assertIn("record_error", report)
+        self.assertEqual(sorted(os.listdir(self.runs)), ["summary.csv"])
+
+    def test_tmp_cleanup_failure_does_not_fail_a_completed_write(self):
+        real_remove = os.remove
+
+        def flaky_remove(path, *a, **kw):
+            if str(path).endswith(".json.tmp"):
+                raise PermissionError("locked")
+            return real_remove(path, *a, **kw)
+        with mock.patch.object(rr.os, "remove", side_effect=flaky_remove):
+            code, report = self._main({"ORA_EVAL_HARNESS_RUNS_DIR": self.runs})
+        self.assertEqual(code, 0, report)
+        self.assertNotIn("record_error", report)
+        self.assertTrue(os.path.exists(report["recorded"]["snapshot_path"]))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -141,10 +141,12 @@ class UnquoteFindsTheRealClosingQuote(unittest.TestCase):
     def test_escapes_inside_still_decode(self):
         self.assertEqual(self.U('"a\\"b"'), 'a"b')
         self.assertEqual(self.U("'it''s'"), "it's")
+        self.assertEqual(self.U('"a""b"'), '"a""b"')          # '' skip is single-quote only
         self.assertEqual(self.U("'it''" "'"), "it'")
 
     def test_hash_without_space_is_not_a_comment(self):
         self.assertEqual(self.U('"a"#b'), '"a"#b')
+        self.assertEqual(self.U('"a" \u3000#x'), '"a" \u3000#x')   # YAML whitespace is space/tab only
 
     def test_unicode_escapes_decode(self):
         self.assertEqual(self.U('"caf\\u00e9"'), 'café')
