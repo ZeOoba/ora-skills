@@ -330,7 +330,10 @@ def main(argv=None):
     ap.add_argument("--agent-ids", nargs="+")
     ap.add_argument("--failed-agent-ids", nargs="+", default=[])
     ap.add_argument("--record", action="store_true", help="write the runs/ snapshot via record_run")
-    ap.add_argument("--run-dir", default=str(here.parent / "runs"))
+    # Default None -> record_run.resolve_run_dir() decides (the ONE home for runs/).
+    # Never "<this script's dir>/runs": run from the installed copy, that wrote run
+    # history into the runtime skills cache, which every re-install wipes.
+    ap.add_argument("--run-dir", default=None)
     ap.add_argument("--skill-sha")
     ap.add_argument("--run-label", default="scheduled-poll")
     args = ap.parse_args(argv)
@@ -387,8 +390,14 @@ def main(argv=None):
 
     code = EXIT_UNUSABLE if unusable else (EXIT_DEGRADED if degraded else EXIT_CLEAN)
     if args.record and code != EXIT_UNUSABLE:
-        report["recorded"] = record_run(results, run_dir=args.run_dir,
-                                        skill_sha=args.skill_sha, run_label=args.run_label)
+        try:
+            report["recorded"] = record_run(results, run_dir=args.run_dir,
+                                            skill_sha=args.skill_sha, run_label=args.run_label)
+        except ValueError as exc:
+            # The diff report is still valid; keep it and say the snapshot was NOT
+            # written (no resolvable runs/ dir, a relative --run-dir, or the cache).
+            report["record_error"] = str(exc)
+            code = max(code, EXIT_DEGRADED)
     report["exit_code"] = code
     print(json.dumps(report, indent=2, default=str))
     return code
