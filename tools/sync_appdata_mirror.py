@@ -107,12 +107,16 @@ def cache_verdict(skill: str, repo_root: Path, mirror: Path) -> str:
     sync never writes or deletes a cache-only file, so counting it would block the
     skill forever after any shipped-file deletion or rename (review finding
     2026-09-23; lease-form-qc was already stuck on cached .pytest_cache junk).
-    REPO-MISSING rows are therefore excluded; every other per-file verdict counts."""
+    REPO-MISSING rows are therefore excluded; every other per-file verdict counts.
+    RUNTIME-STATE rows (git-ignored cache-only runtime files, e.g. runs/ or
+    .pytest_cache/, classified separately since 2026-11-02) are cache-only too, so
+    they are excluded for the same reason: counting them would stop the sync for
+    good on any skill whose cache holds run state (merge-gate finding, PR #196)."""
     from repo_first_check import classify_skill
     verdict, per_file = classify_skill(skill, repo_root=repo_root, cache_root=mirror.parent)
     if not per_file:
         return verdict
-    shipped = [v for _, v in per_file if v != 'REPO-MISSING']
+    shipped = [v for _, v in per_file if v not in ('REPO-MISSING', 'RUNTIME-STATE')]
     unsafe = [v for v in shipped if v not in WRITABLE_VERDICTS]
     if unsafe:
         return unsafe[0]

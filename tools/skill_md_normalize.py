@@ -46,7 +46,7 @@ def split_skill_md(text: str) -> tuple[str, str]:
     return '', text
 
 
-def _unquote(s: str) -> str:
+def _unquote(s: str, decode_newlines: bool = False) -> str:
     if len(s) >= 2 and s[0] == s[-1] and s[0] in '"\'':
         inner = s[1:-1]
         # A double-quoted YAML scalar escapes its inner quotes and backslashes; the
@@ -54,8 +54,13 @@ def _unquote(s: str) -> str:
         # `"say \"x\""` and `say "x"` compare equal (2026-10-30: the platform
         # stores merge-ready's description double-quoted with escaped inner quotes).
         if s[0] == '"':
-            inner = (inner.replace('\\\\', '\x00').replace('\\"', '"')
-                     .replace('\\n', '\n').replace('\x00', '\\'))
+            inner = inner.replace('\\\\', '\x00').replace('\\"', '"')
+            # \n is decoded ONLY for flattened keys (description), where whitespace is
+            # collapsed anyway. Decoded elsewhere, "a\nb: c" in one key would compare
+            # equal to two real keys once the view is re-joined (merge-gate finding).
+            if decode_newlines:
+                inner = inner.replace('\\n', '\n')
+            inner = inner.replace('\x00', '\\')
         return inner
     return s
 
@@ -116,7 +121,7 @@ def _normalize_frontmatter(fm: str) -> str:
             out.append(f'{m.group(1)}: {_collapse_ws(" ".join(body))}')
             continue
         if m and m.group(2).strip():
-            val = _unquote(m.group(2).strip())
+            val = _unquote(m.group(2).strip(), decode_newlines=m.group(1) in _FLATTENED_KEYS)
             out.append(f'{m.group(1)}: {_collapse_ws(val) if m.group(1) in _FLATTENED_KEYS else val}')
         else:
             out.append(ln)

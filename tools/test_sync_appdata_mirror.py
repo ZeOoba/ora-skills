@@ -301,6 +301,23 @@ class RealClassifierIntegrationTests(unittest.TestCase):
         self.assertNotIn('v2', self._mirror_skill_md())
         self.assertIn('platform', (self.mirror / 'scripts' / 'old.py').read_text(encoding='utf-8'))
 
+    def test_runtime_state_in_mirror_does_not_disable_syncs(self):
+        # merge-gate finding PR #196: git-ignored cache-only run state now classifies
+        # as RUNTIME-STATE; it must be excluded like REPO-MISSING, or the mirror is
+        # never written again for any skill whose cache holds run state.
+        (self.repo / '.gitignore').write_text('.pytest_cache/\nmy-skill/runs/\n', encoding='utf-8')
+        self.git('add', '-A')
+        self.git('commit', '-q', '-m', 'ignore run state')
+        (self.mirror / '.pytest_cache').mkdir()
+        (self.mirror / '.pytest_cache' / 'README.md').write_text('x\n', encoding='utf-8')
+        (self.mirror / 'runs').mkdir()
+        (self.mirror / 'runs' / 'x.json').write_text('{}\n', encoding='utf-8')
+        (self.skill / 'SKILL.md').write_text('---\nname: my-skill\ndescription: x\n---\nv2\n', encoding='utf-8')
+        lines = sync_skill(self.skill, appdata=self.appdata)
+        self.assertIn('synced', lines[0], lines)
+        self.assertIn('v2', self._mirror_skill_md())
+        self.assertTrue((self.mirror / 'runs' / 'x.json').exists())  # additive: run state kept
+
     def test_uncommitted_platform_edit_is_not_overwritten(self):
         (self.mirror / 'SKILL.md').write_text('---\nname: my-skill\ndescription: x\n---\nPLATFORM EDIT\n', encoding='utf-8')
         (self.skill / 'SKILL.md').write_text('---\nname: my-skill\ndescription: x\n---\nv2\n', encoding='utf-8')

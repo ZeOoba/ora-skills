@@ -390,8 +390,14 @@ def main(argv=None):
 
     code = EXIT_UNUSABLE if unusable else (EXIT_DEGRADED if degraded else EXIT_CLEAN)
     if args.record and code != EXIT_UNUSABLE:
-        report["recorded"] = record_run(results, run_dir=args.run_dir,
-                                        skill_sha=args.skill_sha, run_label=args.run_label)
+        try:
+            report["recorded"] = record_run(results, run_dir=args.run_dir,
+                                            skill_sha=args.skill_sha, run_label=args.run_label)
+        except ValueError as exc:
+            # The diff report is still valid; keep it and say the snapshot was NOT
+            # written (no resolvable runs/ dir, a relative --run-dir, or the cache).
+            report["record_error"] = str(exc)
+            code = max(code, EXIT_DEGRADED)
     report["exit_code"] = code
     print(json.dumps(report, indent=2, default=str))
     return code

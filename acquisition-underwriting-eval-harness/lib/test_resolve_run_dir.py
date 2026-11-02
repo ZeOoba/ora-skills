@@ -71,11 +71,75 @@ class ResolveRunDir(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     rr.default_run_dir()
 
+    def test_windows_branch_uses_the_repo_copy_when_it_exists(self):
+        # exercised on every platform by pretending to be Windows (gate finding: on
+        # Linux os.name short-circuited this branch, so its guard was never tested)
+        os.environ.pop("ORA_EVAL_HARNESS_RUNS_DIR", None)
+        home = os.path.join(self.tmp.name, "harness")
+        os.makedirs(home)
+        with mock.patch.object(rr.os, "name", "nt"), mock.patch.object(rr, "_CANONICAL_HARNESS_DIR", home):
+            self.assertEqual(rr.default_run_dir(), os.path.normpath(os.path.join(home, "runs")))
+        with mock.patch.object(rr.os, "name", "nt"), \
+                mock.patch.object(rr, "_CANONICAL_HARNESS_DIR", os.path.join(self.tmp.name, "absent")):
+            with self.assertRaises(ValueError):
+                rr.default_run_dir()
+
     def test_record_run_with_no_run_dir_writes_to_the_canonical_dir(self):
         rr.record_run([_result("a")], run_timestamp="2026-10-30T000000Z")
         names = os.listdir(self.runs)
         self.assertIn("summary.csv", names)
         self.assertTrue(any(n.endswith(".json") for n in names), names)
+
+
+class ParseReplaysUsesTheResolver(unittest.TestCase):
+    """parse_replays --record with NO --run-dir must land in the resolver's dir, and a
+    run-dir error must keep the computed report (merge-gate findings, PR #196)."""
+
+    def setUp(self):
+        # helper FUNCTIONS only: importing a TestCase class would make pytest collect it
+        from test_parse_replays import (GOLDEN_INPUTS, OTHER_INPUTS, _assistant, _block,
+                                        _prompt, _result, _write_agent, _write_golden)
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.sub, self.gold = root / "subagents", root / "golden_set"
+        self.sub.mkdir()
+        self.gold.mkdir()
+        _write_golden(self.gold, "deal-a", GOLDEN_INPUTS)
+        _write_golden(self.gold, "deal-b", OTHER_INPUTS)
+        for aid, inputs in (("a1", GOLDEN_INPUTS), ("b1", OTHER_INPUTS)):
+            _write_agent(self.sub, aid, _prompt(inputs), [_assistant(_block(_result(10.0)), "r", "end_turn")])
+        self.runs = os.path.join(self.tmp.name, "canonical-runs")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _main(self, env):
+        import contextlib
+        import io
+        import json
+        from parse_replays import main
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(buf):
+            code = main(["--subagents-dir", str(self.sub), "--golden-dir", str(self.gold), "--record"])
+        return code, json.loads(buf.getvalue())
+
+    def test_default_run_dir_is_the_resolvers_not_the_script_dir(self):
+        code, report = self._main({"ORA_EVAL_HARNESS_RUNS_DIR": self.runs})
+        self.assertEqual(code, 0, report)
+        self.assertNotIn("record_error", report)
+        self.assertTrue(any(n.endswith(".json") for n in os.listdir(self.runs)))
+        script_runs = Path(__file__).resolve().parent.parent / "runs"
+        self.assertNotIn(os.path.normcase(str(script_runs)), os.path.normcase(str(report["recorded"])))
+
+    def test_unresolvable_run_dir_keeps_the_report(self):
+        os.environ.pop("ORA_EVAL_HARNESS_RUNS_DIR", None)
+        with mock.patch.object(rr.os, "name", "nt"), \
+                mock.patch.object(rr, "_CANONICAL_HARNESS_DIR", os.path.join(self.tmp.name, "absent")):
+            code, report = self._main({})
+        self.assertEqual(code, 4, report)
+        self.assertIn("no canonical runs/ dir", report["record_error"])
+        self.assertEqual(report["deals"]["deal-a"]["status"], "PASS")
+        self.assertNotIn("recorded", report)
 
 
 if __name__ == "__main__":

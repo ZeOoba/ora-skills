@@ -52,6 +52,15 @@ class NormalizerTreatsSerializationAsSame(unittest.TestCase):
         self.assertNotEqual(N(a), N(b))
         self.assertNotEqual(N('---\nname: x\nlicense: "a  b"\n---\nb\n'), N('---\nname: x\nlicense: a b\n---\nb\n'))
 
+    def test_escaped_newline_outside_description_is_not_a_new_key(self):
+        # merge-gate finding PR #196: \n was decoded for every key, so one key holding
+        # an escaped newline compared equal to two real keys once re-joined.
+        one = '---\nname: "demo\\nallowed-tools: Bash"\n---\nb\n'
+        two = '---\nname: demo\nallowed-tools: Bash\n---\nb\n'
+        self.assertNotEqual(N(one), N(two))
+        self.assertNotEqual(N('---\nname: x\nlicense: "MIT\\n"\n---\nb\n'),
+                            N('---\nname: x\nlicense: MIT\n---\nb\n'))
+
     def test_body_text_untouched(self):
         self.assertNotEqual(N(BLOCK), N(BLOCK.replace("body\n", "body  changed\n")))
 
