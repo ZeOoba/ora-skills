@@ -141,6 +141,60 @@ class ParseReplaysUsesTheResolver(unittest.TestCase):
         self.assertEqual(report["deals"]["deal-a"]["status"], "PASS")
         self.assertNotIn("recorded", report)
 
+    def test_os_error_while_writing_keeps_the_report(self):
+        # merge-gate PR #196 round 3: an OSError from the write escaped as a traceback.
+        import record_run as rr_mod
+        with mock.patch.object(rr_mod, "record_run", side_effect=PermissionError("read-only runs/")):
+            code, report = self._main({"ORA_EVAL_HARNESS_RUNS_DIR": self.runs})
+        self.assertEqual(code, 4, report)
+        self.assertIn("read-only runs/", report["record_error"])
+        self.assertEqual(report["deals"]["deal-a"]["status"], "PASS")
+        self.assertNotIn("recorded", report)
+
+    def test_csv_failure_rolls_back_the_snapshot(self):
+        # merge-gate PR #199: a summary.csv append failure left an orphan snapshot JSON
+        # while the report said record_error (nothing recorded).
+        os.makedirs(os.path.join(self.runs, "summary.csv"))   # a dir where the CSV belongs
+        code, report = self._main({"ORA_EVAL_HARNESS_RUNS_DIR": self.runs})
+        self.assertEqual(code, 4, report)
+        self.assertIn("record_error", report)
+        self.assertEqual(sorted(os.listdir(self.runs)), ["summary.csv"])
+
+    def test_non_os_error_in_csv_write_rolls_back_and_truncates(self):
+        # merge-gate PR #199 round 2: a ValueError (e.g. UnicodeEncodeError) mid-row
+        # left the orphan JSON and a partial row.
+        os.makedirs(self.runs)
+        csv_path = os.path.join(self.runs, "summary.csv")
+        with open(csv_path, "w", encoding="utf-8", newline="") as f:
+            f.write("header\r\n")
+        res = [{"deal_id": "d", "status": "PASS", "scored": True}]
+        with self.assertRaises(UnicodeEncodeError):
+            rr.record_run(res, run_dir=self.runs, skill_sha="ab\udcff", run_timestamp="2026-11-02T000000Z")
+        self.assertEqual(sorted(os.listdir(self.runs)), ["summary.csv"])
+        with open(csv_path, encoding="utf-8", newline="") as f:
+            self.assertEqual(f.read(), "header\r\n")
+
+    def test_empty_csv_gets_its_header(self):
+        os.makedirs(self.runs)
+        open(os.path.join(self.runs, "summary.csv"), "w").close()
+        res = [{"deal_id": "d", "status": "PASS", "scored": True}]
+        rr.record_run(res, run_dir=self.runs, run_timestamp="2026-11-02T000000Z")
+        with open(os.path.join(self.runs, "summary.csv"), encoding="utf-8") as f:
+            self.assertTrue(f.readline().startswith("run_timestamp,"))
+
+    def test_tmp_cleanup_failure_does_not_fail_a_completed_write(self):
+        real_remove = os.remove
+
+        def flaky_remove(path, *a, **kw):
+            if str(path).endswith(".json.tmp"):
+                raise PermissionError("locked")
+            return real_remove(path, *a, **kw)
+        with mock.patch.object(rr.os, "remove", side_effect=flaky_remove):
+            code, report = self._main({"ORA_EVAL_HARNESS_RUNS_DIR": self.runs})
+        self.assertEqual(code, 0, report)
+        self.assertNotIn("record_error", report)
+        self.assertTrue(os.path.exists(report["recorded"]["snapshot_path"]))
+
 
 if __name__ == "__main__":
     unittest.main()
