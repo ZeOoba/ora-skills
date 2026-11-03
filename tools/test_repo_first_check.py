@@ -687,6 +687,49 @@ class MainBehindOrigin(unittest.TestCase):
 
         self.assertEqual(verdict, 'DIVERGENT')
 
+    def test_divergent_provenance_names_the_introducing_commit_and_branch(self):
+        """2026-11-03: the rescue dir's `-pr167` suffix (the sweeping checkout) was read
+        as the installing branch. The finding now names the commit the cache matches."""
+        _git(self.seed, 'checkout', '-q', '-b', 'capture/x')
+        _commit(self.seed, 'demo-skill/SKILL.md', 'name: demo-skill\ncaptured\n', 'capture: verbatim')
+        _commit(self.seed, 'demo-skill/SKILL.md', 'name: demo-skill\nlater\n', 'later edit')
+        _git(self.seed, 'push', '-q', 'origin', 'capture/x')
+        _git(self.repo, 'fetch', '-q', 'origin')
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'name: demo-skill\ncaptured\n')
+
+        where = rfc._divergent_provenance(self.repo, self.cache / 'demo-skill' / 'SKILL.md')
+
+        self.assertIn('"capture: verbatim"', where)     # introducer, not the later replacer
+        self.assertIn('origin/capture/x', where)
+
+    def test_divergent_provenance_finds_a_blob_born_in_a_merge(self):
+        """Refute C3a: a blob first created by a conflict resolution is invisible to
+        `log --find-object` without -m, so the later replacer looked earliest."""
+        _git(self.seed, 'checkout', '-q', '-b', 'side')
+        _commit(self.seed, 'demo-skill/SKILL.md', 'name: demo-skill\nside\n', 'side')
+        _git(self.seed, 'checkout', '-q', '-b', 'capture', 'main')
+        _commit(self.seed, 'demo-skill/SKILL.md', 'name: demo-skill\nmain-side\n', 'capture base')
+        subprocess.run(['git', '-C', str(self.seed), 'merge', '-q', 'side'], capture_output=True)
+        _write(self.seed / 'demo-skill' / 'SKILL.md', 'name: demo-skill\nresolved\n')
+        _git(self.seed, 'add', 'demo-skill/SKILL.md')
+        _git(self.seed, 'commit', '-q', '-m', 'merge side (resolved)')
+        _commit(self.seed, 'demo-skill/SKILL.md', 'name: demo-skill\nreplaced\n', 'later replacer')
+        _git(self.seed, 'push', '-q', 'origin', 'capture')
+        _git(self.repo, 'fetch', '-q', 'origin')
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'name: demo-skill\nresolved\n')
+
+        where = rfc._divergent_provenance(self.repo, self.cache / 'demo-skill' / 'SKILL.md')
+
+        self.assertIn('"merge side (resolved)"', where)
+
+    def test_divergent_provenance_is_none_for_unknown_content(self):
+        _write(self.cache / 'demo-skill' / 'SKILL.md', 'never committed\n')
+        self.assertIsNone(rfc._divergent_provenance(self.repo, self.cache / 'demo-skill' / 'SKILL.md'))
+
+    def test_divergent_provenance_never_raises_outside_a_repo(self):
+        _write(self.tmp / 'loose.md', 'x\n')
+        self.assertIsNone(rfc._divergent_provenance(self.tmp / 'nope', self.tmp / 'loose.md'))
+
     def test_file_deleted_by_already_merged_pr_stays_repo_missing(self):
         # Review finding 2026-09-17: matching ALL of origin/main's history relabeled a
         # stale cache-only file as MAIN-BEHIND-ORIGIN even with local main fully caught
