@@ -3,7 +3,7 @@ name: market-monitor
 description: "Use when researching industrial real estate market conditions across Oxford Realty Advisors target markets, comparing markets, tracking demand drivers, or preparing market intelligence reports. Triggers: market update, market conditions, vacancy rate, industrial market, rent growth, supply pipeline, absorption, market comparison, submarket analysis, cap rate trends."
 ---
 
-# Market Monitor (v1.8)
+# Market Monitor (v1.9)
 
 You are the Oxford Realty Advisors market intelligence engine. You monitor industrial real estate conditions across all ORA target markets, track demand drivers, and produce actionable market intelligence for acquisition decisions.
 
@@ -150,7 +150,7 @@ Track these macro signals that affect ORA's target tenant base:
 ### Market Update (triggered by "market update" or daily brief Section 2)
 1. Search last 48 hours for news in each primary market
 2. Identify any new transactions, vacancy reports, or development announcements
-3. Flag any ORA-relevant deal (sub-$10M, shallow-bay, target market)
+3. Flag any ORA-relevant deal ($500K–$10M single asset, or up to $15M for 2–5 buildings sold together per Amendment H; shallow-bay; target market)
 4. Rate market conditions: 🟢 Favorable / 🟡 Neutral / 🔴 Unfavorable for acquisition
 
 ### Market Comparison (triggered by "compare markets" or deal evaluation)
@@ -228,6 +228,7 @@ On every full market run, diff the live print against the corresponding standing
 
 ## Changelog
 
+- v1.9 (2026-11-03): Market Update step 3 flags ORA-relevant deals against the current buy-box ($500K–$10M single asset; up to $15M for 2–5 buildings sold together, Amendment H) instead of "sub-$10M". No market data, scoring or workflow changed.
 - v1.8 (2026-10-27): consumer sweep for `acquisition-underwriting` v4.37: the DOCTRINE-DRIFT RCT comparison uses the construction-type-adjusted LOW–HIGH band so a PEMB quote near 0.90 × POINT is not a false drift hit. No other change.
 - v1.7 (2026-10-16): reconciles cache-only v1.6 (2026-09-28, rescued 20260929T022536106000Z-ora-skills) with repo 8420c45. Louisville KY profile refreshed with sourced Q2 2026 prints (C&W: vacancy 4.6%, rent $6.95, YTD absorption +1.0M SF, 5.0M SF UC; four-submarket table) and a CBRE Q1 2026 cross-check, replacing the prior "not sourced yet" gap; prints flagged BLENDED per Stage 2.1 and bear-mode left UNKNOWN for the sub-50K product. Added the run-triggered SUBMARKET CACHE PROTOCOL (no scheduled task, per the 2026-08-22 decision). Cache-side origin: a Cane Run Road (Riverport/Shively) listing screen on 2026-09-28 found Louisville's vacancy/absorption fields empty. `target-markets.json` Louisville nulls NOT updated by this change — parity gap flagged. No target-market scoring, cluster classification, exit cap, or governor changed.
 - v1.6 (2026-09-29): parity — Chicago–Greater Cook County IL entry-phase profile added (11th canonical cluster; target-markets.json v1.11, acquisition-underwriting v4.25). Baseline from CoStar Near South Cook (BLENDED; comparison-table cells marked [VAL] like the other entry markets); "ten" → "eleven" in the Market Comparison Table lead-in, the comparison table gained a Chicago-Cook column, and the drift-sweep residual-gap note. No scoring weight, cap-rate assumption or workflow changed.

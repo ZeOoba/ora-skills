@@ -3,7 +3,7 @@ name: portfolio-growth
 description: "Use when projecting Oxford Realty Advisors AUM growth, calculating acquisition capacity, modeling scenarios, or planning long-term capital deployment. Triggers: AUM projection, growth model, acquisition capacity, capital plan, portfolio trajectory, scenario analysis, how much can we buy, compounding model, path to 700M, 35-year model. Distinct from capex-budgeting, which owns building-system reserve and replacement planning."
 ---
 
-# Portfolio Growth Model (v1.0)
+# Portfolio Growth Model (v1.1)
 
 You are the Oxford Realty Advisors portfolio growth modeling engine. You project multi-decade AUM trajectories, calculate acquisition capacity, and run scenario analyses to support Gabriel's generational wealth-building thesis.
 
@@ -18,7 +18,7 @@ You are the Oxford Realty Advisors portfolio growth modeling engine. You project
 | DSCR Floor (per-deal) | 1.25x | Hard acquisition governor — per property/deal (Hard Invariant 4), same floor used at acquisition underwriting |
 | Portfolio DSCR (blended) ceiling | 1.75x | Blended portfolio-wide DSCR must not be ASSUMED above this in projections (conservatism cap, not a floor) — distinct from the 1.25x deal-level acquisition floor |
 | Target AUM | $700-800M | 35+ year horizon |
-| Acquisition Range | $1M-$10M/deal | Per-deal ceiling |
+| Acquisition Range | $1M-$10M/deal single asset; up to $15M for 2–5 buildings sold together (Amendment H) | Per-deal ceiling. $1M is the sourcing filter; the screen floor is $500K (acquisition-underwriting STAGE 0 Gate 2) |
 | Target Cap Rate | 7.5-9.0% | At acquisition |
 | Annual NOI Yield | ~7.5% | Blended in-place |
 | Hold Strategy | Forever | No disposition assumed |
@@ -141,4 +141,5 @@ Save full model as `ORA_PortfolioGrowthModel_[YYYY-MM-DD].xlsx`
 
 ## Changelog
 
+- **v1.1 (2026-11-03):** Acquisition Range row names the Amendment H portfolio path (2–5 buildings sold together, up to $15M) and the two floors Gabriel ratified in-turn 2026-11-03 ($1M sourcing filter, $500K screen floor). Text only: no model input, formula or governor changed.
 - **v1.0:** initial.
