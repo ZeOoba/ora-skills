@@ -1082,6 +1082,164 @@ class LogBeforeClearGuard(unittest.TestCase):
         self.assertIn('cleared skill-a', out)
 
 
+class ClearFallsBackPastConcurrentEntries(unittest.TestCase):
+    """2026-11-03: submarket-spatial-analysis v1.10 was logged CONFIRMED, then another
+    session logged portfolio-growth on top of it, and `clear` refused because it only
+    read the NEWEST entry -- pushing the session to --force. The fallback clears only
+    when the install now in the cache postdates the ledger line, a recorded-install
+    marker matches its CreationTime, and the newest entry naming it confirms (never
+    negates) it at the installed version the repo declares. The refute pass's repros
+    (same-day reinstall, buried negation, changed line) are pinned below."""
+
+    def setUp(self):
+        tmp = Path(tempfile.mkdtemp(prefix='pending_reimport_fallback_'))
+        self.addCleanup(_rmtree, tmp)
+        self.repo, self.log, self.ledger = tmp / 'repo', tmp / 'event_log.md', tmp / 'PENDING_REIMPORT.md'
+        self.cache, self.baselines = tmp / 'cache', tmp / 'baselines'
+        self.repo.mkdir()
+        for p in (unittest.mock.patch.object(pr, 'REPO', self.repo),
+                  unittest.mock.patch.object(pr, 'LEDGER', self.ledger),
+                  unittest.mock.patch.object(pr, 'EVENT_LOG', self.log),
+                  unittest.mock.patch.object(pr, 'CACHE_ROOT', self.cache),
+                  unittest.mock.patch.object(pr, 'BASELINE_DIR', self.baselines),
+                  unittest.mock.patch.object(pr, 'all_skill_dirs',
+                                             return_value=['skill-a', 'skill-b'])):
+            p.start()
+            self.addCleanup(p.stop)
+        self.set_version('1.10')
+        _write(self.cache / 'skill-a' / 'SKILL.md', '---\nname: skill-a\n---\n\n# Skill A (v1.10)\n')
+        self.ct = pr.cache_creation_time('skill-a')
+        self.today = self.ct.strftime('%Y-%m-%d')
+        pr.write_recorded_install('skill-a', self.ct, pr.cache_digest('skill-a'))
+
+    def set_version(self, v):
+        _write(self.repo / 'skill-a' / 'SKILL.md', f'---\nname: skill-a\n---\n\n# Skill A (v{v})\n')
+
+    def top(self):
+        return f'## {self.today} -- skill-b v2.0 reimport confirmed\n\nskill-b v2.0 reimported; CONFIRMED.'
+
+    def ours(self, date=None, version='1.10'):
+        return (f'## {date or self.today} -- skill-a v{version} reimport confirmed\n\n'
+                f'skill-a v{version} reimported; CONFIRMED.')
+
+    def write_log(self, *entries):
+        self.log.write_text('\n\n'.join(entries) + '\n', encoding='utf-8')
+
+    def line(self, since='2026-01-01T00:00Z'):
+        return f'- skill-a | pending since {since} | commit abc "x" | trigger: skill-a/SKILL.md'
+
+    def clear(self, since='2026-01-01T00:00Z'):
+        pr.write_entries({'skill-a': self.line(since)}, self.ledger)
+        err, out = io.StringIO(), io.StringIO()
+        with unittest.mock.patch('sys.stderr', err), unittest.mock.patch('sys.stdout', out):
+            try:
+                pr.cmd_clear(['skill-a'])
+            except SystemExit:
+                pass
+        return err.getvalue(), out.getvalue(), pr.read_entries(self.ledger)
+
+    def assertRefused(self, result):
+        err, out, left = result
+        self.assertIn('REFUSED', err)
+        self.assertIn('skill-a', left)
+        return err
+
+    def test_confirmed_entry_below_a_concurrent_one_clears(self):
+        self.write_log(self.top(), self.ours())
+        err, out, left = self.clear()
+        self.assertNotIn('REFUSED', err)
+        self.assertIn('cleared skill-a', out)
+        self.assertNotIn('skill-a', left)
+
+    def test_no_recorded_install_marker_refuses(self):
+        """Refute C1a/C2b: a same-day, same-version entry for an EARLIER install."""
+        pr._recorded_path('skill-a', None).unlink()
+        self.write_log(self.top(), self.ours())
+        self.assertIn('no recorded-install marker', self.assertRefused(self.clear()))
+
+    def test_marker_for_an_earlier_install_refuses(self):
+        pr.write_recorded_install('skill-a', self.ct.replace(year=self.ct.year - 1),
+                                  pr.cache_digest('skill-a'))
+        self.write_log(self.top(), self.ours())
+        self.assertRefused(self.clear())
+
+    def test_in_place_overwrite_after_the_logged_install_refuses(self):
+        """Refute round 2, C7: the mirror sync rewrites cache files in place and keeps
+        the dir's CreationTime; the marker's content digest must catch it."""
+        self.write_log(self.top(), self.ours())
+        _write(self.cache / 'skill-a' / 'SKILL.md', '---\nname: skill-a\n---\n\n# Skill A (v1.10)\nnew body\n')
+        self.assertEqual(pr.cache_creation_time('skill-a'), self.ct)
+        self.assertIn('no recorded-install marker', self.assertRefused(self.clear()))
+
+    def test_install_within_the_pending_minute_refuses(self):
+        """Refute round 2, C8: `pending since` is cut to the minute."""
+        since = self.ct.astimezone(pr.timezone.utc).strftime('%Y-%m-%dT%H:%MZ')
+        self.write_log(self.top(), self.ours())
+        self.assertRefused(self.clear(since=since))
+
+    def test_tool_stop_verdict_in_a_shared_sentence_refuses(self):
+        """Refute round 2, C9."""
+        mixed = (f'## {self.today} -- batch\n\nskill-b CONFIRMED; skill-a VERSION-MISMATCH -- '
+                 'STOP, nothing appended.')
+        self.write_log(self.top(), mixed, self.ours())
+        self.assertIn('VERSION-MISMATCH', self.assertRefused(self.clear()))
+
+    def test_cache_not_reinstalled_since_it_went_pending_refuses(self):
+        self.write_log(self.top(), self.ours())
+        self.assertIn('not reinstalled', self.assertRefused(self.clear(since='2099-01-01T00:00Z')))
+
+    def test_entry_dated_before_the_install_refuses(self):
+        self.write_log(self.top(), self.ours(date='2000-01-01'))
+        self.assertRefused(self.clear())
+
+    def test_repo_version_other_than_installed_refuses(self):
+        self.set_version('1.11')
+        self.write_log(self.top(), self.ours())
+        self.assertIn('repo declares v1.11', self.assertRefused(self.clear()))
+
+    def test_logged_version_other_than_installed_refuses(self):
+        self.write_log(self.top(), self.ours(version='1.1'))
+        self.assertIn('logged as v1.1 ', self.assertRefused(self.clear()))
+
+    def test_buried_negation_in_a_shared_sentence_refuses(self):
+        """Refute C1b: one sentence names both skills; skill-b's CONFIRMED must not
+        stand for skill-a, whose own clause says it was not installed."""
+        mixed = (f'## {self.today} -- batch\n\nskill-a v1.10 and skill-b v2.0 packaged: '
+                 'skill-b CONFIRMED, skill-a NOT installed (publish stopped).')
+        self.write_log(self.top(), mixed, self.ours())
+        self.assertIn('NOT installed', self.assertRefused(self.clear()))
+
+    def test_newest_entry_naming_and_refusing_does_not_fall_back(self):
+        neg = f'## {self.today} -- skill-a packaging\n\nskill-a v1.10: not packaged yet.'
+        self.write_log(neg, self.ours())
+        self.assertRefused(self.clear())
+
+    def test_ledger_line_without_a_time_does_not_fall_back(self):
+        self.write_log(self.top(), self.ours())
+        pr.write_entries({'skill-a': '- skill-a | ...'}, self.ledger)
+        err = io.StringIO()
+        with unittest.mock.patch('sys.stderr', err), unittest.mock.patch('sys.stdout', io.StringIO()):
+            with self.assertRaises(SystemExit):
+                pr.cmd_clear(['skill-a'])
+        self.assertIn('REFUSED', err.getvalue())
+
+    def test_prefix_named_skill_is_not_matched(self):
+        other = f'## {self.today} -- skill-a-eval v1.10 reimport confirmed\n\nskill-a-eval v1.10 CONFIRMED.'
+        self.write_log(self.top(), other)
+        self.assertRefused(self.clear())
+
+    def test_line_rewritten_after_it_was_judged_is_not_cleared(self):
+        """Refute defect 3: the read that judges and the clear are not one lock hold."""
+        pr.write_entries({'skill-a': self.line('2026-11-04T09:00Z')}, self.ledger)
+        cleared = pr.clear_entries(['skill-a'], expected={'skill-a': self.line()})
+        self.assertEqual(cleared, [])
+        self.assertIn('skill-a', pr.read_entries(self.ledger))
+
+    def test_trailing_h1_version_reads_like_reimport_correlate(self):
+        _write(self.repo / 'skill-a' / 'SKILL.md', '# Skill A v1.10\n')
+        self.assertEqual(pr._skill_version(self.repo, 'skill-a'), '1.10')
+
+
 class CmdRecordDeliberatelyUnpublishedWarning(unittest.TestCase):
     """Commit-time flag added 2026-09-11 (ORA Setup Audit R25 remediation): a
     commit touching a DELIBERATELY_UNPUBLISHED skill's packaged files must warn

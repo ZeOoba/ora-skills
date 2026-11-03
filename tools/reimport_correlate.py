@@ -42,6 +42,14 @@ Usage
                        has happened since the baseline was taken. Also covers
                        a first-install skill whose cache dir is STILL absent
                        (baseline was recorded ABSENT and nothing has changed).
+          ALREADY-RECORDED  no baseline, but the newest event_log entry naming
+                       the skill (dated on/after the cache's CreationTime date)
+                       logs `<skill> vX.Y reimport confirmed` for the installed
+                       version, and a recorded-install marker matches the
+                       cache CreationTime to the second -- another run's
+                       postclick logged it and used the baseline up. postclick
+                       appends nothing and exits 3 (never 0: reimport_cycle
+                       reads 0 as CONFIRMED).
           NO-BASELINE  nothing to compare against; pass --baseline or run
                        `baseline` first.
           NO-CACHE     cache dir not found and no baseline exists either.
@@ -115,7 +123,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pending_reimport import (  # noqa: E402
     CACHE_ROOT, REPO, _atomic_write_text, _primary_checkout, _read_text_retry, _retry_locked,
+    cache_digest, event_log_blocks, logged_install_entry, write_recorded_install,
 )
+
+ALREADY_RECORDED_RC = 3     # postclick: nothing to do, the install is already logged
 
 # The PRIMARY checkout's _staging/, never a worktree's: a baseline taken during a
 # packaging pre-check in a worktree must survive `git worktree remove` to be read
@@ -253,6 +264,46 @@ def consume_baseline(skill: str) -> int:
     if stranded:
         raise BaselineStranded(stranded)
     return used
+
+
+def install_snapshot(skill: str):
+    """(CreationTime, content digest) of the install in the cache now, or None. Take it
+    BEFORE verifying, and hand it to mark_logged: the marker must name the install that
+    was verified, not whatever is in the cache by the time the append returns."""
+    installed, digest = _creation_time(skill), cache_digest(skill, CACHE_ROOT)
+    return None if installed is None or digest is None else (installed, digest)
+
+
+def mark_logged(skill: str, snapshot, header: str, append_out: str = '') -> bool:
+    """Record the verified install (`snapshot`, from install_snapshot before verify) as
+    logged, for ALREADY-RECORDED and the ledger-clear fallback. Writes ONLY when (a) the
+    cache still holds exactly that install -- a concurrent Save-skill between verify and
+    here would otherwise be marked as logged (round-3 refute, C10) -- and (b) the append
+    really landed: append-event-log.py also exits 0 when it SPOOLS a locked log, so its
+    `append_out` must not say "spooled (log locked)" (headers are deterministic, so an
+    earlier same-day run's identical header would otherwise pass check (c) -- round 4,
+    C11), and (c) `header` is in the event log. Call it only after the append for
+    this install exited 0 -- never from consume, which runs by hand too (round 2, C6).
+    Fails closed and says why: without the marker neither consumer ever fires."""
+    why = None
+    if snapshot is None:
+        why = 'no readable install was snapshotted before verify'
+    elif install_snapshot(skill) != snapshot:
+        why = 'the cache changed between verify and the append (another install?)'
+    elif 'spooled (log locked):' in append_out:
+        why = 'the append was spooled (event_log.md locked), not written'
+    elif header.strip() not in {h.strip() for h, _ in event_log_blocks()}:
+        why = 'the appended entry is not in event_log.md yet (spooled?)'
+    if why:
+        print(f'WARNING: recorded-install marker NOT written for {skill}: {why}. '
+              f'A later postclick says NO-BASELINE, not ALREADY-RECORDED.')
+        return False
+    try:
+        write_recorded_install(skill, *snapshot, base=BASELINE_DIR)
+    except OSError as exc:
+        print(f'WARNING: recorded-install marker not written for {skill} ({exc})')
+        return False
+    return True
 
 
 class BaselineStranded(OSError):
@@ -471,6 +522,17 @@ def _find_log_match(target: datetime) -> tuple[Path, datetime, int] | None:
     return None
 
 
+def _already_recorded(skill: str, current: datetime) -> str | None:
+    """Header of the event_log entry that already logs the install now in the cache, or
+    None. A baseline is used up once its install is logged (consume_baseline), so a
+    second postclick -- the user's own after a Cowork session's, 2026-11-03 -- found no
+    baseline and said NO-BASELINE, sending it looking for one. Rules:
+    pending_reimport.logged_install_entry (recorded-install marker at this exact
+    CreationTime + a confirming, never-negating entry at the installed version)."""
+    header, _ = logged_install_entry(skill, base=BASELINE_DIR, cache_root=CACHE_ROOT)
+    return header
+
+
 def cmd_verify(skills: list[str], baseline_override: str | None) -> int:
     any_confirmed_missing = False
     for skill in skills:
@@ -492,6 +554,12 @@ def cmd_verify(skills: list[str], baseline_override: str | None) -> int:
                 if current is None:
                     print(f'{skill}: NO-CACHE -- cache dir not found under {CACHE_ROOT}')
                 else:
+                    already = _already_recorded(skill, current)
+                    if already:
+                        print(f'{skill}: ALREADY-RECORDED -- no baseline, but "{already}" already '
+                              f'logs this install (cache CreationTime {current.isoformat()}). '
+                              f"Another run's postclick used the baseline up; nothing to verify.")
+                        continue
                     print(f'{skill}: NO-BASELINE -- run `baseline {skill}` first, or pass '
                           f'--baseline "YYYY-MM-DD HH:MM:SS"')
                     _legacy_hint(skill)
@@ -787,6 +855,7 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
     if baseline_override is not None and not baseline_override.strip():
         print('--baseline needs a time ("YYYY-MM-DD HH:MM:SS"), got a blank value')
         return 2
+    snapshot = install_snapshot(skill)        # the install verify is about to judge
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         cmd_verify([skill], baseline_override)
@@ -820,6 +889,20 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
         verdict = verdict.replace(f'{skill}: CONFIRMED', f'{skill}: {word}', 1)
     print(verdict)
     _log_report(6)
+    if f'{skill}: ALREADY-RECORDED' in verdict:
+        # Its own exit code, never 0: reimport_cycle.cmd_close reads 0 as CONFIRMED and
+        # would append a second entry for an install it never verified (2026-11-03 refute).
+        print(f'Nothing appended: the install is already logged (exit {ALREADY_RECORDED_RC}).')
+        if not clear_ledger:
+            return ALREADY_RECORDED_RC
+        blocker = ledger_clear_blocker(skill, _cache_version(skill))
+        if blocker:
+            print(blocker)
+            return ALREADY_RECORDED_RC
+        c = subprocess.run([sys.executable, str(PENDING), 'clear', skill],
+                           capture_output=True, text=True)
+        print((c.stdout + c.stderr).strip())
+        return c.returncode or ALREADY_RECORDED_RC
     if not confirmed:
         print('STOP: verdict is not CONFIRMED. Nothing appended. Do not repackage, edit or commit; '
               'report the log state above.')
@@ -852,8 +935,9 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
     ef = REPO / '_staging' / f'_eventlog_entry_{skill}.md'
     # Baselines live in the primary now, so nothing else creates this checkout's _staging/.
     ef.parent.mkdir(parents=True, exist_ok=True)
+    header = f'## {today} -- {skill}{vtxt} reimport confirmed'
     ef.write_text(
-        f'## {today} -- {skill}{vtxt} reimport confirmed\n\n'
+        f'{header}\n\n'
         f'{skill}{vtxt} reimported via Cowork Save-skill; reimport_correlate CONFIRMED.\n',
         encoding='utf8')
     r = subprocess.run([sys.executable, str(APPEND_LOG), '--entry-file', str(ef)],
@@ -863,6 +947,7 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
         print(f'FAIL: append-event-log.py exited {r.returncode}; ledger NOT cleared.')
         return 1
     print('event log appended (exit 0).')
+    mark_logged(skill, snapshot, header, r.stdout + r.stderr)
     consume_failed = 0
     try:
         consume_baseline(skill)

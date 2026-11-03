@@ -133,6 +133,8 @@ def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool,
         print("close: --version names ONE skill's packaged version -- close skills one at a time.")
         return 2
     failed = []
+    # snapshot each install BEFORE its postclick verifies it (see _rcor.mark_logged)
+    snapshots = {s: _rcor.install_snapshot(s) for s in skills}
     for s in skills:
         print(f"== postclick {s}")
         extra = ["--baseline", baseline] if baseline is not None else []
@@ -149,12 +151,15 @@ def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool,
                     "reimport_correlate CONFIRMED.")
     entry = REPO / "_staging" / today / "reimport_cycle_entry.md"
     entry.parent.mkdir(parents=True, exist_ok=True)
-    entry.write_text(f"## {today} -- {', '.join(skills)} reimport\n\n{body}\n",
-                     encoding="utf-8")
+    header = f"## {today} -- {', '.join(skills)} reimport"
+    entry.write_text(f"{header}\n\n{body}\n", encoding="utf-8")
     print("== event log")
-    if _run([str(APPEND), "--entry-file", str(entry)]).returncode:
+    appended = _run([str(APPEND), "--entry-file", str(entry)])
+    if appended.returncode:
         print("close: append FAILED -- ledger NOT cleared.")
         return 1
+    for s in skills:                      # logged: mark exactly the verified install
+        _rcor.mark_logged(s, snapshots[s], header, appended.stdout + appended.stderr)
     # postclick ran with --no-append, so it left the baselines in place; the install is
     # recorded now, so use them up (a kept baseline would CONFIRM this install again).
     consume_rc = _run([str(TOOLS / "reimport_correlate.py"), "consume", *skills]).returncode
