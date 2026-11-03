@@ -92,6 +92,49 @@ class ReviewCopyRoundTrip(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             rc.clone(self.bundle, "HEAD", Path(self.tmp.name) / "h")
 
+    def test_refused_rev_leaves_dest_reusable(self):
+        rc.bundle(self.sha, self.bundle, None, str(self.repo))
+        dest = Path(self.tmp.name) / "retry"
+        with self.assertRaises(RuntimeError):
+            rc.clone(self.bundle, "HEAD", dest)
+        self.assertFalse(dest.exists())
+        self.assertEqual(rc.clone(self.bundle, self.sha, dest), self.sha)
+
+    def test_failed_checkout_empties_a_preexisting_dest(self):
+        rc.bundle(self.sha, self.bundle, None, str(self.repo))
+        dest = Path(self.tmp.name) / "pre"
+        dest.mkdir()
+        with self.assertRaises(RuntimeError):
+            rc.clone(self.bundle, "deadbeef" * 5, dest)
+        self.assertTrue(dest.is_dir())
+        self.assertEqual(list(dest.iterdir()), [])
+        self.assertEqual(rc.clone(self.bundle, self.sha, dest), self.sha)
+
+    def test_tag_base_keeps_its_name(self):
+        git(self.repo, "tag", "v1", "origin/main")
+        rc.bundle(self.sha, self.bundle, "v1", str(self.repo))
+        dest = Path(self.tmp.name) / "tag"
+        rc.clone(self.bundle, self.sha, dest)
+        self.assertEqual(git(dest, "diff", "--name-only", "v1..HEAD"), "a.txt")
+
+    def test_cleanup_failure_does_not_mask_bundle_error(self):
+        real = rc._git
+
+        def flaky(*args, cwd=None):
+            if args[:2] == ("bundle", "create"):
+                raise RuntimeError("bundle create boom")
+            if args[:2] == ("update-ref", "-d"):
+                raise RuntimeError("update-ref boom")
+            return real(*args, cwd=cwd)
+
+        rc._git = flaky
+        try:
+            with self.assertRaises(RuntimeError) as cm:
+                rc.bundle(self.sha, self.bundle, None, str(self.repo))
+        finally:
+            rc._git = real
+        self.assertIn("bundle create boom", str(cm.exception))
+
     def test_unknown_rev_fails_cleanly(self):
         self.assertEqual(rc.main(["bundle", "--rev", "deadbeef" * 5, "--out", str(self.bundle),
                                   "--repo", str(self.repo)]), 1)
