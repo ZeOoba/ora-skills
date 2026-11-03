@@ -16,17 +16,22 @@ so the clone has the exact committed bytes (LF as stored) and full ancestry.
 bundle: points a temporary ref refs/review/<sha> at --rev, bundles it plus --base
         (default origin/main, so the reviewer can `git diff origin/main..<sha>`),
         then deletes the temp ref. Prints the path, size and sha256.
-clone:  clones the bundle with core.autocrlf=false, detaches at --rev, verifies HEAD,
+clone:  inits --dest with core.autocrlf=false, fetches the bundle (remote-tracking,
+        local-branch and tag bases keep their names), detaches at --rev, verifies HEAD,
         and with --read-only clears every write bit (tree and .git) so reviewers must
-        copy it before probing.
+        copy it before probing. On any failure it removes what it created, so a retry
+        with the corrected arguments works.
 """
 import argparse
-import hashlib
 import os
+import shutil
 import stat
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from stage_transfer import sha256_file  # noqa: E402
 
 
 def _git(*args, cwd=None):
@@ -51,9 +56,15 @@ def bundle(rev, out, base="origin/main", repo="."):
         out = Path(out).resolve()
         out.parent.mkdir(parents=True, exist_ok=True)
         _git("bundle", "create", str(out), *refs, cwd=repo)
-    finally:
-        _git("update-ref", "-d", ref, cwd=repo)
-    digest = hashlib.sha256(out.read_bytes()).hexdigest()
+    except BaseException:
+        # never let a cleanup failure replace the real error
+        try:
+            _git("update-ref", "-d", ref, cwd=repo)
+        except RuntimeError as e:
+            print(f"review_copy: warning: temp ref {ref} left in {repo}: {e}", file=sys.stderr)
+        raise
+    _git("update-ref", "-d", ref, cwd=repo)
+    digest = sha256_file(out)
     print(f"bundle {out} rev={sha} base={refs[1] if len(refs) > 1 else '-'} "
           f"bytes={out.stat().st_size} sha256={digest}")
     return sha, digest
@@ -69,32 +80,68 @@ def _clear_write_bits(root):
         os.chmod(dirpath, os.stat(dirpath).st_mode & ~(stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
 
 
+def _force_remove(func, path, _exc):
+    # git writes object files read-only; Windows rmtree cannot unlink them otherwise
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+
+def _rmtree(path):
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_force_remove)
+    else:
+        shutil.rmtree(path, onerror=_force_remove)
+
+
+def _undo(dest, created):
+    """Remove what a failed clone made: dest itself if we created it, else its contents."""
+    if created:
+        _rmtree(dest)
+        return
+    for child in dest.iterdir():
+        if child.is_dir() and not child.is_symlink():
+            _rmtree(child)
+        else:
+            child.unlink()
+
+
 def clone(bundle_path, rev, dest, read_only=False):
     dest = Path(dest)
+    # validate everything before touching dest, so a refusal leaves nothing behind
+    if rev == "HEAD" or rev.startswith("-"):
+        raise RuntimeError("clone --rev needs the pinned SHA the bundle step printed, not HEAD")
     if dest.exists() and any(dest.iterdir()):
         raise RuntimeError(f"{dest} exists and is not empty")
+    created = not dest.exists()
     # init + fetch, not clone: the bundle carries refs/review/* and refs/remotes/*, no
     # refs/heads/*, so a plain clone would map nothing and check out nothing.
     dest.mkdir(parents=True, exist_ok=True)
+    try:
+        head = _clone_into(bundle_path, rev, dest)
+    except BaseException:
+        _undo(dest, created)
+        raise
+    depth = _git("rev-list", "--count", "HEAD", cwd=dest)
+    if read_only:
+        _clear_write_bits(dest)
+    print(f"clone {dest} HEAD={head} commits={depth} read_only={read_only}")
+    return head
+
+
+def _clone_into(bundle_path, rev, dest):
     _git("init", "-q", str(dest))
     _git("config", "core.autocrlf", "false", cwd=dest)
-    # every bundle ref under refs/review-bundle/, plus refs/remotes/* kept at their usual
-    # names so `git diff origin/main..HEAD` works as on the host.
-    if rev == "HEAD" or rev.startswith("-"):
-        raise RuntimeError("clone --rev needs the pinned SHA the bundle step printed, not HEAD")
-    # local-branch bases keep their names too (`--base main` -> `git diff main..HEAD`)
+    # every bundle ref under refs/review-bundle/, plus remote-tracking, local-branch and
+    # tag refs kept at their usual names so `git diff origin/main..HEAD` (or main.., or
+    # v1..) works as on the host.
     _git("fetch", "-q", "--update-head-ok", str(Path(bundle_path).resolve()),
          "refs/*:refs/review-bundle/*", "refs/remotes/*:refs/remotes/*", "refs/heads/*:refs/heads/*",
-         cwd=dest)
+         "refs/tags/*:refs/tags/*", cwd=dest)
     _git("-c", "advice.detachedHead=false", "checkout", "-q", "--detach", rev, cwd=dest)
     head = _git("rev-parse", "HEAD", cwd=dest)
     want = _git("rev-parse", "--verify", f"{rev}^{{commit}}", cwd=dest)
     if head != want:
         raise RuntimeError(f"HEAD {head} != requested {want}")
-    depth = _git("rev-list", "--count", "HEAD", cwd=dest)
-    if read_only:
-        _clear_write_bits(dest)
-    print(f"clone {dest} HEAD={head} commits={depth} read_only={read_only}")
     return head
 
 
