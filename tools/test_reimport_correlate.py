@@ -506,10 +506,10 @@ class AlreadyRecorded(PostclickTests):
         self.assertTrue(rc.mark_logged('demo-skill', snap, header))
         self.assertEqual(pr.recorded_install('demo-skill', rc.BASELINE_DIR), snap)
 
-    @unittest.skipUnless(os.name == 'nt', 'MAX_PATH is Windows-only')
     def test_cache_digest_sees_files_past_max_path(self):
-        """Refute round 3, C7: plain rglob skips paths over 260 chars, so an in-place
-        overwrite of such a file left the digest unchanged."""
+        """Refute round 3, C7: plain rglob skips paths over 260 chars on Windows, so an
+        in-place overwrite of such a file left the digest unchanged. Runs everywhere (no
+        skip: run_suite.sh's skip baseline is zero); off Windows _win_long is a no-op."""
         self._installed(marked=False)
         deep = Path(pr._win_long(self.cache / 'demo-skill')) / ('d' * 120) / ('e' * 120) / 'f.txt'
         os.makedirs(os.path.dirname(str(deep)), exist_ok=True)
