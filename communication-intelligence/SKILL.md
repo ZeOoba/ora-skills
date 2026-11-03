@@ -3,7 +3,7 @@ name: communication-intelligence
 description: "Use when the user mentions: write an email, draft a response, compose a message, reply to, reach out to, follow up with, send a letter to, communicate with, notify, or any request to produce a written communication to a broker, vendor, lender, attorney, or other external counterparty. Also trigger when the user receives an email and needs help crafting a response, or wants a draft enriched with relationship context (Notion, HubSpot, conversation history). Tenant comms route to tenant-email instead (CLAUDE.md Comms drafting tie-break)."
 ---
 
-# Communication Intelligence — Oxford Realty Advisors (v1.5)
+# Communication Intelligence — Oxford Realty Advisors (v1.6)
 
 ## MODULE 1: CONTEXT ENRICHMENT WORKFLOW
 
@@ -152,7 +152,7 @@ Subject: Certificate of Insurance Required — [Property Address], Suite [X]
 
 ### Deal Outreach to Broker
 Subject: Seeking Industrial Assets — [Market]
-- State Oxford's acquisition criteria concisely: market, size ($1M–$10M), building type (shallow-bay industrial/flex), deal type (value-add Class B/C)
+- State Oxford's acquisition criteria concisely: market, size ($1M–$10M for a single asset, or up to $15M for 2–5 buildings sold together; internal note, not for the email: $1M is ORA's sourcing filter and the screen floor is $500K, so a $500K–$1M deal a broker sends still goes to Gabriel), building type (shallow-bay industrial/flex), deal type (value-add Class B/C)
 - Express preference for off-market or lightly marketed deals
 - Offer quick timeline and clean execution
 - Do not disclose current pipeline or acquisition targets
@@ -218,6 +218,7 @@ Tenant-directed comms ("tenant notice" and similar) route to `tenant-email` inst
 
 ## Changelog
 
+- v1.6 (2026-11-03): the Deal Outreach to Broker criteria line names the Amendment H portfolio path (2–5 buildings sold together, up to $15M) and marks $1M as the sourcing filter, with the $500K screen floor named (Gabriel in-turn 2026-11-03: two floors). No other template, routing or trigger change.
 - v1.5 (2026-09-30): added Module 6 — dispatch the read-only `comms-qc-reviewer` agent for an independent Voice Register + Property-LLC signature check before handoff. The agent existed but no skill dispatched it (2 real dispatches in ~4 weeks of transcripts). No template, routing or trigger change.
 - v1.4 (2026-08-13): dropped "tenant"/"tenant notice" from both the frontmatter description and this trigger-phrase list — the ratified CLAUDE.md tie-break already routes tenant comms to `tenant-email`, but neither trigger surface here matched it. Found by the Automation Audit Rev 7 setup investigation. Module 5's "Renewal offer letters" template reference and Module 3's tenant-notice formal-email format are left as-is (output formatting this skill can still produce if invoked for a non-tenant counterparty, or a genuine edge case) — only the ROUTING trigger surfaces changed.
 - v1.1 (2026-07-08): CRITICAL fix (Skill Text Audit finding 1) — Standard Signature Block (§ Module 2) signed outbound comms as "Ze Ooba" / `ze@oxfordra.net`, an incorrect/retired identity never valid for this principal. Corrected to Gabriel Goldberg / `ggoldberg@oxfordra.net` per current routing canon. Entity Awareness logic immediately below (landlord mail signs as the property LLC, not the generic firm name) was reviewed and left intact — not regressed by this fix. Note: this repo copy already carried the correct block; the installed Cowork runtime copy did not (silent re-sync drift) — repackage and reinstall via `package-and-stage-skill` to close the gap.
