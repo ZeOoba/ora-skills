@@ -66,6 +66,8 @@ class FixtureTestCase(unittest.TestCase):
             unittest.mock.patch.object(rc, 'BASELINE_DIR', self.baselines),
             unittest.mock.patch.object(rc, 'LOCAL_LOG', self.local_log),
             unittest.mock.patch.object(rc, 'ROAMING_LOG', self.roaming_log),
+            # verify's ALREADY-RECORDED check reads the event log: never the real one.
+            unittest.mock.patch.object(pr, 'EVENT_LOG', self.tmp / 'event_log.md'),
         ]
         for p in self.patches:
             p.start()
@@ -395,6 +397,163 @@ class PostclickTests(FixtureTestCase):
         self.assertEqual(code, 1)
         self.assertIn('ledger NOT cleared', out)
         self.assertFalse(any('clear' in [str(a) for a in c.args[0]] for c in run.call_args_list))
+
+
+class AlreadyRecorded(PostclickTests):
+    """2026-11-03: a Cowork session's postclick logged submarket-spatial-analysis v1.10
+    and used every baseline up; the user's own postclick then said NO-BASELINE, and a
+    --baseline retry said VERSION-UNKNOWN, for an install that was already logged."""
+
+    def _installed(self, version='1.10', marked=True):
+        """`marked`: the install's append exited 0 (postclick / cycle close marked it)."""
+        _write(self.cache / 'demo-skill' / 'SKILL.md', f'---\nname: demo-skill\n---\n\n# Demo (v{version})\n')
+        ct = rc._creation_time('demo-skill')
+        if marked:
+            pr.write_recorded_install('demo-skill', *rc.install_snapshot('demo-skill'),
+                                      base=rc.BASELINE_DIR)
+        return ct
+
+    def _log(self, header_date, version='1.10', top=True):
+        entry = (f'## {header_date} -- demo-skill v{version} reimport confirmed\n\n'
+                 f'demo-skill v{version} reimported via Cowork Save-skill; reimport_correlate CONFIRMED.\n')
+        other = '## 2099-01-01 -- other-skill v2.0 reimport confirmed\n\nother-skill CONFIRMED.\n'
+        _write(pr.EVENT_LOG, (other + '\n' if top else '') + entry)
+
+    def test_logged_install_reports_already_recorded_and_exits_3(self):
+        ct = self._installed()
+        self._log(ct.strftime('%Y-%m-%d'))
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, False)
+        self.assertEqual(code, rc.ALREADY_RECORDED_RC, out)
+        self.assertIn('demo-skill: ALREADY-RECORDED', out)
+        self.assertNotIn('NO-BASELINE', out)
+        self.assertFalse(self.calls.exists())          # nothing appended twice
+
+    def test_no_append_postclick_is_never_0_so_reimport_cycle_cannot_relog(self):
+        """Refute C2a: reimport_cycle.cmd_close reads postclick exit 0 as CONFIRMED."""
+        ct = self._installed()
+        self._log(ct.strftime('%Y-%m-%d'))
+        code, _ = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+        self.assertNotEqual(code, 0)
+
+    def test_same_day_reinstall_without_a_marker_stays_no_baseline(self):
+        """Refute C2b: a morning v1.10 install is logged; a later reinstall of the same
+        version (new CreationTime, never verified) must not read as already logged."""
+        ct = self._installed()
+        self._log(ct.strftime('%Y-%m-%d'))
+        pr.write_recorded_install('demo-skill', ct.replace(year=ct.year - 1),
+                                  pr.cache_digest('demo-skill', rc.CACHE_ROOT), base=rc.BASELINE_DIR)
+        code, out = self._run(rc.cmd_verify, ['demo-skill'], None)
+        self.assertEqual(code, 1)
+        self.assertIn('NO-BASELINE', out)
+
+    def test_bare_consume_never_marks_an_install_as_logged(self):
+        """Refute round 2, C6: `consume` runs by hand too; only a successful append marks."""
+        ct = self._installed(marked=False)
+        self._log(ct.strftime('%Y-%m-%d'))
+        self._run(rc.cmd_consume, ['demo-skill'])
+        self.assertIsNone(pr.recorded_install('demo-skill', rc.BASELINE_DIR))
+        code, out = self._run(rc.cmd_verify, ['demo-skill'], None)
+        self.assertIn('NO-BASELINE', out)
+
+    def test_successful_postclick_append_marks_the_install(self):
+        self._confirmable()
+        _write(self.cache / 'demo-skill' / 'SKILL.md', '# Demo (v4.23)\n')
+        # the fake append records the entry elsewhere; put its header where mark_logged looks
+        _write(pr.EVENT_LOG, f'## {datetime.now():%Y-%m-%d} -- demo-skill v4.23 reimport confirmed\n\nx\n')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.23', False, False)
+        self.assertEqual(code, 0, out)
+        self.assertIsNotNone(pr.recorded_install('demo-skill', rc.BASELINE_DIR))
+
+    def test_install_changed_between_verify_and_mark_is_not_marked(self):
+        """Refute round 3, C10: a concurrent Save-skill lands while the append runs."""
+        self._installed(marked=False)
+        snap = rc.install_snapshot('demo-skill')
+        header = '## 2026-11-03 -- demo-skill v1.10 reimport confirmed'
+        _write(pr.EVENT_LOG, header + '\n\nCONFIRMED.\n')
+        _write(self.cache / 'demo-skill' / 'SKILL.md', '# Demo (v1.11)\n')     # the other install
+        with redirect_stdout(io.StringIO()) as out:
+            self.assertFalse(rc.mark_logged('demo-skill', snap, header))
+        self.assertIn('cache changed between verify and the append', out.getvalue())
+        self.assertIsNone(pr.recorded_install('demo-skill', rc.BASELINE_DIR))
+
+    def test_spooled_append_is_not_marked(self):
+        """append-event-log.py exits 0 when it spools a locked log: no entry yet, no mark."""
+        self._installed(marked=False)
+        snap = rc.install_snapshot('demo-skill')
+        with redirect_stdout(io.StringIO()) as out:
+            self.assertFalse(rc.mark_logged('demo-skill', snap, '## 2026-11-03 -- demo-skill reimport'))
+        self.assertIn('not in event_log.md yet', out.getvalue())
+        self.assertIsNone(pr.recorded_install('demo-skill', rc.BASELINE_DIR))
+
+    def test_spooled_append_with_a_duplicate_same_day_header_is_not_marked(self):
+        """Refute round 4, C11: headers are deterministic, so an earlier same-day run's
+        identical header is already in the log while this run's entry sits in the spool."""
+        self._installed(marked=False)
+        snap = rc.install_snapshot('demo-skill')
+        header = '## 2026-11-03 -- demo-skill v1.10 reimport confirmed'
+        _write(pr.EVENT_LOG, header + '\n\nCONFIRMED (earlier run).\n')
+        with redirect_stdout(io.StringIO()) as out:
+            self.assertFalse(rc.mark_logged('demo-skill', snap, header,
+                                            f'spooled (log locked): {header}\n'))
+        self.assertIn('spooled', out.getvalue())
+        self.assertIsNone(pr.recorded_install('demo-skill', rc.BASELINE_DIR))
+
+    def test_unchanged_install_with_its_entry_present_is_marked(self):
+        self._installed(marked=False)
+        snap = rc.install_snapshot('demo-skill')
+        header = '## 2026-11-03 -- demo-skill v1.10 reimport confirmed'
+        _write(pr.EVENT_LOG, header + '\n\nCONFIRMED.\n')
+        self.assertTrue(rc.mark_logged('demo-skill', snap, header))
+        self.assertEqual(pr.recorded_install('demo-skill', rc.BASELINE_DIR), snap)
+
+    def test_cache_digest_sees_files_past_max_path(self):
+        """Refute round 3, C7: plain rglob skips paths over 260 chars on Windows, so an
+        in-place overwrite of such a file left the digest unchanged. Runs everywhere (no
+        skip: run_suite.sh's skip baseline is zero); off Windows _win_long is a no-op."""
+        self._installed(marked=False)
+        deep = Path(pr._win_long(self.cache / 'demo-skill')) / ('d' * 120) / ('e' * 120) / 'f.txt'
+        os.makedirs(os.path.dirname(str(deep)), exist_ok=True)
+        with open(str(deep), 'w') as f:
+            f.write('one')
+        before = pr.cache_digest('demo-skill', rc.CACHE_ROOT)
+        with open(str(deep), 'w') as f:
+            f.write('two')
+        self.assertNotEqual(pr.cache_digest('demo-skill', rc.CACHE_ROOT), before)
+
+    def test_failed_append_does_not_mark(self):
+        self._confirmable()
+        _write(self.cache / 'demo-skill' / 'SKILL.md', '# Demo (v1.0)\n')
+        with unittest.mock.patch.dict('os.environ', {'FAKE_APPEND_RC': '1'}):
+            self._run(rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+        self.assertIsNone(pr.recorded_install('demo-skill', rc.BASELINE_DIR))
+
+    def test_clear_ledger_runs_the_guarded_clear(self):
+        ct = self._installed()
+        self._log(ct.strftime('%Y-%m-%d'))
+        _write(self.repo / 'demo-skill' / 'SKILL.md', '---\nname: demo-skill\n---\n\n# Demo (v1.10)\n')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
+        self.assertEqual(code, rc.ALREADY_RECORDED_RC, out)
+        self.assertEqual(self.pending_calls.read_text(), 'clear demo-skill')
+
+    def test_entry_dated_before_the_install_is_not_it(self):
+        self._installed()
+        self._log('2000-01-01', top=False)
+        code, out = self._run(rc.cmd_verify, ['demo-skill'], None)
+        self.assertEqual(code, 1)
+        self.assertIn('NO-BASELINE', out)
+
+    def test_entry_for_another_version_is_not_it(self):
+        ct = self._installed('1.11')
+        self._log(ct.strftime('%Y-%m-%d'), version='1.10')
+        code, out = self._run(rc.cmd_verify, ['demo-skill'], None)
+        self.assertEqual(code, 1)
+        self.assertIn('NO-BASELINE', out)
+
+    def test_no_log_keeps_no_baseline(self):
+        self._installed()
+        code, out = self._run(rc.cmd_verify, ['demo-skill'], None)
+        self.assertEqual(code, 1)
+        self.assertIn('NO-BASELINE', out)
 
 
 class BaselineDirResolvesToPrimaryCheckout(unittest.TestCase):
