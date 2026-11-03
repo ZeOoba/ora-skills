@@ -442,6 +442,38 @@ def _read_with_stat(path: Path):
         return f.read(), os.fstat(f.fileno())
 
 
+def _divergent_provenance(repo_root: Path, cache_file: Path, max_branches: int = 3) -> str | None:
+    """`<short sha> "<subject>" (on <branches>)` for the earliest commit that introduced the
+    cache file's exact blob, or None when git can't say. A DIVERGENT verdict used to name
+    only the rescue dir, whose `-<checkout>` suffix is the sweeping checkout: 2026-11-03,
+    a rescue labelled `-pr167` sent a session to PR #167 (loi-generation) when the cache
+    really matched capture commit 24010a4c on the pr131 capture branches. Best effort,
+    never raises: provenance is a hint on a finding, not part of the verdict."""
+    def git(*args):
+        r = subprocess.run(['git', '-C', str(repo_root), *args], capture_output=True, text=True)
+        return r.stdout.strip() if r.returncode == 0 else ''
+    try:
+        blob = git('hash-object', '--no-filters', str(cache_file))
+        if not blob:
+            return None
+        # --find-object also lists the commit that later REPLACED the blob; the earliest
+        # hit is the one that introduced it. -m diffs merges too: a blob first created by
+        # a conflict resolution is otherwise invisible, and the replacer looks earliest.
+        hits = git('log', '--all', '-m', '--reverse', '--format=%h%x00%s',
+                   f'--find-object={blob}')
+        if not hits:
+            return None
+        sha, subject = hits.splitlines()[0].split('\0', 1)
+        heads = [b.strip().lstrip('* ').strip() for b in
+                 git('branch', '-a', '--contains', sha, '--format=%(refname:short)').splitlines()]
+        heads = [b for b in heads if b]
+        on = ', '.join(heads[:max_branches]) + (f' +{len(heads) - max_branches} more'
+                                                 if len(heads) > max_branches else '')
+        return f'{sha} "{subject}"' + (f' (on {on})' if on else ' (on no branch)')
+    except (OSError, ValueError):
+        return None
+
+
 def _newest_rescue(skill_dir: Path) -> Path | None:
     if not skill_dir.is_dir():
         return None
@@ -552,7 +584,11 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
     }
     fix = {
         'CACHE-AHEAD': 'Edited platform-side and never committed -- commit it to the repo first.',
-        'DIVERGENT': 'Installed from another branch -- reconcile the branches, do not auto-reimport.',
+        'DIVERGENT': 'Installed from another branch -- reconcile the branches, do not auto-reimport.\n'
+                     '   If the matched commit is a capture/branch whose content main later '
+                     're-landed (squash), diff the rescue against main: when main holds '
+                     'everything the rescue does, the cache copy is stale -- main wins, '
+                     'repackage + Save-skill, no repo change.',
         'REPO-MISSING': 'Created platform-side (create-skill / a direct cache write) with no '
                          'repo counterpart -- commit it to the repo, or delete it from the '
                          'cache if it should not exist.',
@@ -570,6 +606,10 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
         print(f'!! REPO-FIRST {verdict}: {skill}', file=sys.stderr)
         for rel, v in bad:
             print(f'     {rel} -- {why[v]}', file=sys.stderr)
+            if v == 'DIVERGENT':
+                where = _divergent_provenance(repo_root, Path(cache_root) / skill / rel)
+                if where:
+                    print(f'       matches {where}', file=sys.stderr)
         for v in ('CACHE-AHEAD', 'REPO-MISSING', 'DIVERGENT'):
             if v in {bv for _, bv in bad}:
                 print(f'   {fix[v]}', file=sys.stderr)
@@ -578,6 +618,8 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
                       checkout=Path(repo_root).resolve().name)
         if dest:
             print(f'   Rescued the cache copy -> {dest}', file=sys.stderr)
+            print(f'   (the "-{Path(repo_root).resolve().name}" suffix names the checkout that ran '
+                  f'this sweep, not the branch the cache was installed from)', file=sys.stderr)
             print('   Reconcile it into the repo before relying on either store.', file=sys.stderr)
 
     if not check_staged and _primary_checkout(repo_root).resolve() != Path(repo_root).resolve():

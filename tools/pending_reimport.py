@@ -59,6 +59,13 @@ exists to catch, so silently proceeding would defeat its own purpose. `--force`
 overrides it for a genuine edge case (skips the check for every skill named in
 this invocation) and is never silent -- it prints why the guard would have
 refused before proceeding.
+
+CONCURRENT-ENTRY FALLBACK (2026-11-03): a skill the newest entry does not NAME may
+still clear when the install now in the cache postdates the ledger line's `pending
+since`, a recorded-install marker (written only after a successful append) matches its
+CreationTime, and the newest entry naming it confirms and never negates it, at the
+installed version the repo declares (older_entry_authorizes, logged_install_entry).
+Other sessions logging their own reimports a minute later no longer force --force.
 """
 import contextlib
 import hashlib
@@ -69,7 +76,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Reuse the packager's single source of truth for the shared-dep fan-out + skip set,
@@ -412,13 +419,17 @@ def record_hits(hits, shorthash, subject, ledger_path: Path | None = None,
 
 
 def clear_entries(skills, ledger_path: Path | None = None,
-                  timeout: float | None = None) -> list[str]:
+                  timeout: float | None = None, expected: dict[str, str] | None = None) -> list[str]:
     """cmd_clear's ledger write, after its log-before-clear guard. Returns the
-    skills that were actually pending and are now cleared."""
+    skills that were actually pending and are now cleared. A skill in `expected` is
+    cleared only while its line still reads exactly that (the line its guard judged)."""
     cleared: list[str] = []
+    expected = expected or {}
 
     def mutate(entries):
-        cleared[:] = [s for s in skills if entries.pop(s, None) is not None]
+        cleared[:] = [s for s in skills
+                      if s in entries and (s not in expected or entries[s] == expected[s])
+                      and entries.pop(s, None) is not None]
 
     update_entries(mutate, ledger_path, timeout=timeout)
     return cleared
@@ -973,7 +984,7 @@ def cmd_backfill() -> None:
         print(f'   {skill}')
 
 
-def newest_event_log_block(log_path: Path = EVENT_LOG) -> tuple[str, str] | tuple[None, None]:
+def newest_event_log_block(log_path: Path | None = None) -> tuple[str, str] | tuple[None, None]:
     """(header_line, full_block_text) of the newest dated '## YYYY-MM-DD' entry in
     event_log.md, or (None, None) if the log is missing, empty, or has no dated
     entry. Newest-first is append-event-log.py's own insertion convention
@@ -982,10 +993,18 @@ def newest_event_log_block(log_path: Path = EVENT_LOG) -> tuple[str, str] | tupl
 
     Skips YAML frontmatter the same way append-event-log.py's entry_blocks() does,
     so a '## ' inside the frontmatter block is never mistaken for an entry."""
+    blocks = event_log_blocks(log_path)
+    return blocks[0] if blocks else (None, None)
+
+
+def event_log_blocks(log_path: Path | None = None) -> list[tuple[str, str]]:
+    """Every dated entry as (header_line, full_block_text), newest first; [] if the log
+    is missing, empty, or has no dated entry. `log_path` defaults to EVENT_LOG at CALL
+    time, so a patched EVENT_LOG is honored."""
     try:
-        content = log_path.read_text(encoding='utf-8')
+        content = (log_path or EVENT_LOG).read_text(encoding='utf-8')
     except OSError:
-        return None, None
+        return []
     body_start = 0
     if content.startswith('---\n'):
         end = content.find('\n---\n', 4)
@@ -993,11 +1012,221 @@ def newest_event_log_block(log_path: Path = EVENT_LOG) -> tuple[str, str] | tupl
             body_start = end + len('\n---\n')
     lines = content[body_start:].split('\n')
     idxs = [i for i, ln in enumerate(lines) if _ENTRY_HEADER_RE.match(ln)]
-    if not idxs:
-        return None, None
-    i = idxs[0]
-    j = idxs[1] if len(idxs) > 1 else len(lines)
-    return lines[i], '\n'.join(lines[i:j])
+    ends = idxs[1:] + [len(lines)]
+    return [(lines[i], '\n'.join(lines[i:j])) for i, j in zip(idxs, ends)]
+
+
+def _entry_date(header: str) -> str:
+    return header[3:13]
+
+
+def newest_block_naming(skill: str, since: str, log_path: Path | None = None):
+    """(header, block) of the newest entry dated on or after `since` (YYYY-MM-DD) that
+    names `skill`, or (None, None). Only the newest such entry counts: an older entry
+    that confirms the skill must not outvote a newer one that says it was not installed."""
+    for header, block in event_log_blocks(log_path):
+        if _entry_date(header) < since:
+            break
+        if _named_in_block(skill, block):
+            return header, block
+    return None, None
+
+
+_PENDING_SINCE_RE = re.compile(r'\| pending since (\d{4}-\d{2}-\d{2}T\d{2}:\d{2})Z')
+
+# Where reimport_correlate keeps its baselines -- and, in a sibling dir of their own (a
+# per-skill baseline dir holds baselines only), the marker naming the install whose log
+# entry they were used up for (write_recorded_install).
+BASELINE_DIR = _primary_checkout(REPO) / '_staging' / 'reimport-baselines'
+RECORDED_DIRNAME = '_recorded-installs'
+
+
+def _recorded_path(skill: str, base: Path | None) -> Path:
+    return (base or BASELINE_DIR) / RECORDED_DIRNAME / f'{skill}.txt'
+
+
+def cache_digest(skill: str, cache_root: Path | None = None) -> str | None:
+    """One SHA256 over every file in the cache skill dir (relative path + normalized
+    content), or None when it cannot be read. CreationTime alone is not enough: the pre-
+    commit mirror sync overwrites cache files IN PLACE and keeps it (2026-11-03 refute, C7)."""
+    # Walked through the `\\?\` form: plain rglob silently skips paths past MAX_PATH, and
+    # masterlease-jurisdiction-rebase ships 9 of its 18 cache files there (round-3 refute).
+    root = _win_long((cache_root or CACHE_ROOT) / skill)
+    rels: list[str] = []
+    try:
+        if not os.path.isdir(root):
+            return None
+        for dirpath, _dirs, names in os.walk(root, onerror=_raise):
+            for n in names:
+                rels.append(os.path.relpath(os.path.join(dirpath, n), root).replace(os.sep, '/'))
+        if not rels:
+            return None
+        h = hashlib.sha256()
+        for rel in sorted(rels):
+            with open(os.path.join(root, *rel.split('/')), 'rb') as f:
+                data = f.read()
+            h.update(rel.encode('utf-8') + b'\0')
+            h.update(_normalized_hash_bytes(data).encode('ascii') + b'\n')
+        return h.hexdigest()
+    except OSError:
+        return None
+
+
+def _raise(exc: OSError) -> None:
+    raise exc
+
+
+def write_recorded_install(skill: str, creation_time: datetime, digest: str,
+                           base: Path | None = None) -> None:
+    """Record that the install now in the cache (its CreationTime AND content digest) has
+    its event-log entry. Call it ONLY right after that entry's append exited 0
+    (reimport_correlate.cmd_postclick, reimport_cycle.cmd_close) -- never from consume,
+    which a session may run by hand (2026-11-03 refute, C6). It is the proof the log's
+    date-only headers cannot give: an older same-day entry must not stand for a later
+    install or an in-place overwrite."""
+    path = _recorded_path(skill, base)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write_text(path, f'{creation_time.isoformat()}\n{digest}\n')
+
+
+def recorded_install(skill: str, base: Path | None = None) -> tuple[datetime, str] | None:
+    try:
+        when, digest = _read_text_retry(_recorded_path(skill, base)).split()
+        parsed = datetime.fromisoformat(when)
+    except (OSError, ValueError):
+        return None
+    return None if parsed.tzinfo is not None else (parsed, digest)
+
+
+def cache_creation_time(skill: str, cache_root: Path | None = None) -> datetime | None:
+    """The cache dir's CreationTime (naive local), the same reading reimport_correlate uses."""
+    d = (cache_root or CACHE_ROOT) / skill
+    try:
+        return datetime.fromtimestamp(d.stat().st_ctime) if d.is_dir() else None
+    except OSError:
+        return None
+
+
+def _skill_md_text_version(text: str) -> str | None:
+    """Version a SKILL.md text declares: frontmatter `version:`, else the H1's `(vX.Y`,
+    else a trailing ` vX.Y` -- the same precedence as reimport_correlate._skill_md_version."""
+    text = text.replace('\r\n', '\n').lstrip('﻿')
+    m = re.match(r'^---\n(.*?)\n---\n', text, re.S)
+    if m:
+        v = re.search(r'^version:\s*["\']?v?([\w.\-]+)["\']?\s*(?:#.*)?$', m.group(1), re.M)
+        if v:
+            return v.group(1).lstrip('vV')
+        text = text[m.end():]
+    h1 = next((ln for ln in text.split('\n') if ln.startswith('# ')), None)
+    if h1 is None:
+        return None
+    v = re.search(r'\(v?(\d+(?:\.\d+)+)', h1) or re.search(r'\bv(\d+(?:\.\d+)+)\b', h1)
+    return v.group(1) if v else None
+
+
+def _skill_version(root: Path, skill: str) -> str | None:
+    try:
+        return _skill_md_text_version((root / skill / 'SKILL.md').read_text(
+            encoding='utf-8', errors='replace'))
+    except OSError:
+        return None
+
+
+# reimport_correlate's own non-CONFIRMED verdict words, uppercase as it prints them. Only the
+# buried-entry path reads these (2026-11-03 refute, C9); the newest-entry guard's narrow list
+# is unchanged, by its own over-firing rationale.
+_TOOL_STOP_RES = tuple(re.compile(p) for p in (
+    r'\bVERSION-MISMATCH\b', r'\bVERSION-UNKNOWN\b', r'\bMOVED-ONLY\b', r'\bNO-CHANGE\b',
+    r'\bNO-BASELINE\b', r'\bNO-CACHE\b', r'\bSTOP\b', r'\bFAIL\b',
+))
+
+
+def _entry_logs_install(skill: str, block: str) -> str | None:
+    """Why `block` does NOT log a confirmed install of `skill`, or None when it does. Stricter
+    than clear_authorized(), because a buried entry is read here: a confirmation must sit in
+    a unit that names THIS skill, and a non-install phrase in ANY unit naming it refuses --
+    a sole-subject unit or not (2026-11-03 refute, C1b: "skill-b CONFIRMED, skill-a NOT
+    installed" in one sentence authorized skill-a)."""
+    units = [u for u in _scopes(block) if _named_in_block(skill, u)]
+    for unit in units:
+        for rx in _NON_INSTALL_RES + _TOOL_STOP_RES:
+            m = rx.search(unit)
+            if m:
+                return f'named as NOT installed ("{m.group(0)}")'
+    if not any(_CONFIRM_RE.search(u) for u in units):
+        return 'records no confirmed install of it'
+    return None
+
+
+def logged_install_entry(skill: str, log_path: Path | None = None, base: Path | None = None,
+                         cache_root: Path | None = None) -> tuple[str | None, str]:
+    """(header, '') of the event-log entry that logs the install NOW in the cache, or
+    (None, why). All must hold:
+      - a recorded-install marker matches the cache's CreationTime to the second AND its
+        content digest (proof that THIS install -- the one verified -- was logged; dates
+        alone cannot tell two same-day installs apart, nor an in-place overwrite);
+      - the newest entry naming the skill, dated on or after that CreationTime's (local)
+        date, logs a confirmed install of it and negates it nowhere;
+      - a version it logs for the skill (`<skill> vX.Y`) equals the installed version."""
+    ct = cache_creation_time(skill, cache_root)
+    if ct is None:
+        return None, 'no cache dir'
+    rec = recorded_install(skill, base)
+    if (rec is None or abs((ct - rec[0]).total_seconds()) >= 1
+            or rec[1] != cache_digest(skill, cache_root)):
+        return None, ('no recorded-install marker for the cache\'s current install '
+                      '(CreationTime + content)')
+    header, block = newest_block_naming(skill, ct.strftime('%Y-%m-%d'), log_path)
+    if block is None:
+        return None, f'not named in any entry dated on or after {ct:%Y-%m-%d}'
+    why = _entry_logs_install(skill, block)
+    if why:
+        return None, f'{why} in "{header.strip()}"'
+    v = re.search(rf'(?<![\w-]){re.escape(skill)} v(\d+(?:\.\d+)+)(?![\w.])', block)
+    try:
+        installed = _skill_md_text_version(((cache_root or CACHE_ROOT) / skill / 'SKILL.md')
+                                           .read_text(encoding='utf-8', errors='replace'))
+    except OSError:
+        installed = None
+    if v and v.group(1) != installed:
+        return None, (f'logged as v{v.group(1)} in "{header.strip()}" but the cache holds '
+                      f'{"v" + installed if installed else "no readable version"}')
+    return header.strip(), ''
+
+
+def older_entry_authorizes(skill: str, ledger_line: str, log_path: Path | None = None
+                           ) -> tuple[bool, str]:
+    """Fallback for a skill the NEWEST entry does not name: concurrent sessions log their
+    own reimports, so a confirmed install is often pushed one or more entries down within
+    minutes (2026-11-03: submarket-spatial-analysis sat below portfolio-growth). Authorized
+    only when the install now in the cache (a) happened AFTER the ledger line went pending
+    (its CreationTime is later than `pending since`, compared in UTC) and (b) is logged
+    (logged_install_entry), and (c) the repo declares the version that is installed."""
+    m = _PENDING_SINCE_RE.search(ledger_line or '')
+    if not m:
+        return False, 'not named in'
+    since = datetime.strptime(m.group(1), '%Y-%m-%dT%H:%M').replace(tzinfo=timezone.utc)
+    ct = cache_creation_time(skill)
+    # `pending since` is cut to the minute: the commit may be up to 59s after it, so only
+    # an install a full minute later is known to follow it (2026-11-03 refute, C8).
+    if ct is None or ct.astimezone(timezone.utc) <= since + timedelta(minutes=1):
+        return False, (f'not named in (and the cache was not reinstalled after it went '
+                       f'pending at {m.group(1)}Z) --')
+    header, why = logged_install_entry(skill, log_path)
+    if header is None:
+        return False, f'not named in (fallback: {why}) --'
+    try:
+        installed = _skill_md_text_version((CACHE_ROOT / skill / 'SKILL.md').read_text(
+            encoding='utf-8', errors='replace'))
+    except OSError:
+        installed = None
+    repo_vers = {x for x in (_skill_version(REPO, skill),
+                             _skill_version(_primary_checkout(REPO), skill)) if x}
+    if repo_vers and repo_vers != {installed}:
+        return False, (f'not named in (fallback: the repo declares '
+                       f'{", ".join(sorted("v" + x for x in repo_vers))} but the cache holds '
+                       f'{"v" + installed if installed else "no readable version"}) --')
+    return True, ''
 
 
 def _named_in_block(skill: str, block: str) -> bool:
@@ -1125,6 +1354,7 @@ def cmd_clear(skills: list[str], force: bool = False) -> None:
     # Nothing was ever installed for a Code-only skill with no cache dir, so there is no
     # install to log and the log-before-clear guard has nothing to guard for it.
     gated = [sk for sk in skills if not code_only_uninstalled(sk)]
+    expected: dict[str, str] = {}
     if not force and gated:
         header, block = newest_event_log_block()
         if block is None:
@@ -1138,6 +1368,17 @@ def cmd_clear(skills: list[str], force: bool = False) -> None:
             )
             sys.exit(1)
         verdicts = {s: clear_authorized(s, block) for s in gated}
+        # Only a skill the newest entry does not NAME falls back: one it names and refuses
+        # (unconfirmed, or negated) is refused on that newer verdict, never an older one.
+        unnamed = [s for s, (ok, why) in verdicts.items() if not ok and why == 'not named in']
+        if unnamed:
+            lines = read_entries(LEDGER)
+            for s in unnamed:
+                verdicts[s] = older_entry_authorizes(s, lines.get(s, ''))
+                if verdicts[s][0]:
+                    # judged on THIS line's pending-since: a post-commit hook that rewrites
+                    # it before the clear takes the lock must not be cleared on the old one
+                    expected[s] = lines[s]
         unlogged = [s for s, (ok, _) in verdicts.items() if not ok]
         if unlogged:
             for s in unlogged:
@@ -1153,7 +1394,7 @@ def cmd_clear(skills: list[str], force: bool = False) -> None:
             if not skills:
                 sys.exit(1)
     try:
-        cleared = clear_entries(skills)
+        cleared = clear_entries(skills, expected=expected)
     except LedgerLockTimeout as exc:
         print(_ledger_failure_message(exc, f'{", ".join(skills)} NOT cleared',
                                       'Re-run the same clear.'), file=sys.stderr)
@@ -1161,6 +1402,11 @@ def cmd_clear(skills: list[str], force: bool = False) -> None:
     if cleared:
         print(f'pending_reimport: cleared {", ".join(cleared)}')
     missing = [s for s in skills if s not in cleared]
+    moved = [s for s in missing if s in expected and s in read_entries(LEDGER)]
+    if moved:
+        print(f'pending_reimport: NOT cleared (its ledger line changed after it was judged; '
+              f're-run the clear): {", ".join(moved)}', file=sys.stderr)
+        missing = [s for s in missing if s not in moved]
     if missing:
         print(f'pending_reimport: not pending (nothing to clear): {", ".join(missing)}')
 
