@@ -1428,6 +1428,11 @@ class PostclickPackageVersion(PostclickTests):
         _write(rc._baseline_path('demo-skill'),
                json.dumps({**self._baseline_json(), 'creation_time': '2020-01-01T00:00:00'}))
         self._cache_md(installed)
+        # These tests are about the version. The content check has its own class, so the
+        # installed content matches the manifest here.
+        _write(rc._baseline_path('demo-skill'), json.dumps({
+            **self._baseline_json(),
+            'expected_files': {'SKILL.md': rc._normalized_hash(self.cache / 'demo-skill' / 'SKILL.md')}}))
         self._repo_md(checkout)
         ts = rc._creation_time('demo-skill').strftime('%Y-%m-%d %H:%M:%S')
         _write(self.local_log,
@@ -1479,8 +1484,9 @@ class PostclickPackageVersion(PostclickTests):
         self._arm(packaged='4.32', installed='4.31', checkout='4.31')
         _write(self.cache / 'demo-skill' / 'SKILL.md',
                '---\nname: demo-skill\ndescription: d\n---\n\n# Demo, no version\n')
-        _write(rc._baseline_path('demo-skill'),
-               json.dumps({**self._baseline_json(), 'expected_version': None}))
+        _write(rc._baseline_path('demo-skill'), json.dumps({
+            **self._baseline_json(), 'expected_version': None,
+            'expected_files': {'SKILL.md': rc._normalized_hash(self.cache / 'demo-skill' / 'SKILL.md')}}))
         code, out = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
         self.assertEqual(code, 0, out)
         self.assertIn('version not verified', out)
@@ -1998,8 +2004,9 @@ class LedgerGuardRoundFive(PostclickPackageVersion):
         self._arm(packaged='4.29', installed='4.29', checkout='4.30')
         _write(self.cache / 'demo-skill' / 'SKILL.md',
                '---\nname: demo-skill\ndescription: d\n---\n\n# Demo, no version\n')
-        _write(rc._baseline_path('demo-skill'),
-               json.dumps({**self._baseline_json(), 'expected_version': None}))
+        _write(rc._baseline_path('demo-skill'), json.dumps({
+            **self._baseline_json(), 'expected_version': None,
+            'expected_files': {'SKILL.md': rc._normalized_hash(self.cache / 'demo-skill' / 'SKILL.md')}}))
         code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, True)
         self.assertEqual(code, 0, out)
         self.assertIn('ledger NOT cleared', out)
@@ -2078,6 +2085,110 @@ class PostclickTestsNeverReachTheRealLedger(unittest.TestCase):
         finally:
             t.doCleanups()
             t.tearDown()
+
+
+class PostclickContentCheck(PostclickTests):
+    """2026-11-03: postclick said CONFIRMED and exit 0 without comparing any bytes. A timing
+    match proves an install happened, not that the package's content landed whole."""
+
+    PKG = {'SKILL.md': b'---\r\nname: demo-skill\r\ndescription: d\r\n---\r\nbody\r\n',
+           'target-markets.json': b'{"k": 1}\n'}
+    CACHED = {'SKILL.md': '---\nname: "demo-skill"\ndescription: d\n---\nbody\n',
+              'target-markets.json': '{"k": 1}\n'}
+
+    def _manifest(self):
+        return {k: rc._normalized_hash_bytes(v) for k, v in self.PKG.items()}
+
+    def _install(self, cached, manifest, version=None):
+        self._confirmable()
+        for rel, text in cached.items():
+            _write(self.cache / 'demo-skill' / rel, text)
+        data = {'skill': 'demo-skill', 'creation_time': '2020-01-01T00:00:00',
+                'expected_files': manifest}
+        if version:
+            data['expected_version'] = version
+        _write(rc._baseline_path('demo-skill'), json.dumps(data))
+
+    def test_platform_serialization_is_not_a_difference(self):
+        self._install(self.CACHED, self._manifest())
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+        self.assertEqual(code, 0, out)
+        self.assertIn('content verified', out)
+        self.assertTrue(self.calls.exists())
+
+    def test_missing_file_stops_and_appends_nothing(self):
+        cached = {'SKILL.md': self.CACHED['SKILL.md']}
+        self._install(cached, self._manifest())
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '1.0', False, True)
+        self.assertEqual(code, 1, out)
+        self.assertIn('demo-skill: CONTENT-MISMATCH', out)
+        self.assertNotIn('demo-skill: CONFIRMED', out)
+        self.assertIn('target-markets.json: missing', out)
+        self.assertFalse(self.calls.exists())
+        self.assertFalse(self.pending_calls.exists())
+
+    def test_changed_body_stops_and_appends_nothing(self):
+        cached = dict(self.CACHED, **{'SKILL.md': self.CACHED['SKILL.md'].replace('body', 'other')})
+        self._install(cached, self._manifest())
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+        self.assertEqual(code, 1, out)
+        self.assertIn('SKILL.md: content differs', out)
+        self.assertFalse(self.calls.exists())
+
+    def test_malformed_manifest_never_reads_as_unrecorded(self):
+        self._install(self.CACHED, 'not-a-manifest')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+        self.assertEqual(code, 1, out)
+        self.assertIn('malformed', out)
+        self.assertFalse(self.calls.exists())
+
+    def test_no_manifest_warns_and_still_appends(self):
+        self._confirmable()
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '1.0', False, False)
+        self.assertEqual(code, 0, out)
+        self.assertIn('content not verified', out)
+        self.assertTrue(self.calls.exists())
+
+    def test_no_append_stops_on_a_mismatch_too(self):
+        self._install({}, self._manifest())
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '1.0', True, False)
+        self.assertEqual(code, 1, out)
+        self.assertIn('CONTENT-MISMATCH', out)
+
+    def test_override_reads_the_matching_baselines_manifest(self):
+        self._install({'SKILL.md': self.CACHED['SKILL.md']}, self._manifest(), version='1.0')
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', None, False, False,
+                              '2020-01-01 00:00:00')
+        self.assertEqual(code, 1, out)
+        self.assertIn('target-markets.json: missing', out)
+        self.assertFalse(self.calls.exists())
+
+
+class PrecheckRecordsManifest(PrecheckTests):
+    def _read(self):
+        return json.loads(rc._baseline_path('demo-skill').read_text())
+
+    def test_passing_precheck_records_every_packaged_file(self):
+        _make_pkg(self.pkg, 'demo-skill', self._good_entries())
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(set(self._read()['expected_files']),
+                         {'SKILL.md', 'references/a.md', 'shared.json'})
+
+    def test_failed_precheck_drops_the_manifest(self):
+        _make_pkg(self.pkg, 'demo-skill', self._good_entries())
+        self._run(rc.cmd_precheck, [str(self.pkg)])
+        bad = dict(self._good_entries(), **{'demo-skill/references/a.md': b'stale\n'})
+        _make_pkg(self.pkg, 'demo-skill', bad)
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 1, out)
+        self.assertNotIn('expected_files', self._read())
+
+    def test_baseline_package_records_the_manifest(self):
+        _make_pkg(self.pkg, 'demo-skill', self._good_entries())
+        code, out = self._run(rc.cmd_baseline, ['demo-skill'], str(self.pkg))
+        self.assertEqual(code, 0, out)
+        self.assertIn('SKILL.md', self._read()['expected_files'])
 
 
 if __name__ == '__main__':

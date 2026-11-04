@@ -123,6 +123,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pending_reimport import (  # noqa: E402
     CACHE_ROOT, REPO, _atomic_write_text, _primary_checkout, _read_text_retry, _retry_locked,
+    _normalized_hash, _normalized_hash_bytes,
     cache_digest, event_log_blocks, logged_install_entry, write_recorded_install,
 )
 
@@ -383,7 +384,8 @@ def cmd_baseline(skills: list[str], package: str | None = None) -> int:
             print('--package names ONE package, so give exactly one skill', file=sys.stderr)
             return 2
         try:
-            extra = {'expected_version': _package_version(Path(package), skills[0])}
+            extra = {'expected_version': _package_version(Path(package), skills[0]),
+                     'expected_files': _package_manifest(Path(package), skills[0])}
         except (OSError, zipfile.BadZipFile, KeyError) as exc:
             print(f'{skills[0]}: cannot read the package version from {package} '
                   f'({type(exc).__name__}: {exc}) -- no baseline written', file=sys.stderr)
@@ -409,12 +411,23 @@ def _package_version(pkg: Path, skill: str) -> str | None:
         return _skill_md_version(z.read(f'{skill}/SKILL.md').decode('utf8', errors='replace'))
 
 
+def _package_manifest(pkg: Path, skill: str) -> dict[str, str]:
+    """{path under the skill dir: normalized hash} for every file the package ships. Uses
+    the comparator's own rules, so what the platform does to an installed copy (CRLF to LF,
+    quoting frontmatter scalars) is not a difference and a real content change is."""
+    prefix = f'{skill}/'
+    with zipfile.ZipFile(pkg) as z:
+        return {n[len(prefix):]: _normalized_hash_bytes(z.read(n))
+                for n in z.namelist() if n.startswith(prefix) and not n.endswith('/')}
+
+
 _DROP = object()
 
 
-def _record_expected_version(skill: str, version) -> None:
-    """Merge `expected_version` into this session's existing baseline (precheck keeps or
-    recaptures one, and must not leave it without the package it just inspected)."""
+def _record_expected_version(skill: str, version, files: dict[str, str] | None = None) -> None:
+    """Merge `expected_version` and `expected_files` into this session's existing baseline
+    (precheck keeps or recaptures one, and must not leave it without the package it just
+    inspected). `_DROP` removes both: they describe the same package."""
     path = _baseline_path(skill)
     text = _read_baseline(path)
     if text is None:
@@ -423,8 +436,13 @@ def _record_expected_version(skill: str, version) -> None:
         data = json.loads(text)
         if version is _DROP:
             data.pop('expected_version', None)
+            data.pop('expected_files', None)
         else:
             data['expected_version'] = version
+            if files:
+                data['expected_files'] = files
+            else:
+                data.pop('expected_files', None)
     except (TypeError, ValueError, AttributeError):
         return
     # A consume may have claimed the baseline since the read: writing now would bring a
@@ -456,6 +474,58 @@ def _baseline_expected_version(skill: str):
         return _expected_from(json.loads(text) if text is not None else None)
     except (TypeError, ValueError):
         return False, None
+
+
+def _baseline_expected_files(skill: str):
+    """(recorded, manifest) from THIS session's baseline."""
+    text = _read_baseline(_baseline_path(skill))
+    try:
+        data = json.loads(text) if text is not None else None
+    except (TypeError, ValueError):
+        return False, None
+    if not isinstance(data, dict) or 'expected_files' not in data:
+        return False, None
+    return True, data['expected_files']
+
+
+def _override_expected_files(skill: str, override: datetime):
+    """(recorded, manifest) for `postclick --baseline TIME`: only from baselines, of any
+    session, whose recorded CreationTime IS `override`. Matches that disagree yield a value
+    _content_problems refuses, never one of them picked at random."""
+    found = []
+    d = BASELINE_DIR / skill
+    for path in sorted(d.glob('*.json')) if d.is_dir() else []:
+        try:
+            text = _read_baseline(path)
+            recorded, ok = _recorded(text) if text is not None else (None, False)
+            data = json.loads(text) if ok else None
+        except (OSError, ValueError):
+            continue
+        if (ok and recorded is not None and recorded.replace(microsecond=0) == override
+                and isinstance(data, dict) and 'expected_files' in data):
+            found.append(data['expected_files'])
+    if not found:
+        return False, None
+    return True, found[0] if all(f == found[0] for f in found) else None
+
+
+def _content_problems(skill: str, manifest) -> list[str]:
+    """What differs between the cache and the package manifest. A timing match proves an
+    install happened; this is what proves its content landed whole (2026-11-03: postclick
+    said CONFIRMED and exit 0 with nothing having compared a single byte)."""
+    if (not isinstance(manifest, dict) or not manifest
+            or not all(isinstance(k, str) and isinstance(v, str) for k, v in manifest.items())):
+        return ['the recorded package manifest is malformed or ambiguous']
+    problems = []
+    for rel, want in sorted(manifest.items()):
+        try:
+            got = _normalized_hash(_cache_dir(skill) / rel)
+        except OSError:
+            problems.append(f'{rel}: missing from the cache')
+            continue
+        if got != want:
+            problems.append(f'{rel}: content differs from the package')
+    return problems
 
 
 def _override_expected_version(skill: str, override: datetime):
@@ -732,8 +802,9 @@ def cmd_precheck(pkgs: list[str]) -> int:
                 fails.append(f'repo skill dir not found: {sd}')
         try:
             pkg_version = _package_version(p, skill)
+            pkg_files = _package_manifest(p, skill)
         except (OSError, zipfile.BadZipFile, KeyError):
-            pkg_version = None     # no readable SKILL.md: already a FAIL above
+            pkg_version = pkg_files = None     # no readable SKILL.md: already a FAIL above
         note = _refresh_stale_baseline(skill)
         if note is not None:
             base_note = note
@@ -743,7 +814,7 @@ def cmd_precheck(pkgs: list[str]) -> int:
             base_note = 'baseline CAPTURED'
         # Only a package that PASSED precheck is the one about to be installed; a stale
         # one's version would otherwise outlive the repo bump that made it stale.
-        _record_expected_version(skill, _DROP if fails else pkg_version)
+        _record_expected_version(skill, _DROP if fails else pkg_version, pkg_files)
         if fails:
             rc = 1
             print(f'{skill}: PRECHECK FAIL -- ' + '; '.join(fails))
@@ -884,8 +955,16 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
                                                    and want != cache_ver)))
     # A timing match proves SOME install happened, not WHICH version (2026-10-17: v4.28
     # was logged as CONFIRMED while the cache held v4.29). Never print CONFIRMED for it.
-    if mismatch or unknown:
-        word = 'VERSION-MISMATCH' if mismatch else 'VERSION-UNKNOWN'
+    files_recorded, content_problems = False, []
+    if confirmed and not (mismatch or unknown):
+        files_recorded, manifest = (
+            _override_expected_files(skill, datetime.strptime(baseline_override, '%Y-%m-%d %H:%M:%S'))
+            if baseline_override else _baseline_expected_files(skill))
+        if files_recorded:
+            content_problems = _content_problems(skill, manifest)
+    if mismatch or unknown or content_problems:
+        word = ('VERSION-MISMATCH' if mismatch else
+                'VERSION-UNKNOWN' if unknown else 'CONTENT-MISMATCH')
         verdict = verdict.replace(f'{skill}: CONFIRMED', f'{skill}: {word}', 1)
     print(verdict)
     _log_report(6)
@@ -921,6 +1000,18 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
               f'untouched. Find what was actually saved (a newer draft or a different package) '
               f'before logging or clearing anything.')
         return 1
+    if content_problems:
+        print('STOP: CONTENT-MISMATCH -- the install moved, but the cache does not hold what '
+              'the package shipped: ' + '; '.join(content_problems) + '. Nothing appended, '
+              'ledger and baseline untouched. Re-install through Cowork Save skill (desktop '
+              'Settings drops subfolder files), or find what was actually saved.')
+        return 1
+    if files_recorded:
+        print('content verified: every packaged file matches the cache.')
+    else:
+        print('WARNING: content not verified -- this baseline recorded no package manifest '
+              '(no precheck or baseline --package ran first), so the cached files were not '
+              'compared to the package.')
     if want and cache_ver is None:
         print(f'WARNING: version not verified -- the cache SKILL.md has no readable version '
               f'(frontmatter `version:` or an H1 `(vX.Y)`); v{want} is taken on trust.')
