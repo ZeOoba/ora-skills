@@ -275,6 +275,13 @@ class TestMultiRowHeader(_Base):
         self.assertEqual(r["thin_exhibits"], [])
         self.assert_gate_unchanged_populated(r)
 
+    def test_malformed_grid_span_does_not_crash(self):
+        title = ('<w:tr><w:tc><w:tcPr><w:gridSpan w:val="x"/></w:tcPr>{}</w:tc></w:tr>'
+                 .format(P("Rent Roll")))
+        p = self.doc(exhibit_blocks("<w:tbl>{}{}</w:tbl>".format(title, ROW(HEADER))))
+        rc, _, _ = self.run_main(p)
+        self.assertEqual(rc, 0)
+
     def test_single_column_list_second_row_is_data(self):
         # Unmerged single-cell first row is an ordinary header, not a title: the
         # next row is data.
