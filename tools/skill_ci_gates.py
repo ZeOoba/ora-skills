@@ -27,8 +27,9 @@ Subcommands (each exits 0 clean, 1 on a finding, 2 on a usage/environment error)
                            `_archive/<skill>/...` or the standard retirement form
                            `_archive/<skill>_retired-YYYY-MM-DD/...` (a git mv in R..HEAD), or a
                            commit in R..HEAD carries a `Suite-Removed: <path>` trailer. Excused
-                           suites are listed on stdout. Also fails if HEAD's tools/package_skills.py
-                           SKIP is not a single top-level literal set. R may be `auto`, as for
+                           suites are listed on stdout. Also fails if the AST-parsed SKIP
+                           (last top-level assignment) of HEAD's tools/package_skills.py differs
+                           from the imported value (e.g. a mutation via .add/.discard/|=/rebind). R may be `auto`, as for
                            target-markets. Runs in CI only, not in tools/run_skill_suites.sh.
   packaged-layout          package() every skill that declares a SHARED_ROOT_DEPS .py file into
                            a temp dir OUTSIDE the repo (so the dev-checkout sys.path fallback
@@ -288,7 +289,7 @@ def _archived_as(rel: str, head_archive_paths: set[str]) -> bool:
     name or takes the standard `<skill>_retired-YYYY-MM-DD` form, and the skill-relative rest is
     identical. Anchored at a path-segment boundary so `_archive/ab/...` never excuses skill `a`."""
     skill, _, rest = rel.partition('/')
-    pat = re.compile(rf'(?:^|/){re.escape(skill)}(?:_retired-\d{{4}}-\d{{2}}-\d{{2}})?/'
+    pat = re.compile(rf'(?:^|/){re.escape(skill)}(?:_retired-[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})?/'
                      rf'{re.escape(rest)}$')
     return any(pat.search(a) for a in head_archive_paths)
 
@@ -370,7 +371,7 @@ def base_skip_set(base: str, repo: Path = REPO) -> set[str]:
 
 def head_skip_inconsistency(repo: Path = REPO) -> bool:
     """True if HEAD's tools/package_skills.py SKIP, as the AST sees it, differs from the SKIP the
-    running tool imported (a double assignment, `.add()`, or a computed value would make the
+    running tool imported (a mutation via `.add`/`.discard`/`|=`, a rebind inside a block, or a computed value would make the
     base-side AST parse untrustworthy). False when the file is absent at HEAD (nothing to check)."""
     r = _git('show', 'HEAD:tools/package_skills.py', repo=repo)
     if r.returncode != 0:

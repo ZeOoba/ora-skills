@@ -180,6 +180,19 @@ class VanishedSuites(unittest.TestCase):
         errs = g.vanished_suites(self.BASE, {'b/test_b.py'}, {'_archive/ab/tests/test_a.py'}, set())
         self.assertEqual(len(errs), 1)
 
+    def test_different_archived_file_same_skill_does_not_excuse(self):
+        # Identical-rest rule: an unrelated archived file under the same skill never excuses test_a.py.
+        for arch in ('_archive/a/tests/test_other.py',
+                     '_archive/a_retired-2026-11-05/tests/test_other.py'):
+            errs = g.vanished_suites({'a/tests/test_a.py'}, set(), {arch}, set())
+            self.assertEqual(len(errs), 1, arch)
+
+    def test_unicode_digit_retired_date_does_not_count(self):
+        errs = g.vanished_suites({'a/tests/test_a.py'}, set(),
+                                 {'_archive/a_retired-２０２６-１１-０５/tests/test_a.py'},
+                                 set())
+        self.assertEqual(len(errs), 1)
+
     def test_declared_removed_is_allowed(self):
         self.assertEqual(g.vanished_suites(self.BASE, {'b/test_b.py'}, set(), {'a/tests/test_a.py'}), [])
 
@@ -383,7 +396,8 @@ class SuiteContinuityGit(TempRepo):
         self.assertIn('SKIP must be a single top-level literal set', err)
 
     def test_skip_assigned_twice_fails_self_consistency(self):
-        # The runtime value is the first assignment's; the AST parse takes the last. They disagree.
+        # The AST parse takes the last top-level assignment ({'x','z'}); the imported value is {'x'}.
+        # They disagree, so the check fails. (A double literal assignment whose last matches is silent.)
         rc, out, err = self._consistency_case("SKIP = {'x'}\nSKIP = {'x', 'z'}\n", {'x'})
         self.assertEqual(rc, 1, (out, err))
         self.assertIn('SKIP must be a single top-level literal set', err)
