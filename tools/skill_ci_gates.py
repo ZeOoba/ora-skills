@@ -23,9 +23,13 @@ Subcommands (each exits 0 clean, 1 on a finding, 2 on a usage/environment error)
                            tools/run_suite.sh: every test_*.py under a skill dir, minus any
                            file declaring a top-level CI_EXCLUDE = "<reason>" (listed on stderr).
   suite-continuity --base R  fail if a skill test file present at R is no longer discovered on HEAD
-                           (renamed, deleted, or its SKILL.md removed), unless it moved under
-                           _archive/ or a commit in R..HEAD carries a `Suite-Removed: <path>`
-                           trailer. R may be `auto`, as for target-markets.
+                           (renamed, deleted, or its SKILL.md removed), unless it moved to
+                           `_archive/<skill>/...` or the standard retirement form
+                           `_archive/<skill>_retired-YYYY-MM-DD/...` (a git mv in R..HEAD), or a
+                           commit in R..HEAD carries a `Suite-Removed: <path>` trailer. Excused
+                           suites are listed on stdout. Also fails if HEAD's tools/package_skills.py
+                           SKIP is not a single top-level literal set. R may be `auto`, as for
+                           target-markets. Runs in CI only, not in tools/run_skill_suites.sh.
   packaged-layout          package() every skill that declares a SHARED_ROOT_DEPS .py file into
                            a temp dir OUTSIDE the repo (so the dev-checkout sys.path fallback
                            to tools/ cannot resolve), extract it, and confirm each staged
@@ -279,54 +283,99 @@ def cmd_target_markets(base_arg: str) -> int:
 _SUITE_REMOVED = re.compile(r'^Suite-Removed:[ \t]*(\S.*?)[ \t]*$', re.M)
 
 
-def vanished_suites(base_files: set[str], head_files: set[str], head_archive_paths: set[str],
-                    declared_removed: set[str]) -> list[str]:
-    """Errors for each base suite file absent from head, unless it moved under `_archive/`
-    (same skill-relative path) or a commit declared its removal via a Suite-Removed trailer."""
-    errors = []
+def _archived_as(rel: str, head_archive_paths: set[str]) -> bool:
+    """True if some added archive path is `rel` re-homed under `_archive/`: the skill dir keeps its
+    name or takes the standard `<skill>_retired-YYYY-MM-DD` form, and the skill-relative rest is
+    identical. Anchored at a path-segment boundary so `_archive/ab/...` never excuses skill `a`."""
+    skill, _, rest = rel.partition('/')
+    pat = re.compile(rf'(?:^|/){re.escape(skill)}(?:_retired-\d{{4}}-\d{{2}}-\d{{2}})?/'
+                     rf'{re.escape(rest)}$')
+    return any(pat.search(a) for a in head_archive_paths)
+
+
+def suite_continuity_report(base_files: set[str], head_files: set[str],
+                            head_archive_paths: set[str], declared_removed: set[str]
+                            ) -> tuple[list[str], dict[str, str]]:
+    """(errors, excused). Each base suite file absent from head is excused when a commit declared
+    its removal via a Suite-Removed trailer ('Suite-Removed') or it moved under `_archive/` in this
+    range ('archive'); otherwise it is an error."""
+    errors, excused = [], {}
     for rel in sorted(base_files - head_files):
         if rel in declared_removed:
-            continue
-        if any(a == f'_archive/{rel}' or a.endswith(f'/{rel}') for a in head_archive_paths):
-            continue
-        errors.append(f'{rel}: suite present at the PR base is no longer discovered on HEAD '
-                      f'(renamed, deleted, or its SKILL.md removed). Restore it, move it under '
-                      f'_archive/, or add a "Suite-Removed: {rel}" trailer to the removing commit')
-    return errors
+            excused[rel] = 'Suite-Removed'
+        elif _archived_as(rel, head_archive_paths):
+            excused[rel] = 'archive'
+        else:
+            errors.append(f'{rel}: suite present at the PR base is no longer discovered on HEAD '
+                          f'(renamed, deleted, or its SKILL.md removed). Restore it, move it to '
+                          f'_archive/<skill>/ or _archive/<skill>_retired-YYYY-MM-DD/, or add a '
+                          f'"Suite-Removed: {rel}" trailer to the removing commit')
+    return errors, excused
+
+
+def vanished_suites(base_files: set[str], head_files: set[str], head_archive_paths: set[str],
+                    declared_removed: set[str]) -> list[str]:
+    """Errors only; see suite_continuity_report."""
+    return suite_continuity_report(base_files, head_files, head_archive_paths, declared_removed)[0]
 
 
 _DEFAULT_SKIP = frozenset({'_archive', 'tools', '.git'})
 
 
+def _parse_skip(source: str) -> set[str] | None:
+    """The LAST top-level `SKIP = <literal>` (or annotated) assignment in `source`, evaluated with
+    literal_eval (last wins, as Python rebinding does); None if there is none or it is not a
+    literal collection of str. `SKIP.add(...)`-style mutation is invisible here by design; the
+    head self-consistency check in cmd_suite_continuity catches it."""
+    try:
+        nodes = ast.parse(source).body
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
+        return None
+    value = None
+    for node in nodes:
+        if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == 'SKIP' for t in node.targets):
+            value = node.value
+        elif (isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+              and node.target.id == 'SKIP' and node.value is not None):
+            value = node.value
+    if value is None:
+        return None
+    if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
+            and value.func.id in ('set', 'frozenset') and len(value.args) == 1
+            and not value.keywords):
+        value = value.args[0]
+    try:
+        got = ast.literal_eval(value)
+    except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
+        return None
+    if isinstance(got, (set, frozenset, list, tuple)) and all(isinstance(x, str) for x in got):
+        return set(got)
+    return None
+
+
 def base_skip_set(base: str, repo: Path = REPO) -> set[str]:
-    """SKIP as written in `tools/package_skills.py` AT `base` (module-level assignment, parsed
-    with ast, evaluated with literal_eval). Falls back to the default set when the file or the
-    assignment is absent/unparseable at base. Deliberately not head's SKIP: a head edit that adds
-    a skill to SKIP must not hide that skill's base suites."""
+    """SKIP as written in `tools/package_skills.py` AT `base` (the last top-level assignment,
+    parsed with ast and evaluated with literal_eval). Falls back to the default set on ANY
+    `git show` failure (file absent at base, bad ref, git error) and when the assignment is
+    absent or not a literal. Deliberately not head's SKIP: a head edit that adds a skill to SKIP
+    must not hide that skill's base suites."""
     r = _git('show', f'{base}:tools/package_skills.py', repo=repo)
     if r.returncode == 0:
-        try:
-            for node in ast.parse(r.stdout).body:
-                value = None
-                if isinstance(node, ast.Assign) and any(
-                        isinstance(t, ast.Name) and t.id == 'SKIP' for t in node.targets):
-                    value = node.value
-                elif (isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
-                      and node.target.id == 'SKIP' and node.value is not None):
-                    value = node.value
-                if value is None:
-                    continue
-                if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
-                        and value.func.id in ('set', 'frozenset') and len(value.args) == 1
-                        and not value.keywords):
-                    value = value.args[0]
-                got = ast.literal_eval(value)
-                if isinstance(got, (set, frozenset, list, tuple)) and all(
-                        isinstance(x, str) for x in got):
-                    return set(got)
-        except (SyntaxError, ValueError, TypeError, MemoryError, RecursionError):
-            pass
+        got = _parse_skip(r.stdout)
+        if got is not None:
+            return got
     return set(_DEFAULT_SKIP)
+
+
+def head_skip_inconsistency(repo: Path = REPO) -> bool:
+    """True if HEAD's tools/package_skills.py SKIP, as the AST sees it, differs from the SKIP the
+    running tool imported (a double assignment, `.add()`, or a computed value would make the
+    base-side AST parse untrustworthy). False when the file is absent at HEAD (nothing to check)."""
+    r = _git('show', 'HEAD:tools/package_skills.py', repo=repo)
+    if r.returncode != 0:
+        return False
+    return _parse_skip(r.stdout) != set(package_skills.SKIP)
 
 
 def base_suite_files(base: str, repo: Path = REPO) -> set[str]:
@@ -346,8 +395,13 @@ def base_suite_files(base: str, repo: Path = REPO) -> set[str]:
 
 
 def declared_removed_suites(base: str, repo: Path = REPO) -> set[str]:
-    """Paths named by `Suite-Removed: <repo-relative path>` trailer lines in base..HEAD."""
+    """Paths named by `Suite-Removed: <repo-relative path>` lines in base..HEAD commit messages.
+    Matches at any line start, not only the final trailer block, deliberately: GitHub squash
+    bodies concatenate the PR's commit messages, so a trailer lands mid-body. Raises RuntimeError
+    if `git log` fails."""
     r = _git('log', '--format=%B', f'{base}..HEAD', repo=repo)
+    if r.returncode != 0:
+        raise RuntimeError(f'git log {base}..HEAD failed (rc {r.returncode}): {r.stderr.strip()}')
     return {m.group(1) for m in _SUITE_REMOVED.finditer(r.stdout)}
 
 
@@ -376,17 +430,28 @@ def cmd_suite_continuity(base_arg: str, repo: Path = REPO) -> int:
     try:
         base_files = base_suite_files(base, repo)
         archived = archived_suite_paths(base, repo)
+        declared = declared_removed_suites(base, repo)
     except RuntimeError as e:
         print(f'suite-continuity: {e}', file=sys.stderr)
         return 2
-    errors = vanished_suites(base_files, set(discover_skill_test_files(repo)),
-                             archived, declared_removed_suites(base, repo))
+    if head_skip_inconsistency(repo):
+        print('tools/package_skills.py SKIP must be a single top-level literal set (AST parse '
+              'disagrees with the imported value)', file=sys.stderr)
+        return 1
+    errors, excused = suite_continuity_report(
+        base_files, set(discover_skill_test_files(repo)), archived, declared)
     for e in errors:
         print(e, file=sys.stderr)
     if errors:
         return 1
     sha = _git('rev-parse', base, repo=repo).stdout.strip() or base
-    print(f'suite-continuity: {len(base_files)} base suite(s) all present versus base {sha[:12]}')
+    for rel, how in sorted(excused.items()):
+        print(f'excused: {rel} ({how})')
+    if excused:
+        print(f'suite-continuity: {len(base_files)} base suite(s), {len(excused)} excused, '
+              f'{len(base_files) - len(excused)} present versus base {sha[:12]}')
+    else:
+        print(f'suite-continuity: {len(base_files)} base suite(s) all present versus base {sha[:12]}')
     return 0
 
 
