@@ -129,6 +129,47 @@ def _count_media(el: ET.Element) -> int:
     return sum(1 for n in el.iter() if n.tag in (A_BLIP, V_IMAGE))
 
 
+_ROW_WRAPPERS = (W + "sdt", W + "sdtContent", W + "customXml")
+
+
+def _table_rows(tbl: ET.Element) -> list:
+    """This table's own rows, including rows wrapped in content controls (w:sdt)
+    or custom XML -- not rows of tables nested inside its cells."""
+    rows = []
+    for ch in tbl:
+        if ch.tag == W + "tr":
+            rows.append(ch)
+        elif ch.tag in _ROW_WRAPPERS:
+            rows.extend(_table_rows(ch))
+    return rows
+
+
+def _header_rows(rows: list) -> int:
+    """Leading header rows: at least one; more when unambiguous -- rows marked as
+    repeating headers (w:tblHeader), or a first row that is one cell merged across
+    columns (a title) followed by the column-header row."""
+    n = 1
+    while n < len(rows) and rows[n].find(W + "trPr/" + W + "tblHeader") is not None \
+            and rows[n - 1].find(W + "trPr/" + W + "tblHeader") is not None:
+        n += 1
+    if rows:
+        cells = rows[0].findall(W + "tc")
+        span = cells[0].find(W + "tcPr/" + W + "gridSpan") if len(cells) == 1 else None
+        val = span.get(W + "val", "") if span is not None else ""
+        if val.isdigit() and int(val) > 1:
+            n = max(n, 2)
+    return n
+
+
+def _table_has_data(tbl: ET.Element) -> bool:
+    """True if any row after the header row(s) carries visible text (deleted text
+    excluded), in this table or in any table nested inside it."""
+    rows = _table_rows(tbl)
+    if any(_text_of(tr).strip() for tr in rows[_header_rows(rows):]):
+        return True
+    return any(_table_has_data(t) for t in tbl.iter(W + "tbl") if t is not tbl)
+
+
 def _blocks(root: ET.Element) -> list:
     body = root.find(W + "body")
     if body is None:
@@ -194,8 +235,7 @@ def audit(path: Path) -> dict:
                 chars += len(t)
                 # A header row with no non-blank row after it (a skeleton rent roll
                 # or schedule) is populated but says nothing: advisory THIN only.
-                rows = el.findall(W + "tr")
-                if any(_text_of(tr).strip() for tr in rows[1:]):
+                if _table_has_data(el):
                     data_tables += 1
                 continue
             if DMS_STAMP_RE.match(t):
