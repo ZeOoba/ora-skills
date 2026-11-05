@@ -24,9 +24,12 @@ Subcommands (each exits 0 clean, 1 on a finding, 2 on a usage/environment error)
                            file declaring a top-level CI_EXCLUDE = "<reason>" (listed on stderr).
   suite-continuity --base R  fail if a skill test file present at R is no longer discovered on HEAD
                            (renamed, deleted, or its SKILL.md removed), unless it moved to
-                           `_archive/<skill>/...` or the standard retirement form
-                           `_archive/<skill>_retired-YYYY-MM-DD/...` (a git mv in R..HEAD), or a
-                           commit in R..HEAD carries a `Suite-Removed: <path>` trailer. Excused
+                           (a) some file added in R..HEAD under `_archive/` has a path ending
+                           `<skill>/<rest>` or `<skill>_retired-YYYY-MM-DD/<rest>` (any depth;
+                           path-only, content not compared), or (b) any commit in R..HEAD has a
+                           line starting `Suite-Removed: <path>`. (Recommended practice is a git mv
+                           to `_archive/<skill>_retired-YYYY-MM-DD` and a trailer on the removing
+                           commit; the gate is looser.) Excused
                            suites are listed on stdout. Also fails if the AST-parsed SKIP
                            (last top-level assignment) of HEAD's tools/package_skills.py differs
                            from the imported value (e.g. a mutation via .add/.discard/|=/rebind). R may be `auto`, as for
