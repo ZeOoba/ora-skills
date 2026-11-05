@@ -4,13 +4,17 @@
 Stdlib only -- run with `python tools/test_skill_ci_gates.py` (no pytest).
 """
 import json
+import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -29,12 +33,26 @@ def _skill(root: Path, name: str, body: str = 'x', files: dict | None = None) ->
     return d
 
 
+def _rmtree(path) -> None:
+    """git writes object files read-only, which rmtree cannot unlink on Windows -- with
+    ignore_errors=True every git-backed fixture leaked silently into %TEMP%. Clear the bit and
+    retry; still best-effort, so a locked file never fails a test. (Same helper as
+    tools/test_catch_up_main.py.)"""
+    def _retry(func, p, _exc):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except Exception:  # onexc can also hand over os.open/os.close
+            pass
+    shutil.rmtree(path, onexc=_retry)
+
+
 class TempRepo(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp())
 
     def tearDown(self):
-        shutil.rmtree(self.root, ignore_errors=True)
+        _rmtree(self.root)
 
 
 class SuiteCoverage(TempRepo):
@@ -148,9 +166,42 @@ class VanishedSuites(unittest.TestCase):
         errs = g.vanished_suites(self.BASE, {'b/test_b.py'}, {'_archive/xa/tests/test_a.py'}, set())
         self.assertEqual(len(errs), 1)
 
+    def test_retired_dated_archive_form_is_allowed(self):
+        head = {'b/test_b.py'}
+        self.assertEqual(g.vanished_suites(
+            self.BASE, head, {'_archive/a_retired-2026-11-05/tests/test_a.py'}, set()), [])
+
+    def test_malformed_retired_suffix_does_not_count(self):
+        errs = g.vanished_suites(
+            self.BASE, {'b/test_b.py'}, {'_archive/a_retired-2026-1-5/tests/test_a.py'}, set())
+        self.assertEqual(len(errs), 1)
+
+    def test_prefix_sibling_archive_dir_does_not_count(self):
+        errs = g.vanished_suites(self.BASE, {'b/test_b.py'}, {'_archive/ab/tests/test_a.py'}, set())
+        self.assertEqual(len(errs), 1)
+
+    def test_different_archived_file_same_skill_does_not_excuse(self):
+        # Identical-rest rule: an unrelated archived file under the same skill never excuses test_a.py.
+        for arch in ('_archive/a/tests/test_other.py',
+                     '_archive/a_retired-2026-11-05/tests/test_other.py'):
+            errs = g.vanished_suites({'a/tests/test_a.py'}, set(), {arch}, set())
+            self.assertEqual(len(errs), 1, arch)
+
+    def test_unicode_digit_retired_date_does_not_count(self):
+        errs = g.vanished_suites({'a/tests/test_a.py'}, set(),
+                                 {'_archive/a_retired-２０２６-１１-０５/tests/test_a.py'},
+                                 set())
+        self.assertEqual(len(errs), 1)
+
     def test_declared_removed_is_allowed(self):
         self.assertEqual(g.vanished_suites(self.BASE, {'b/test_b.py'}, set(), {'a/tests/test_a.py'}), [])
 
+    def test_report_labels_excused_paths(self):
+        errs, excused = g.suite_continuity_report(
+            {'a/tests/test_a.py', 'b/test_b.py', 'c/test_c.py'}, {'c/test_c.py'},
+            {'_archive/a_retired-2026-11-05/tests/test_a.py'}, {'b/test_b.py'})
+        self.assertEqual(errs, [])
+        self.assertEqual(excused, {'a/tests/test_a.py': 'archive', 'b/test_b.py': 'Suite-Removed'})
 
 
 class SuiteContinuityGit(TempRepo):
@@ -172,7 +223,6 @@ class SuiteContinuityGit(TempRepo):
         return base
 
     def run_cmd(self, base):
-        from contextlib import redirect_stderr, redirect_stdout
         out, err = StringIO(), StringIO()
         with redirect_stdout(out), redirect_stderr(err):
             rc = g.cmd_suite_continuity(base, repo=self.root)
@@ -193,7 +243,8 @@ class SuiteContinuityGit(TempRepo):
         self.assertEqual(g.declared_removed_suites(base, self.root), {'a/tests/test_a.py'})
         rc, out, err = self.run_cmd(base)
         self.assertEqual(rc, 0, (out, err))
-        self.assertIn('suite-continuity: 1 base suite(s) all present', out)
+        self.assertIn('excused: a/tests/test_a.py (Suite-Removed)', out)
+        self.assertNotIn('all present', out)
 
     def test_preexisting_archive_copy_does_not_excuse_deletion(self):
         self.git('init', '-q')
@@ -222,16 +273,43 @@ class SuiteContinuityGit(TempRepo):
         self.git('commit', '-q', '-m', 'archive suite')
         rc, out, err = self.run_cmd(base)
         self.assertEqual(rc, 0, (out, err))
+        self.assertIn('excused: a/tests/test_a.py (archive)', out)
+
+    def _archive_move(self, dest_rel: str):
+        self.git('init', '-q')
+        _skill(self.root, 'a', files={'tests/test_a.py': ''})
+        self.git('add', '.')
+        self.git('commit', '-q', '-m', 'base')
+        base = self.git('rev-parse', 'HEAD')
+        (self.root / '_archive').mkdir()
+        self.git('mv', 'a', dest_rel)
+        self.git('commit', '-q', '-m', 'retire a')
+        return self.run_cmd(base)
+
+    def test_standard_retirement_form_passes(self):
+        rc, out, err = self._archive_move('_archive/a_retired-2026-11-05')
+        self.assertEqual(rc, 0, (out, err))
+        self.assertIn('excused: a/tests/test_a.py (archive)', out)
+
+    def test_plain_archive_move_passes(self):
+        rc, out, err = self._archive_move('_archive/a')
+        self.assertEqual(rc, 0, (out, err))
+
+    def test_malformed_retired_suffix_move_fails(self):
+        rc, out, err = self._archive_move('_archive/a_retired-2026-1-5')
+        self.assertEqual(rc, 1, (out, err))
+
+    def test_prefix_sibling_archive_move_fails(self):
+        rc, out, err = self._archive_move('_archive/ab')
+        self.assertEqual(rc, 1, (out, err))
 
     def test_head_skip_does_not_hide_base_suites(self):
-        base = None
         self.git('init', '-q')
         _skill(self.root, 'a', files={'tests/test_a.py': ''})
         self.git('add', '.')
         self.git('commit', '-q', '-m', 'base')
         base = self.git('rev-parse', 'HEAD')
         self.git('commit', '-q', '--allow-empty', '-m', 'head adds a to SKIP')
-        from unittest import mock
         with mock.patch.object(g.package_skills, 'SKIP', set(g.package_skills.SKIP) | {'a'}):
             self.assertEqual(g.base_suite_files(base, self.root), {'a/tests/test_a.py'})
             rc, out, err = self.run_cmd(base)
@@ -275,7 +353,6 @@ class SuiteContinuityGit(TempRepo):
         (self.root / 'README.md').write_text('x\n', encoding='utf-8')
         self.git('add', '.')
         self.git('commit', '-q', '-m', 'readme only')
-        from unittest import mock
         # head's imported SKIP also carries 'a' (as the real module would after P1)
         with mock.patch.object(g.package_skills, 'SKIP', set(g.package_skills.SKIP) | {'a'}):
             self.assertEqual(g.base_suite_files(p1, self.root), set())
@@ -296,6 +373,39 @@ class SuiteContinuityGit(TempRepo):
         self.assertEqual(g.base_suite_files(self.git('rev-parse', 'HEAD'), self.root),
                          {'a/tests/test_a.py'})
 
+    def test_base_skip_uses_last_top_level_assignment(self):
+        self.git('init', '-q')
+        sha = self._commit_package_skills("{'x'}\nSKIP = {'x', 'y'}", 'double assign')
+        self.assertEqual(g.base_skip_set(sha, self.root), {'x', 'y'})
+
+    def _consistency_case(self, body: str, imported: set):
+        self.git('init', '-q')
+        _skill(self.root, 'a', files={'tests/test_a.py': ''})
+        (self.root / 'tools').mkdir()
+        (self.root / 'tools' / 'package_skills.py').write_text(body, encoding='utf-8')
+        self.git('add', '.')
+        self.git('commit', '-q', '-m', 'base')
+        base = self.git('rev-parse', 'HEAD')
+        self.git('commit', '-q', '--allow-empty', '-m', 'head')
+        with mock.patch.object(g.package_skills, 'SKIP', imported):
+            return self.run_cmd(base)
+
+    def test_skip_mutated_with_add_fails_self_consistency(self):
+        rc, out, err = self._consistency_case("SKIP = {'x'}\nSKIP.add('y')\n", {'x', 'y'})
+        self.assertEqual(rc, 1, (out, err))
+        self.assertIn('SKIP must be a single top-level literal set', err)
+
+    def test_skip_assigned_twice_fails_self_consistency(self):
+        # The AST parse takes the last top-level assignment ({'x','z'}); the imported value is {'x'}.
+        # They disagree, so the check fails. (A double literal assignment whose last matches is silent.)
+        rc, out, err = self._consistency_case("SKIP = {'x'}\nSKIP = {'x', 'z'}\n", {'x'})
+        self.assertEqual(rc, 1, (out, err))
+        self.assertIn('SKIP must be a single top-level literal set', err)
+
+    def test_consistent_skip_passes(self):
+        rc, out, err = self._consistency_case("SKIP = {'x'}\n", {'x'})
+        self.assertEqual(rc, 0, (out, err))
+
     def _failing_git(self, failing: str):
         real = g._git
 
@@ -307,7 +417,6 @@ class SuiteContinuityGit(TempRepo):
 
     def test_ls_tree_failure_is_rc2_not_pass(self):
         base = self.build()
-        from unittest import mock
         with mock.patch.object(g, '_git', self._failing_git('ls-tree')):
             rc, out, err = self.run_cmd(base)
         self.assertEqual(rc, 2, (out, err))
@@ -315,12 +424,18 @@ class SuiteContinuityGit(TempRepo):
 
     def test_archive_diff_failure_is_rc2_not_vanished_report(self):
         base = self.build()
-        from unittest import mock
         with mock.patch.object(g, '_git', self._failing_git('diff')):
             rc, out, err = self.run_cmd(base)
         self.assertEqual(rc, 2, (out, err))
         self.assertIn('git diff', err)
         self.assertNotIn('no longer discovered', err)
+
+    def test_git_log_failure_is_rc2(self):
+        base = self.build()
+        with mock.patch.object(g, '_git', self._failing_git('log')):
+            rc, out, err = self.run_cmd(base)
+        self.assertEqual(rc, 2, (out, err))
+        self.assertIn('git log', err)
 
     def test_bad_base_is_usage_error(self):
         self.build()
