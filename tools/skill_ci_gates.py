@@ -295,13 +295,51 @@ def vanished_suites(base_files: set[str], head_files: set[str], head_archive_pat
     return errors
 
 
+_DEFAULT_SKIP = frozenset({'_archive', 'tools', '.git'})
+
+
+def base_skip_set(base: str, repo: Path = REPO) -> set[str]:
+    """SKIP as written in `tools/package_skills.py` AT `base` (module-level assignment, parsed
+    with ast, evaluated with literal_eval). Falls back to the default set when the file or the
+    assignment is absent/unparseable at base. Deliberately not head's SKIP: a head edit that adds
+    a skill to SKIP must not hide that skill's base suites."""
+    r = _git('show', f'{base}:tools/package_skills.py', repo=repo)
+    if r.returncode == 0:
+        try:
+            for node in ast.parse(r.stdout).body:
+                value = None
+                if isinstance(node, ast.Assign) and any(
+                        isinstance(t, ast.Name) and t.id == 'SKIP' for t in node.targets):
+                    value = node.value
+                elif (isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+                      and node.target.id == 'SKIP' and node.value is not None):
+                    value = node.value
+                if value is None:
+                    continue
+                if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
+                        and value.func.id in ('set', 'frozenset') and len(value.args) == 1
+                        and not value.keywords):
+                    value = value.args[0]
+                got = ast.literal_eval(value)
+                if isinstance(got, (set, frozenset, list, tuple)) and all(
+                        isinstance(x, str) for x in got):
+                    return set(got)
+        except (SyntaxError, ValueError, TypeError, MemoryError, RecursionError):
+            pass
+    return set(_DEFAULT_SKIP)
+
+
 def base_suite_files(base: str, repo: Path = REPO) -> set[str]:
-    """test_*.py paths at `base` under a top-level skill dir (one that held a SKILL.md at base).
-    Deliberately NOT filtered by head's package_skills.SKIP, so a SKIP edit cannot hide suites
-    (`_archive/` and `tools/` hold no top-level SKILL.md and fall out on their own)."""
+    """test_*.py paths at `base` under a top-level skill dir (one that held a SKILL.md at base),
+    minus the dirs in the BASE commit's SKIP (so a merged SKIP addition stops being reported on
+    later PRs, while a SKIP edit made on head cannot hide suites). Raises RuntimeError if
+    `git ls-tree` fails."""
     r = _git('ls-tree', '-r', '--name-only', '-z', base, repo=repo)
+    if r.returncode != 0:
+        raise RuntimeError(f'git ls-tree -r {base} failed (rc {r.returncode}): {r.stderr.strip()}')
+    skip = base_skip_set(base, repo)
     names = [n for n in r.stdout.split('\0') if n]
-    skills = {n.split('/')[0] for n in names if n.count('/') == 1 and n.endswith('/SKILL.md')}
+    skills = {n.split('/')[0] for n in names if n.count('/') == 1 and n.endswith('/SKILL.md')} - skip
     return {n for n in names
             if n.split('/')[0] in skills and '/' in n and '__pycache__' not in n.split('/')
             and n.rsplit('/', 1)[-1].startswith('test_') and n.endswith('.py')}
@@ -314,10 +352,15 @@ def declared_removed_suites(base: str, repo: Path = REPO) -> set[str]:
 
 
 def archived_suite_paths(base: str, repo: Path = REPO) -> set[str]:
-    """`_archive/` test files ADDED or RENAMED-INTO in base..HEAD. Copies already present at
-    base never count: they cannot account for a suite deleted in this range."""
-    r = _git('diff', '--name-only', '-z', '--diff-filter=AR', base, 'HEAD', '--', '_archive/',
+    """`_archive/` test files ADDED in base..HEAD (-M, A only). With the `_archive/` pathspec a
+    move from outside the archive always shows as A, never R; an R would only be a copy that
+    already lived under `_archive/` at base, which cannot account for a suite deleted in this
+    range. Raises RuntimeError if `git diff` fails."""
+    r = _git('diff', '--name-only', '-z', '-M', '--diff-filter=A', base, 'HEAD', '--', '_archive/',
              repo=repo)
+    if r.returncode != 0:
+        raise RuntimeError(f'git diff {base} HEAD -- _archive/ failed (rc {r.returncode}): '
+                           f'{r.stderr.strip()}')
     return {n for n in r.stdout.split('\0')
             if n and '__pycache__' not in n.split('/')
             and n.rsplit('/', 1)[-1].startswith('test_') and n.endswith('.py')}
@@ -330,9 +373,14 @@ def cmd_suite_continuity(base_arg: str, repo: Path = REPO) -> int:
         print(f'suite-continuity: base {base!r} is not a commit in this clone (fetch-depth: 0?)',
               file=sys.stderr)
         return 2
-    base_files = base_suite_files(base, repo)
+    try:
+        base_files = base_suite_files(base, repo)
+        archived = archived_suite_paths(base, repo)
+    except RuntimeError as e:
+        print(f'suite-continuity: {e}', file=sys.stderr)
+        return 2
     errors = vanished_suites(base_files, set(discover_skill_test_files(repo)),
-                             archived_suite_paths(base, repo), declared_removed_suites(base, repo))
+                             archived, declared_removed_suites(base, repo))
     for e in errors:
         print(e, file=sys.stderr)
     if errors:

@@ -151,12 +151,6 @@ class VanishedSuites(unittest.TestCase):
     def test_declared_removed_is_allowed(self):
         self.assertEqual(g.vanished_suites(self.BASE, {'b/test_b.py'}, set(), {'a/tests/test_a.py'}), [])
 
-    def test_preexisting_archive_copy_is_not_passed_in_so_base_path_is_reported(self):
-        # the caller supplies only archive paths ADDED in base..HEAD; a copy that already
-        # existed at base is therefore absent from this set and must not excuse the deletion
-        errs = g.vanished_suites(self.BASE, {'b/test_b.py'}, set(), set())
-        self.assertEqual(len(errs), 1)
-        self.assertIn('a/tests/test_a.py', errs[0])
 
 
 class SuiteContinuityGit(TempRepo):
@@ -243,6 +237,90 @@ class SuiteContinuityGit(TempRepo):
             rc, out, err = self.run_cmd(base)
         self.assertEqual(rc, 1, (out, err))
         self.assertIn('a/tests/test_a.py', err)
+
+    def test_rename_of_preexisting_archive_dir_does_not_excuse_deletion(self):
+        # With the `-- _archive/` pathspec a rename from OUTSIDE _archive/ shows as A, never R;
+        # an R therefore only means a copy that already lived under _archive/ at base.
+        self.git('init', '-q')
+        _skill(self.root, 'a', files={'tests/test_a.py': ''})
+        old = self.root / '_archive' / 'old' / 'a' / 'tests'
+        old.mkdir(parents=True)
+        (old / 'test_a.py').write_text('', encoding='utf-8')
+        self.git('add', '.')
+        self.git('commit', '-q', '-m', 'base')
+        base = self.git('rev-parse', 'HEAD')
+        self.git('mv', '_archive/old', '_archive/new')
+        self.git('rm', '-q', 'a/tests/test_a.py')
+        self.git('commit', '-q', '-m', 'rename archive dir and delete suite')
+        rc, out, err = self.run_cmd(base)
+        self.assertEqual(rc, 1, (out, err))
+        self.assertIn('a/tests/test_a.py', err)
+
+    def _commit_package_skills(self, skip_literal: str, msg: str):
+        (self.root / 'tools').mkdir(exist_ok=True)
+        (self.root / 'tools' / 'package_skills.py').write_text(
+            f"SKIP = {skip_literal}\n", encoding='utf-8')
+        self.git('add', '.')
+        self.git('commit', '-q', '-m', msg)
+        return self.git('rev-parse', 'HEAD')
+
+    def test_base_skip_filters_base_suites(self):
+        # Once a SKIP addition (with its Suite-Removed trailer) has merged, later PRs diffed
+        # against that base must not report the skipped skill's suites as vanished.
+        self.git('init', '-q')
+        _skill(self.root, 'a', files={'tests/test_a.py': ''})
+        self._commit_package_skills("{'_archive', 'tools', '.git'}", 'base 0')
+        p1 = self._commit_package_skills(
+            "{'_archive', 'tools', '.git', 'a'}", 'skip a\n\nSuite-Removed: a/tests/test_a.py')
+        (self.root / 'README.md').write_text('x\n', encoding='utf-8')
+        self.git('add', '.')
+        self.git('commit', '-q', '-m', 'readme only')
+        from unittest import mock
+        # head's imported SKIP also carries 'a' (as the real module would after P1)
+        with mock.patch.object(g.package_skills, 'SKIP', set(g.package_skills.SKIP) | {'a'}):
+            self.assertEqual(g.base_suite_files(p1, self.root), set())
+            rc, out, err = self.run_cmd(p1)
+        self.assertEqual(rc, 0, (out, err))
+
+    def test_unreadable_base_skip_falls_back_to_default_set(self):
+        self.git('init', '-q')
+        _skill(self.root, 'a', files={'tests/test_a.py': ''})
+        self.git('add', '.')
+        self.git('commit', '-q', '-m', 'no package_skills at base')
+        base = self.git('rev-parse', 'HEAD')
+        self.assertEqual(g.base_suite_files(base, self.root), {'a/tests/test_a.py'})
+        self.root.joinpath('tools').mkdir()
+        self.root.joinpath('tools', 'package_skills.py').write_text('SKIP = (((\n', encoding='utf-8')
+        self.git('add', '.')
+        self.git('commit', '-q', '-m', 'unparseable')
+        self.assertEqual(g.base_suite_files(self.git('rev-parse', 'HEAD'), self.root),
+                         {'a/tests/test_a.py'})
+
+    def _failing_git(self, failing: str):
+        real = g._git
+
+        def fake(*args, repo=g.REPO):
+            if args and args[0] == failing:
+                return subprocess.CompletedProcess(['git', *args], 128, '', 'fatal: boom')
+            return real(*args, repo=repo)
+        return fake
+
+    def test_ls_tree_failure_is_rc2_not_pass(self):
+        base = self.build()
+        from unittest import mock
+        with mock.patch.object(g, '_git', self._failing_git('ls-tree')):
+            rc, out, err = self.run_cmd(base)
+        self.assertEqual(rc, 2, (out, err))
+        self.assertIn('ls-tree', err)
+
+    def test_archive_diff_failure_is_rc2_not_vanished_report(self):
+        base = self.build()
+        from unittest import mock
+        with mock.patch.object(g, '_git', self._failing_git('diff')):
+            rc, out, err = self.run_cmd(base)
+        self.assertEqual(rc, 2, (out, err))
+        self.assertIn('git diff', err)
+        self.assertNotIn('no longer discovered', err)
 
     def test_bad_base_is_usage_error(self):
         self.build()
