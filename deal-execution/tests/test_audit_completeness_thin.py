@@ -197,6 +197,98 @@ class TestPopulatedTablesStayOk(_Base):
         self.assertEqual(self.ex_a(r)["data_tables"], 0)
 
 
+def ROW(cells, tr_pr="") -> str:
+    return "<w:tr>{}{}</w:tr>".format(tr_pr, "".join(cell(c) for c in cells))
+
+
+DATA = [["100", "Tenant One", "1,000", "2030-01-31"],
+        ["200", "Tenant Two", "2,000", "2031-06-30"]]
+
+
+class TestWrappedAndNestedRows(_Base):
+    """REFUTE (d): rows wrapped in content controls / custom XML, or data held in a
+    nested table, are real data -- a populated rent roll must not read as THIN.
+    populated and blocking must be identical to the plain-table case."""
+
+    def _check_populated_ok(self, tbl):
+        r = self.audit(exhibit_blocks(tbl))
+        e = self.ex_a(r)
+        self.assertEqual(e["data_tables"], 1)
+        self.assertFalse(e["thin"])
+        self.assertEqual(r["thin_exhibits"], [])
+        self.assert_gate_unchanged_populated(r)
+        plain = self.audit(exhibit_blocks(TBL([HEADER] + DATA)))
+        self.assertEqual((r["blocking"], e["populated"], r["empty_exhibits"]),
+                         (plain["blocking"], self.ex_a(plain)["populated"],
+                          plain["empty_exhibits"]))
+
+    def test_rows_inside_sdt_are_data(self):
+        rows = "".join(ROW(d) for d in DATA)
+        tbl = "<w:tbl>{}<w:sdt><w:sdtPr/><w:sdtContent>{}</w:sdtContent></w:sdt></w:tbl>" \
+            .format(ROW(HEADER), rows)
+        self._check_populated_ok(tbl)
+
+    def test_rows_inside_custom_xml_are_data(self):
+        rows = "".join(ROW(d) for d in DATA)
+        tbl = '<w:tbl>{}<w:customXml w:element="rows">{}</w:customXml></w:tbl>' \
+            .format(ROW(HEADER), rows)
+        self._check_populated_ok(tbl)
+
+    def test_data_in_nested_table_is_data(self):
+        inner = TBL([HEADER] + DATA)
+        tbl = "<w:tbl>{}</w:tbl>".format(ROW([("xml", "<w:p/>" + inner)]))
+        self._check_populated_ok(tbl)
+
+    def test_skeleton_rows_inside_sdt_still_thin(self):
+        tbl = ("<w:tbl><w:sdt><w:sdtContent>{}{}</w:sdtContent></w:sdt></w:tbl>"
+               .format(ROW(HEADER), ROW(["", "", "", ""])))
+        r = self.audit(exhibit_blocks(tbl))
+        self.assertEqual(r["thin_exhibits"], ["A"])
+        self.assert_gate_unchanged_populated(r)
+
+
+class TestMultiRowHeader(_Base):
+    """REFUTE (e): a title row plus a column row with no data is still a skeleton,
+    when the second header row is unambiguous (w:tblHeader repeat-header marker, or
+    a first row that is one cell merged across columns)."""
+
+    def test_repeat_header_rows_are_not_data(self):
+        hdr = "<w:trPr><w:tblHeader/></w:trPr>"
+        tbl = "<w:tbl>{}{}</w:tbl>".format(ROW(["Rent Roll"], hdr), ROW(HEADER, hdr))
+        r = self.audit(exhibit_blocks(tbl))
+        self.assertEqual(r["thin_exhibits"], ["A"])
+        self.assert_gate_unchanged_populated(r)
+
+    def test_merged_title_row_then_column_row_is_skeleton(self):
+        title = ('<w:tr><w:tc><w:tcPr><w:gridSpan w:val="4"/></w:tcPr>{}</w:tc></w:tr>'
+                 .format(P("Rent Roll")))
+        tbl = "<w:tbl>{}{}</w:tbl>".format(title, ROW(HEADER))
+        r = self.audit(exhibit_blocks(tbl))
+        self.assertEqual(r["thin_exhibits"], ["A"])
+        self.assert_gate_unchanged_populated(r)
+
+    def test_merged_title_row_with_data_is_ok(self):
+        title = ('<w:tr><w:tc><w:tcPr><w:gridSpan w:val="4"/></w:tcPr>{}</w:tc></w:tr>'
+                 .format(P("Rent Roll")))
+        tbl = "<w:tbl>{}{}{}</w:tbl>".format(title, ROW(HEADER), ROW(DATA[0]))
+        r = self.audit(exhibit_blocks(tbl))
+        self.assertEqual(r["thin_exhibits"], [])
+        self.assert_gate_unchanged_populated(r)
+
+    def test_single_column_list_second_row_is_data(self):
+        # Unmerged single-cell first row is an ordinary header, not a title: the
+        # next row is data.
+        r = self.audit(exhibit_blocks(TBL([["Permitted Exceptions"], [LOREM]])))
+        self.assertEqual(r["thin_exhibits"], [])
+
+    def test_unmarked_two_row_header_is_not_detected(self):
+        # Disclosed limit: two plain header rows with no tblHeader marker and no
+        # merged title cell cannot be told apart from header + one data row.
+        r = self.audit(exhibit_blocks(TBL([["Rent Roll", "", "", ""], HEADER])))
+        self.assertEqual(r["thin_exhibits"], [])
+        self.assert_gate_unchanged_populated(r)
+
+
 class TestBlockingUnchanged(_Base):
     def test_caption_only_exhibit_is_still_empty_and_blocks(self):
         p = self.doc(exhibit_blocks())
