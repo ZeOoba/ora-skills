@@ -3,7 +3,7 @@ name: lease-abstraction-pipeline
 description: 'Use when the user mentions: abstract this lease, abstract/parse leases, extract lease data or terms, lease abstract, summarize/read/review this lease, process lease folder, batch lease, lease pipeline, run lease abstraction, update rent roll from leases, or scheduled lease scan — for one or more commercial leases uploaded directly or in a folder, SharePoint, or Google Drive. Also trigger when an uploaded PDF/DOCX appears to be a commercial lease, or on "run the lease pipeline" / "process the leases" / "update my rent roll". Covers single-document and batch lease abstraction and rent roll data extraction for Oxford Realty Advisors; autonomous unattended operation — do not pause mid-run.'
 ---
 
-# Lease Abstraction Pipeline — Oxford Realty Advisors (v2.8)
+# Lease Abstraction Pipeline — Oxford Realty Advisors (v2.9)
 
 Autonomous batch extraction of 33 structured data fields from every lease in a target folder. Outputs a master XLSX workbook, upserts Notion Tenant Database, and sends a completion summary. Designed for unattended execution.
 
@@ -41,6 +41,12 @@ Skip (and log in Tab 6): files that are not leases, corrupted files, password-pr
 
 **Classify the ingestion path and carry it forward.** Record `INGEST_PATH` = `TEXT_LAYER` | `OCR` | `DOCX` per document.
 Any document on the `OCR` path is subject to STEP 2A below and cannot be reported as abstracted until STEP 2A has run.
+
+**Classify the source and carry it forward.** Record `SOURCE_CLASS` = `CANONICAL` | `ARCHIVE` | `UPLOAD` per document.
+`CANONICAL` = the file is in the property's canonical lease folder per the Notion page
+`Lease Path Map (Master Lease Database)` (3e96ecd8-9e59-81fe-ad70-fdcd7c2ab885); `ARCHIVE` = a copy outside that folder;
+`UPLOAD` = supplied directly, canonical location not compared. Carry it in the XLSX (Tab 1) and in the STEP 7 source note.
+`estoppel-request-generation` will not pre-fill from an `ARCHIVE` or `UPLOAD` abstract as if it were verified.
 
 ---
 
@@ -145,7 +151,7 @@ Extract every field. Mark `NOT FOUND` if absent.
 
 | # | Field |
 |---|---|
-| 31 | CAM Recovery Type — classify from Field 19's CAM structure language plus Field 18's lease type into exactly one of: "Full CAM + Tax + Insurance", "Tax Only", "Capped CAM", "Uncapped CAM", "NNN — All Pass-Through", "Gross — No Recovery", "Partial Recovery" (these 7 values are the live options on the Notion Tenant Database's CAM Recovery Type field — do not invent a new option). Inference guide: Lease Type=Gross with no CAM/tax passthrough language -> Gross — No Recovery. Lease Type=NNN with full CAM+tax+insurance passthrough and no cap mentioned -> NNN — All Pass-Through (or Uncapped CAM if the lease frames it as CAM specifically, not full NNN). Any "controllable expense cap" or "cap of X% per year" language -> Capped CAM. Tenant pays only real estate tax reimbursement, no CAM -> Tax Only. Passthrough applies to only some categories (e.g. CAM but not insurance) -> Partial Recovery. If the language doesn't clearly map to one option, mark NOT FOUND and flag for manual review rather than guessing — same discipline as every other field. |
+| 31 | CAM Recovery Type — classify from Field 19's CAM structure language plus Field 18's lease type into exactly one of: "Full CAM + Tax + Insurance", "Tax Only", "Capped CAM", "Uncapped CAM", "NNN — All Pass-Through", "Gross — No Recovery", "Partial Recovery" (these 7 values are live options on the Notion Tenant Database's CAM Recovery Type field — do not invent a new option). The live select also has an 8th option, literally named "Direct-Pay Net — No Recovery Article", which looks malformed: keep classifying into the 7 values above and never into the 8th until Gabriel confirms its name. Inference guide: Lease Type=Gross with no CAM/tax passthrough language -> Gross — No Recovery. Lease Type=NNN with full CAM+tax+insurance passthrough and no cap mentioned -> NNN — All Pass-Through (or Uncapped CAM if the lease frames it as CAM specifically, not full NNN). Any "controllable expense cap" or "cap of X% per year" language -> Capped CAM. Tenant pays only real estate tax reimbursement, no CAM -> Tax Only. Passthrough applies to only some categories (e.g. CAM but not insurance) -> Partial Recovery. If the language doesn't clearly map to one option, mark NOT FOUND and flag for manual review rather than guessing — same discipline as every other field. |
 | 32 | Tenant Pro-Rata Share — the tenant's % share of building/project CAM pool (usually stated as "Tenant's Proportionate Share" or a ratio of Field 6 Rentable SF to total building/project SF). Extract the stated percentage if given; if only the ratio/SF figures are given, calculate it and flag as CALCULATED (not stated) in output. NOT FOUND if neither is present. |
 
 ### PARKING (v2.8 addition — closes a gap found 2026-09-28 at 9620 State Route 350)
@@ -210,7 +216,7 @@ Extract every field. Mark `NOT FOUND` if absent.
 
 | Tab | Contents |
 |---|---|
-| 1 — Master Rent Roll | One row/lease. All 33 fields + 7 derived metrics + flag counts. Freeze row 1. Auto-filter. Color: red fill = any CRITICAL, yellow = WARNING only, white = clean. |
+| 1 — Master Rent Roll | One row/lease. All 33 fields + 7 derived metrics + `SOURCE_CLASS` + Flag Count (total flags, all severities) + Flag Status (highest severity: Critical / Warning / Clean). Freeze row 1. Auto-filter. Color: red fill = any CRITICAL, yellow = WARNING only, white = clean. |
 | 2 — Rent Schedules | One block/tenant: name, property, suite, then full escalation table (Year, Period Start, Period End, Monthly, Annual, PSF). |
 | 3 — Quality Flags Dashboard | One row/flag: File, Tenant, Property, Suite, Severity, Description. |
 | 4 — Expiration Heatmap | Count of expirations by quarter, next 5 years. Highlight quarters with 3+ expirations. |
@@ -221,29 +227,41 @@ Extract every field. Mark `NOT FOUND` if absent.
 
 ## STEP 7 — NOTION UPSERT
 
-Target database: ORA Notion Tenant Database. Logic: update record if tenant already exists (match on Tenant Name + Property + Suite); create new record if no match. Do not overwrite records where Notion shows a more recent modified date than the lease document, unless Gabriel explicitly instructs.
+Target database: ORA Notion Tenant Database. Every Notion field named in this step is a live Tenant Database property (schema checked 2026-11-05); never write to a property name the live schema does not have.
+
+**Match.** Match key: `Tenant Name` + `Property Address` + `Suite / Unit`. Match tenant names with the fuzzy name rule in `rent-roll-reconciliation` Step 4, not exact string equality. Update the matched record; create a new record only when nothing matches. Do not overwrite records where Notion shows a more recent modified date than the lease document, unless Gabriel explicitly instructs.
+
+**Property Address** is a select of complex-level options. Resolve Field 4 to the existing option for that complex; never create an option. If no option is a confident match, flag `DATA-GAP` (a Tab 3 row, and a line under "Top issues" in the STEP 8 notification) and do not write that tenant's row.
+
+**Precedence.** The lease document owns lease-document fields; the rent roll owns current rent, SF and escalation dates.
 
 | Notion Field | Source Field |
 |---|---|
 | Tenant Name | Field 2 — Tenant entity name |
-| Property | Field 4 — Property address |
-| Suite | Field 5 — Suite/unit |
+| Property Address | Field 4 — resolved to the existing select option (above) |
+| Suite / Unit | Field 5 — Suite/unit |
 | Lease Start | Field 8 — Commencement date |
-| Lease End | Field 9 — Expiration date |
-| Current Rent (monthly) | Field 14 — Base rent Year 1, monthly |
-| Rent PSF | Derived — Rent PSF Year 1 |
-| Lease Type | Field 18 |
-| Renewal Options | Field 11 |
-| Guaranty | Field 23 — Yes/No |
-| Days Until Expiration | Derived — Months until expiration × 30 |
-| Flag Count | Total flags (all severities) |
-| Flag Status | Highest severity: Critical / Warning / Clean |
+| Lease Expiration | Field 9 — Expiration date |
+| Monthly Rent | Field 14 — Base rent Year 1, monthly. **On create only**; never overwritten on update |
+| Rent PSF (Annual) | Derived — Rent PSF Year 1. **On create only**; never overwritten on update |
+| Lease Type | Field 18 — select options are exactly NNN / Modified Gross / Gross. "Industrial gross" maps to Modified Gross, and the source note keeps "(lease: industrial gross)" |
+| Renewal Option Terms | Field 11 |
+| Personal Guaranty | Fields 3 and 23 — select options are exactly Full PG / Partial PG / Burned Off / None. Burned Off when a burn-off date has passed or a burn-off condition is already met; otherwise Full PG for full scope and Partial PG for limited or partial scope; None when absent |
+| Guarantor Name | Field 3 — guarantor name(s) (v2.9) |
+| Lease Status | Derived (v2.9) — select options are Active / Month-to-Month / Vacant / Notice Given / Expired. Active when commencement ≤ today ≤ expiration; Expired when expiration < today. **On create only**; never overwrite an existing value |
+| Security Deposit | Field 17 — deposit amount (v2.9). On create, or on update only when the Notion value is blank |
 | CAM Recovery Type | Field 31 (v2.3) |
 | Tenant Pro-Rata Share | Field 32 (v2.4) |
-| Assignment / Sublet Terms (Lease) | Field 24 (v2.8) — condensed exact language, prefixed with a source note: document name and `EXECUTION_STATUS` |
+| Assignment / Sublet Terms (Lease) | Field 24 (v2.8) — condensed exact language, prefixed with a source note: document name, `SOURCE_CLASS` and `EXECUTION_STATUS` |
 | Parking Terms (Lease) | Field 33 (v2.8) — condensed exact language plus calculated allocation %, prefixed with the same source note |
 
-The existing numeric `Parking Spaces` field is NOT written by this pipeline unless the lease states a fixed count. When `EXECUTION_STATUS` is anything other than EXECUTED, still write Fields 24 and 33 but the source note must say the copy is unexecuted.
+`Monthly Rent` and `Rent PSF (Annual)` are written on create only because `rent-roll-reconciliation` fixes Notion to the rent roll's values; a Year-1 figure written on update would overwrite current rent.
+
+`Lease Status` is written on create only because Notice Given, Month-to-Month and Vacant are operational facts a lease document cannot know. It still has to be set: `lease-renewal-pipeline` and `exception-detection` select on Lease Status, so a row created with a blank status falls out of both. When neither rule applies (commencement after today, or a date NOT FOUND), leave it blank and list the tenant under "Top issues" in the STEP 8 notification so Gabriel sets it.
+
+Not written: `Days to Expiration` is a read-only formula. Flag Count and Flag Status have no Tenant Database property; they stay in the XLSX (Tab 1).
+
+The existing numeric `Parking Spaces` field is NOT written by this pipeline unless the lease states a fixed count. When `EXECUTION_STATUS` is anything other than EXECUTED, still write Fields 24 and 33 but the source note must say the copy is unexecuted. When `SOURCE_CLASS` is `ARCHIVE`, the source note says `ARCHIVE COPY`, the phrase `lease-renewal-pipeline`'s lease-source check reads.
 
 ---
 
@@ -303,10 +321,11 @@ Notion: [N] updated / [N] created
 - **tenant-intelligence:** Feed extracted data into tenant risk scoring for existing portfolio tenants.
 - **acquisition-underwriting** (successor to the retired `rent-comp`, 2026-08-05): compare extracted rent PSF against current market comps for below/above-market flags, using that skill's COMPS mode / comp-grid discipline (absorbed from `rent-comp` on 2026-08-12 — see the 2026-08-12 event_log entry).
 - **title-exam-abstraction** (2026-08-21): source of the vesting record the STEP 5 landlord-mismatch flag checks the lease's named landlord against.
-- **estoppel-request-generation** (2026-08-21): consumes the 33-field abstract (including `EXECUTION_STATUS`/`INGEST_PATH`/`MANUSCRIPT AMENDMENTS`) to pre-fill and draft tenant estoppel certificates — the sole path for that deliverable; `document-assembly`'s Template 7 is superseded, see that skill's own note.
+- **estoppel-request-generation** (2026-08-21): consumes the 33-field abstract (including `SOURCE_CLASS`/`EXECUTION_STATUS`/`INGEST_PATH`/`MANUSCRIPT AMENDMENTS`) to pre-fill and draft tenant estoppel certificates — the sole path for that deliverable; `document-assembly`'s Template 7 is superseded, see that skill's own note.
 - **document-assembly:** Use extracted data to auto-populate renewal offers, lease addenda.
 - **lease-renewal-pipeline:** Auto-trigger for any lease flagged as expiring within 12 months.
 - **tenant-consent-request** (2026-09-28): reads the Notion `Assignment / Sublet Terms (Lease)` and `Parking Terms (Lease)` fields this pipeline writes (Fields 24 and 33) as its first-pass lease shortcut.
+- **rent-roll-reconciliation** (2026-11-05): owns current rent, SF and escalation dates in the Tenant Database. STEP 7 uses its Step 4 fuzzy tenant-name match and never overwrites the rent it writes.
 
 ---
 
@@ -321,6 +340,7 @@ See `references/extraction-edge-cases.md` for guidance on:
 
 ## Changelog
 
+- v2.9 (2026-11-05): STEP 7 rewritten against the live Tenant Database schema (checked 2026-11-05). The v2.8 mapping wrote property names the database does not have (`Property`, `Suite`, `Lease End`, `Current Rent (monthly)`, `Rent PSF`, `Renewal Options`, `Guaranty`, `Days Until Expiration`, `Flag Count`, `Flag Status`), and its rent rows would have overwritten current rent with Year-1 rent on every update. Now: the match key is `Tenant Name` + `Property Address` + `Suite / Unit`, using `rent-roll-reconciliation`'s Step 4 fuzzy name rule. Field 4 resolves to an existing `Property Address` option, or the tenant is flagged `DATA-GAP` and not written. `Monthly Rent` and `Rent PSF (Annual)` are written on create only, because the rent roll owns current rent, SF and escalation dates. `Personal Guaranty` and `Lease Type` now map onto their live select options. Added `Guarantor Name`, `Security Deposit`, and `Lease Status` on create only, because lease-renewal-pipeline and exception-detection select on Lease Status and a row created with a blank status fell out of both. `Days to Expiration` is a read-only formula and is not written; Flag Count and Flag Status stay in the XLSX (Tab 1). STEP 2 now defines `SOURCE_CLASS` (CANONICAL / ARCHIVE / UPLOAD), which estoppel-request-generation has consumed since its v1.2 but this pipeline never defined; it is carried in Tab 1 and in the STEP 7 source note. Field 31 does not classify into the malformed-looking 8th CAM Recovery Type option until Gabriel confirms its name. No extraction field, derived metric or quality-flag threshold changed. No scored or governor constant changed.
 - v2.8 (2026-09-28): added Field 33 (Parking terms) and widened Field 24 to capture the assignment/sublet admin fee, whether it is owed if the request is denied, and cost/attorney-fee reimbursement. Origin: 9620 State Route 350 shared-occupancy request — the parking allocation formula and the $500 per-request fee were only discoverable by re-reading the full lease, and the Notion Tenant Database had no field for either. STEP 7 now writes two new Tenant Database text fields (`Assignment / Sublet Terms (Lease)`, `Parking Terms (Lease)`) with a mandatory source/execution note. Added one STEP 5 warning cross-referencing occupancy-by-another-party language. Rebuilt the field, metric, flag, XLSX-tab and Notion-mapping tables as proper Markdown tables (the synced copy had them collapsed into run-on text); no field, formula, flag threshold or routing rule from v2.7 changed. Field count 32 -> 33.
 - v2.7 (2026-08-21, adversarial review): the v2.6 landlord-mismatch flag had no defined source for "owner of record" —
   now checks against `title-exam-abstraction`'s vesting record (added to CROSS-SKILL INTEGRATION), with a provisional

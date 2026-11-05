@@ -3,7 +3,7 @@ name: portfolio-reporting
 description: "Use when the user mentions: portfolio report, quarterly report, annual report, investor report, portfolio summary, portfolio overview, portfolio performance, KPI report, management report, board presentation, portfolio PowerPoint, or any request to produce a summary of portfolio performance across all properties and markets — Oxford Realty Advisors portfolio-level reporting and investor-ready output generation. Also trigger when the user asks for a consolidated view of the entire Oxford portfolio."
 ---
 
-# Portfolio Reporting — Oxford Realty Advisors (v1.1)
+# Portfolio Reporting — Oxford Realty Advisors (v1.2)
 
 ## MODULE 1: REPORT TYPES
 
@@ -37,6 +37,7 @@ description: "Use when the user mentions: portfolio report, quarterly report, an
 **Audience:** Internal board-level; structured for future capital partner review
 **Format:** DOCX report (use docx skill) + abbreviated PPTX deck
 **Frequency:** February (covering prior calendar year)
+**Relationship to annual-cycle:** the LP-facing derivative of `annual-cycle`'s Year-In-Review (the `ora-year-end-review` scheduled task), not a second year-end review.
 **Contents:**
 - Year-in-review narrative: acquisitions, dispositions, major operational events
 - Full-year financial summary: revenue, NOI, NOI margin, DSCR
@@ -67,10 +68,10 @@ Pull data from these sources in priority order:
 | Lease expirations, renewal pipeline | Notion Tenant Database views | Manual input |
 | Active deals, pipeline value | Notion Acquisition Pipeline Tracker | Gabriel-provided deal summary |
 | Debt balances, rates, maturities | Notion Loan Portfolio Tracker (V2) | Memory context |
-| Portfolio AUM, LTV | Memory context + manual input | Gabriel-provided estimate |
+| Portfolio AUM, LTV | Live ORA Master Workbook (SharePoint, per Notion pointer page `3706ecd8-9e59-813a-b4c7-ecbc2c213fa8`), then the Notion Portfolio Intelligence Dashboard (`3396ecd8-9e59-819c-a598-e55dc5581504`), labeled STALE when it is more than 7 days behind the workbook | Gabriel-provided estimate |
 | Market cap rates | Memory context + web search (recent comps) | Gabriel-provided estimate |
 
-Before pulling data, check when each source was last updated. If >30 days, flag to Gabriel.
+Before pulling data, check when each source was last updated. If >7 days, flag to Gabriel and label the figure STALE; never present it as current (firm freshness canon).
 
 ---
 
@@ -151,4 +152,5 @@ Activate this skill when Gabriel says:
 ## Changelog
 (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
 
+- **v1.2 (2026-11-05):** source-of-record order. Portfolio AUM and LTV came from memory context plus manual input. They now come from the live Master Workbook first, then the Notion Portfolio Intelligence Dashboard, labeled STALE when more than 7 days behind (firm read-order and freshness canon). The source-freshness flag moved from 30 days to 7 to match that canon. The February Annual Report is now described as the LP-facing derivative of annual-cycle's Year-In-Review (ora-year-end-review), not a second year-end review. No scored or governor constant changed.
 - **v1.1 (2026-07-15):** LOW fix, ora-skill-text-audit — Parchment token corrected #F5F0E8 -> #F5F3EF to match ORA Institutional Style Guide v1.0+.
