@@ -1,12 +1,14 @@
 ---
 
 name: parcel-data-recovery
-description: "Use when an Oxford Realty Advisors off-market screen workbook has rows lacking Bldg SF or auditor values and county-level building SF, market value, year-built, or tax-delinquency data must be recovered from county GIS/CAMA sources (Jackson MO, Wyandotte KS, Clay MO, Hamilton/Butler/Clermont/Warren OH; endpoints in references/endpoints.md, live-monitored quarterly by ora-gis-endpoint-liveping). Trigger on: recover SF, missing building SF, parcel data gap, UNSCREENABLE rows, DATA-GAP rows, county GIS pull, footprint SF, assessor values, CAMA extract, recover year built, recover market value, tax delinquency flags, refresh parcel data, re-run P1 on recovered data, off-market master rebuild. Companion to county-parcel-screen; patches an existing master."
+description: "Use when an Oxford Realty Advisors off-market screen workbook has rows lacking Bldg SF or auditor values and county-level building SF, market value, year-built, or tax-delinquency data must be recovered from county GIS/CAMA sources (Jackson MO, Wyandotte KS, Clay MO, Hamilton/Butler/Clermont/Warren OH; endpoints and their last-verified status in references/endpoints.md). Trigger on: recover SF, missing building SF, parcel data gap, UNSCREENABLE rows, DATA-GAP rows, county GIS pull, footprint SF, assessor values, CAMA extract, recover year built, recover market value, tax delinquency flags, refresh parcel data, re-run P1 on recovered data, off-market master rebuild. Companion to county-parcel-screen; patches an existing master."
 ---
 
-# Parcel Data Recovery — ORA Off-Market Screens (v1.10)
+# Parcel Data Recovery — ORA Off-Market Screens (v1.11)
 
 Recovers the inputs that block P1 Buy Box economics (building SF, market value, year built, delinquency) from county GIS/CAMA sources, then recomputes P1 and rebuilds the off-market master workbook.
+
+**Endpoint status is last-verified, not live.** The quarterly `ora-gis-endpoint-liveping` task that re-pings these endpoints is registered on the LAMS/Cowork fleet, which has been dark since 2026-10-30 (a deliberate ruling). Until that task is migrated to CC or retired, treat every status in `references/endpoints.md` as of its stated date, and live-test an endpoint before relying on a DOWN or UNTESTED status.
 
 ## Iron rules
 
@@ -66,6 +68,7 @@ Recovers the inputs that block P1 Buy Box economics (building SF, market value, 
 
 ## Changelog
 
+- **v1.11 (2026-11-05):** The description no longer says the endpoints are "live-monitored quarterly by ora-gis-endpoint-liveping". That task is on the LAMS fleet, dark since 2026-10-30, so the claim was false. Added a body note that endpoint statuses are last-verified and must be live-tested before use. Wording only; no endpoint, formula, QC gate, scored or governor constant changed.
 - **v1.10 (2026-10-27):** Consumer sweep for acquisition-underwriting v4.37 (Construction-Type Multiplier on the RCT). P1 keeps multiplier 1.00 and tags rows `[DATA-GAP: construction type]`; no constants changed.
 - v1.9 (2026-09-07): Description-level routing arbitration (R23 trigger-collision sweep, commit ab850fd) — added the “Companion to county-parcel-screen; patches an existing master” tie-break to the frontmatter description so the two skills’ shared parcel/assessor vocabulary routes on scope (existing master vs. fresh county universe) rather than on CLAUDE.md prose. No workflow, endpoint, Iron-rule or QC-gate change.
 - v1.8 (2026-08-15): MEDIUM fix (Skill Text Audit finding F8) + LOW fix (finding F9). The frontmatter description's "Encodes verified endpoints (2026-06-11)" read as a staleness claim once >60 days old, even though `ora-gis-endpoint-liveping`'s quarterly run keeps the endpoints themselves live-monitored — reworded to point at that monitoring instead of a bare date. Also moved the v1.7/v1.6 changelog prose that had accumulated in the description field down here (both entries already existed in this section, so the description copies were pure duplication); description now carries a single trailing version tag. No endpoint, formula, or QC-gate content changed.
