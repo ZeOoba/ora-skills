@@ -3,9 +3,8 @@
 # zero unallowed skips, zero EMPTY/BARE files, zero unmatched globs). Single source for
 # local runs and .github/workflows/skill-gates.yml (2026-10-03).
 #
-# The gated list lives in tools/skill_ci_gates.py (GATED_SKILL_SUITES / EXCLUDED_SKILL_SUITES);
-# `skill_ci_gates.py suites` refuses to print it if any test_*.py under a skill dir is in
-# neither list, so a new suite cannot silently go ungated.
+# The gated set is auto-discovered by tools/skill_ci_gates.py: every test_*.py under a skill dir,
+# minus files declaring a top-level CI_EXCLUDE = "<reason>" (an empty reason fails).
 #
 # Shared-file staging: the QC suites (lease-form-qc, lease-addendum, listing-agreement-qc)
 # import tools/ora_doc_qc.py, which package_skills.py injects as scripts/ora_doc_qc.py via

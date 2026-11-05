@@ -20,8 +20,8 @@ Subcommands (each exits 0 clean, 1 on a finding, 2 on a usage/environment error)
                            re-run against the PR base so a --no-verify commit can't skip it).
                            R may be `auto` (resolved from GITHUB_REF / GITHUB_EVENT_BEFORE).
   suites                   print the gated skill test files (repo-relative, one per line) for
-                           tools/run_suite.sh, after checking that every test_*.py under a
-                           skill dir is either gated or explicitly excluded.
+                           tools/run_suite.sh: every test_*.py under a skill dir, minus any
+                           file declaring a top-level CI_EXCLUDE = "<reason>" (listed on stderr).
   packaged-layout          package() every skill that declares a SHARED_ROOT_DEPS .py file into
                            a temp dir OUTSIDE the repo (so the dev-checkout sys.path fallback
                            to tools/ cannot resolve), extract it, and confirm each staged
@@ -52,41 +52,6 @@ from package_skills import (  # noqa: E402
 
 TARGET_MARKETS = 'target-markets.json'
 
-# ---------------------------------------------------------------------------
-# Skill-level test suites (F1). Every test_*.py that lives under a skill directory
-# must appear in exactly one of these two lists -- `suites` fails on any file in
-# neither, so a newly added suite can never silently go ungated.
-# Entries are repo-relative globs, expanded by tools/run_suite.sh.
-# ---------------------------------------------------------------------------
-GATED_SKILL_SUITES = [
-    'lease-form-qc/tests/test_*.py',
-    'lease-addendum/tests/test_*.py',
-    'listing-agreement-qc/tests/test_*.py',
-    'lease-generation/tests/test_*.py',
-    'dirty-tree-triage/tests/test_*.py',
-    'land/tests/test_*.py',
-    'rent-roll-reconciliation/tests/test_*.py',
-    'website-perfection/tests/test_*.py',
-    'masterlease-jurisdiction-rebase/scripts/test_*.py',
-    'acquisition-underwriting-eval-harness/lib/test_aggregate_replays.py',
-    'acquisition-underwriting-eval-harness/lib/test_diff_verdict.py',
-    'acquisition-underwriting-eval-harness/lib/test_doctrine_skip_gate.py',
-    'acquisition-underwriting-eval-harness/lib/test_record_run.py',
-    'acquisition-underwriting-eval-harness/lib/test_resolve_run_dir.py',
-    'debt-management/tests/test_*.py',
-]
-
-# path-glob -> reason. Excluded suites are follow-ups, not permanent exemptions: fix the
-# cause, then move the entry to GATED_SKILL_SUITES. (pma-qc/tests and vendor-management/tests
-# hold fixture .txt files only, no test_*.py, so there is nothing to gate or exclude there.)
-EXCLUDED_SKILL_SUITES: dict[str, str] = {
-    # Passes on Windows (local, 2026-10-03) and fails on ubuntu-latest (first skill-gates
-    # run, 2026-10-03): the code/tests lean on Windows' case-insensitive filesystem.
-    'acquisition-underwriting-eval-harness/lib/test_parse_replays.py':
-        'case-sensitive filesystem: duplicate_agent_ids expects case-folding',
-}
-
-
 def skill_dirs(repo: Path = REPO) -> list[Path]:
     return [d for d in sorted(repo.iterdir())
             if d.is_dir() and d.name not in package_skills.SKIP and (d / 'SKILL.md').is_file()]
@@ -103,33 +68,42 @@ def discover_skill_test_files(repo: Path = REPO) -> list[str]:
     return found
 
 
-def _expand(globs, repo: Path) -> dict[str, list[str]]:
-    return {g: sorted(p.relative_to(repo).as_posix() for p in repo.glob(g) if p.is_file())
-            for g in globs}
+# ---------------------------------------------------------------------------
+# Skill-level test suites (F1; auto-discovery since 2026-11-05, maintenance-reduction
+# bundle 1 -- the hand-kept GATED/EXCLUDED lists were a recurring follow-up-commit source).
+# Every test_*.py under a skill directory is gated automatically. To keep one out of CI,
+# put a top-level line in that file:
+#     CI_EXCLUDE = "<reason>"
+# An exclusion is a follow-up, not a permanent exemption: fix the cause, delete the line.
+# ---------------------------------------------------------------------------
+_CI_EXCLUDE = re.compile(r'^CI_EXCLUDE\s*=\s*([\'"])(.*?)\1\s*(?:#.*)?$', re.M)
 
 
-def suite_coverage(repo: Path = REPO, gated=None, excluded=None) -> tuple[list[str], list[str]]:
-    """Return (gated_files, errors). errors lists: a gated/excluded glob matching nothing
-    (a renamed suite must not silently vanish), a file both gated and excluded, and a
-    discovered skill test file in neither list."""
-    gated = GATED_SKILL_SUITES if gated is None else gated
-    excluded = EXCLUDED_SKILL_SUITES if excluded is None else excluded
-    errors = []
-    g_map, x_map = _expand(gated, repo), _expand(list(excluded), repo)
-    for label, m in (('gated', g_map), ('excluded', x_map)):
-        for glob, files in m.items():
-            if not files:
-                errors.append(f'{label} suite glob {glob!r} matches no file')
-    g_files = sorted({f for fs in g_map.values() for f in fs})
-    x_files = {f for fs in x_map.values() for f in fs}
-    for f in sorted(set(g_files) & x_files):
-        errors.append(f'{f}: listed as both gated and excluded')
-    for f in discover_skill_test_files(repo):
-        if f not in g_files and f not in x_files:
-            errors.append(f'{f}: skill test file is neither gated nor excluded -- add it to '
-                          f'GATED_SKILL_SUITES (or EXCLUDED_SKILL_SUITES with a reason) in '
-                          f'tools/skill_ci_gates.py')
-    return g_files, errors
+def ci_exclude_reason(path: Path) -> str | None:
+    """The stripped CI_EXCLUDE reason declared at column 0 of `path`, or None if absent."""
+    m = _CI_EXCLUDE.search(path.read_text(encoding='utf-8', errors='replace'))
+    return m.group(2).strip() if m else None
+
+
+def excluded_suites(repo: Path = REPO) -> dict[str, str]:
+    """Skill test files carrying a CI_EXCLUDE marker -> their (possibly empty) reason."""
+    out = {}
+    for rel in discover_skill_test_files(repo):
+        reason = ci_exclude_reason(repo / rel)
+        if reason is not None:
+            out[rel] = reason
+    return out
+
+
+def suite_coverage(repo: Path = REPO) -> tuple[list[str], list[str]]:
+    """Return (gated_files, errors). Gated = every discovered skill test file without a
+    CI_EXCLUDE marker. errors lists any marker whose reason is empty -- an exclusion must
+    say why, or it is indistinguishable from an accident."""
+    excluded = excluded_suites(repo)
+    errors = [f'{rel}: CI_EXCLUDE has an empty reason -- state why it is excluded, or delete '
+              f'the line to gate it' for rel, reason in excluded.items() if not reason]
+    gated = [rel for rel in discover_skill_test_files(repo) if rel not in excluded]
+    return gated, errors
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +329,8 @@ def main(argv=None) -> int:
             print(e, file=sys.stderr)
         if errors:
             return 1
+        for rel, reason in sorted(excluded_suites().items()):
+            print(f'excluded (CI_EXCLUDE): {rel} -- {reason}', file=sys.stderr)
         print('\n'.join(files))
         return 0
     if cmd == 'packaged-layout':

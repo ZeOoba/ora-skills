@@ -37,33 +37,32 @@ class TempRepo(unittest.TestCase):
 
 
 class SuiteCoverage(TempRepo):
-    def test_gated_files_are_returned(self):
-        _skill(self.root, 'a', files={'tests/test_a.py': ''})
-        files, errors = g.suite_coverage(self.root, gated=['a/tests/test_*.py'], excluded={})
-        self.assertEqual(files, ['a/tests/test_a.py'])
+    def test_every_discovered_file_is_gated(self):
+        _skill(self.root, 'a', files={'tests/test_a.py': '', 'lib/test_b.py': ''})
+        files, errors = g.suite_coverage(self.root)
+        self.assertEqual(files, ['a/lib/test_b.py', 'a/tests/test_a.py'])
         self.assertEqual(errors, [])
 
-    def test_ungated_skill_test_file_is_flagged(self):
-        _skill(self.root, 'a', files={'tests/test_a.py': '', 'lib/test_b.py': ''})
-        _, errors = g.suite_coverage(self.root, gated=['a/tests/test_*.py'], excluded={})
-        self.assertEqual(len(errors), 1)
-        self.assertIn('a/lib/test_b.py', errors[0])
+    def test_ci_exclude_marker_keeps_file_out(self):
+        _skill(self.root, 'a', files={'tests/test_a.py': 'CI_EXCLUDE = "linux case folding"\n',
+                                      'tests/test_b.py': ''})
+        files, errors = g.suite_coverage(self.root)
+        self.assertEqual((files, errors), (['a/tests/test_b.py'], []))
+        self.assertEqual(g.excluded_suites(self.root), {'a/tests/test_a.py': 'linux case folding'})
 
-    def test_excluded_file_is_not_flagged_or_returned(self):
-        _skill(self.root, 'a', files={'tests/test_a.py': ''})
-        files, errors = g.suite_coverage(self.root, gated=[], excluded={'a/tests/test_a.py': 'why'})
-        self.assertEqual((files, errors), ([], []))
+    def test_single_quoted_marker_counts(self):
+        _skill(self.root, 'a', files={'tests/test_a.py': "CI_EXCLUDE = 'why'\n"})
+        self.assertEqual(g.suite_coverage(self.root), ([], []))
 
-    def test_glob_matching_nothing_is_flagged(self):
-        _skill(self.root, 'a')
-        _, errors = g.suite_coverage(self.root, gated=['a/tests/test_*.py'], excluded={})
-        self.assertTrue(any('matches no file' in e for e in errors), errors)
+    def test_blank_reason_is_an_error_and_not_excluded_silently(self):
+        _skill(self.root, 'a', files={'tests/test_a.py': 'CI_EXCLUDE = "   "\n'})
+        files, errors = g.suite_coverage(self.root)
+        self.assertEqual(files, [])
+        self.assertTrue(any('empty reason' in e for e in errors), errors)
 
-    def test_both_gated_and_excluded_is_flagged(self):
-        _skill(self.root, 'a', files={'tests/test_a.py': ''})
-        _, errors = g.suite_coverage(self.root, gated=['a/tests/test_*.py'],
-                                     excluded={'a/tests/test_a.py': 'why'})
-        self.assertTrue(any('both gated and excluded' in e for e in errors), errors)
+    def test_indented_marker_does_not_count(self):
+        _skill(self.root, 'a', files={'tests/test_a.py': 'def f():\n    CI_EXCLUDE = "x"\n'})
+        self.assertEqual(g.suite_coverage(self.root), (['a/tests/test_a.py'], []))
 
     def test_archive_and_non_skill_dirs_ignored(self):
         (self.root / '_archive' / 'old' / 'tests').mkdir(parents=True)
@@ -73,10 +72,13 @@ class SuiteCoverage(TempRepo):
         (self.root / 'notaskill' / 'test_y.py').write_text('', encoding='utf-8')
         self.assertEqual(g.discover_skill_test_files(self.root), [])
 
-    def test_real_repo_every_skill_test_file_is_covered(self):
+    def test_real_repo_gates_known_suites_and_excludes_parse_replays(self):
         files, errors = g.suite_coverage()
         self.assertEqual(errors, [])
         self.assertIn('lease-form-qc/tests/test_lease_qc.py', files)
+        self.assertIn('acquisition-underwriting-eval-harness/lib/test_parse_replays.py',
+                      g.excluded_suites())
+        self.assertNotIn('acquisition-underwriting-eval-harness/lib/test_parse_replays.py', files)
 
 
 class ReadmeInventory(TempRepo):
