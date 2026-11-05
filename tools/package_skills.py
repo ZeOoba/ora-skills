@@ -526,6 +526,12 @@ SHARED_ROOT_DEPS = {
     # list from target-markets.json (preferred)") and treats it as the fixed comparison
     # universe -- it shipped without the file until now.
     'insurance-climate-risk-comparison': ['target-markets.json'],
+    # 2026-11-05 (data-flow review): both restated ORA's target geography and now cite the
+    # file instead. submarket-spatial-analysis reads the cluster set at run time, and
+    # annual-cycle's December back-test sweeps every cluster in it. (verified-deal-recon
+    # cites it too but reads nothing at run time; it is exempt in skill_ci_gates.py.)
+    'annual-cycle': ['target-markets.json'],
+    'submarket-spatial-analysis': ['target-markets.json'],
     'pma-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
     'listing-agreement-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
     'lease-form-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
