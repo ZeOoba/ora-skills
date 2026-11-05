@@ -3,7 +3,7 @@ name: repo-architecture
 description: Use when working in, or asking how to navigate, any of Gabriel's 7 most-active GitHub repos (ora-skills, ~/.claude/ora-claude-config, oxford-command-center, Website/website-canonical, AAOS, ora-county-sales-monitor, ora-pm) - purpose, layout, data flow, deploy path, gotchas, and which files to read first. Point-in-time snapshot; verify counts and paths against the repo.
 ---
 
-# Repo architecture map (v1.0.1)
+# Repo architecture map (v1.0.2)
 
 Selected by `pushedAt` (gh repo list). Local checkouts under `C:\Users\Owner`. All private except none. Counts drift - verify before quoting. Facts marked (unverified) were not checked against source.
 
@@ -14,7 +14,7 @@ Cross-repo rules that apply everywhere: shared checkouts are single-writer (fetc
 **Layout:** `tools/` (packaging, drift, mirror sync, CI gates, hooks/), the shared buy-box data file at repo root (version-bump gated), `_archive/` (retired, most tracked files), `_staging/` (gitignored drift ledgers), `.github/workflows/`.
 **Mechanics:** frontmatter `name`+`description` does routing; no code path between skills. `tools/package_skills.py` zips to `.skill` (manual Cowork import); shared files injected via `SHARED_ROOT_DEPS`; hooks mirror to AppData cache (additive, repo wins).
 **CI:** `tools-tests.yml`, `skill-gates.yml`, `claude-ci-fix.yml`; stdlib unittest via `bash tools/run_suite.sh`.
-**Gotchas:** pre-commit blocks on a missing buy-box data-file version bump or bad frontmatter; new `test_*.py` under a skill must be added to `GATED_SKILL_SUITES` or `EXCLUDED_SKILL_SUITES`; Cowork sandboxes can't do git writes (index.lock) - use Code; keep descriptions short; no tenant PII; red `tools-tests` can be an Actions billing block, not a failure.
+**Gotchas:** pre-commit blocks on a missing buy-box data-file version bump or bad frontmatter; new `test_*.py` under a skill is gated automatically (opt out only via a top-level `CI_EXCLUDE = "<reason>"`); Cowork sandboxes can't do git writes (index.lock) - use Code; keep descriptions short; no tenant PII; red `tools-tests` can be an Actions billing block, not a failure.
 **Read first:** `README.md`, `tools/skill_ci_gates.py`, `tools/hooks/pre-commit`.
 
 ## 2. ~/.claude  (ZeOoba/ora-claude-config)
@@ -72,5 +72,6 @@ Cross-repo rules that apply everywhere: shared checkouts are single-writer (fetc
 **Read first:** `README.md`, `server/index.ts`, `server/routes/cron.ts`.
 
 ## Changelog
+- v1.0.2 (2026-11-05): ora-skills suite gating is now auto-discovered (CI_EXCLUDE marker); updated the gotcha line. Wording only; NO change to scored or governor constants.
 - v1.0.1 (2026-10-29): Marked which repo the `scripts/` paths in sections 3 and 4 belong to. This was a reference-path clarification only (wording; no change to procedures, scored or governor constants): NO change to scored or governor constants.
 - v1.0 (2026-10-13): initial map of the 7 most recently pushed repos, built from read-only per-repo surveys.
