@@ -181,6 +181,39 @@ class DefaultSunsetTests(unittest.TestCase):
         self.assertIsNone(rows[2]['sunset'])
 
 
+class SunsetRobustnessTests(unittest.TestCase):
+    """Review finding C1f: a rephrased sunset or a new column must never empty the agenda silently."""
+
+    LEDGER_NEXT = CHANGELOG.replace('Metric A. Sunset: December 2026 back-test',
+                                    'Metric A. Sunset: next December back-test')
+    LEDGER_COLUMN = """## Rule Evidence ledger (retro-tagged 2026-10-23)
+
+| Evidence ID | Entry | Incidents | Expected loss | Class | Testable via | Sunset review |
+|---|---|---|---|---|---|---|
+| RE-9.2-1 | Rule A | 1 | [UNQUANTIFIED] | EVIDENCE: SINGLE-INCIDENT | Metric A | December 2026 back-test |
+| RE-9.2-2 | Rule B | 0 | n/a | RATIFIED-JUDGMENT | Next screens | when the register lands |
+"""
+
+    def test_next_december_resolves_from_the_version_date(self):
+        rows = ba.apply_default_sunsets(ba.parse_evidence_ledger(self.LEDGER_NEXT), ba.parse_version_dates(INDEX))
+        self.assertEqual((rows[0]['sunset'], rows[0]['sunset_basis']), ('December 2026 back-test', 'resolved'))
+        self.assertTrue(ba.sunset_due(rows[0]['sunset'], SESSION))
+
+    def test_sunset_column_is_read_by_header(self):
+        rows = ba.parse_evidence_ledger(self.LEDGER_COLUMN)
+        self.assertEqual([r['sunset'] for r in rows], ['December 2026 back-test', 'when the register lands'])
+        self.assertEqual(rows[0]['testable'], 'Metric A')
+
+    def test_unparsed_sunset_is_reported(self):
+        rows = ba.apply_default_sunsets(ba.parse_evidence_ledger(self.LEDGER_COLUMN), ba.parse_version_dates(INDEX))
+        self.assertEqual(ba.evidence_integrity(rows)['sunset_unparsed'], ['RE-9.2-2'])
+
+    def test_missing_required_header_raises(self):
+        broken = self.LEDGER_COLUMN.replace('| Evidence ID | Entry |', '| ID | Entry |')
+        with self.assertRaises(ba.AgendaError):
+            ba.parse_evidence_ledger(broken)
+
+
 class DoctrineVersionTests(unittest.TestCase):
     def test_version_with_suffix_inside_parentheses(self):
         self.assertEqual(ba.parse_doctrine_version(SKILL_H1), '9.2')
@@ -249,9 +282,19 @@ class PatchBaseTests(unittest.TestCase):
         found = self.scan()
         versions = {'acquisition-underwriting': '9.2'}
         self.assertTrue(ba.patch_status(found['D1_patch.md'], versions).startswith('STALE BASE'))
-        self.assertEqual(ba.patch_status(found['D2_named.md'], versions), 'CURRENT')
+        self.assertTrue(ba.patch_status(found['D2_named.md'], versions).startswith('CURRENT'))
         self.assertTrue(ba.patch_status(found['D3_loi.md'], versions).startswith('SHA STAMP'))
         self.assertTrue(ba.patch_status(found['notes.md'], versions).startswith('NO STAMP'))
+
+    def test_matching_version_with_a_different_sha_is_stale(self):
+        """Review finding C1e: two changes have shared one version label, so a version match is not enough."""
+        found = self.scan()
+        versions = {'acquisition-underwriting': '9.2'}
+        same = {'acquisition-underwriting': {'9e98546a47bb' + '0' * 52}}
+        other = {'acquisition-underwriting': {'f' * 64}}
+        self.assertEqual(ba.patch_status(found['D2_named.md'], versions, same), 'CURRENT')
+        self.assertTrue(ba.patch_status(found['D2_named.md'], versions, other).startswith('STALE BASE'))
+        self.assertIn('SHA not checked', ba.patch_status(found['D2_named.md'], versions, {}))
 
     def test_sha_stamp_is_checked_against_the_current_file(self):
         found = self.scan()
@@ -336,6 +379,18 @@ class LiveRepoSmokeTest(unittest.TestCase):
     def test_live_doctrine_version_parses(self):
         text = (REPO / 'acquisition-underwriting/SKILL.md').read_text(encoding='utf-8')
         self.assertRegex(ba.parse_doctrine_version(text) or '', r'^\d+\.\d+$')
+
+    def test_live_december_sunsets_produce_due_rows(self):
+        """If the live ledger cites 'December <year>', that December's agenda cannot be empty."""
+        import re
+        text = (REPO / 'acquisition-underwriting/versions/CHANGELOG.md').read_text(encoding='utf-8')
+        doctrine = (REPO / 'acquisition-underwriting/SKILL.md').read_text(encoding='utf-8')
+        rows = ba.apply_default_sunsets(ba.parse_evidence_ledger(text), ba.parse_version_dates(doctrine))
+        years = [int(y) for y in re.findall(r'December (\d{4}) back-test', text)]
+        if not years:
+            return  # nothing cites a December sunset, so there is nothing to lose (run_suite fails on skips)
+        session = dt.date(max(years), 12, 16)
+        self.assertGreater(sum(ba.sunset_due(r['sunset'], session) for r in rows), 0)
 
     def test_live_agenda_runs(self):
         buf = io.StringIO()

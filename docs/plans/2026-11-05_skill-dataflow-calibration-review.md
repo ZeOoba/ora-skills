@@ -69,7 +69,7 @@ Severity is business impact against ORA's priorities: acquisition velocity first
 | L1 | HIGH | The December back-test has no trigger. 14 Rule Evidence entries are due at it: 13 with an explicit "December 2026" sunset, plus RE-4.30-1 by the single-incident default. `acquisition-underwriting` and `ora-passed-deal-tracker` both name `annual-cycle` as its home, and `annual-cycle` had no row, section or task for it. | PR1: workflow and rows, manual, Gabriel convenes. ASK: date and prep owner. |
 | L2 | HIGH | No BackTestDataset exists on disk, and none of the Pre-December checklist steps is done. The ACQUIRED rows in `disposition-ledger.md` sit right at the n = 10 sample threshold, so one data gap drops the analysis back under INSUFFICIENT SAMPLE [FORECAST]. | ASK: prep owner. `annual-cycle` step 2 now names the checklist. |
 | L3 | HIGH | The store-only `deal-log-refresh` step 5 rewrites `ORA Max Defensible Price`, Walk Price and score fields in place after an LOI. That breaks the immutability that `acquisition-underwriting` (OUTCOME FEEDBACK) and `loi-generation` Phase 6c rely on: hindsight bias in the only calibration channel. | LATER: capture the skill into git (catalog review F2), then add a freeze guard once `LOI Sent Date` or `LOI Outcome` is set. |
-| L4 | HIGH | No skill ever wrote `LOI Outcome = WON`. A closed deal stayed `PENDING` on the tracker's lost-bid sweep, and its own recorded deed could become the "winning price". | PR1: `deal-retirement` step 2b. TASK: the tracker treats an ORA-LLC grantee as NONARMS. ASK: a one-time backfill of rows for deals already closed. |
+| L4 | HIGH | No skill ever wrote `LOI Outcome = WON`. A closed deal stayed on the tracker's watch list (a `PENDING` outcome, a stale `Status`, screen-time flags or an unflagged duplicate), and its own recorded deed could become a clearing or winning price. Live check 2026-11-05: the watch list holds 188 rows and 0 `WON`. Two of the rows are ORA acquisitions: "Point S Bay Tire — 401 Sunburst Hwy" (acquired 2026-01-27, Status Passed) and "1100 Rarig Ave" (acquired 2023-10-06, canonical row Status Dead). | PR1: `deal-retirement` step 2b (`WON` on the canonical row, 3a duplicate handling, stop on Passed/Dead). TASK, done live 2026-11-05 with Gabriel's in-turn approval: the tracker excludes `WON` from every arm (2d) and treats an ORA-entity grantee as NONARMS (3a). ora-claude-config `bf97ebf1`, propagated and hash-verified. ASK: stamp the two rows, and correct their Status. |
 | L5 | HIGH | The 2026-11-04 Falls Commerce rulings (Milwaukee exit row 8.75%; Amendment H premium inadmissible if any building is below its own floor; office-finish downtime) are marked "staged as v4.42 patch". No patch exists in the repo, the worktrees, the store, memory, `Claude_Workspace` or Code transcripts. It was probably staged in a Cowork session. A second claimant to the label exists: unmerged branch `claude/fix-ltv-enforcement-2026-10-17-f355fb` (`5c214ec3`, 2026-10-18) labels a pending-debt-register change v4.42 through v4.44. | ASK: locate or re-draft. It lands as the next `acquisition-underwriting` version with Rule Evidence lines and a harness run. See S7. |
 | L6 | MED-HIGH | Lessons land in the sourcing scan the same day, but not in the scorecard. Three of the 10-30 REFINED rows are PARTIAL in `acquisition-underwriting`, and the 11-04 rows have not landed. | On the agenda: `backtest_agenda.py` section 3 lists every REFINED and VALIDATED row in the window. |
 | L7 | MED-HIGH | The regression route is dark. `ora-acquisition-underwriting-eval-harness` is disabled; the last scheduled run was 2026-09-13 at v4.22. An ad-hoc run on 2026-09-29 FLAGGED Port Sheldon at 16.67 against a golden of 26.81, with no review on record. | ASK: re-enable the poll, or run one supervised replay before December. `annual-cycle` step 5 adds the post-ratification replay. |
@@ -128,13 +128,28 @@ O11 covers four residuals:
 
 | ID | Sev | Finding | Disposition |
 |---|---|---|---|
-| S1 | HIGH | `portfolio-growth` tests DSCR at the 40% aggregate LTV instead of per-property sizing. `deal-comparison` v1.2 fixed the same defect with Gabriel's approval. | ASK (Invariant 4). The guard allowlists it with that reason. |
-| S2 | MED | Cluster counts drifted ("ten canonical markets", "10 target-market clusters", "other 9"). | PR1 (`insurance-climate-risk-comparison`). The AU reference lines: NEXT-AU, allowlisted. |
+| S1 | HIGH | `portfolio-growth` tests DSCR at the 40% aggregate LTV instead of per-property sizing. `deal-comparison` v1.2 fixed the same defect with Gabriel's approval. | PR1, Gabriel in-turn 2026-11-05 (Invariant 4): `portfolio-growth` v1.2 tests DSCR at the per-property refi basis. No governor value moved. |
+| S2 | MED | Cluster counts drifted: "ten canonical markets", "10 target-market clusters", "other 9", and `county-sales-monitor`'s "the other eight ORA clusters" (six since Cook and Indianapolis joined Tier A). | PR1 (`insurance-climate-risk-comparison` v1.2, `county-sales-monitor` v0.12). The AU reference lines: NEXT-AU, allowlisted by exact phrase. |
 | S3 | MED | Target geography was restated as the holdings states. | PR1 plus the guard. CFG: agents. |
 | S4 | MED | Firm counts disagree: 26 vs 27 vs ~14 properties; 513K vs ~600K SF; ~$57M vs ~$60M AUM. | ASK: the canonical count for outbound and for internal use. |
 | S5 | LOW | 8-character Notion short IDs collide (shared prefixes), and Ops Hub is labeled both page and DB. | LATER. |
 | S6 | — | No existing probe checks semantic restatements (buybox and governor probes check numbers only). | PR1: `tools/doctrine_consistency.py`, run by `tools/run_suite.sh` in CI. |
 | S7 | MED | Version labels collide between concurrent sessions: two `acquisition-underwriting` v4.40s, two `loi-generation` v1.16s, and two claimants to the next AU version (L5). An installed copy cannot be identified by version, and Rule Evidence IDs (`RE-<version>-<n>`) inherit the collision (L9). | LATER (CFG): allocate doctrine versions the way OI ids already are (`~/.claude/maintenance/allocate-oi-id.py`); `backtest_agenda.py` already reports duplicate labels. |
+
+## Decisions taken 2026-11-05 (Gabriel, in-turn)
+
+- **December back-test:** convene December 16–18, 2026, after the December 15 `ora-passed-deal-tracker` run. The dataset and agenda are prepared by December 10 (`annual-cycle` v1.3 workflow; `tools/backtest_agenda.py`).
+- **`portfolio-growth` DSCR basis (S1):** approved; fixed in PR1.
+- **Regression:** one supervised eval-harness replay at v4.41 before December. Proposed as its own session. The daily poll stays off.
+- **Adversarial review of PR1:**
+  - Fix all five medium findings now:
+    - C1e: SHA check on a version match.
+    - C1f: sunset phrasing and header-based columns.
+    - C2b: phrase-keyed, counted allowlist.
+    - C2c: guard coverage, including a live stale count in `county-sales-monitor`.
+    - C3b: the tracker's Status and flag arm.
+  - All five are fixed. C3b includes the live tracker spec edit.
+  - The four low findings were fixed in the first pass.
 
 ## What works and should not be touched
 

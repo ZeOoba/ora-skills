@@ -5,20 +5,35 @@ WHY (2026-11-05 data-flow review): facts paraphrased across skills drifted in wa
 existing probe sees. buybox-drift-probe covers price statements and governor-drift-probe
 covers DSCR/LTV numbers. This covers three semantic restatements:
 
-  cluster-count          "N canonical markets/clusters", "N target-market clusters",
-                         "ORA's N clusters" must equal len(target-markets.json clusters);
-                         "the other N clusters" must equal that minus one.
-  target-geography       a line that talks about targets and lists five or more state codes
-                         must include every cluster state in target-markets.json. Holdings
-                         statements ("ORA spans OH, MD, ...") do not mention targets and
-                         are left alone.
-  dscr-at-aggregate-ltv  DSCR tested "at 40% LTV". 40% is the portfolio-aggregate governor;
-                         per-property debt is sized at the lesser of 65% LTV and 1.25x DSCR
-                         (acquisition-underwriting UNDERWRITING CONVENTIONS).
+  cluster-count          A count of ORA's clusters or target markets that signals the whole set
+                         ("all eleven", "ORA's 11", "N canonical markets", "N target-market
+                         clusters") must equal len(target-markets.json clusters). "the other N
+                         clusters/markets" must equal that total, minus one, minus any subset
+                         count named earlier in the same line ("Tier A covers three clusters;
+                         the other eight").
+  target-geography       A line that presents ORA's target geography (target markets, states or
+                         clusters; "ORA targets ...") and lists five or more states, at least four
+                         of them established-cluster states, must name every cluster state, must
+                         not list a state outside the clusters (TN is a watch market), and, if it
+                         names four or more clusters by city, must name them all. Holdings
+                         statements ("ORA spans/holds ...") and counted subsets ("five of ten
+                         target clusters") are left alone.
+  dscr-at-aggregate-ltv  DSCR tested, or debt sized, "at 40% LTV". 40% is the portfolio-aggregate
+                         governor; per-property debt is sized at the lesser of 65% LTV and 1.25x
+                         DSCR (acquisition-underwriting UNDERWRITING CONVENTIONS).
 
-History is exempt: changelog sections, version bullets and index rows, versions/ and
-_archive/ may quote old values. ALLOWED lists known findings that wait on a decision; each
-entry carries its reason, and the test suite fails on an entry that no longer matches.
+History is exempt: changelog sections, version bullets and index rows, versions/ and _archive/
+may quote old values.
+
+ALLOWED holds known findings that wait on a decision. Each key is (path, check, phrase) with an
+exact count, so a new or repeated phrase in an allowlisted file is still unexplained, and an entry
+that no longer matches exactly fails the test suite.
+
+LIMITS, stated plainly: these are pattern checks. They catch the phrasings above and the variants
+pinned in tools/test_doctrine_consistency.py, not every possible wording. A subset count stated on
+another line ("Tier A: five clusters" twenty lines up) cannot be seen, so an "other N" line may need
+an allowlist entry or a rewrite without a count. A new phrasing that drifts needs a new pattern and
+a test.
 
 Usage: python tools/doctrine_consistency.py [--repo PATH]
 Exit:  0 nothing unexplained · 1 unexplained findings · 2 target-markets.json unreadable
@@ -27,7 +42,7 @@ import argparse
 import json
 import re
 import sys
-from collections import namedtuple
+from collections import Counter, namedtuple
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -35,17 +50,20 @@ SKIP_TOP = {'tools', 'docs', 'plugins'}
 SKIP_DIRS = {'versions', 'tests', 'fixtures', 'golden_set', '__pycache__', 'node_modules', 'runs'}
 SUFFIXES = {'.md', '.js', '.py'}
 
+# (path, check, normalized matched phrase) -> (exact count, reason)
 ALLOWED = {
-    ('acquisition-underwriting/references/outcome-feedback-and-backtest.md', 'cluster-count'):
-        'Says "all ten canonical markets" and omits Chicago. The fix rides the next '
-        'acquisition-underwriting version, so it does not collide with the 2026-11-04 '
-        'rulings recorded as "staged as v4.42" (docs/plans/2026-11-05_skill-dataflow-calibration-review.md).',
-    ('acquisition-underwriting/references/market-and-cost-calibration-data.md', 'cluster-count'):
-        'A dated 2026-08-11 correction note ("the other nine clusters"); nine was right when ten '
-        'clusters existed. Rewording rides the next acquisition-underwriting version, as above.',
-    ('portfolio-growth/SKILL.md', 'dscr-at-aggregate-ltv'):
-        'Changing the DSCR test basis is a financial-model methodology change (Hard Invariant 4) '
-        'and waits on Gabriel. deal-comparison v1.2 fixed the same defect with his approval.',
+    ('acquisition-underwriting/references/outcome-feedback-and-backtest.md', 'cluster-count',
+     'all ten canonical markets'):
+        (1, 'Omits Chicago. The fix rides the next acquisition-underwriting version, so it does '
+            'not collide with the rulings recorded as "staged as v4.42" '
+            '(docs/plans/2026-11-05_skill-dataflow-calibration-review.md L5, S7).'),
+    ('acquisition-underwriting/references/market-and-cost-calibration-data.md', 'cluster-count',
+     'other nine clusters'):
+        (1, 'A dated 2026-08-11 correction note; nine was right when ten clusters existed. '
+            'Rewording rides the next acquisition-underwriting version, as above.'),
+    ('owner-outreach/SKILL.md', 'cluster-count', "ora's 9 target clusters"):
+        (1, 'A dated 2026-06-22 fix narrative ("covered 4 of ORA\'s 9 target clusters"); nine was right '
+            'when written. History, not a live claim.'),
 }
 
 US_STATES = set('AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO '
@@ -56,28 +74,40 @@ STATE_NAMES = {'ohio': 'OH', 'maryland': 'MD', 'indiana': 'IN', 'wisconsin': 'WI
 NUMBER_WORDS = {'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'seven': 7,
                 'eight': 8, 'nine': 9, 'ten': 10, 'eleven': 11, 'twelve': 12, 'thirteen': 13,
                 'fourteen': 14, 'fifteen': 15}
-LOOKBACK = 160
+LOOKBACK = 160   # 'target' may come this far before the first state named
+LOOKAHEAD = 40   # or this close after the last one ("... TN are ORA's target states")
+
 _NUM = r'(\d{1,2}|%s)' % '|'.join(NUMBER_WORDS)
-_COUNT_PATTERNS = [
-    (re.compile(r'\b%s\s+canonical\s+(?:target[- ]market\s+)?(?:markets|clusters)\b' % _NUM, re.I), 0),
-    (re.compile(r'\b%s\s+target[- ]market\s+clusters\b' % _NUM, re.I), 0),
-    (re.compile(r'\bother\s+%s\s+(?:canonical\s+)?(?:target[- ]market\s+)?clusters\b' % _NUM, re.I), -1),
-    (re.compile(r"\bORA['’]s\s+%s\s+clusters\b" % _NUM, re.I), 0),
+_QUALIFIERS = r'(?:(?:canonical|ORA|target(?:[- ]market)?)\s+)*'
+_FULL_SET_PATTERNS = [
+    re.compile(r"\b(?:all|ORA['’]s|our|its)\s+%s\s+%s(?:markets|clusters)\b" % (_NUM, _QUALIFIERS), re.I),
+    re.compile(r'\b%s\s+canonical\s+(?:target[- ]market\s+)?(?:markets|clusters)\b' % _NUM, re.I),
+    re.compile(r'\b%s\s+target[- ]market\s+clusters\b' % _NUM, re.I),
 ]
-_TARGET_WORD = re.compile(r'\btarget', re.I)
+_OTHER_PATTERN = re.compile(r'\bother\s+%s\s+%s(?:markets|clusters)\b' % (_NUM, _QUALIFIERS), re.I)
+_SUBSET_COUNT = re.compile(r'\b%s\s+(?:[\w-]+\s+){0,2}(?:markets|clusters)\b' % _NUM, re.I)
+_TARGET_GEO = re.compile(
+    r"\btarget[- ](?:markets?|states?|clusters?|geograph\w*)\b|\b(?:ORA|we|the firm|it)\s+targets?\b", re.I)
+_HOLDINGS = re.compile(r'\b(?:holds?|holdings|owns?|spans)\b', re.I)
 _STATE_TOKEN = re.compile(r'\b[A-Z]{2}\b')
 _STATE_NAME = re.compile(r'\b(%s)\b' % '|'.join(STATE_NAMES), re.I)
 _COUNT_TOKEN = re.compile(r'\b(\d{1,2}|%s)\b' % '|'.join(NUMBER_WORDS), re.I)
-_DSCR_AT_AGGREGATE = re.compile(r'\bDSCR\b[^\n]{0,40}?\bat\s+40\s*%\s*LTV\b', re.I)
+_DSCR_PATTERNS = [
+    re.compile(r'\bDSCR\b[^\n]{0,60}?\bat\s+(?:an?\s+)?40\s*%\s*LTV\b', re.I),
+    re.compile(r'\b(?:size[sd]?|sizing|lever(?:ed|age)?|loan)\b[^\n]{0,40}?\bat\s+(?:an?\s+)?40\s*%\s*LTV\b'
+               r'[^\n]{0,80}\bDSCR\b', re.I),
+]
 _HISTORY_HEADING = re.compile(
     r'^(#{1,6})\s.*\b(changelog|change log|version history|revision history|release notes)\b', re.I)
 _HEADING = re.compile(r'^(#{1,6})\s')
 _VERSION_LINE = re.compile(r'^\s*(?:[-*]\s+|\|\s*)?\*{0,2}v\d+\.\d+\b')
 
+Clusters = namedtuple('Clusters', 'count states established allowed_states names')
 
-class Finding(namedtuple('Finding', 'path line check message allowed')):
+
+class Finding(namedtuple('Finding', 'path line check message phrase allowed')):
     def __str__(self):
-        tag = ' (allowed: waits on a decision)' if self.allowed else ''
+        tag = ' (allowlisted; reason in ALLOWED)' if self.allowed else ''
         return '%s:%d: [%s] %s%s' % (self.path, self.line, self.check, self.message, tag)
 
 
@@ -86,13 +116,33 @@ def _as_int(token):
     return NUMBER_WORDS[token] if token in NUMBER_WORDS else int(token)
 
 
+def _phrase(text):
+    return ' '.join(text.lower().split())
+
+
 def count_claims(line, n_clusters):
-    found = []
-    for pattern, offset in _COUNT_PATTERNS:
-        for match in pattern.finditer(line):
-            expected = n_clusters + offset
-            if _as_int(match.group(1)) != expected:
-                found.append('"%s" but target-markets.json gives %d' % (match.group(0), expected))
+    """[(message, phrase)] for count claims that disagree with the cluster total.
+
+    Every claim is collected with its span first; where patterns overlap ("ORA's 10
+    target-market clusters" matches two of them) the longest match wins, and a claim whose
+    count is right suppresses any overlapping one.
+    """
+    claims = []
+    for match in _OTHER_PATTERN.finditer(line):
+        before = line[:match.start()]
+        subset = sum(_as_int(m.group(1)) for m in _SUBSET_COUNT.finditer(before))
+        claims.append((match, n_clusters - (subset if subset else 1)))
+    for pattern in _FULL_SET_PATTERNS:
+        claims += [(match, n_clusters) for match in pattern.finditer(line)]
+    claims.sort(key=lambda c: (c[0].start(), -(c[0].end() - c[0].start())))
+    found, taken = [], []
+    for match, expected in claims:
+        if any(match.start() < end and start < match.end() for start, end in taken):
+            continue
+        taken.append((match.start(), match.end()))
+        if _as_int(match.group(1)) != expected:
+            found.append(('"%s" but target-markets.json gives %d' % (match.group(0), expected),
+                          _phrase(match.group(0))))
     return found
 
 
@@ -102,42 +152,59 @@ def _state_positions(line):
     return sorted(hits)
 
 
-def target_geography(line, cluster_states, established_states, n_clusters):
-    """Flag a line that presents an incomplete state list as ORA's whole target set.
+def _labeled_watch(line, code):
+    return bool(re.search(r'\b%s\b\s*[(:-]?\s*watch' % code, line, re.I)
+                or re.search(r'\bwatch\w*\b[^.;]{0,25}\b%s\b' % code, line, re.I))
 
-    It fires only when every condition holds:
-      * at least five states are named, and at least four of them are established-cluster states
-        (a list of entry-phase clusters alone is a deliberate subset);
-      * the word 'target' comes within LOOKBACK characters BEFORE the first state named (a tax
-        line that mentions targets after its own state list is about something else);
-      * no count smaller than the cluster total sits just before that 'target'
-        ("five of ten target clusters" is a counted subset, not the target set);
-      * some cluster state from target-markets.json is missing.
-    """
+
+def target_geography(line, clusters):
+    """[(message, phrase)] when a line presents an incomplete or padded list as ORA's target set."""
     hits = _state_positions(line)
     named = {code for _, code in hits}
-    if len(named) < 5 or len(named & set(established_states)) < 4:
+    if len(named) < 5 or len(named & set(clusters.established)) < 4:
         return []
-    first = hits[0][0]
-    targets = [m for m in _TARGET_WORD.finditer(line) if first - LOOKBACK <= m.start() < first]
-    if not targets:
+    first, last = hits[0][0], hits[-1][0]
+    before = [m for m in _TARGET_GEO.finditer(line) if first - LOOKBACK <= m.start() < first]
+    after = [m for m in _TARGET_GEO.finditer(line) if last < m.start() <= last + LOOKAHEAD]
+    if before:
+        if _HOLDINGS.search(line[before[-1].end():first]):
+            return []
+        anchor = before[-1]
+    elif after:
+        if _HOLDINGS.search(line[last:after[0].start()]):
+            return []
+        anchor = after[0]
+    else:
         return []
-    window = line[max(0, targets[-1].start() - 30):targets[-1].start()]
+    window = line[max(0, anchor.start() - 30):anchor.start()]
     counts = [_as_int(t) for t in _COUNT_TOKEN.findall(window)]
-    if counts and counts[0] < n_clusters:
+    if counts and counts[0] < clusters.count:
         return []
-    missing = sorted(set(cluster_states) - named)
-    if not missing:
-        return []
-    return ['target geography omits cluster states %s (target-markets.json)' % ', '.join(missing)]
+    problems = []
+    missing = sorted(set(clusters.states) - named)
+    if missing:
+        problems.append('target geography omits cluster states %s (target-markets.json)' % ', '.join(missing))
+    extra = sorted(code for code in named - set(clusters.allowed_states)
+                   if not _labeled_watch(line, code))  # "...; TN watch" names a watch market, not a target
+    if extra:
+        problems.append('target geography lists %s, which no cluster in target-markets.json covers'
+                        % ', '.join(extra))
+    named_clusters = [name for name, tokens in clusters.names
+                      if any(re.search(r'\b%s\b' % re.escape(t), line, re.I) for t in tokens)]
+    if len(named_clusters) >= 4 and len(named_clusters) < len(clusters.names):
+        absent = [name for name, _ in clusters.names if name not in named_clusters]
+        problems.append('target geography names %d of %d clusters; missing %s'
+                        % (len(named_clusters), len(clusters.names), ', '.join(absent)))
+    return [(p, _phrase(p)) for p in problems]
 
 
 def dscr_at_aggregate(line):
-    match = _DSCR_AT_AGGREGATE.search(line)
-    if not match:
-        return []
-    return ['"%s": 40%% is the portfolio-aggregate governor; size per-property debt at the lesser '
-            'of 65%% LTV and 1.25x DSCR' % match.group(0)]
+    for pattern in _DSCR_PATTERNS:
+        match = pattern.search(line)
+        if match:
+            return [('"%s": 40%% is the portfolio-aggregate governor; size per-property debt at the lesser '
+                     'of 65%% LTV and 1.25x DSCR' % match.group(0), _phrase(match.group(0)))]
+    return []
 
 
 def live_lines(text):
@@ -172,30 +239,50 @@ def _files(repo):
             yield path, rel.as_posix()
 
 
+def _cluster_tokens(market):
+    primary = re.split(r'\s*[–—(-]\s*|\s+[A-Z]{2}(?:/[A-Z]{2})*\s*$', market)[0].strip()
+    extra = re.findall(r'\(([^)]*)\)', market)
+    tokens = [primary] + [t.strip() for part in extra for t in part.split('/')]
+    return [t for t in tokens if len(t) >= 4]
+
+
 def load_clusters(repo):
-    """(cluster count, cluster states, established-cluster states) from target-markets.json."""
     data = json.loads((repo / 'target-markets.json').read_text(encoding='utf-8'))
     clusters = data['clusters']
     states = sorted({c['state'] for c in clusters if c.get('state')})
     established = sorted({c['state'] for c in clusters if c.get('state') and c.get('status') == 'established'})
-    return len(clusters), states, established or states
+    allowed = set(states)
+    names = []
+    for c in clusters:
+        market = c.get('market') or ''
+        allowed.update(code for code in re.findall(r'\b[A-Z]{2}\b', market) if code in US_STATES)
+        if market:
+            names.append((market, _cluster_tokens(market)))
+    return Clusters(len(clusters), states, established or states, sorted(allowed), names)
 
 
 def scan(repo):
-    n_clusters, cluster_states, established = load_clusters(repo)
-    findings = []
+    clusters = load_clusters(repo)
+    raw = []
     for path, rel in _files(repo):
         try:
             text = path.read_text(encoding='utf-8')
         except (OSError, UnicodeDecodeError):
             continue
         for number, line in live_lines(text):
-            checks = (('cluster-count', count_claims(line, n_clusters)),
-                      ('target-geography', target_geography(line, cluster_states, established, n_clusters)),
+            checks = (('cluster-count', count_claims(line, clusters.count)),
+                      ('target-geography', target_geography(line, clusters)),
                       ('dscr-at-aggregate-ltv', dscr_at_aggregate(line)))
-            for check, messages in checks:
-                for message in messages:
-                    findings.append(Finding(rel, number, check, message, (rel, check) in ALLOWED))
+            for check, items in checks:
+                for message, phrase in items:
+                    raw.append((rel, number, check, message, phrase))
+    seen = Counter()
+    findings = []
+    for rel, number, check, message, phrase in raw:
+        key = (rel, check, phrase)
+        seen[key] += 1
+        allowed = key in ALLOWED and seen[key] <= ALLOWED[key][0]
+        findings.append(Finding(rel, number, check, message, phrase, allowed))
     return findings
 
 

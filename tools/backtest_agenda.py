@@ -56,6 +56,12 @@ _VERSION_IN_H1 = re.compile(r'\(v(\d+\.\d+)')
 _INDEX_ROW = re.compile(r'^\|\s*(v\d+\.\d+)\s*\|')
 _INDEX_DATE_ROW = re.compile(r'^\|\s*v(\d+\.\d+)\s*\|\s*(\d{4}-\d{2}-\d{2})\s*\|')
 _EVIDENCE_VERSION = re.compile(r'^RE-(\d+\.\d+)-')
+_HEADER_FIELDS = {
+    'evidence id': 'id', 'entry': 'entry', 'incidents': 'incidents', 'expected loss': 'expected_loss',
+    'class': 'evidence_class', 'evidence class': 'evidence_class', 'testable via': 'testable',
+    'testable': 'testable', 'sunset': 'sunset_col', 'sunset review': 'sunset_col',
+}
+_REQUIRED_FIELDS = ('id', 'entry', 'incidents', 'expected_loss', 'evidence_class', 'testable')
 _LEDGER_ROW = re.compile(r'^\|\s*(\d{4}-\d{2}-\d{2})\s*\|')
 _BASE_STAMP = re.compile(
     r'#\s*base:\s*(?:(?!v\d)(?P<skill>[a-z][a-z0-9-]*)\b\s*)?(?:v(?P<version>\d+\.\d+))?'
@@ -100,35 +106,67 @@ def duplicate_versions(text):
     return _unique([v for v in labels if labels.count(v) > 1])
 
 
+def _ledger_columns(header_cells):
+    """Map the Rule Evidence table header to field names; a missing required column is an error."""
+    columns = {}
+    for index, name in enumerate(header_cells):
+        field = _HEADER_FIELDS.get(' '.join(name.lower().split()))
+        if field and field not in columns:
+            columns[field] = index
+    missing = [f for f in _REQUIRED_FIELDS if f not in columns]
+    if missing:
+        raise AgendaError('Rule Evidence table header lacks %s (got: %s)' % (', '.join(missing), header_cells))
+    return columns
+
+
 def parse_evidence_ledger(text):
-    """Rows of the '## Rule Evidence ledger' table, stopping at the next '## ' heading."""
+    """Rows of the '## Rule Evidence ledger' table, stopping at the next '## ' heading.
+
+    Columns are found by header name, so a reordered table or a new Sunset column parses
+    correctly; a header that lacks a required column raises instead of mis-assigning cells.
+    """
     lines = text.splitlines()
     start = next((i for i, line in enumerate(lines) if _LEDGER_HEADING.match(line)), None)
     if start is None:
         raise AgendaError("no '## Rule Evidence ledger' heading")
-    rows = []
+    columns, rows = None, []
     for line in lines[start + 1:]:
         if line.startswith('## '):
             break
-        if not line.startswith('| RE-'):
+        if not line.startswith('|') or line.startswith('|---') or line.replace('|', '').strip(' -:') == '':
             continue
         cells = _cells(line)
-        if len(cells) < 6:
-            raise AgendaError('Rule Evidence row has %d cells, expected 6: %s' % (len(cells), cells[0]))
-        rid, entry, incidents, loss, klass = cells[:5]
-        testable = ' | '.join(cells[5:])
+        if not line.startswith('| RE-'):
+            if columns is None:
+                columns = _ledger_columns(cells)
+            continue
+        if columns is None:
+            raise AgendaError('Rule Evidence rows appear before a header row')
+        width = max(columns.values()) + 1
+        if len(cells) < width:
+            raise AgendaError('Rule Evidence row has %d cells, header needs %d: %s' % (len(cells), width, cells[0]))
+        last = max(columns.values())
+        if len(cells) > width:  # a literal '|' inside the last column
+            cells = cells[:last] + [' | '.join(cells[last:])]
+        get = lambda field: cells[columns[field]] if field in columns else ''  # noqa: E731
+        klass, testable = get('evidence_class'), get('testable')
         sunset = None
-        for source in (testable, klass):
-            match = _SUNSET.search(source)
-            if match:
-                sunset = match.group(1).rstrip('. ')
-                break
+        column_text = get('sunset_col').strip()
+        if column_text and column_text not in ('—', '-', 'n/a', 'none'):
+            sunset = column_text.rstrip('. ')
+        else:
+            for source in (testable, klass):
+                match = _SUNSET.search(source)
+                if match:
+                    sunset = match.group(1).rstrip('. ')
+                    break
         rows.append({
-            'id': rid, 'entry': entry, 'incidents': incidents, 'expected_loss': loss,
-            'evidence_class': klass, 'testable': testable, 'sunset': sunset,
+            'id': get('id'), 'entry': get('entry'), 'incidents': get('incidents'),
+            'expected_loss': get('expected_loss'), 'evidence_class': klass, 'testable': testable,
+            'sunset': sunset, 'sunset_basis': 'explicit' if sunset else None, 'sunset_default': False,
             'single_incident': 'SINGLE-INCIDENT' in (klass + ' ' + testable).upper(),
             'incomplete': any('[per archive]' in c for c in cells),
-            'unquantified': '[UNQUANTIFIED' in loss.upper(),
+            'unquantified': '[UNQUANTIFIED' in get('expected_loss').upper(),
         })
     if not rows:
         raise AgendaError('the Rule Evidence ledger section has no RE- rows')
@@ -159,24 +197,32 @@ def _december_on_or_after(day):
 
 
 def apply_default_sunsets(rows, version_dates):
-    """Fill a missing sunset with the RULE EVIDENCE default, flagged sunset_default=True.
+    """Fill in sunsets the ledger leaves blank or states without a year.
 
-    Single-incident rules get the next December back-test after their version date (the
+    sunset_basis becomes 'default' when a blank sunset takes the RULE EVIDENCE default:
+    single-incident rules get the next December back-test after their version date (the
     admission rule); every other rule gets the December back-test that follows the next
-    12 months of data (the Sunset review field default). A version with no index date stays unset.
+    12 months of data (the Sunset review field default). It becomes 'resolved' when the
+    text names a December without a year ("next December back-test"), anchored on the
+    version date. A version with no index date leaves the sunset as it was.
     """
     out = []
     for row in rows:
-        row = dict(row, sunset_default=False)
-        if not row['sunset']:
-            match = _EVIDENCE_VERSION.match(row['id'])
-            day = version_dates.get(match.group(1)) if match else None
-            if day:
-                anchor = day if row['single_incident'] else day + dt.timedelta(days=365)
-                row['sunset'] = _december_on_or_after(anchor)
-                row['sunset_default'] = True
+        row = dict(row)
+        match = _EVIDENCE_VERSION.match(row['id'])
+        day = version_dates.get(match.group(1)) if match else None
+        if day and not row['sunset']:
+            anchor = day if row['single_incident'] else day + dt.timedelta(days=365)
+            row['sunset'], row['sunset_basis'] = _december_on_or_after(anchor), 'default'
+        elif day and row['sunset'] and 'december' in row['sunset'].lower() and not _DECEMBER.search(row['sunset']):
+            row['sunset'], row['sunset_basis'] = _december_on_or_after(day), 'resolved'
+        row['sunset_default'] = row.get('sunset_basis') == 'default'
         out.append(row)
     return out
+
+
+def sunset_parseable(sunset):
+    return bool(sunset) and bool(_DECEMBER.search(sunset) or _ISO_DATE.search(sunset))
 
 
 def sunset_due(sunset, session_date):
@@ -202,6 +248,7 @@ def evidence_integrity(rows):
         'single_incident_without_sunset': _unique(
             [r['id'] for r in rows if r['single_incident'] and (not r['sunset'] or r.get('sunset_default'))]),
         'sunset_unknown': _unique([r['id'] for r in rows if not r['sunset']]),
+        'sunset_unparsed': _unique([r['id'] for r in rows if r['sunset'] and not sunset_parseable(r['sunset'])]),
         'incomplete': _unique([r['id'] for r in rows if r['incomplete']]),
         'unquantified': _unique([r['id'] for r in rows if r['unquantified']]),
     }
@@ -280,14 +327,23 @@ def file_shas(path):
 def patch_status(patch, current_versions, current_shas=None):
     if not patch['skill']:
         return 'NO STAMP: base unknown, verify every anchor before applying'
+    shas = (current_shas or {}).get(patch['skill'])
     if patch['version']:
         current = current_versions.get(patch['skill'])
         if current is None:
             return 'STAMPED v%s: current %s version not readable' % (patch['version'], patch['skill'])
         if patch['version'] != current:
             return 'STALE BASE (v%s vs current v%s): re-base before merge' % (patch['version'], current)
-        return 'CURRENT'
-    shas = (current_shas or {}).get(patch['skill'])
+        if not patch['sha']:
+            return 'CURRENT (version only; the stamp carries no SHA)'
+        if not shas:
+            return 'CURRENT (version only; SHA not checked)'
+        if any(h.startswith(patch['sha'].lower()) for h in shas):
+            return 'CURRENT'
+        # Two changes have shared one version label (acquisition-underwriting v4.40, loi-generation
+        # v1.16), so a matching label with a different file is a different base.
+        return ('STALE BASE (same label v%s, but %s SKILL.md changed since the stamp): re-base before merge'
+                % (patch['version'], patch['skill']))
     if not shas:
         return 'SHA STAMP (%s): compare with the current %s SKILL.md before applying' % (
             patch['sha'] or '?', patch['skill'])
@@ -312,7 +368,8 @@ def _md(text, limit=None):
 
 
 def _sunset_cell(row):
-    return _md(row['sunset'] or '—') + (' (default)' if row.get('sunset_default') else '')
+    label = {'default': ' (default)', 'resolved': ' (resolved from the version date)'}.get(row.get('sunset_basis'), '')
+    return _md(row['sunset'] or '—') + label
 
 
 def _render_lessons(add, since, lessons):
@@ -432,6 +489,11 @@ def render(session_date, since, version, evidence, dup_versions, lessons, ledger
         problems.append('Single-incident rules with no explicit sunset: %s. The admission rule gives each a sunset at '
                         'the next December back-test; this agenda applies that default.'
                         % ', '.join(integrity['single_incident_without_sunset']))
+    if integrity['sunset_unparsed']:
+        problems.append('Sunsets that are conditional or not a date: %s. They never come due on their own; '
+                        'review each by hand.' % ', '.join(
+                            '%s ("%s")' % (r['id'], _md(r['sunset'], 80)) for r in evidence
+                            if r['id'] in integrity['sunset_unparsed']))
     if integrity['sunset_unknown']:
         problems.append('Entries whose sunset cannot be resolved (no explicit sunset, and the version is not in the '
                         'SKILL.md index): %s. Review them by hand.' % ', '.join(integrity['sunset_unknown']))
