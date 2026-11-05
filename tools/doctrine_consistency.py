@@ -25,20 +25,27 @@ covers DSCR/LTV numbers. This covers three semantic restatements:
 History is exempt: changelog sections, version bullets and index rows, versions/ and _archive/
 may quote old values.
 
-ALLOWED holds known findings that wait on a decision. Each key is (path, check, phrase) with an
-exact count, so a new or repeated phrase in an allowlisted file is still unexplained, and an entry
-that no longer matches exactly fails the test suite.
+ALLOWED holds reviewed findings: history that was right when written, or a fix waiting on a decision.
+Each key is (path, check, phrase, line key) with an exact count; the line key hashes the whole
+normalized line, so a new, repeated or moved phrase is still unexplained, and an entry whose line
+changed or vanished fails the test suite.
 
 LIMITS, stated plainly: these are pattern checks. They catch the phrasings above and the variants
-pinned in tools/test_doctrine_consistency.py, not every possible wording. A subset count stated on
-another line ("Tier A: five clusters" twenty lines up) cannot be seen, so an "other N" line may need
-an allowlist entry or a rewrite without a count. A new phrasing that drifts needs a new pattern and
-a test.
+pinned in tools/test_doctrine_consistency.py, not every possible wording. Known gaps:
+  * A subset count is trusted only for arithmetic; every subset-excused "other N" is reported as
+    cluster-count-subset and must be allowlisted after a human confirms the subset is current. A
+    subset stated on another line ("Tier A: five clusters" twenty lines up) cannot be seen at all.
+  * A holdings word inside a target clause ("ORA targets markets where it already holds scale: ...")
+    reads as a holdings statement and is skipped, and a state annotated as a watch market
+    ("TN (watch ...)") is not treated as a target claim.
+  * Geography is checked only where 'target' sits within 160 characters before the list or 40 after.
+A new phrasing that drifts needs a new pattern and a test.
 
 Usage: python tools/doctrine_consistency.py [--repo PATH]
 Exit:  0 nothing unexplained · 1 unexplained findings · 2 target-markets.json unreadable
 """
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -50,18 +57,18 @@ SKIP_TOP = {'tools', 'docs', 'plugins'}
 SKIP_DIRS = {'versions', 'tests', 'fixtures', 'golden_set', '__pycache__', 'node_modules', 'runs'}
 SUFFIXES = {'.md', '.js', '.py'}
 
-# (path, check, normalized matched phrase) -> (exact count, reason)
+# (path, check, normalized matched phrase, line_key(line)) -> (exact count, reason)
 ALLOWED = {
     ('acquisition-underwriting/references/outcome-feedback-and-backtest.md', 'cluster-count',
-     'all ten canonical markets'):
+     'all ten canonical markets', '49ebebbfbd'):
         (1, 'Omits Chicago. The fix rides the next acquisition-underwriting version, so it does '
             'not collide with the rulings recorded as "staged as v4.42" '
             '(docs/plans/2026-11-05_skill-dataflow-calibration-review.md L5, S7).'),
     ('acquisition-underwriting/references/market-and-cost-calibration-data.md', 'cluster-count',
-     'other nine clusters'):
+     'other nine clusters', 'f92a6a7e48'):
         (1, 'A dated 2026-08-11 correction note; nine was right when ten clusters existed. '
             'Rewording rides the next acquisition-underwriting version, as above.'),
-    ('owner-outreach/SKILL.md', 'cluster-count', "ora's 9 target clusters"):
+    ('owner-outreach/SKILL.md', 'cluster-count', "ora's 9 target clusters", 'b3c4356aa1'):
         (1, 'A dated 2026-06-22 fix narrative ("covered 4 of ORA\'s 9 target clusters"); nine was right '
             'when written. History, not a live claim.'),
 }
@@ -81,8 +88,9 @@ _NUM = r'(\d{1,2}|%s)' % '|'.join(NUMBER_WORDS)
 _QUALIFIERS = r'(?:(?:canonical|ORA|target(?:[- ]market)?)\s+)*'
 _FULL_SET_PATTERNS = [
     re.compile(r"\b(?:all|ORA['’]s|our|its)\s+%s\s+%s(?:markets|clusters)\b" % (_NUM, _QUALIFIERS), re.I),
-    re.compile(r'\b%s\s+canonical\s+(?:target[- ]market\s+)?(?:markets|clusters)\b' % _NUM, re.I),
+    re.compile(r'\b%s\s+(?:canonical|ratified)\s+(?:target[- ]market\s+)?(?:markets|clusters)\b' % _NUM, re.I),
     re.compile(r'\b%s\s+target[- ]market\s+clusters\b' % _NUM, re.I),
+    re.compile(r'\btargets?\s+%s\s+%sclusters\b' % (_NUM, _QUALIFIERS), re.I),
 ]
 _OTHER_PATTERN = re.compile(r'\bother\s+%s\s+%s(?:markets|clusters)\b' % (_NUM, _QUALIFIERS), re.I)
 _SUBSET_COUNT = re.compile(r'\b%s\s+(?:[\w-]+\s+){0,2}(?:markets|clusters)\b' % _NUM, re.I)
@@ -92,11 +100,16 @@ _HOLDINGS = re.compile(r'\b(?:holds?|holdings|owns?|spans)\b', re.I)
 _STATE_TOKEN = re.compile(r'\b[A-Z]{2}\b')
 _STATE_NAME = re.compile(r'\b(%s)\b' % '|'.join(STATE_NAMES), re.I)
 _COUNT_TOKEN = re.compile(r'\b(\d{1,2}|%s)\b' % '|'.join(NUMBER_WORDS), re.I)
+_LTV_40 = r'(?:at|to)\s+(?:an?\s+)?40\s*%\s*(?:LTV|loan[- ]to[- ]value)\b'
+_DSCR_WORD = r'(?:DSCR|debt[- ]service[- ]coverage)'
 _DSCR_PATTERNS = [
-    re.compile(r'\bDSCR\b[^\n]{0,60}?\bat\s+(?:an?\s+)?40\s*%\s*LTV\b', re.I),
-    re.compile(r'\b(?:size[sd]?|sizing|lever(?:ed|age)?|loan)\b[^\n]{0,40}?\bat\s+(?:an?\s+)?40\s*%\s*LTV\b'
-               r'[^\n]{0,80}\bDSCR\b', re.I),
+    re.compile(r'\b%s\b[^\n]{0,60}?\b%s' % (_DSCR_WORD, _LTV_40), re.I),
+    re.compile(r'\b(?:size[sd]?|sizing|lever(?:ed|age)?|loan)\b[^\n]{0,40}?\b%s[^\n]{0,80}\b%s\b'
+               % (_LTV_40, _DSCR_WORD), re.I),
 ]
+# A correct governor summary ("leverage capped at 40% LTV aggregate") is not a DSCR test basis.
+_AGGREGATE_CONTEXT = re.compile(r'^\s*(?:portfolio[- ])?aggregate\b', re.I)
+_CAP_CONTEXT = re.compile(r'\b(?:cap(?:ped)?|ceiling|limit(?:ed)?)\s*$', re.I)
 _HISTORY_HEADING = re.compile(
     r'^(#{1,6})\s.*\b(changelog|change log|version history|revision history|release notes)\b', re.I)
 _HEADING = re.compile(r'^(#{1,6})\s')
@@ -105,7 +118,12 @@ _VERSION_LINE = re.compile(r'^\s*(?:[-*]\s+|\|\s*)?\*{0,2}v\d+\.\d+\b')
 Clusters = namedtuple('Clusters', 'count states established allowed_states names')
 
 
-class Finding(namedtuple('Finding', 'path line check message phrase allowed')):
+def line_key(line):
+    """Short hash of the whole line, whitespace-normalized: part of every ALLOWED key."""
+    return hashlib.sha1(' '.join(line.split()).encode('utf-8')).hexdigest()[:10]
+
+
+class Finding(namedtuple('Finding', 'path line check message phrase linekey allowed')):
     def __str__(self):
         tag = ' (allowlisted; reason in ALLOWED)' if self.allowed else ''
         return '%s:%d: [%s] %s%s' % (self.path, self.line, self.check, self.message, tag)
@@ -121,28 +139,37 @@ def _phrase(text):
 
 
 def count_claims(line, n_clusters):
-    """[(message, phrase)] for count claims that disagree with the cluster total.
+    """[(check, message, phrase)] for count claims about the cluster set.
 
     Every claim is collected with its span first; where patterns overlap ("ORA's 10
-    target-market clusters" matches two of them) the longest match wins, and a claim whose
-    count is right suppresses any overlapping one.
+    target-market clusters" matches two of them) the longest match wins. An "other N" whose
+    expectation depends on a subset count stated earlier in the line ("Tier A covers three
+    clusters; the other eight") is reported as cluster-count-subset even when the arithmetic
+    holds: the subset itself is unverifiable here and was the stale part of the defect this
+    check exists for (county-sales-monitor, 2026-11-05), so each one needs a reviewed allowlist
+    entry. A count equal to the cluster total is never treated as a subset.
     """
     claims = []
     for match in _OTHER_PATTERN.finditer(line):
         before = line[:match.start()]
-        subset = sum(_as_int(m.group(1)) for m in _SUBSET_COUNT.finditer(before))
-        claims.append((match, n_clusters - (subset if subset else 1)))
+        subsets = [_as_int(m.group(1)) for m in _SUBSET_COUNT.finditer(before)]
+        subset = sum(c for c in subsets if c != n_clusters)
+        claims.append((match, n_clusters - (subset if subset else 1), bool(subset)))
     for pattern in _FULL_SET_PATTERNS:
-        claims += [(match, n_clusters) for match in pattern.finditer(line)]
+        claims += [(match, n_clusters, False) for match in pattern.finditer(line)]
     claims.sort(key=lambda c: (c[0].start(), -(c[0].end() - c[0].start())))
     found, taken = [], []
-    for match, expected in claims:
+    for match, expected, via_subset in claims:
         if any(match.start() < end and start < match.end() for start, end in taken):
             continue
         taken.append((match.start(), match.end()))
         if _as_int(match.group(1)) != expected:
-            found.append(('"%s" but target-markets.json gives %d' % (match.group(0), expected),
+            found.append(('cluster-count', '"%s" but target-markets.json gives %d' % (match.group(0), expected),
                           _phrase(match.group(0))))
+        elif via_subset:
+            found.append(('cluster-count-subset',
+                          '"%s" holds only if the subset count earlier in the line is current; confirm it '
+                          'and allowlist the line' % match.group(0), _phrase(match.group(0))))
     return found
 
 
@@ -201,9 +228,15 @@ def target_geography(line, clusters):
 def dscr_at_aggregate(line):
     for pattern in _DSCR_PATTERNS:
         match = pattern.search(line)
-        if match:
-            return [('"%s": 40%% is the portfolio-aggregate governor; size per-property debt at the lesser '
-                     'of 65%% LTV and 1.25x DSCR' % match.group(0), _phrase(match.group(0)))]
+        if not match:
+            continue
+        ltv = re.search(_LTV_40, match.group(0), re.I)
+        ltv_start = match.start() + ltv.start()
+        ltv_end = match.start() + ltv.end()
+        if _AGGREGATE_CONTEXT.match(line[ltv_end:ltv_end + 25]) or _CAP_CONTEXT.search(line[max(0, ltv_start - 15):ltv_start]):
+            continue
+        return [('"%s": 40%% is the portfolio-aggregate governor; size per-property debt at the lesser '
+                 'of 65%% LTV and 1.25x DSCR' % match.group(0), _phrase(match.group(0)))]
     return []
 
 
@@ -270,19 +303,18 @@ def scan(repo):
         except (OSError, UnicodeDecodeError):
             continue
         for number, line in live_lines(text):
-            checks = (('cluster-count', count_claims(line, clusters.count)),
-                      ('target-geography', target_geography(line, clusters)),
-                      ('dscr-at-aggregate-ltv', dscr_at_aggregate(line)))
-            for check, items in checks:
-                for message, phrase in items:
-                    raw.append((rel, number, check, message, phrase))
+            items = list(count_claims(line, clusters.count))
+            items += [('target-geography', m, p) for m, p in target_geography(line, clusters)]
+            items += [('dscr-at-aggregate-ltv', m, p) for m, p in dscr_at_aggregate(line)]
+            for check, message, phrase in items:
+                raw.append((rel, number, check, message, phrase, line_key(line)))
     seen = Counter()
     findings = []
-    for rel, number, check, message, phrase in raw:
-        key = (rel, check, phrase)
+    for rel, number, check, message, phrase, key_of_line in raw:
+        key = (rel, check, phrase, key_of_line)
         seen[key] += 1
         allowed = key in ALLOWED and seen[key] <= ALLOWED[key][0]
-        findings.append(Finding(rel, number, check, message, phrase, allowed))
+        findings.append(Finding(rel, number, check, message, phrase, key_of_line, allowed))
     return findings
 
 
