@@ -1,10 +1,10 @@
 ---
 name: cash-position-monitor
-description: "Use when the user mentions: cash position, cash balance, treasury, reserve adequacy, distribution headroom, cash forecast, weekly cash, daily cash, intercompany, sweep account, cash concentration, debt service coverage of cash, or any task requiring real-time consolidated cash visibility — multi-entity cash position consolidation across QuickBooks accounts. Powers the ora-cash-position-snapshot scheduled task and the ora-cash-position artifact."
+description: "Use when the user mentions: cash position, cash balance, treasury, reserve adequacy, distribution headroom, cash forecast, weekly cash, daily cash, intercompany, sweep account, cash concentration, debt service coverage of cash, or any task requiring real-time consolidated cash visibility — multi-entity cash position consolidation across QuickBooks accounts. The scheduled Monday snapshot runs inside the ora-am-brief task (Block D); this skill is the on-demand path."
 license: ORA Internal
 ---
 
-# Cash Position Monitor (v1.0)
+# Cash Position Monitor (v1.1)
 
 Produce consolidated multi-entity cash position views with reserve adequacy checks and distribution headroom calculations.
 
@@ -26,7 +26,9 @@ Daily/weekly cash snapshot, reserve adequacy check, distribution decision, refi 
 
 ## Standard Workflows
 
-### Weekly Snapshot (Monday 6:30 AM via ora-cash-position-snapshot)
+### Weekly Snapshot
+
+The scheduled run is Block D of the `ora-am-brief` task (Mondays). That task spec is authoritative for the scheduled run; the steps below are the on-demand version. The former standalone `ora-cash-position-snapshot` task no longer exists.
 1. Pull current balances by account, by entity.
 2. Compute consolidated total.
 3. Compute operating reserve adequacy: cash − payables vs. policy floor.
@@ -34,7 +36,7 @@ Daily/weekly cash snapshot, reserve adequacy check, distribution decision, refi 
 5. Compute week-over-week delta.
 6. Flag: any reserve below floor (ALERT), any week-over-week drop > 10% (WARN).
 7. Update ora-cash-position artifact.
-8. Email Gabriel + Eric.
+8. Email Gabriel only (ggoldberg@oxfordra.net). Scheduled and automated outputs never cc Eric; the Daily Brief is the sole exception.
 
 ### Distribution Decision Support
 1. Pull current cash and outflows for next 90 days.
@@ -72,3 +74,8 @@ Daily/weekly cash snapshot, reserve adequacy check, distribution decision, refi 
 - xlsx skill (cash schedules)
 - docx skill (decision memos)
 - ~~investor-relations skill (distribution waterfall)~~ — retired 2026-09-09, no replacement assigned
+
+## Changelog
+
+- **v1.1 (2026-11-05):** The description and the Weekly Snapshot section said this skill powers `ora-cash-position-snapshot`. That task is not on either fleet; its work was folded into `ora-am-brief` Block D (Mondays). Both now point there. Step 8 said "Email Gabriel + Eric", which contradicted the email routing rule (scheduled outputs go to ggoldberg@ only; the Daily Brief cc is the sole exception) and the Block D spec ("Email to Gabriel (only)"); it now says Gabriel only. Whether to retire this skill is still open (catalog review F7). No scored or governor constant changed.
+- **v1.0:** initial.
