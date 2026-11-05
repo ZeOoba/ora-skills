@@ -151,6 +151,13 @@ class VanishedSuites(unittest.TestCase):
     def test_declared_removed_is_allowed(self):
         self.assertEqual(g.vanished_suites(self.BASE, {'b/test_b.py'}, set(), {'a/tests/test_a.py'}), [])
 
+    def test_preexisting_archive_copy_is_not_passed_in_so_base_path_is_reported(self):
+        # the caller supplies only archive paths ADDED in base..HEAD; a copy that already
+        # existed at base is therefore absent from this set and must not excuse the deletion
+        errs = g.vanished_suites(self.BASE, {'b/test_b.py'}, set(), set())
+        self.assertEqual(len(errs), 1)
+        self.assertIn('a/tests/test_a.py', errs[0])
+
 
 class SuiteContinuityGit(TempRepo):
     def git(self, *a):
@@ -193,6 +200,49 @@ class SuiteContinuityGit(TempRepo):
         rc, out, err = self.run_cmd(base)
         self.assertEqual(rc, 0, (out, err))
         self.assertIn('suite-continuity: 1 base suite(s) all present', out)
+
+    def test_preexisting_archive_copy_does_not_excuse_deletion(self):
+        self.git('init', '-q')
+        _skill(self.root, 'a', files={'tests/test_a.py': ''})
+        old = self.root / '_archive' / 'old' / 'a' / 'tests'
+        old.mkdir(parents=True)
+        (old / 'test_a.py').write_text('', encoding='utf-8')
+        self.git('add', '.')
+        self.git('commit', '-q', '-m', 'base')
+        base = self.git('rev-parse', 'HEAD')
+        self.git('rm', '-q', 'a/tests/test_a.py')
+        self.git('commit', '-q', '-m', 'delete suite')
+        rc, out, err = self.run_cmd(base)
+        self.assertEqual(rc, 1, (out, err))
+        self.assertIn('a/tests/test_a.py', err)
+
+    def test_move_into_archive_in_this_range_passes(self):
+        self.git('init', '-q')
+        _skill(self.root, 'a', files={'tests/test_a.py': ''})
+        self.git('add', '.')
+        self.git('commit', '-q', '-m', 'base')
+        base = self.git('rev-parse', 'HEAD')
+        dest = self.root / '_archive' / '2026-11-05' / 'a' / 'tests'
+        dest.mkdir(parents=True)
+        self.git('mv', 'a/tests/test_a.py', '_archive/2026-11-05/a/tests/test_a.py')
+        self.git('commit', '-q', '-m', 'archive suite')
+        rc, out, err = self.run_cmd(base)
+        self.assertEqual(rc, 0, (out, err))
+
+    def test_head_skip_does_not_hide_base_suites(self):
+        base = None
+        self.git('init', '-q')
+        _skill(self.root, 'a', files={'tests/test_a.py': ''})
+        self.git('add', '.')
+        self.git('commit', '-q', '-m', 'base')
+        base = self.git('rev-parse', 'HEAD')
+        self.git('commit', '-q', '--allow-empty', '-m', 'head adds a to SKIP')
+        from unittest import mock
+        with mock.patch.object(g.package_skills, 'SKIP', set(g.package_skills.SKIP) | {'a'}):
+            self.assertEqual(g.base_suite_files(base, self.root), {'a/tests/test_a.py'})
+            rc, out, err = self.run_cmd(base)
+        self.assertEqual(rc, 1, (out, err))
+        self.assertIn('a/tests/test_a.py', err)
 
     def test_bad_base_is_usage_error(self):
         self.build()

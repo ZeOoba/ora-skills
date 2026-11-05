@@ -296,11 +296,12 @@ def vanished_suites(base_files: set[str], head_files: set[str], head_archive_pat
 
 
 def base_suite_files(base: str, repo: Path = REPO) -> set[str]:
-    """test_*.py paths at `base` under a top-level skill dir (one that held a SKILL.md)."""
+    """test_*.py paths at `base` under a top-level skill dir (one that held a SKILL.md at base).
+    Deliberately NOT filtered by head's package_skills.SKIP, so a SKIP edit cannot hide suites
+    (`_archive/` and `tools/` hold no top-level SKILL.md and fall out on their own)."""
     r = _git('ls-tree', '-r', '--name-only', '-z', base, repo=repo)
     names = [n for n in r.stdout.split('\0') if n]
     skills = {n.split('/')[0] for n in names if n.count('/') == 1 and n.endswith('/SKILL.md')}
-    skills -= package_skills.SKIP
     return {n for n in names
             if n.split('/')[0] in skills and '/' in n and '__pycache__' not in n.split('/')
             and n.rsplit('/', 1)[-1].startswith('test_') and n.endswith('.py')}
@@ -312,12 +313,14 @@ def declared_removed_suites(base: str, repo: Path = REPO) -> set[str]:
     return {m.group(1) for m in _SUITE_REMOVED.finditer(r.stdout)}
 
 
-def archived_suite_paths(repo: Path = REPO) -> set[str]:
-    arch = repo / '_archive'
-    if not arch.is_dir():
-        return set()
-    return {p.relative_to(repo).as_posix() for p in arch.rglob('test_*.py')
-            if '__pycache__' not in p.parts}
+def archived_suite_paths(base: str, repo: Path = REPO) -> set[str]:
+    """`_archive/` test files ADDED or RENAMED-INTO in base..HEAD. Copies already present at
+    base never count: they cannot account for a suite deleted in this range."""
+    r = _git('diff', '--name-only', '-z', '--diff-filter=AR', base, 'HEAD', '--', '_archive/',
+             repo=repo)
+    return {n for n in r.stdout.split('\0')
+            if n and '__pycache__' not in n.split('/')
+            and n.rsplit('/', 1)[-1].startswith('test_') and n.endswith('.py')}
 
 
 def cmd_suite_continuity(base_arg: str, repo: Path = REPO) -> int:
@@ -329,7 +332,7 @@ def cmd_suite_continuity(base_arg: str, repo: Path = REPO) -> int:
         return 2
     base_files = base_suite_files(base, repo)
     errors = vanished_suites(base_files, set(discover_skill_test_files(repo)),
-                             archived_suite_paths(repo), declared_removed_suites(base, repo))
+                             archived_suite_paths(base, repo), declared_removed_suites(base, repo))
     for e in errors:
         print(e, file=sys.stderr)
     if errors:
