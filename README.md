@@ -43,7 +43,7 @@ flowchart TD
         PK["_pk_stage/ built .skill zips (untracked; *.skill ignored)"]
         WT[".worktrees .claude-worktrees .superpowers"]
     end
-    TM -- "SHARED_ROOT_DEPS inject at package time (5 skills)" --> Pkg
+    TM -- "SHARED_ROOT_DEPS inject at package time (7 skills)" --> Pkg
     T --> Pkg["package_skills.py -> .skill zip"]
     S --> Pkg
     Pkg --> PK

@@ -146,6 +146,9 @@ TARGET_MARKETS_CITATION_EXEMPT = {
               'SHARED_ROOT_DEPS pattern',
     'package-and-stage-skill': 'documents how SHARED_ROOT_DEPS consumers are compared; '
                                'not a consumer itself',
+    'verified-deal-recon': 'cites the file only as the source its inlined recon-prompt cluster list '
+                           'is checked against (tools/doctrine_consistency.py, run in CI on the repo '
+                           'copy); the workflow reads nothing at run time',
 }
 _SHARED_PY_IMPORT = re.compile(r'^\s*(?:from\s+ora_doc_qc\s+import|import\s+ora_doc_qc\b)', re.M)
 

@@ -3,7 +3,7 @@ name: verified-deal-recon
 description: "Use whenever ONE named acquisition target — a street address, a property name, or a single offering memorandum — needs a real pursue/pass decision before underwriting: Oxford Realty Advisors' adversarially-verified SINGLE-TARGET PRE-SCREEN DEFAULT. Trigger on: pre-screen this, screen this property, is this worth underwriting, first look, recon this deal, verified deal recon, should we pursue, worth a look. NOT for batch-triaging a broker inbox and NOT for off-market owner lead-lists. Does NOT underwrite — hands off to acquisition-underwriting."
 ---
 
-# Verified Deal Recon — ORA single-target pre-screen (v1.3)
+# Verified Deal Recon — ORA single-target pre-screen (v1.4)
 
 Runs the `verified-deal-recon` workflow: one recon pass, three adversarial verifiers working independently, one synthesized brief. The verifiers do their own research and are instructed to refute the recon — that adversarial step is the whole point, and it is what separates this from the bare `deal-recon` agent (instant first-look only).
 
@@ -54,9 +54,10 @@ Two changes from v1.1, both required for Cowork; behaviour is otherwise identica
 1. **`agentType:'deal-recon'` removed.** The agent's system prompt (`.claude/agents/deal-recon.md`, 2026-07-17) is inlined verbatim into the Phase 1 prompt with `model:'opus'` matching its frontmatter. The `Explore` verifiers are unchanged — `Explore` is a built-in agent type available on both surfaces.
 2. **`new Date()` removed.** Workflow scripts throw on argless `new Date()`, `Date.now()` and `Math.random()` — they would break resume. The ledger date now arrives via `args.today` or falls back to a `<STAMP-DATE>` token.
 
-If `.claude/agents/deal-recon.md` is later edited on the Code surface, re-inline it here — the two copies are not linked.
+If `.claude/agents/deal-recon.md` is later edited on the Code surface, re-inline it here — the two copies are not linked. Since v1.4 this copy deliberately differs (the 11-cluster geography and the LTV split): keep both when re-inlining.
 
 ## Changelog
 
+- **v1.4 (2026-11-05):** The recon prompt's buy-box sentence named only the seven holdings states (OH, MD, IN, WI, MO, KS, TN), so the analyst read Grand Rapids, Richmond, Des Moines, Louisville and Chicago as out of scope and TN as a target. It now names the eleven clusters in `target-markets.json`, re-inlines the Amendment H portfolio clause that `.claude/agents/deal-recon.md` gained in ora-claude-config #396, and splits LTV into the 40% portfolio aggregate and the 65% per-property refi ceiling. `tools/doctrine_consistency.py` now fails CI if this line drops a cluster state. The agent file still carries the old state list; that fix belongs to ora-claude-config. No scored or governor constant changed.
 - **v1.3 (2026-10-27):** recon checklist item 5 also pulls the last recorded sale; seller acquired within 24 months → ask vs. seller basis in the brief (parity with `acquisition-underwriting` v4.37 Stage -1 item 10); item 6 also notes the construction type (tilt-up baseline vs PEMB/masonry/brick, per the Construction-Type Multiplier).
 - **v1.2 (2026-08-22):** cross-surface port — runs on Cowork and Code (detail under Port notes above).
