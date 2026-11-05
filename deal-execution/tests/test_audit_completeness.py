@@ -252,6 +252,26 @@ class TestExhibitPopulation(_Base):
         self.assertFalse(e["thin"])
         self.assertFalse(r["blocking"])
 
+    def test_empty_table_grid_exhibit_is_populated_today(self):
+        # KNOWN DEFECT D1 (needs Gabriel's doctrine call; not fixed): an exhibit whose
+        # only content is an empty table grid -- zero rows, or rows whose cells are
+        # all blank -- counts as populated because populated includes `tables`, so
+        # it is never EMPTY and the gate exits 0. `thin` is deliberately not asserted
+        # here (A-2 changes it for the all-blank-cells grid).
+        for label, grid in (("zero rows", "<w:tbl><w:tblPr/><w:tblGrid/></w:tbl>"),
+                            ("all cells blank", TBL([["", ""], ["", ""]]))):
+            with self.subTest(grid=label):
+                p = self.doc(BODY_CLEAN + SIG + [P("EXHIBIT A"), P("(Rent Roll)"),
+                                                 grid])
+                r = ac.audit(p)
+                e = self.exhibit(r, "A")
+                self.assertEqual(e["text_chars"], 0)
+                self.assertTrue(e["populated"])
+                self.assertEqual(r["empty_exhibits"], [])
+                self.assertFalse(r["blocking"])
+                rc, _, _ = self.run_main(p)
+                self.assertEqual(rc, 0)
+
     def test_heading_inside_table_is_detected(self):
         blocks = BODY_CLEAN + SIG + [TBL([["EXHIBIT A"]]), P(LOREM)]
         r = self.audit(blocks)
@@ -397,12 +417,40 @@ class TestBlanks(_Base):
 
     def test_compare_summary_chrome_is_ignored(self):
         # Everything from a compare-tool summary page onward is chrome, not contract.
+        # The chrome holds a bare "EXHIBIT Q" heading: were chrome not cut off, Q
+        # would be an EMPTY exhibit and the gate would block.
         blocks = clean_blocks() + [P("Litera Compare summary report"),
-                                   P("Deposit $__________"), P("See Exhibit Z.")]
+                                   P("EXHIBIT Q"), P("Deposit $__________")]
+        r = self.audit(blocks)
+        self.assertEqual([e["letter"] for e in r["exhibits"]], ["A"])
+        self.assertEqual(r["empty_exhibits"], [])
+        self.assertEqual(len(r["signature_blanks"]), 2)
+        self.assertFalse(r["blocking"])
+
+    def test_compare_summary_chrome_before_signature_drops_later_content(self):
+        # Chrome detection is positional: a summary page placed before the
+        # signature block cuts off everything after it, including body blanks.
+        blocks = BODY_CLEAN + [P("Document comparison done on lorem date"),
+                               P("5. Deposit. The Deposit is $__________.")] \
+            + SIG + EXHIBIT_A_OK
         r = self.audit(blocks)
         self.assertEqual(r["body_blanks"], [])
-        self.assertEqual(r["dangling_exhibit_refs"], [])
-        self.assertFalse(r["blocking"])
+        self.assertEqual(r["signature_blanks"], [])
+        self.assertEqual(r["exhibits"], [])
+        self.assertEqual(r["dangling_exhibit_refs"], ["A"])
+        self.assertTrue(r["blocking"])
+
+    def test_no_signature_block_keeps_every_blank_in_the_body(self):
+        # Fail-closed path: with no IN WITNESS / signature-page marker the whole
+        # document is body, so an underscore blank blocks.
+        p = self.doc(BODY_CLEAN + [P("4. Deposit. The Deposit is $__________.")]
+                     + EXHIBIT_A_OK)
+        r = ac.audit(p)
+        self.assertEqual(len(r["body_blanks"]), 1)
+        self.assertEqual(r["signature_blanks"], [])
+        self.assertTrue(r["blocking"])
+        rc, _, _ = self.run_main(p)
+        self.assertEqual(rc, 1)
 
 
 # --------------------------------------------------------------------------- CLI
