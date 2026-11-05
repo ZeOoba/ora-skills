@@ -67,11 +67,11 @@ Pull data from these sources in priority order:
 | Occupancy, rent roll, lease terms | Notion Tenant Database | Gabriel-provided rent roll |
 | Lease expirations, renewal pipeline | Notion Tenant Database views | Manual input |
 | Active deals, pipeline value | Notion Acquisition Pipeline Tracker | Gabriel-provided deal summary |
-| Debt balances, rates, maturities | Notion Loan Portfolio Tracker (V2) | Memory context |
+| Debt balances, rates, maturities | Live ORA Master Workbook, `External Loans Summary` sheet | Notion Loan Portfolio Tracker (V2), with its last-refreshed date stated and labeled STALE when more than 7 days behind the workbook |
 | Portfolio AUM, LTV | Live ORA Master Workbook (SharePoint, per Notion pointer page `3706ecd8-9e59-813a-b4c7-ecbc2c213fa8`), then the Notion Portfolio Intelligence Dashboard (`3396ecd8-9e59-819c-a598-e55dc5581504`), labeled STALE when it is more than 7 days behind the workbook | Gabriel-provided estimate |
 | Market cap rates | Memory context + web search (recent comps) | Gabriel-provided estimate |
 
-Before pulling data, check when each source was last updated. If >7 days, flag to Gabriel and label the figure STALE; never present it as current (firm freshness canon).
+Before pulling data, check when each source was last updated. STALE has one test everywhere in this skill: a source that lags the live Master Workbook by more than 7 days. It is never the age of the workbook itself. Flag a STALE source to Gabriel and label every figure taken from it STALE; never present it as current (firm freshness canon).
 
 ---
 
@@ -81,14 +81,14 @@ Calculate and present all of the following in every report regardless of type:
 
 | Metric | Definition | Calculation |
 |--------|-----------|-------------|
-| Total AUM | Estimated market value of entire portfolio | Sum of (property NOI ÷ submarket cap rate) across all properties |
+| Total AUM | Estimated market value of entire portfolio | Read the live Master Workbook's `00_Home` Portfolio Value, the same source as Module 2's AUM/LTV row. The NOI ÷ submarket cap rate build in Module 5 is the annual valuation update, not this metric |
 | Total SF | Gross rentable area owned | Sum of all property GRAs |
 | Portfolio occupancy | Occupied SF ÷ total SF (by SF, not by unit count) | Occupied SF / Total SF |
 | WALT | Weighted average lease term remaining | Σ (remaining term × occupied SF) / total occupied SF |
 | Portfolio NOI | Total net operating income | Sum of all property NOIs (trailing 12 months or annualized current) |
 | NOI margin | NOI ÷ Effective Gross Income | NOI / EGI |
-| Total debt outstanding | Sum of all outstanding loan balances | Pull from Loan Portfolio Tracker |
-| Portfolio LTV | Total debt ÷ Total AUM | Total debt / Total AUM |
+| Total debt outstanding | Sum of all outstanding loan balances | Read the `External Loans Summary` borrower total in the live Master Workbook (Module 2 debt row; Loan Portfolio Tracker only as its fallback) |
+| Portfolio LTV | Total debt ÷ Total AUM | Read the `00_Home` "Portfolio LTV" cell: the GROSS-external definition (external borrower total ÷ Portfolio Value) per `ora-master-workbook-ingest` T3. Never substitute `External Loans Summary`'s own NET-external "Portfolio LTV" cell, and label which one is quoted |
 | Weighted avg cost of debt | Weighted average interest rate across all loans | Σ (balance × rate) / total balance |
 | Collections rate | Collected rent ÷ scheduled rent | Collected / Scheduled (trailing 3 months) |
 | Revenue per SF | Annualized EGI ÷ total SF | Annualized EGI / Total SF |
@@ -152,5 +152,5 @@ Activate this skill when Gabriel says:
 ## Changelog
 (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
 
-- **v1.2 (2026-11-05):** source-of-record order. Portfolio AUM and LTV came from memory context plus manual input. They now come from the live Master Workbook first, then the Notion Portfolio Intelligence Dashboard, labeled STALE when more than 7 days behind (firm read-order and freshness canon). The source-freshness flag moved from 30 days to 7 to match that canon. The February Annual Report is now described as the LP-facing derivative of annual-cycle's Year-In-Review (ora-year-end-review), not a second year-end review. No scored or governor constant changed.
+- **v1.2 (2026-11-05):** source-of-record order. Portfolio AUM and LTV came from memory context plus manual input. They now come from the live Master Workbook first, then the Notion Portfolio Intelligence Dashboard, labeled STALE when more than 7 days behind (firm read-order and freshness canon). The source-freshness flag moved from 30 days to 7 to match that canon. The February Annual Report is now described as the LP-facing derivative of annual-cycle's Year-In-Review (ora-year-end-review), not a second year-end review. Review corrections applied the same day: STALE is one test (lag behind the live Master Workbook of more than 7 days, never the workbook's own age); Module 3 AUM, total debt and LTV read the same workbook cells as Module 2 (`00_Home` Portfolio Value, the `External Loans Summary` borrower total, and the `00_Home` gross-external LTV per ora-master-workbook-ingest T3); debt is workbook-first, with the Loan Portfolio Tracker as a dated fallback. No scored or governor constant changed.
 - **v1.1 (2026-07-15):** LOW fix, ora-skill-text-audit — Parchment token corrected #F5F0E8 -> #F5F3EF to match ORA Institutional Style Guide v1.0+.
