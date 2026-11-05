@@ -331,7 +331,7 @@ against the PR base). Job `skill-tests` runs `bash tools/run_skill_suites.sh`: i
 temp dir outside the repo and confirms its scripts resolve the packaged copy), then runs the skill-level
 test suites (every `test_*.py` under a skill dir, auto-discovered) through `tools/run_suite.sh`
 (same zero-fail / zero-skip / zero-empty / no-bare-test rules). A file opts out only with a top-level
-`CI_EXCLUDE = "<reason>"` line; an empty reason fails the gate. Run locally with `bash tools/run_skill_suites.sh`.
+`CI_EXCLUDE = "<reason>"` line; an empty reason fails the gate. Run locally with `bash tools/run_skill_suites.sh`. `skill_ci_gates.py suite-continuity --base auto` fails if a suite present at the PR base disappears, unless it moved under `_archive/` or the removing commit carries a `Suite-Removed: <path>` trailer.
 
 ## Conventions
 

@@ -22,11 +22,16 @@ Subcommands (each exits 0 clean, 1 on a finding, 2 on a usage/environment error)
   suites                   print the gated skill test files (repo-relative, one per line) for
                            tools/run_suite.sh: every test_*.py under a skill dir, minus any
                            file declaring a top-level CI_EXCLUDE = "<reason>" (listed on stderr).
+  suite-continuity --base R  fail if a skill test file present at R is no longer discovered on HEAD
+                           (renamed, deleted, or its SKILL.md removed), unless it moved under
+                           _archive/ or a commit in R..HEAD carries a `Suite-Removed: <path>`
+                           trailer. R may be `auto`, as for target-markets.
   packaged-layout          package() every skill that declares a SHARED_ROOT_DEPS .py file into
                            a temp dir OUTSIDE the repo (so the dev-checkout sys.path fallback
                            to tools/ cannot resolve), extract it, and confirm each staged
                            script that imports the shared module resolves the packaged copy.
 """
+import ast
 import json
 import os
 import re
@@ -72,17 +77,29 @@ def discover_skill_test_files(repo: Path = REPO) -> list[str]:
 # Skill-level test suites (F1; auto-discovery since 2026-11-05, maintenance-reduction
 # bundle 1 -- the hand-kept GATED/EXCLUDED lists were a recurring follow-up-commit source).
 # Every test_*.py under a skill directory is gated automatically. To keep one out of CI,
-# put a top-level line in that file:
+# put a top-level assignment in that file (parsed with ast, so docstring text never counts):
 #     CI_EXCLUDE = "<reason>"
 # An exclusion is a follow-up, not a permanent exemption: fix the cause, delete the line.
+# The suite-continuity gate (below) catches suites that vanish versus the PR base.
 # ---------------------------------------------------------------------------
-_CI_EXCLUDE = re.compile(r'^CI_EXCLUDE\s*=\s*([\'"])(.*?)\1\s*(?:#.*)?$', re.M)
-
-
 def ci_exclude_reason(path: Path) -> str | None:
-    """The stripped CI_EXCLUDE reason declared at column 0 of `path`, or None if absent."""
-    m = _CI_EXCLUDE.search(path.read_text(encoding='utf-8', errors='replace'))
-    return m.group(2).strip() if m else None
+    """The stripped CI_EXCLUDE reason of `path`, or None if it declares none.
+
+    A reason exists only when the module body has a top-level plain assignment
+    `CI_EXCLUDE = <str literal>` (single target; trailing comments are fine). Anything else --
+    marker text inside a docstring, expressions, annotated assignments, non-str values, a
+    nested assignment, a file that does not parse -- leaves the file gated; a syntax error
+    surfaces when the suite runs. The returned reason may be '' (callers treat it as an error)."""
+    try:
+        tree = ast.parse(path.read_text(encoding='utf-8', errors='replace'))
+    except (SyntaxError, ValueError):
+        return None
+    for node in tree.body:
+        if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name) and node.targets[0].id == 'CI_EXCLUDE'
+                and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)):
+            return node.value.value.strip()
+    return None
 
 
 def excluded_suites(repo: Path = REPO) -> dict[str, str]:
@@ -255,6 +272,74 @@ def cmd_target_markets(base_arg: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Suite continuity vs the PR base: auto-discovery gates what exists, so a renamed or deleted
+# suite file (or a deleted SKILL.md, which stops discovery of its tests) would otherwise drop
+# out of CI silently.
+# ---------------------------------------------------------------------------
+_SUITE_REMOVED = re.compile(r'^Suite-Removed:[ \t]*(\S.*?)[ \t]*$', re.M)
+
+
+def vanished_suites(base_files: set[str], head_files: set[str], head_archive_paths: set[str],
+                    declared_removed: set[str]) -> list[str]:
+    """Errors for each base suite file absent from head, unless it moved under `_archive/`
+    (same skill-relative path) or a commit declared its removal via a Suite-Removed trailer."""
+    errors = []
+    for rel in sorted(base_files - head_files):
+        if rel in declared_removed:
+            continue
+        if any(a == f'_archive/{rel}' or a.endswith(f'/{rel}') for a in head_archive_paths):
+            continue
+        errors.append(f'{rel}: suite present at the PR base is no longer discovered on HEAD '
+                      f'(renamed, deleted, or its SKILL.md removed). Restore it, move it under '
+                      f'_archive/, or add a "Suite-Removed: {rel}" trailer to the removing commit')
+    return errors
+
+
+def base_suite_files(base: str, repo: Path = REPO) -> set[str]:
+    """test_*.py paths at `base` under a top-level skill dir (one that held a SKILL.md)."""
+    r = _git('ls-tree', '-r', '--name-only', '-z', base, repo=repo)
+    names = [n for n in r.stdout.split('\0') if n]
+    skills = {n.split('/')[0] for n in names if n.count('/') == 1 and n.endswith('/SKILL.md')}
+    skills -= package_skills.SKIP
+    return {n for n in names
+            if n.split('/')[0] in skills and '/' in n and '__pycache__' not in n.split('/')
+            and n.rsplit('/', 1)[-1].startswith('test_') and n.endswith('.py')}
+
+
+def declared_removed_suites(base: str, repo: Path = REPO) -> set[str]:
+    """Paths named by `Suite-Removed: <repo-relative path>` trailer lines in base..HEAD."""
+    r = _git('log', '--format=%B', f'{base}..HEAD', repo=repo)
+    return {m.group(1) for m in _SUITE_REMOVED.finditer(r.stdout)}
+
+
+def archived_suite_paths(repo: Path = REPO) -> set[str]:
+    arch = repo / '_archive'
+    if not arch.is_dir():
+        return set()
+    return {p.relative_to(repo).as_posix() for p in arch.rglob('test_*.py')
+            if '__pycache__' not in p.parts}
+
+
+def cmd_suite_continuity(base_arg: str, repo: Path = REPO) -> int:
+    base = resolve_base(base_arg, repo=repo)
+    ok = _git('rev-parse', '--verify', '--quiet', f'{base}^{{commit}}', repo=repo)
+    if ok.returncode != 0:
+        print(f'suite-continuity: base {base!r} is not a commit in this clone (fetch-depth: 0?)',
+              file=sys.stderr)
+        return 2
+    base_files = base_suite_files(base, repo)
+    errors = vanished_suites(base_files, set(discover_skill_test_files(repo)),
+                             archived_suite_paths(repo), declared_removed_suites(base, repo))
+    for e in errors:
+        print(e, file=sys.stderr)
+    if errors:
+        return 1
+    sha = _git('rev-parse', base, repo=repo).stdout.strip() or base
+    print(f'suite-continuity: {len(base_files)} base suite(s) all present versus base {sha[:12]}')
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Packaged-layout import check (F1 shared-file staging)
 # ---------------------------------------------------------------------------
 def staged_import_targets(skill: str, staged_root: Path, deps=None) -> list[tuple[Path, str]]:
@@ -323,6 +408,11 @@ def main(argv=None) -> int:
             print('usage: skill_ci_gates.py target-markets --base <ref|auto>', file=sys.stderr)
             return 2
         return cmd_target_markets(argv[2])
+    if cmd == 'suite-continuity':
+        if len(argv) != 3 or argv[1] != '--base':
+            print('usage: skill_ci_gates.py suite-continuity --base <ref|auto>', file=sys.stderr)
+            return 2
+        return cmd_suite_continuity(argv[2])
     if cmd == 'suites':
         files, errors = suite_coverage()
         for e in errors:

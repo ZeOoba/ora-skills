@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -64,6 +65,43 @@ class SuiteCoverage(TempRepo):
         _skill(self.root, 'a', files={'tests/test_a.py': 'def f():\n    CI_EXCLUDE = "x"\n'})
         self.assertEqual(g.suite_coverage(self.root), (['a/tests/test_a.py'], []))
 
+    def test_marker_inside_docstring_does_not_exclude(self):
+        _skill(self.root, 'a', files={'tests/test_a.py': '"""Notes.\nCI_EXCLUDE = "x"\n"""\n'})
+        self.assertEqual(g.suite_coverage(self.root), (['a/tests/test_a.py'], []))
+
+    def test_empty_triple_quoted_reason_is_an_error(self):
+        _skill(self.root, 'a', files={'tests/test_a.py': 'CI_EXCLUDE = """"""\n'})
+        files, errors = g.suite_coverage(self.root)
+        self.assertEqual(files, [])
+        self.assertTrue(any('empty reason' in e for e in errors), errors)
+
+    def test_conditional_expression_marker_stays_gated(self):
+        _skill(self.root, 'a', files={'tests/test_a.py': 'CI_EXCLUDE = "x" if False else ""\n'})
+        self.assertEqual(g.suite_coverage(self.root), (['a/tests/test_a.py'], []))
+
+    def test_adjacent_string_concat_marker_uses_full_value(self):
+        _skill(self.root, 'a', files={'tests/test_a.py': 'CI_EXCLUDE = "" ""\n'})
+        files, errors = g.suite_coverage(self.root)
+        self.assertEqual(files, [])
+        self.assertTrue(any('empty reason' in e for e in errors), errors)
+
+    def test_trailing_comment_marker_excludes_with_reason(self):
+        _skill(self.root, 'a', files={'tests/test_a.py': 'CI_EXCLUDE = "why"  # note\n'})
+        self.assertEqual(g.suite_coverage(self.root), ([], []))
+        self.assertEqual(g.excluded_suites(self.root), {'a/tests/test_a.py': 'why'})
+
+    def test_annotated_and_non_str_and_multi_target_markers_stay_gated(self):
+        for i, src in enumerate(['CI_EXCLUDE: str = "x"\n', 'CI_EXCLUDE = 5\n',
+                                 'CI_EXCLUDE = other = "x"\n']):
+            _skill(self.root, f's{i}', files={'tests/test_a.py': src})
+        files, errors = g.suite_coverage(self.root)
+        self.assertEqual(files, [f's{i}/tests/test_a.py' for i in range(3)])
+        self.assertEqual(errors, [])
+
+    def test_syntax_error_file_stays_gated(self):
+        _skill(self.root, 'a', files={'tests/test_a.py': 'CI_EXCLUDE = "x"\ndef (:\n'})
+        self.assertEqual(g.suite_coverage(self.root), (['a/tests/test_a.py'], []))
+
     def test_archive_and_non_skill_dirs_ignored(self):
         (self.root / '_archive' / 'old' / 'tests').mkdir(parents=True)
         (self.root / '_archive' / 'old' / 'SKILL.md').write_text('x', encoding='utf-8')
@@ -79,6 +117,86 @@ class SuiteCoverage(TempRepo):
         self.assertIn('acquisition-underwriting-eval-harness/lib/test_parse_replays.py',
                       g.excluded_suites())
         self.assertNotIn('acquisition-underwriting-eval-harness/lib/test_parse_replays.py', files)
+
+
+class VanishedSuites(unittest.TestCase):
+    BASE = {'a/tests/test_a.py', 'b/test_b.py'}
+
+    def test_unchanged_has_no_error(self):
+        self.assertEqual(g.vanished_suites(self.BASE, set(self.BASE), set(), set()), [])
+
+    def test_additions_are_fine(self):
+        self.assertEqual(g.vanished_suites(self.BASE, self.BASE | {'c/test_c.py'}, set(), set()), [])
+
+    def test_rename_is_reported(self):
+        head = {'a/tests/a_test.py', 'b/test_b.py'}
+        errs = g.vanished_suites(self.BASE, head, set(), set())
+        self.assertEqual(len(errs), 1)
+        self.assertIn('a/tests/test_a.py', errs[0])
+
+    def test_delete_is_reported(self):
+        errs = g.vanished_suites(self.BASE, {'b/test_b.py'}, set(), set())
+        self.assertEqual(len(errs), 1)
+        self.assertIn('a/tests/test_a.py', errs[0])
+
+    def test_archived_move_is_allowed(self):
+        head = {'b/test_b.py'}
+        self.assertEqual(g.vanished_suites(self.BASE, head, {'_archive/a/tests/test_a.py'}, set()), [])
+        self.assertEqual(g.vanished_suites(self.BASE, head, {'_archive/2026-11/a/tests/test_a.py'}, set()), [])
+
+    def test_archive_path_with_different_suffix_does_not_count(self):
+        errs = g.vanished_suites(self.BASE, {'b/test_b.py'}, {'_archive/xa/tests/test_a.py'}, set())
+        self.assertEqual(len(errs), 1)
+
+    def test_declared_removed_is_allowed(self):
+        self.assertEqual(g.vanished_suites(self.BASE, {'b/test_b.py'}, set(), {'a/tests/test_a.py'}), [])
+
+
+class SuiteContinuityGit(TempRepo):
+    def git(self, *a):
+        return subprocess.run(
+            ['git', '-C', str(self.root), '-c', 'user.name=t', '-c', 'user.email=t@t',
+             '-c', 'core.hooksPath=/dev/null', *a],
+            capture_output=True, text=True, check=True).stdout.strip()
+
+    def build(self, trailer: str = ''):
+        self.git('init', '-q')
+        _skill(self.root, 'a', files={'tests/test_a.py': ''})
+        self.git('add', '.')
+        self.git('commit', '-q', '-m', 'base')
+        base = self.git('rev-parse', 'HEAD')
+        (self.root / 'a' / 'SKILL.md').unlink()
+        self.git('add', '-A')
+        self.git('commit', '-q', '-m', 'drop skill md' + (f'\n\n{trailer}' if trailer else ''))
+        return base
+
+    def run_cmd(self, base):
+        from contextlib import redirect_stderr, redirect_stdout
+        out, err = StringIO(), StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            rc = g.cmd_suite_continuity(base, repo=self.root)
+        return rc, out.getvalue(), err.getvalue()
+
+    def test_base_suite_files_reads_base_tree(self):
+        base = self.build()
+        self.assertEqual(g.base_suite_files(base, self.root), {'a/tests/test_a.py'})
+
+    def test_deleted_skill_md_is_reported(self):
+        base = self.build()
+        rc, out, err = self.run_cmd(base)
+        self.assertEqual(rc, 1, (out, err))
+        self.assertIn('a/tests/test_a.py', err)
+
+    def test_suite_removed_trailer_suppresses(self):
+        base = self.build('Suite-Removed: a/tests/test_a.py')
+        self.assertEqual(g.declared_removed_suites(base, self.root), {'a/tests/test_a.py'})
+        rc, out, err = self.run_cmd(base)
+        self.assertEqual(rc, 0, (out, err))
+        self.assertIn('suite-continuity: 1 base suite(s) all present', out)
+
+    def test_bad_base_is_usage_error(self):
+        self.build()
+        self.assertEqual(self.run_cmd('no-such-ref-xyz')[0], 2)
 
 
 class ReadmeInventory(TempRepo):
