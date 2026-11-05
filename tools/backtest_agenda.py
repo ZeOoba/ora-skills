@@ -50,7 +50,10 @@ RULE_PREVIEW = 240
 
 _LEDGER_HEADING = re.compile(r'^## Rule Evidence ledger\b')
 _SUNSET = re.compile(r'\bsunset\b(?: review)?\s*:?\s*(.+?)\s*(?:;|$)', re.IGNORECASE)
-_DECEMBER = re.compile(r'\bDecember\s+(\d{4})\b', re.IGNORECASE)
+_DECEMBER = re.compile(r'\bDecember\s+(\d{4})\b|\b(\d{4})\s+December\b', re.IGNORECASE)
+_NEXT_DECEMBER = re.compile(r'\bnext\s+December\b', re.IGNORECASE)
+_TWELVE_MONTHS = re.compile(r'\bfollows\s+the\s+next\s+12\s+months\b', re.IGNORECASE)
+_EVIDENCE_ID = re.compile(r'^RE-\d+\.\d+-\d+$')
 _ISO_DATE = re.compile(r'\b(\d{4})-(\d{2})-(\d{2})\b')
 _VERSION_IN_H1 = re.compile(r'\(v(\d+\.\d+)')
 _INDEX_ROW = re.compile(r'^\|\s*(v\d+\.\d+)\s*\|')
@@ -65,7 +68,7 @@ _REQUIRED_FIELDS = ('id', 'entry', 'incidents', 'expected_loss', 'evidence_class
 _LEDGER_ROW = re.compile(r'^\|\s*(\d{4}-\d{2}-\d{2})\s*\|')
 _BASE_STAMP = re.compile(
     r'#\s*base:\s*(?:(?!v\d)(?P<skill>[a-z][a-z0-9-]*)\b\s*)?(?:v(?P<version>\d+\.\d+))?'
-    r'(?:[^\n]*?SHA256\s+(?P<sha>[0-9a-f]{6,64}))?', re.IGNORECASE)
+    r'(?:[^\n]*?(?:SHA-?256|\bsha\b)\s*[:=]?\s*(?P<sha>[0-9a-f]{6,64}))?', re.IGNORECASE)
 
 
 class AgendaError(Exception):
@@ -136,12 +139,16 @@ def parse_evidence_ledger(text):
         if not line.startswith('|') or line.startswith('|---') or line.replace('|', '').strip(' -:') == '':
             continue
         cells = _cells(line)
-        if not line.startswith('| RE-'):
-            if columns is None:
-                columns = _ledger_columns(cells)
+        if columns is None:  # the first table row in the section is the header
+            columns = _ledger_columns(cells)
             continue
-        if columns is None:
-            raise AgendaError('Rule Evidence rows appear before a header row')
+        raw_id = cells[columns['id']] if columns['id'] < len(cells) else ''
+        ident = re.sub(r'[*_`\s]', '', raw_id)
+        if not _EVIDENCE_ID.match(ident):
+            # A row that is not an Evidence ID (bolded, re-spaced or malformed) would otherwise
+            # vanish from the agenda without a trace; refuse instead (review finding C1f-b).
+            raise AgendaError('unrecognized Rule Evidence row (Evidence ID cell %r)' % raw_id)
+        cells[columns['id']] = ident
         width = max(columns.values()) + 1
         if len(cells) < width:
             raise AgendaError('Rule Evidence row has %d cells, header needs %d: %s' % (len(cells), width, cells[0]))
@@ -214,8 +221,13 @@ def apply_default_sunsets(rows, version_dates):
         if day and not row['sunset']:
             anchor = day if row['single_incident'] else day + dt.timedelta(days=365)
             row['sunset'], row['sunset_basis'] = _december_on_or_after(anchor), 'default'
-        elif day and row['sunset'] and 'december' in row['sunset'].lower() and not _DECEMBER.search(row['sunset']):
-            row['sunset'], row['sunset_basis'] = _december_on_or_after(day), 'resolved'
+        elif day and row['sunset'] and not _DECEMBER.search(row['sunset']):
+            # Only the two year-less forms the doctrine itself uses are resolved; any other
+            # year-less text stays as written and is reported as unparsed, never guessed.
+            if _TWELVE_MONTHS.search(row['sunset']):
+                row['sunset'], row['sunset_basis'] = _december_on_or_after(day + dt.timedelta(days=365)), 'resolved'
+            elif _NEXT_DECEMBER.search(row['sunset']):
+                row['sunset'], row['sunset_basis'] = _december_on_or_after(day), 'resolved'
         row['sunset_default'] = row.get('sunset_basis') == 'default'
         out.append(row)
     return out
@@ -231,7 +243,7 @@ def sunset_due(sunset, session_date):
         return False
     match = _DECEMBER.search(sunset)
     if match:
-        return int(match.group(1)) <= session_date.year
+        return int(match.group(1) or match.group(2)) <= session_date.year
     match = _ISO_DATE.search(sunset)
     if match:
         try:
@@ -335,9 +347,9 @@ def patch_status(patch, current_versions, current_shas=None):
         if patch['version'] != current:
             return 'STALE BASE (v%s vs current v%s): re-base before merge' % (patch['version'], current)
         if not patch['sha']:
-            return 'CURRENT (version only; the stamp carries no SHA)'
+            return 'UNVERIFIED (version v%s matches; the stamp carries no SHA): verify every anchor' % patch['version']
         if not shas:
-            return 'CURRENT (version only; SHA not checked)'
+            return 'UNVERIFIED (version v%s matches; SHA not checked): verify every anchor' % patch['version']
         if any(h.startswith(patch['sha'].lower()) for h in shas):
             return 'CURRENT'
         # Two changes have shared one version label (acquisition-underwriting v4.40, loi-generation
@@ -540,7 +552,8 @@ def render(session_date, since, version, evidence, dup_versions, lessons, ledger
     add('- The Pre-December checklist in `acquisition-underwriting/references/outcome-feedback-and-backtest.md` '
         '(Retro-underwrite calibration dataset section).')
     add('- Drift sweep: `market-monitor` DOCTRINE-DRIFT for every cluster in `target-markets.json` (%s).' % clusters)
-    add('- Lost-deal ledger: classified `Loss Class` rows on the Notion Deal Sourcing Log against the sample threshold in the same reference.')
+    add('- Lost-deal ledger: classified `Loss Class` rows on the Notion Deal Sourcing Log against the sample threshold in the same reference. '
+        'Count only rows with `LOI Outcome` not `WON` and `Exclude from Calibration` unchecked: a `WON` row is a deal ORA bought, never a loss.')
     add('- Passed and lost deals: `Winning Price` and `Winning Price Confidence` against `Walk Price` and `ORA Max Defensible Price` on the Deal Sourcing Log.')
     add('- Exception Register tripwire (acquisition-underwriting EXCEPTION REGISTER + TRIPWIRE).')
     add("- After ratification: one supervised `acquisition-underwriting-eval-harness` replay. Goldens are re-baselined only on Gabriel's sign-off.")

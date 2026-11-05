@@ -40,7 +40,7 @@ def messages(items):
 
 class CountClaimTests(unittest.TestCase):
     def check(self, line):
-        return dc.count_claims(line, 11)
+        return [c for c in dc.count_claims(line, 11) if c[0] == 'cluster-count']
 
     def test_wrong_canonical_count(self):
         self.assertEqual(len(self.check('run market-monitor across all ten canonical markets')), 1)
@@ -64,21 +64,33 @@ class CountClaimTests(unittest.TestCase):
 
 
 class RoundTwoCountTests(unittest.TestCase):
-    """Misses and false positives from the 2026-11-05 adversarial review (finding C2c)."""
+    """Misses and false positives from the 2026-11-05 adversarial reviews (finding C2c, rounds 1-2)."""
 
-    def check(self, line):
-        return dc.count_claims(line, 11)
+    def checks(self, line):
+        return [c[0] for c in dc.count_claims(line, 11)]
 
     def test_oras_n_target_markets(self):
-        self.assertEqual(len(self.check("ORA's ten target markets")), 1)
+        self.assertEqual(self.checks("ORA's ten target markets"), ['cluster-count'])
 
     def test_other_n_target_markets_and_ora_clusters(self):
-        self.assertEqual(len(self.check('the other nine target markets')), 1)
-        self.assertEqual(len(self.check('the other eight ORA clusters are Tier B/C')), 1)
+        self.assertEqual(self.checks('the other nine target markets'), ['cluster-count'])
+        self.assertEqual(self.checks('the other eight ORA clusters are Tier B/C'), ['cluster-count'])
 
-    def test_subset_named_earlier_in_the_line(self):
-        self.assertEqual(self.check('Tier A covers three clusters; the other eight clusters are Tier B/C'), [])
-        self.assertEqual(len(self.check('Tier A covers five clusters; the other eight clusters are Tier B/C')), 1)
+    def test_subset_excuse_is_reported_for_review_not_trusted(self):
+        """Round 2: trusting a same-line subset passed the stale county-sales-monitor shape."""
+        self.assertEqual(self.checks('Tier A covers three clusters; the other eight clusters are Tier B/C'),
+                         ['cluster-count-subset'])
+        self.assertEqual(self.checks('Tier A covers five clusters; the other eight clusters are Tier B/C'),
+                         ['cluster-count'])
+
+    def test_full_set_count_is_not_a_subset(self):
+        found = dc.count_claims("Of ORA's eleven clusters, Tier A covers three clusters; the other eight clusters", 11)
+        self.assertEqual([c[0] for c in found], ['cluster-count-subset'])
+        self.assertNotIn('-3', found[0][1])
+
+    def test_targets_n_clusters_and_ratified(self):
+        self.assertEqual(self.checks('ORA now targets ten clusters'), ['cluster-count'])
+        self.assertEqual(self.checks('not among the nine ratified clusters'), ['cluster-count'])
 
 
 class TargetGeographyTests(unittest.TestCase):
@@ -172,6 +184,12 @@ class AggregateLtvTests(unittest.TestCase):
     def test_round_two_variants(self):
         self.assertEqual(len(dc.dscr_at_aggregate('DSCR is tested at a 40% LTV for every deal')), 1)
         self.assertEqual(len(dc.dscr_at_aggregate('Size the loan at 40% LTV and confirm DSCR clears 1.25x')), 1)
+        self.assertEqual(len(dc.dscr_at_aggregate('Size the loan to 40% LTV and confirm DSCR clears 1.25x')), 1)
+        self.assertEqual(len(dc.dscr_at_aggregate('DSCR is tested at 40% loan-to-value')), 1)
+        self.assertEqual(len(dc.dscr_at_aggregate('Debt service coverage is tested at 40% LTV')), 1)
+
+    def test_governor_summary_is_not_a_dscr_basis(self):
+        self.assertEqual(dc.dscr_at_aggregate('DSCR 1.25x per property; leverage capped at 40% LTV aggregate'), [])
 
     def test_correct_statements_pass(self):
         self.assertEqual(dc.dscr_at_aggregate(
@@ -224,21 +242,31 @@ class ScanAndAllowlistTests(unittest.TestCase):
             findings = dc.scan(make_repo(tmp, '# Demo (v1.0)\nUse all ten canonical markets.\n'))
         self.assertEqual([(f.path, f.line, f.check) for f in findings], [('demo-skill/SKILL.md', 2, 'cluster-count')])
 
-    def test_allowlist_is_keyed_by_phrase(self):
+    def allow(self, line_text, phrase='all ten canonical markets'):
         dc.ALLOWED.clear()
-        dc.ALLOWED[('demo-skill/SKILL.md', 'cluster-count', 'all ten canonical markets')] = (1, 'test')
+        dc.ALLOWED[('demo-skill/SKILL.md', 'cluster-count', phrase, dc.line_key(line_text))] = (1, 'test')
+
+    def test_allowlist_is_keyed_by_phrase(self):
+        self.allow('Use all ten canonical markets.')
         text = '# Demo (v1.0)\nUse all ten canonical markets.\nThe other 9 clusters wait.\n'
         with tempfile.TemporaryDirectory() as tmp:
             findings = dc.scan(make_repo(tmp, text))
         self.assertEqual([(f.line, f.allowed) for f in findings], [(2, True), (3, False)])
 
     def test_allowlist_count_caps_a_repeated_phrase(self):
-        dc.ALLOWED.clear()
-        dc.ALLOWED[('demo-skill/SKILL.md', 'cluster-count', 'all ten canonical markets')] = (1, 'test')
-        text = '# Demo (v1.0)\nUse all ten canonical markets.\nAgain: all ten canonical markets.\n'
+        self.allow('Use all ten canonical markets.')
+        text = '# Demo (v1.0)\nUse all ten canonical markets.\nUse all ten canonical markets.\n'
         with tempfile.TemporaryDirectory() as tmp:
             findings = dc.scan(make_repo(tmp, text))
         self.assertEqual([f.allowed for f in findings], [True, False])
+
+    def test_a_moved_phrase_is_unexplained(self):
+        """Round 2: fixing the allowlisted line and adding the same phrase elsewhere read as clean."""
+        self.allow('Use all ten canonical markets.')
+        text = '# Demo (v1.0)\nUse every cluster in target-markets.json.\nLater: all ten canonical markets.\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            findings = dc.scan(make_repo(tmp, text))
+        self.assertEqual([(f.line, f.allowed) for f in findings], [(3, False)])
 
 
 class LiveRepoGate(unittest.TestCase):
@@ -249,7 +277,7 @@ class LiveRepoGate(unittest.TestCase):
     def test_every_allowlist_entry_matches_exactly_its_count(self):
         counts = {}
         for f in dc.scan(REPO):
-            key = (f.path, f.check, f.phrase)
+            key = (f.path, f.check, f.phrase, f.linekey)
             counts[key] = counts.get(key, 0) + 1
         wrong = sorted((key, counts.get(key, 0), expected) for key, (expected, _) in dc.ALLOWED.items()
                        if counts.get(key, 0) != expected)

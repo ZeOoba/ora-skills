@@ -4,9 +4,9 @@
 Written 2026-11-05 with the tool. Stdlib unittest only:
     python tools/test_backtest_agenda.py
 
-Why the tool exists: acquisition-underwriting moves scorecard weights and constants ONLY
-at the annual December back-test, and its admission rule sends every single-incident rule
-to that session for review. On 2026-11-05 thirteen Rule Evidence entries carried
+Why the tool exists: acquisition-underwriting moves scorecard weights ONLY at the annual
+December back-test (floors and defaults ratified in-turn are re-confirmed there), and its
+admission rule sends every single-incident rule to that session for review. On 2026-11-05 thirteen Rule Evidence entries carried
 "Sunset: December 2026 back-test", but nothing compiled what the session had to review:
 the inputs sat in the Rule Evidence ledger, the deal decision ledger and staged patches,
 and a hand-written agenda from 2026-10-17 was already nine doctrine versions behind.
@@ -213,6 +213,24 @@ class SunsetRobustnessTests(unittest.TestCase):
         with self.assertRaises(ba.AgendaError):
             ba.parse_evidence_ledger(broken)
 
+    def test_bold_or_respaced_ids_parse_and_garbage_rows_raise(self):
+        """Second review: '| **RE-4.37-1** |' and '|RE-4.37-2 |' rows were dropped silently."""
+        bold = self.LEDGER_COLUMN.replace('| RE-9.2-1 |', '| **RE-9.2-1** |').replace('| RE-9.2-2 |', '|RE-9.2-2 |')
+        self.assertEqual([r['id'] for r in ba.parse_evidence_ledger(bold)], ['RE-9.2-1', 'RE-9.2-2'])
+        garbage = self.LEDGER_COLUMN.replace('| RE-9.2-2 |', '| see the archive |')
+        with self.assertRaises(ba.AgendaError):
+            ba.parse_evidence_ledger(garbage)
+
+    def test_year_first_and_twelve_month_phrasing(self):
+        """Second review: only 'next December' may resolve from the version date."""
+        ledger = self.LEDGER_COLUMN.replace(
+            'December 2026 back-test', '2027 December back-test').replace(
+            'when the register lands', 'the December back-test that follows the next 12 months of data')
+        rows = ba.apply_default_sunsets(ba.parse_evidence_ledger(ledger), ba.parse_version_dates(INDEX))
+        self.assertFalse(ba.sunset_due(rows[0]['sunset'], SESSION))
+        self.assertTrue(ba.sunset_due(rows[0]['sunset'], dt.date(2027, 12, 16)))
+        self.assertEqual((rows[1]['sunset'], rows[1]['sunset_basis']), ('December 2027 back-test', 'resolved'))
+
 
 class DoctrineVersionTests(unittest.TestCase):
     def test_version_with_suffix_inside_parentheses(self):
@@ -282,9 +300,15 @@ class PatchBaseTests(unittest.TestCase):
         found = self.scan()
         versions = {'acquisition-underwriting': '9.2'}
         self.assertTrue(ba.patch_status(found['D1_patch.md'], versions).startswith('STALE BASE'))
-        self.assertTrue(ba.patch_status(found['D2_named.md'], versions).startswith('CURRENT'))
+        self.assertTrue(ba.patch_status(found['D2_named.md'], versions).startswith('UNVERIFIED'))
         self.assertTrue(ba.patch_status(found['D3_loi.md'], versions).startswith('SHA STAMP'))
         self.assertTrue(ba.patch_status(found['notes.md'], versions).startswith('NO STAMP'))
+
+    def test_sha_spelling_variants(self):
+        for stamp in ('# base: v9.2 · SHA-256: abcdef012345', '# base: v9.2 sha256=abcdef012345',
+                      '# base: acquisition-underwriting v9.2 · sha abcdef012345'):
+            match = ba._BASE_STAMP.search(stamp)
+            self.assertEqual((match.group('version'), match.group('sha')), ('9.2', 'abcdef012345'), stamp)
 
     def test_matching_version_with_a_different_sha_is_stale(self):
         """Review finding C1e: two changes have shared one version label, so a version match is not enough."""
@@ -337,6 +361,7 @@ class RenderAndCliTests(unittest.TestCase):
         self.assertIn('1 Main St, Town WI', out)
         self.assertNotIn('5 Old Rd', out)
         self.assertIn('every cluster in `target-markets.json` (3 at v9.9)', out)
+        self.assertIn('Count only rows with `LOI Outcome` not `WON`', out)
 
     def test_missing_ledger_is_reported_not_fatal(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -389,8 +414,12 @@ class LiveRepoSmokeTest(unittest.TestCase):
         years = [int(y) for y in re.findall(r'December (\d{4}) back-test', text)]
         if not years:
             return  # nothing cites a December sunset, so there is nothing to lose (run_suite fails on skips)
-        session = dt.date(max(years), 12, 16)
-        self.assertGreater(sum(ba.sunset_due(r['sunset'], session) for r in rows), 0)
+        year = max(years)
+        session = dt.date(year, 12, 16)
+        cited = sum(1 for r in ba.parse_evidence_ledger(text)
+                    if 'December %d back-test' % year in (r['testable'] + ' ' + r['evidence_class']))
+        due = sum(ba.sunset_due(r['sunset'], session) for r in rows)
+        self.assertGreaterEqual(due, cited, 'every explicitly cited December sunset must come due')
 
     def test_live_agenda_runs(self):
         buf = io.StringIO()

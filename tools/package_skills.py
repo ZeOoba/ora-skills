@@ -532,6 +532,9 @@ SHARED_ROOT_DEPS = {
     # cites it too but reads nothing at run time; it is exempt in skill_ci_gates.py.)
     'annual-cycle': ['target-markets.json'],
     'submarket-spatial-analysis': ['target-markets.json'],
+    # portfolio-growth's phase table defers market geography to the file (WI/KS clusters,
+    # TN watch), so a projection that names markets reads it.
+    'portfolio-growth': ['target-markets.json'],
     'pma-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
     'listing-agreement-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
     'lease-form-qc': [('tools/ora_doc_qc.py', 'scripts/ora_doc_qc.py')],
