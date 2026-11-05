@@ -6,9 +6,11 @@
 # The gated set is auto-discovered by tools/skill_ci_gates.py: every test_*.py under a skill dir,
 # minus files declaring a top-level CI_EXCLUDE = "<reason>" (an empty reason fails).
 # `skill_ci_gates.py suite-continuity --base auto` (CI only; this runner does not run it) fails
-# if a suite present at the PR base disappears, unless it moved to _archive/<skill>/... or
-# _archive/<skill>_retired-YYYY-MM-DD/..., or the removing commit carries a
-# `Suite-Removed: <path>` trailer.
+# if a suite present at the PR base is no longer discovered, unless (a) a file added in
+# base..HEAD under _archive/ (any depth) has a path ending <skill>/<rest> or
+# <skill>_retired-YYYY-MM-DD/<rest> (path-only match), or (b) any commit in base..HEAD has a
+# line starting `Suite-Removed: <path>`. Recommended: git mv <skill> _archive/<skill>_retired-DATE
+# plus a trailer on the removing commit; the gate itself is looser.
 #
 # Shared-file staging: the QC suites (lease-form-qc, lease-addendum, listing-agreement-qc)
 # import tools/ora_doc_qc.py, which package_skills.py injects as scripts/ora_doc_qc.py via
