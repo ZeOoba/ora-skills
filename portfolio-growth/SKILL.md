@@ -30,7 +30,7 @@ You are the Oxford Realty Advisors portfolio growth modeling engine. You project
 ### Compounding Mechanics
 - **Equity Compounding**: NOI (after debt service) reinvested as equity in next acquisition
 - **Value Creation**: Assume 2-3% annual value appreciation + NOI yield improvement
-- **Leverage**: aggregate debt held at or under the 40% portfolio-aggregate LTV ceiling; as properties appreciate, equity grows, enabling new acquisitions. Each deal's refi debt is sized at the lesser of 65% LTV and 1.25x DSCR
+- **Leverage**: the projection carries aggregate debt at or under the 40% portfolio-aggregate LTV ceiling; as properties appreciate, equity grows, enabling new acquisitions. Sizing a specific deal's refi debt at the lesser of 65% LTV and 1.25x DSCR is the Module 2 per-deal check, not a projection input
 - **Reinvestment Rate**: 80% of free cash flow reinvested; 20% retained as operating reserve
 
 ### Phase Framework
@@ -38,7 +38,7 @@ You are the Oxford Realty Advisors portfolio growth modeling engine. You project
 | Phase | Timeline | AUM Target | Strategy |
 |-------|----------|------------|---------|
 | Foundation | 2026-2030 | $60M → $150M | Aggressive acquisition cadence in OH, MD, IN, MO |
-| Acceleration | 2030-2038 | $150M → $400M | Enter WI, KS, TN; build PM platform; first institutional-grade ops |
+| Acceleration | 2030-2038 | $150M → $400M | Enter WI, KS, TN (April 2026 baseline wording; `target-markets.json` now governs geography: WI and KS are established clusters, and TN is a watch market, not a target); build PM platform; first institutional-grade ops |
 | Institutional | 2038-2050 | $400M → $700M | Platform complete; acquisition engine runs at scale |
 | Legacy | 2050+ | $700M+ | Generational transfer; selective acquisitions only |
 
@@ -74,7 +74,9 @@ For any proposed acquisition, verify against the per-property floor (same govern
 ```
 DSCR = Year 1 NOI / Annual Debt Service ≥ 1.25x
 ```
-Test DSCR at the deal's refi-sizing basis: the LESSER of 65% LTV per-property and 1.25x DSCR (acquisition-underwriting Stage 1, the per-property governor). If DSCR falls below 1.25x on that basis, size the loan down until DSCR ≥1.25x, or model the deal all-cash; the deal is FLOOR-FLAGGED for Gabriel under Ruling 5, not dropped. The 40% figure in CORE PARAMETERS is the separate portfolio-aggregate LTV test (all-cash at acquisition, per acquisition-underwriting STAGE 2.3), never the basis for one deal's DSCR.
+Test DSCR at the deal's refi-sizing basis: the LESSER of 65% LTV per-property and 1.25x DSCR (acquisition-underwriting Stage 1, the per-property governor). If DSCR falls below 1.25x on that basis, size the loan down until DSCR ≥1.25x, or model the deal all-cash; the deal is FLOOR-FLAGGED for Gabriel under Ruling 5, not dropped, and a flagged deal that is pursued states its compensating factor. The 40% figure in CORE PARAMETERS is the separate portfolio-aggregate LTV test (all-cash at acquisition, per acquisition-underwriting STAGE 2.3), never the basis for one deal's DSCR.
+
+**Two bases, two questions (Gabriel in-turn 2026-11-05).** Multi-year projections (Modules 1, 3 and 4) carry debt at the 40% portfolio-aggregate LTV and report DSCR cushion on that modeled debt; that is what the projection actually borrows. The 65% LTV / 1.25x DSCR refi-sizing test above is the per-deal underwriting check for a specific acquisition, and a projection never sizes its debt to it.
 
 The per-deal acquisition governor (Hard Invariant 4) is DSCR floor 1.25x.
 The portfolio-wide blended DSCR ceiling (see CORE PARAMETERS) is a separate conservatism cap on projections, not a deal-level test — if a scenario's modeled blend would exceed 1.75x, treat the projection assumptions as too optimistic and dial them back.
@@ -96,7 +98,7 @@ For each scenario, project:
 - AUM at Years 5, 10, 20, 35
 - Time to reach $700M
 - Required annual acquisition SF
-- DSCR cushion at each deal's refi-sizing basis (the lesser of 65% LTV and 1.25x DSCR), and the portfolio's aggregate LTV against the 40% ceiling
+- DSCR cushion over the 1.25x floor on the scenario's own modeled debt (40% aggregate LTV), and the portfolio's aggregate LTV against the 40% ceiling. A specific deal's 65% / 1.25x refi-sizing test is the Module 2 DSCR Check, not a scenario output
 - Blended portfolio DSCR vs. the 1.75x ceiling — flag if a scenario's projected blend would exceed it (distinct from the 1.25x single-deal acquisition floor)
 
 ---
@@ -141,6 +143,6 @@ Save full model as `ORA_PortfolioGrowthModel_[YYYY-MM-DD].xlsx`
 
 ## Changelog
 
-- **v1.2 (2026-11-05, Gabriel in-turn under Hard Invariant 4):** The DSCR Check tested DSCR "at 40% LTV" and the scenario outputs reported "DSCR cushion at 40% LTV". 40% is the portfolio-aggregate governor; per-property debt is sized at the lesser of 65% LTV and 1.25x DSCR. This is the same defect `deal-comparison` v1.2 fixed with Gabriel's approval on 2026-08-21: testing at the lower aggregate LTV overstates DSCR. The DSCR Check, the scenario output and the LTV labels now use the per-property refi basis, and a deal that cannot carry debt at 1.25x is FLOOR-FLAGGED under Ruling 5, not dropped. The aggregate equity-capacity formula is unchanged. No governor value changed (DSCR 1.25x; 40% aggregate; 65% per-property).
+- **v1.2 (2026-11-05, Gabriel in-turn under Hard Invariant 4):** The DSCR Check tested DSCR "at 40% LTV" and the scenario outputs reported "DSCR cushion at 40% LTV". 40% is the portfolio-aggregate governor; per-property debt is sized at the lesser of 65% LTV and 1.25x DSCR. This is the same defect `deal-comparison` v1.2 fixed with Gabriel's approval on 2026-08-21: testing at the lower aggregate LTV overstates DSCR. The Module 2 DSCR Check and the LTV labels now use the per-property refi basis, and a deal that cannot carry debt at 1.25x is FLOOR-FLAGGED under Ruling 5, not dropped. The aggregate equity-capacity formula is unchanged. Same day, also Gabriel in-turn: projections (Modules 1, 3, 4) keep 40% aggregate leverage, so the Module 1 leverage line and the scenario DSCR cushion use that modeled debt, and the 65%/1.25x test is named as the per-deal check only. No governor value changed (DSCR 1.25x; 40% aggregate; 65% per-property).
 - **v1.1 (2026-11-03):** Acquisition Range row names the Amendment H portfolio path (2–5 buildings sold together, up to $15M) and the two floors Gabriel ratified in-turn 2026-11-03 ($1M sourcing filter, $500K screen floor). Text only: no model input, formula or governor changed.
 - **v1.0:** initial.
