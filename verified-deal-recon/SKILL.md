@@ -3,7 +3,7 @@ name: verified-deal-recon
 description: "Use whenever ONE named acquisition target — a street address, a property name, or a single offering memorandum — needs a real pursue/pass decision before underwriting: Oxford Realty Advisors' adversarially-verified SINGLE-TARGET PRE-SCREEN DEFAULT. Trigger on: pre-screen this, screen this property, is this worth underwriting, first look, recon this deal, verified deal recon, should we pursue, worth a look. NOT for batch-triaging a broker inbox and NOT for off-market owner lead-lists. Does NOT underwrite — hands off to acquisition-underwriting."
 ---
 
-# Verified Deal Recon — ORA single-target pre-screen (v1.3)
+# Verified Deal Recon — ORA single-target pre-screen (v1.4)
 
 Runs the `verified-deal-recon` workflow: one recon pass, three adversarial verifiers working independently, one synthesized brief. The verifiers do their own research and are instructed to refute the recon — that adversarial step is the whole point, and it is what separates this from the bare `deal-recon` agent (instant first-look only).
 
@@ -40,7 +40,7 @@ A `brief` object: verdict, one-line thesis, snapshot, verified rent and sale com
 
 1. **Hand off, do not underwrite.** A PURSUE or NEEDS_MORE goes to `acquisition-underwriting` (SCREEN or FULL). This skill deliberately computes no DSCR, LTV or IRR.
 2. **Ledger row is a DRAFT.** `ledgerRowDraft` is never written by the workflow and must never be appended on a provisional result. Append it to `memory/deal-decision-ledger.md` only after Gabriel ratifies the verdict in-turn, and stamp the real date if it reads `<STAMP-DATE>`. The 6-column schema is `Date | Deal | Verdict | one-line reason | buy-box rule validated/refined | FORT`; write `—` for FORT unless Stage 2.8 actually ran.
-3. **Dedupe before logging.** Check both the Notion Deal Sourcing Log (`9a6ae219`) and the Acquisition Pipeline Tracker (`bcfe4a03`) for an existing row on this parcel; update in place rather than creating a duplicate, and stamp `Last Activity` = today on any row you touch.
+3. **Dedupe before logging.** Check both the Notion Deal Sourcing Log (`9a6ae219`) and the Acquisition Pipeline Tracker (`bcfe4a03`) for an existing row on this parcel; update in place rather than creating a duplicate, and stamp `Last Activity` = today on any row you touch. **Never write `Verdict at First Sighting` or `Score at First Sighting` (v1.4)** — leave both blank on a row you create and exactly as found on a row you update. They are the sourcing scans' write-once original prediction, which the monthly back-test (`maintenance/funnel-backtest.py` in `~/.claude`) grades; a recon verdict changes `Verdict`, `Status` or `Go / No-Go`, never these. **A ratified PASS is recorded as `Go / No-Go` = `🔴 Pass` (and `Status` = `Passed` if the status is changed), never as `Status = Dead`**, which is reserved for a listing that is gone with no ORA decision; the back-test cannot tell an undecided `Dead` row from a withdrawn listing.
 4. **Recent-acquisition parity (v1.3).** The recon checklist pulls the last recorded sale price and date; if the seller acquired within 24 months, the brief states ask vs. seller basis (`acquisition-underwriting` Stage -1 item 10). A recorded sale inside 24 months is a comp, not a motivation signal.
 
 ## Confidentiality
@@ -58,5 +58,6 @@ If `.claude/agents/deal-recon.md` is later edited on the Code surface, re-inline
 
 ## Changelog
 
+- **v1.4 (2026-11-05):** rule 3 gains the write-once first-sighting never-write rule (`Verdict at First Sighting`, `Score at First Sighting`) and records a ratified PASS as `Go / No-Go` = 🔴 Pass, reserving `Status = Dead` for listings that are gone (Gabriel-approved, business-loops review F-11). No score, gate, floor or governor value changed.
 - **v1.3 (2026-10-27):** recon checklist item 5 also pulls the last recorded sale; seller acquired within 24 months → ask vs. seller basis in the brief (parity with `acquisition-underwriting` v4.37 Stage -1 item 10); item 6 also notes the construction type (tilt-up baseline vs PEMB/masonry/brick, per the Construction-Type Multiplier).
 - **v1.2 (2026-08-22):** cross-surface port — runs on Cowork and Code (detail under Port notes above).
