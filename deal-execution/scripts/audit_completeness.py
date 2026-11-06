@@ -183,13 +183,17 @@ _CONTEXT_FORMS = [re.compile(x, re.IGNORECASE) for x in (
     r"^_{2,},?\s+an?\s+_{2,}(?:\s+" + _ENTITY + r")?\.?$",
     r"^_{2,},?\s+an?\s+[A-Za-z][A-Za-z .-]{0,30}?\s+" + _ENTITY + r"\.?$",
 )]
-# A neighbouring line that marks a signature / notary block.
+# Neighbouring lines that mark a SIGNATURE block (for party labels, entity lines and
+# a bare rule in a multi-cell table) or a NOTARY block (for a bare venue line). A
+# notary block is not a signature block: "Tenant: ____" next to "Notary Public"
+# still blocks.
 _SIG_CUE_RE = re.compile(
     r"^(?:by|name|title|its|signature|authorized\s+signatory|printed\s+name)\b\s*:?"
-    r"|^_{2,}\s*(?:\(\s*seal\s*\))?$|\(\s*(?:notary\s+)?seal\s*\)|notary\s+public"
-    r"|acknowledged\s+before\s+me|personally\s+(?:appeared|came)|sworn\s+to"
-    r"|^\)?\s*ss\b|^(?:state|commonwealth|county|parish)\s+of\b[^,]{0,40}(?:\)|\bss\b)",
-    re.IGNORECASE)
+    r"|^_{2,}\s*(?:\(\s*seal\s*\))?$|\(\s*seal\s*\)", re.IGNORECASE)
+_NOTARY_CUE_RE = re.compile(
+    r"notary\s+public|acknowledged\s+before\s+me|personally\s+(?:appeared|came)"
+    r"|sworn\s+to|^\)?\s*ss\b|^(?:state|commonwealth|county|parish)\s+of\b[^,]{0,40}"
+    r"(?:\)|\bss\b)|\(\s*notary\s+seal\s*\)", re.IGNORECASE)
 
 
 def _norm_label(x: str) -> str:
@@ -197,7 +201,8 @@ def _norm_label(x: str) -> str:
 
 
 def _classify_line(line: str, in_table: bool) -> str:
-    """'exempt', 'context' (exempt only inside a signature block) or 'body'."""
+    """'exempt'; 'context' (exempt only next to a signature cue); 'venue' (exempt
+    only next to a notary cue); or 'body'."""
     t = line.replace(" ", " ").strip()
     if len(t) > 400 or "$" in t:
         return "body"
@@ -208,7 +213,7 @@ def _classify_line(line: str, in_table: bool) -> str:
     if _VENUE_RE.match(t) or _MD_VENUE_RE.match(t):
         return "exempt"
     if _BARE_VENUE_RE.match(t):
-        return "context"
+        return "venue"                   # exempt only next to a notary cue
     m = _LEAD_LABEL_RE.match(t)
     lead = _norm_label(m.group(1)) if m else None
     sig_lead = lead in _CORE_LABELS or lead in _CONTEXT_LABELS
@@ -540,16 +545,16 @@ def _exhibit_stream(blocks: list, start: int, end: int) -> list:
     return out
 
 
-def _in_signature_block(stream: list, k: int, by_cell: dict, para_pos: dict) -> bool:
-    """Is line k next to a signature / notary cue (same table cell, else within
-    three non-empty paragraph lines)?"""
+def _has_cue(stream: list, k: int, by_cell: dict, para_pos: dict, cue) -> bool:
+    """Is line k next to a cue line (same table cell, else within three non-empty
+    paragraph lines)?"""
     i, cell, _multi, _line = stream[k]
     if cell is not None:
-        return any(_SIG_CUE_RE.search(stream[x][3]) for x in by_cell[cell] if x != k)
+        return any(cue.search(stream[x][3]) for x in by_cell[cell] if x != k)
     pos = para_pos[k]
     plines = para_pos["order"]
     for q in plines[max(0, pos - 3):pos] + plines[pos + 1:pos + 4]:
-        if _SIG_CUE_RE.search(stream[q][3]):
+        if cue.search(stream[q][3]):
             return True
     return False
 
@@ -579,8 +584,9 @@ def _scan_exhibit(stream: list, form_end: int, is_form: bool):
             form.setdefault(i, entry)
             continue
         verdict = _classify_line(ln, multi)
-        if verdict == "context":
-            verdict = "exempt" if _in_signature_block(stream, k, by_cell, para_pos) else "body"
+        if verdict in ("context", "venue"):
+            cue = _SIG_CUE_RE if verdict == "context" else _NOTARY_CUE_RE
+            verdict = "exempt" if _has_cue(stream, k, by_cell, para_pos, cue) else "body"
         if verdict == "body":
             body.setdefault(i, entry)
         else:
