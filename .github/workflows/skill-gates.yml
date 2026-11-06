@@ -7,7 +7,12 @@ name: skill gates
 #   skill-gates  validate_skill_frontmatter over EVERY skill dir (the hook only checks
 #                staged dirs), --check-tree-hygiene, the SHARED_ROOT_DEPS declaration check,
 #                and the target-markets.json version-bump rule against the PR base
-#                (fork point with origin/main; on main, the pre-push tip).
+#                (fork point with origin/main; on main, the pre-push tip), plus the
+#                suite-continuity rule against the same base: a skill test suite present
+#                no longer be discovered unless a file added under _archive/ (any depth) has
+#                a path ending <skill>/<rest> or <skill>_retired-DATE/<rest> (path-only), or any
+#                commit in the range has a `Suite-Removed: <path>` line. Recommended practice
+#                (git mv to _archive/<skill>_retired-DATE + trailer on the removing commit) is stricter.
 #   skill-tests  every gated skill test suite under tools/run_suite.sh's zero-fail /
 #                zero-skip / zero-empty / no-bare-test rules, plus the packaged-layout check
 #                that stages tools/ora_doc_qc.py through package_skills.package().
@@ -64,6 +69,11 @@ jobs:
         env:
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
         run: python tools/skill_ci_gates.py target-markets --base auto
+
+      - name: Skill suites present vs base (no silent drop-out)
+        env:
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+        run: python tools/skill_ci_gates.py suite-continuity --base auto
 
   skill-tests:
     runs-on: ${{ vars.CI_RUNNER == 'self' && fromJSON('["self-hosted","windows","ora-ci"]') || 'ubuntu-latest' }}
