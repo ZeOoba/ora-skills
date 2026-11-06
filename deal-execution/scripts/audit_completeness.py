@@ -102,17 +102,78 @@ BLANK_PATTERNS = [
     (re.compile(r"\[\s*\]"), "empty bracket"),
 ]
 # Inside an exhibit that follows the signature page, a blank is a BODY blank
-# (blocking) unless its paragraph is a genuine signature or notary line (Gabriel's
-# ruling, 2026-11-06). Deliberately narrow: a label anchored at the start of the
-# paragraph (By:/Name:/Title:/Its:/Date:/Dated:/Signature:/Printed Name:/Witness:),
-# a bare signature rule, or notary-acknowledgement wording -- and never a line that
-# carries "$". "Closing Date: ____" or "$____" is not a signature line.
-SIGNATURE_LINE_RE = re.compile(
-    r"^(?:by|name|title|its|date|dated|signature|print(?:ed)?\s+name|witness)\s*:"
-    r"|^_{3,}\s*$"
-    r"|notary\s+public|acknowledged\s+before\s+me|sworn\s+to\s+(?:and|&)\s+subscribed"
-    r"|subscribed\s+and\s+sworn|my\s+commission\s+expires"
-    r"|^(?:state|commonwealth)\s+of\b|^(?:county|parish)\s+of\b",
+# (blocking) unless its LINE is a genuine signature, notary or recording-form line
+# (Gabriel's ruling, 2026-11-06). Paragraphs are split on w:br / w:cr first. The
+# test is deliberately narrow (see _is_signature_line): a line carrying "$" is never
+# exempt; every "Label:" on the line must be a signature/notary/recording label;
+# any parenthetical other than a seal marker disqualifies the line; a bare signature
+# rule is exempt as a paragraph but not inside a table cell (a blank rent-roll cell);
+# venue lines must have the venue shape ("STATE OF OHIO ) ss:"), so a legal
+# description that starts "State of Ohio, County of ..., Parcel No. ____" blocks;
+# notary wording counts only in its anchored sentence or title forms.
+_SEAL_RE = re.compile(r"\(\s*(?:seal|l\.?\s?s\.?)\s*\)", re.IGNORECASE)
+_LABEL_RE = re.compile(r"([A-Za-z][A-Za-z.'/ ]{0,40}?)\s*:")
+_SIGNATURE_LABELS = frozenset("""
+by|name|title|its|date|dated|signature|signed|print|print name|printed name|witness|
+witnesses|attest|authorized signatory|authorized signature|name and title|name/title|
+date signed|grantor|grantee|seller|purchaser|buyer|landlord|tenant|assignor|assignee|
+notary|notary public|my commission expires|commission expires|my commission expiration|
+commission expiration|my term expires|my appointment expires|my county of residence|
+county of residence|commission no.|commission no|commission number|
+printed name of notary|notary printed name|notary name|this instrument prepared by|
+prepared by|send tax statements to|tax statements to|after recording return to|
+return to|ss|ss.""".replace("\n", "").split("|"))
+_VENUE_RE = re.compile(
+    r"^(?:(?:state|commonwealth|county|parish)\s+of\s+[^,:()]{0,30}?\s*\)?\s*"
+    r"(?:ss\.?:?\s*)?)+$", re.IGNORECASE)
+_ENTITY = (r"(?:limited\s+liability\s+company|corporation|limited\s+partnership|"
+           r"general\s+partnership|partnership|trust|company|llc|l\.l\.c\.)")
+_SIGNATURE_FORMS = [re.compile(x, re.IGNORECASE) for x in (
+    r"^(?:by|its|witness|signature|print|attest)\s+_{2,}\s*$",        # "By ____"
+    r"^notary\s+public\s*_{2,}\s*$", r"^_{2,}\s*,?\s*notary\s+public\.?\s*$",
+    r"^(?:the\s+foregoing\s+[a-z ]{0,40}?\s+was\s+)?acknowledged\s+before\s+me\b",
+    r"^(?:subscribed\s+and\s+)?sworn\s+to\s+(?:and\s+subscribed\s+)?before\s+me\b",
+    r"^before\s+me,?\s.*\bpersonally\s+appeared\b",
+    r"^on\s+[^.]{0,80}?\bbefore\s+me\b.*\bpersonally\s+appeared\b",
+    r"^personally\s+appeared\s+before\s+me\b",
+    r"^_{2,},?\s+an?\s+_{2,}(?:\s+" + _ENTITY + r")?\.?\s*$",       # entity lines
+    r"^_{2,},?\s+an?\s+[A-Za-z][A-Za-z .-]{0,30}?\s+" + _ENTITY + r"\.?\s*$",
+    r"^(?:executed|dated|signed)(?:\s+and\s+delivered)?(?:\s+(?:as\s+of|this|on))?"
+    r"(?:\s+the)?\s+_{2,}\s+day\s+of\s+_{2,}(?:\s*,?\s*(?:(?:19|20)?_{2,}|\d{4}))?\.?\s*$",
+    r"^dated\s+(?:as\s+of\s+)?_{2,}\s*,?\s*(?:(?:19|20)?_{2,}|\d{4})?\.?\s*$",
+    r"^receipt\s+(?:is\s+hereby\s+)?acknowledged\s+this\s+_{2,}\s+day\s+of\s+_{2,}"
+    r"(?:\s*,?\s*(?:19|20)?_{2,})?\.?\s*$",
+)]
+
+
+def _is_signature_line(line: str, in_table: bool) -> bool:
+    t = line.strip()
+    if "$" in t:
+        return False
+    seal = bool(_SEAL_RE.search(t))
+    t = re.sub(r"\s+", " ", _SEAL_RE.sub(" ", t)).strip()
+    if re.fullmatch(r"_{2,}", t):
+        return seal or not in_table   # bare rule: not a blank rent-roll cell
+    if _VENUE_RE.match(t):
+        return True
+    if "(" in t or ")" in t:
+        return False                  # e.g. 'Name: ____ (Purchaser)', '(the "Date")'
+    labels = [re.sub(r"\s+", " ", m.group(1)).strip().lower()
+              for m in _LABEL_RE.finditer(t)]
+    if any(lb not in _SIGNATURE_LABELS for lb in labels):
+        return False                  # e.g. 'By: ____ Purchase Price: ____'
+    if labels and _LABEL_RE.match(t):
+        return True                   # line starts with a signature label
+    return any(rx.match(t) for rx in _SIGNATURE_FORMS)
+
+
+# Gabriel's ruling, 2026-11-06: an exhibit captioned "Form of ..." (form of deed,
+# assignment, estoppel ...) is a template completed at closing; its blanks never
+# block. The caption is one of the first two blocks after the heading (or a later
+# paragraph of a heading table), starts with "Form of" (optionally after
+# "Exhibit X -" or "("), and carries no blank itself.
+FORM_CAPTION_RE = re.compile(
+    r"^\(?\s*(?:exhibit\s+[A-Z](?:-\d+)?\s*[-–—:.]?\s*)?form\s+of\b",
     re.IGNORECASE)
 
 KNOWLEDGE_DEF_RE = re.compile(
@@ -140,6 +201,40 @@ def _text_of(el: ET.Element, include_deleted: bool = False) -> str:
         elif n.tag == W + "tab":
             out.append(" ")
     return "".join(out)
+
+
+def _is_placeholder(n: ET.Element) -> bool:
+    return n.tag == W + "sdt" and n.find(W + "sdtPr/" + W + "showingPlcHdr") is not None
+
+
+def _content_text(el: ET.Element) -> str:
+    """Visible text for exhibit POPULATION of a table: deleted text and the prompt
+    text of an empty content control ("Click or tap here ...") do not count."""
+    out = []
+    stack = [el]
+    while stack:
+        n = stack.pop()
+        if _is_placeholder(n):
+            continue
+        if n.tag == W + "t":
+            out.append(n.text or "")
+        elif n.tag == W + "tab":
+            out.append(" ")
+        stack.extend(reversed(list(n)))
+    return "".join(out)
+
+
+def _para_lines(el: ET.Element) -> list:
+    """Visible text of a paragraph split into lines at soft breaks (w:br / w:cr)."""
+    out = []
+    for n in el.iter():
+        if n.tag == W + "t":
+            out.append(n.text or "")
+        elif n.tag == W + "tab":
+            out.append(" ")
+        elif n.tag in (W + "br", W + "cr"):
+            out.append("\n")
+    return "".join(out).split("\n")
 
 
 def _count_media(el: ET.Element) -> int:
@@ -258,26 +353,50 @@ def _first_blank(t: str):
     return None
 
 
-def _exhibit_blank(i: int, kind: str, el: ET.Element):
-    """A blank in an exhibit block that follows the signature page, checked one
-    paragraph at a time (a table is checked cell paragraph by cell paragraph).
-    Returns (entry, is_body): body if any blank sits on a paragraph that is not a
-    signature/notary line, signature if every blank does, (None, False) if none."""
+def _exhibit_blank(i: int, kind: str, el: ET.Element, skip_heading: bool = False):
+    """A blank in a block inside a post-signature exhibit, checked LINE by line
+    (paragraphs split at soft breaks; a table is checked cell paragraph by cell
+    paragraph). Returns (entry, is_body): body if any blank sits on a line that is
+    not a signature/notary/recording line, signature if every blank does, (None,
+    False) if there is none. skip_heading skips the EXHIBIT X paragraph of a heading
+    table."""
     paras = [el] if kind == "p" else (list(el.iter(W + "p")) or [el])
+    in_table = kind == "tbl"
     sig_hit = None
     for para in paras:
-        pt = _text_of(para).strip()
-        if not pt or DMS_STAMP_RE.match(pt):
+        if skip_heading and EXHIBIT_HEAD_RE.match(_text_of(para).strip()):
             continue
-        hit = _first_blank(pt)
-        if not hit:
-            continue
-        entry = {"block": i, "kind": hit[0], "context": hit[1]}
-        # A signature or notary line never carries a dollar amount.
-        if "$" in pt or not SIGNATURE_LINE_RE.search(pt):
-            return entry, True
-        sig_hit = sig_hit or entry
+        for line in _para_lines(para):
+            lt = line.strip()
+            if not lt or DMS_STAMP_RE.match(lt):
+                continue
+            hit = _first_blank(lt)
+            if not hit:
+                continue
+            entry = {"block": i, "kind": hit[0], "context": hit[1]}
+            if not _is_signature_line(lt, in_table):
+                return entry, True
+            sig_hit = sig_hit or entry
     return sig_hit, False
+
+
+def _form_caption(blocks: list, texts: list, start: int, end: int) -> bool:
+    """True if the exhibit at heading block `start` is captioned "Form of ..."."""
+    cands = []
+    kind, el = blocks[start]
+    if kind == "tbl":
+        after = False
+        for para in el.iter(W + "p"):
+            pt = _text_of(para).strip()
+            if after and pt:
+                cands.append(pt)
+            if EXHIBIT_HEAD_RE.match(pt):
+                after = True
+        cands = cands[:2]
+    for j in range(start + 1, min(start + 3, end)):
+        cands.append(texts[j].strip())
+    return any(c and len(c) <= 150 and FORM_CAPTION_RE.match(c) and not _first_blank(c)
+               for c in cands)
 
 
 def audit(path: Path) -> dict:
@@ -317,7 +436,11 @@ def audit(path: Path) -> dict:
             media += _count_media(el)
             if kind == "tbl":
                 tables += 1
-                chars += len(t)
+                # Population counts visible text only: a DMS stamp or an empty
+                # content-control prompt is not content (2026-11-06 ruling, LOW).
+                tt = _content_text(el).strip()
+                if not DMS_STAMP_RE.match(tt):
+                    chars += len(tt)
                 # A header row with no non-blank row after it (a skeleton rent roll
                 # or schedule) is populated but says nothing: advisory THIN only.
                 if _table_has_data(el):
@@ -338,6 +461,7 @@ def audit(path: Path) -> dict:
             "letter": letter, "caption": caption, "block": start,
             "text_chars": chars, "images": media, "tables": tables,
             "data_tables": data_tables,
+            "form": _form_caption(blocks, texts, start, end),
             "populated": populated,
             "thin": populated and ((chars < 60 and not tables)
                                    or (tables and not data_tables
@@ -385,20 +509,34 @@ def audit(path: Path) -> dict:
     likely_citations.sort(key=lambda x: [int(p) for p in x.split(".")])
 
     # ---- 3. unfilled blanks ----------------------------------------------
-    body_blanks, sig_blanks = [], []
-    in_exhibit = [False] * limit
+    body_blanks, sig_blanks, form_blanks = [], [], []
+    # Exhibit ranges after the signature page, built ONLY from headings at or after
+    # IN WITNESS WHEREOF: an exhibit list or an exhibit placed before it must not
+    # swallow the signature page. The heading block itself is included (a heading
+    # table can hold the exhibit's rows).
+    region = [None] * limit
     for n, (start, _letter) in enumerate(heads):
+        if start < sig_at:
+            continue
         end = heads[n + 1][0] if n + 1 < len(heads) else limit
-        for j in range(start + 1, end):
-            in_exhibit[j] = True
+        for j in range(start, end):
+            region[j] = n
     for i in range(limit):
         t = texts[i]
         if not t.strip() or DMS_STAMP_RE.match(t.strip()):
             continue
-        if i >= sig_at and in_exhibit[i]:
-            entry, is_body = _exhibit_blank(i, blocks[i][0], blocks[i][1])
+        n = region[i]
+        if n is not None:
+            kind, el = blocks[i]
+            head = i == heads[n][0]
+            if head and kind != "tbl":
+                continue
+            entry, is_body = _exhibit_blank(i, kind, el, skip_heading=head)
             if entry:
-                (body_blanks if is_body else sig_blanks).append(entry)
+                if exhibits[n]["form"]:
+                    form_blanks.append(entry)   # template completed at closing
+                else:
+                    (body_blanks if is_body else sig_blanks).append(entry)
             continue
         for rx, label in BLANK_PATTERNS:
             m = rx.search(t)
@@ -440,6 +578,9 @@ def audit(path: Path) -> dict:
         "likely_statutory_citations": likely_citations,
         "body_blanks": body_blanks,
         "signature_blanks": sig_blanks,
+        "form_exhibits": [e["letter"] for e in exhibits
+                          if e["form"] and e["block"] >= sig_at],
+        "form_blanks": form_blanks,
         "knowledge_party": knowledge,
         "blocking": blocking,
     }
@@ -511,6 +652,10 @@ def render(r: dict) -> str:
     for b in r["body_blanks"]:
         add("   !! [block {}] {}".format(b["block"], b["kind"]))
         add("      …{}…".format(b["context"]))
+    if r.get("form_blanks"):
+        add("   ({} blank(s) in form exhibit(s) {} -- templates completed at closing,"
+            .format(len(r["form_blanks"]), ", ".join(r["form_exhibits"])))
+        add("    not blocking)")
     if r["signature_blanks"]:
         add("   ({} blank(s) in the signature block — expected, but must be "
             "completed".format(len(r["signature_blanks"])))
