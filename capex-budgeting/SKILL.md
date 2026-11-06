@@ -4,13 +4,13 @@ description: "Use when the user mentions: capex budget, capital plan (building-s
 license: ORA Internal
 ---
 
-# Capex Budgeting (v1.1)
+# Capex Budgeting (v1.2)
 
 Build multi-year capital plans and reserve studies that translate physical asset condition into financial cash-flow obligations.
 
 ## Scope
 
-Covers capital plans of 3, 5, 10, and 30-year horizons across the portfolio. Outputs feed annual-cycle, ora-cash-position-snapshot reserve checks, and lender reserve compliance tests.
+Covers capital plans of 3, 5, 10, and 30-year horizons across the portfolio. Outputs feed annual-cycle, the capex-reserve check in ora-am-brief Block D (Cash Position Snapshot, which absorbed ora-cash-position-snapshot), and lender reserve compliance tests.
 
 ## Triggers
 
@@ -36,7 +36,7 @@ Annual budget kickoff, refi reserve negotiation, property acquisition (initial 1
 6. Roll up to consolidated capex budget for fund.
 
 ### Reserve Study (10-year)
-1. Build asset register: roof age, HVAC tonnage and age, paving, parking lot, electrical, plumbing, fire/life safety, building envelope.
+1. Read the asset register from `capital-asset-register` (its Building Asset Register, or its interim `2026-09-17_AssetRegister-VendorPrequal_Register_v01.xlsx` while that Notion database is not created): roof age, HVAC tonnage and age, paving, parking lot, electrical, plumbing, fire/life safety, building envelope. Do not build a parallel register here.
 2. Apply expected useful life by system (per RSMeans / industry).
 3. Compute annual sinking fund contribution per property.
 4. Surface concentration: any year where capex exceeds 1.5× baseline.
@@ -68,9 +68,11 @@ Annual budget kickoff, refi reserve negotiation, property acquisition (initial 1
 ## Dependencies
 
 - **(no successor):** `maintenance-analytics` retired 2026-08-05 — failure horizons need a manual source until one exists
+- capital-asset-register skill (Building Asset Register, the reserve study's asset inventory)
 - vendor-management skill (vendor cost benchmarks)
 - xlsx skill (capex schedule models)
 - docx skill (reserve study deliverables)
 
 ## Changelog
+- **v1.2 (2026-11-05):** Reserve Study step 1 built its own asset register, duplicating `capital-asset-register`. It now reads that skill's Building Asset Register, or its interim xlsx while the Notion database is not created. The Scope line pointed at `ora-cash-position-snapshot`, which was folded into ora-am-brief Block D; it now points at that block's capex-reserve check. Pointers only, because a merge of the two skills is pending separately. No formula or reserve-study method changed. No scored or governor constant changed.
 - **v1.1 (2026-08-12):** tombstoned the three dangling `maintenance-analytics` references left by that skill's 2026-08-05 retirement — predictive failure horizons are now an explicit manual source; no formula or reserve-study method changed.
