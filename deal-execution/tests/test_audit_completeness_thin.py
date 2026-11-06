@@ -22,6 +22,7 @@ import importlib.util
 import io
 import json
 import tempfile
+import time
 import unittest
 import zipfile
 from pathlib import Path
@@ -294,6 +295,58 @@ class TestMultiRowHeader(_Base):
         r = self.audit(exhibit_blocks(TBL([["Rent Roll", "", "", ""], HEADER])))
         self.assertEqual(r["thin_exhibits"], [])
         self.assert_gate_unchanged_populated(r)
+
+
+class TestReviewRound2(_Base):
+    """Independent review of 230f16cf: C6 crash on a non-ASCII-digit gridSpan, C4
+    surviving prose_chars->chars mutant, C8 exponential nesting cost."""
+
+    def test_superscript_digit_grid_span_does_not_crash(self):
+        # C6: "²".isdigit() is True but int("²") raises ValueError -- an uncaught
+        # crash exits 1 and reads as BLOCKING. A malformed span must count as 1.
+        title = ('<w:tr><w:tc><w:tcPr><w:gridSpan w:val="²"/></w:tcPr>{}</w:tc></w:tr>'
+                 .format(P("Rent Roll")))
+        p = self.doc(exhibit_blocks("<w:tbl>{}{}</w:tbl>".format(
+            title, ROW(["100", "Tenant One", "1,000", "2030-01-31"]))))
+        rc, _, err = self.run_main(p)
+        self.assertEqual(rc, 0)
+        self.assertEqual(err, "")
+        r = ac.audit(p)
+        self.assertEqual(self.ex_a(r)["data_tables"], 1)
+        self.assertFalse(r["blocking"])
+
+    def test_other_non_ascii_digit_spans_do_not_crash(self):
+        for val in ("¹", "₂", "①", "", "-1", "0", " 2 ", "x"):
+            with self.subTest(val=val):
+                title = ('<w:tr><w:tc><w:tcPr><w:gridSpan w:val="{}"/></w:tcPr>{}</w:tc>'
+                         '</w:tr>').format(escape(val, {'"': "&quot;"}), P("Rent Roll"))
+                p = self.doc(exhibit_blocks("<w:tbl>{}{}</w:tbl>".format(title,
+                                                                         ROW(HEADER))))
+                self.assertEqual(self.run_main(p)[0], 0)
+
+    def test_long_header_skeleton_table_is_thin(self):
+        # C4: the table's own text counts toward `chars`; THIN for a skeleton table
+        # must key off prose_chars, so a 60+-char header row alone is still THIN.
+        long_header = ["Tenant Legal Name", "Suite", "Rentable SF", "Lease Commencement",
+                       "Lease Expiration", "Monthly Base Rent", "Security Deposit"]
+        self.assertGreaterEqual(len("".join(long_header)), 60)
+        r = self.audit(exhibit_blocks(TBL([long_header])))
+        e = self.ex_a(r)
+        self.assertGreaterEqual(e["text_chars"], 60)
+        self.assertEqual(r["thin_exhibits"], ["A"])
+        self.assert_gate_unchanged_populated(r)
+
+    def test_deeply_nested_dataless_tables_are_fast(self):
+        # C8: data detection must not be exponential in nesting depth.
+        inner = P("")
+        for _ in range(22):
+            inner = "<w:tbl>{}</w:tbl>".format(ROW([("xml", P("hdr") + inner)]))
+        p = self.doc(exhibit_blocks(inner))
+        t0 = time.perf_counter()
+        r = ac.audit(p)
+        self.assertLess(time.perf_counter() - t0, 1.0)
+        self.assertEqual(r["thin_exhibits"], ["A"])
+        self.assertFalse(r["blocking"])
 
 
 class TestBlockingUnchanged(_Base):
