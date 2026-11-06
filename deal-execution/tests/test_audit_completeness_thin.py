@@ -391,8 +391,11 @@ class TestReviewRound2(_Base):
         t0 = time.perf_counter()
         r = ac.audit(p)
         self.assertLess(time.perf_counter() - t0, 1.0)
-        self.assertEqual(r["thin_exhibits"], ["A"])
-        self.assertFalse(r["blocking"])
+        # Every cell is blank, so under Gabriel's 2026-11-06 ruling this exhibit is an
+        # empty grid: EMPTY and blocking (no longer advisory THIN).
+        self.assertEqual(r["empty_exhibits"], ["A"])
+        self.assertEqual(r["thin_exhibits"], [])
+        self.assertTrue(r["blocking"])
 
 
 LEGAL = ("Situate in Lorem County, being Lot 12 of Example Industrial Park as recorded "

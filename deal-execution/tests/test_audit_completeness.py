@@ -280,25 +280,47 @@ class TestExhibitPopulation(_Base):
         self.assertEqual(r["thin_exhibits"], ["A"])
         self.assertFalse(r["blocking"])
 
-    def test_empty_table_grid_exhibit_is_populated_today(self):
-        # KNOWN DEFECT D1 (needs Gabriel's doctrine call; not fixed): an exhibit whose
-        # only content is an empty table grid -- zero rows, or rows whose cells are
-        # all blank -- counts as populated because populated includes `tables`, so
-        # it is never EMPTY and the gate exits 0. `thin` is deliberately not asserted
-        # here (A-2 changes it for the all-blank-cells grid).
+    def test_empty_table_grid_exhibit_is_empty_and_blocks(self):
+        # Gabriel's 2026-11-06 ruling (was KNOWN DEFECT D1): an exhibit whose only
+        # content is an empty table grid -- zero rows, or every cell blank -- is EMPTY
+        # and blocks the send (rc 1).
         for label, grid in (("zero rows", "<w:tbl><w:tblPr/><w:tblGrid/></w:tbl>"),
-                            ("all cells blank", TBL([["", ""], ["", ""]]))):
+                            ("all cells blank", TBL([["", ""], ["", ""]])),
+                            ("struck-only cells", "<w:tbl><w:tr><w:tc>{}</w:tc></w:tr></w:tbl>"
+                             .format(PR(("del", "Tenant One"))))):
             with self.subTest(grid=label):
                 p = self.doc(BODY_CLEAN + SIG + [P("EXHIBIT A"), P("(Rent Roll)"),
                                                  grid])
                 r = ac.audit(p)
                 e = self.exhibit(r, "A")
                 self.assertEqual(e["text_chars"], 0)
+                self.assertEqual(e["tables"], 1)
+                self.assertFalse(e["populated"])
+                self.assertFalse(e["thin"])
+                self.assertEqual(r["empty_exhibits"], ["A"])
+                self.assertTrue(r["blocking"])
+                rc, _, _ = self.run_main(p)
+                self.assertEqual(rc, 1)
+
+    def test_table_with_text_or_image_is_still_populated(self):
+        # The ruling covers empty grids only: any visible text or an image in the
+        # table keeps the exhibit populated (a header-only table stays advisory THIN).
+        img = "<w:p><w:r><w:drawing><a:graphic><a:graphicData><a:blip r:embed=\"rId9\"/>" \
+              "</a:graphicData></a:graphic></w:drawing></w:r></w:p>"
+        cases = {
+            "header only": (TBL([["Suite", "Tenant", "Rent"], ["", "", ""]]), True),
+            "image in a cell": ("<w:tbl><w:tr><w:tc>{}</w:tc></w:tr></w:tbl>".format(img),
+                                True),
+            "populated grid": (TBL([["Suite", "Tenant"], ["100", "Tenant One"]]), False),
+        }
+        for label, (grid, thin) in cases.items():
+            with self.subTest(case=label):
+                r = self.audit(BODY_CLEAN + SIG + [P("EXHIBIT A"), P("(Rent Roll)"), grid])
+                e = self.exhibit(r, "A")
                 self.assertTrue(e["populated"])
+                self.assertEqual(e["thin"], thin)
                 self.assertEqual(r["empty_exhibits"], [])
                 self.assertFalse(r["blocking"])
-                rc, _, _ = self.run_main(p)
-                self.assertEqual(rc, 0)
 
     def test_heading_inside_table_is_detected(self):
         blocks = BODY_CLEAN + SIG + [TBL([["EXHIBIT A"]]), P(LOREM)]
@@ -413,21 +435,61 @@ class TestBlanks(_Base):
         self.assertEqual(len(r["body_blanks"]), 1)
         self.assertTrue(r["blocking"])
 
-    def test_blank_inside_exhibit_after_signature_is_not_blocking(self):
-        # KNOWN DEFECT (false clean): every block from the signature start onward is
-        # treated as signature territory, and exhibits normally follow the signature
-        # page. An open $____ inside an exhibit is therefore reported only as a
-        # signature blank and the gate exits 0. Pinned here; flip this assertion only
-        # together with a reviewed change to the gate.
+    def test_blank_inside_exhibit_after_signature_blocks(self):
+        # Gabriel's 2026-11-06 ruling (was KNOWN DEFECT, false clean): an open blank
+        # inside an exhibit that follows IN WITNESS WHEREOF is a body blank and
+        # blocks. Only the signature page itself keeps the signature exemption.
         blocks = BODY_CLEAN + SIG + [P("EXHIBIT A"), P("(Legal Description)"), P(LOREM),
                                      P("Allocated value: $__________")]
         p = self.doc(blocks)
         r = ac.audit(p)
-        self.assertEqual(r["body_blanks"], [])
-        self.assertEqual(len(r["signature_blanks"]), 3)
-        self.assertFalse(r["blocking"])
+        self.assertEqual(len(r["body_blanks"]), 1)
+        self.assertEqual(r["body_blanks"][0]["block"], len(blocks) - 1)
+        self.assertEqual(len(r["signature_blanks"]), 2)
+        self.assertTrue(r["blocking"])
         rc, _, _ = self.run_main(p)
-        self.assertEqual(rc, 0)
+        self.assertEqual(rc, 1)
+
+    def test_other_exhibit_blank_kinds_block(self):
+        cases = {
+            "bracket placeholder": P("Commencement Date: [TBD]"),
+            "labelled date that is not a signature date": P("Closing Date: ________"),
+            "blank in a table cell": TBL([["Suite", "Rent"], ["100", "$______"]]),
+            "signature cell next to an open value": TBL([["By: ________", "$______"]]),
+        }
+        for label, blk in cases.items():
+            with self.subTest(case=label):
+                r = self.audit(BODY_CLEAN + SIG + [P("EXHIBIT A"), P("(Schedule)"),
+                                                   P(LOREM), blk])
+                self.assertEqual(len(r["body_blanks"]), 1)
+                self.assertTrue(r["blocking"])
+
+    def test_signature_and_notary_lines_inside_exhibits_do_not_block(self):
+        # The exemption is narrow: a form signature block or a notary acknowledgement
+        # inside an exhibit (e.g. a form of deed) stays a signature blank.
+        form = [
+            P("SELLER: Lorem Holdings LLC"),
+            P("By: ______________________"),
+            P("Name: ______________________"),
+            P("Title: ______________________"),
+            P("Date: ______________________"),
+            P("______________________"),
+            P("STATE OF ______________"),
+            P("COUNTY OF ______________"),
+            P("The foregoing instrument was acknowledged before me this ____ day of "
+              "__________, 20__, by ______________."),
+            P("______________________ Notary Public"),
+            P("My commission expires: __________"),
+        ]
+        sig_table = TBL([["By: ____________", "By: ____________"],
+                         ["Name: __________", "Name: __________"]])
+        p = self.doc(BODY_CLEAN + SIG + [P("EXHIBIT A"), P("(Form of Deed)"), P(LOREM)]
+                     + form + [sig_table])
+        r = ac.audit(p)
+        self.assertEqual(r["body_blanks"], [])
+        self.assertEqual(len(r["signature_blanks"]), 2 + len(form) - 1 + 1)
+        self.assertFalse(r["blocking"])
+        self.assertEqual(self.run_main(p)[0], 0)
 
     def test_unfilled_knowledge_party_blocks(self):
         body = BODY_CLEAN[:3] + [
