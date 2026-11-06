@@ -22,6 +22,9 @@ Four checks, all mechanical:
                            every section cross-reference resolves.
   3. UNFILLED BLANKS     — placeholder runs, [TBD], and open definitions, split into
                            body blanks (defects) and signature-block blanks (expected).
+                           Inside an exhibit that follows the signature page only
+                           genuine signature / notary lines are signature blanks
+                           (Gabriel's ruling, 2026-11-06).
   4. KNOWLEDGE PARTY     — the definition that silently voids or unbounds every
                            knowledge-qualified representation when left blank.
 
@@ -98,6 +101,20 @@ BLANK_PATTERNS = [
     (re.compile(r"\$\s*_{2,}"), "open dollar amount"),
     (re.compile(r"\[\s*\]"), "empty bracket"),
 ]
+# Inside an exhibit that follows the signature page, a blank is a BODY blank
+# (blocking) unless its paragraph is a genuine signature or notary line (Gabriel's
+# ruling, 2026-11-06). Deliberately narrow: a label anchored at the start of the
+# paragraph (By:/Name:/Title:/Its:/Date:/Dated:/Signature:/Printed Name:/Witness:),
+# a bare signature rule, or notary-acknowledgement wording -- and never a line that
+# carries "$". "Closing Date: ____" or "$____" is not a signature line.
+SIGNATURE_LINE_RE = re.compile(
+    r"^(?:by|name|title|its|date|dated|signature|print(?:ed)?\s+name|witness)\s*:"
+    r"|^_{3,}\s*$"
+    r"|notary\s+public|acknowledged\s+before\s+me|sworn\s+to\s+(?:and|&)\s+subscribed"
+    r"|subscribed\s+and\s+sworn|my\s+commission\s+expires"
+    r"|^(?:state|commonwealth)\s+of\b|^(?:county|parish)\s+of\b",
+    re.IGNORECASE)
+
 KNOWLEDGE_DEF_RE = re.compile(
     r"(?:to\s+(?:the\s+)?(?:Seller|Purchaser|Buyer)(?:'s|’s)?\s+(?:actual\s+)?knowledge"
     r"|knowledge\s+of\s+(?:the\s+)?(?:Seller|Purchaser|Buyer))", re.IGNORECASE)
@@ -232,6 +249,37 @@ def _exhibit_heading(kind: str, el: ET.Element, text: str):
     return None
 
 
+def _first_blank(t: str):
+    for rx, label in BLANK_PATTERNS:
+        m = rx.search(t)
+        if m:
+            lo, hi = max(0, m.start() - 70), min(len(t), m.end() + 70)
+            return label, t[lo:hi].strip().replace("\n", " ")
+    return None
+
+
+def _exhibit_blank(i: int, kind: str, el: ET.Element):
+    """A blank in an exhibit block that follows the signature page, checked one
+    paragraph at a time (a table is checked cell paragraph by cell paragraph).
+    Returns (entry, is_body): body if any blank sits on a paragraph that is not a
+    signature/notary line, signature if every blank does, (None, False) if none."""
+    paras = [el] if kind == "p" else (list(el.iter(W + "p")) or [el])
+    sig_hit = None
+    for para in paras:
+        pt = _text_of(para).strip()
+        if not pt or DMS_STAMP_RE.match(pt):
+            continue
+        hit = _first_blank(pt)
+        if not hit:
+            continue
+        entry = {"block": i, "kind": hit[0], "context": hit[1]}
+        # A signature or notary line never carries a dollar amount.
+        if "$" in pt or not SIGNATURE_LINE_RE.search(pt):
+            return entry, True
+        sig_hit = sig_hit or entry
+    return sig_hit, False
+
+
 def audit(path: Path) -> dict:
     root = _load(path)
     blocks = _blocks(root)
@@ -283,7 +331,9 @@ def audit(path: Path) -> dict:
                 continue
             chars += len(t)
             prose_chars += len(t)
-        populated = bool(chars or media or tables)
+        # An empty table grid (zero rows, every cell blank) is EMPTY, not populated:
+        # Gabriel's ruling, 2026-11-06. A table counts only through its text/images.
+        populated = bool(chars or media)
         exhibits.append({
             "letter": letter, "caption": caption, "block": start,
             "text_chars": chars, "images": media, "tables": tables,
@@ -336,9 +386,19 @@ def audit(path: Path) -> dict:
 
     # ---- 3. unfilled blanks ----------------------------------------------
     body_blanks, sig_blanks = [], []
+    in_exhibit = [False] * limit
+    for n, (start, _letter) in enumerate(heads):
+        end = heads[n + 1][0] if n + 1 < len(heads) else limit
+        for j in range(start + 1, end):
+            in_exhibit[j] = True
     for i in range(limit):
         t = texts[i]
         if not t.strip() or DMS_STAMP_RE.match(t.strip()):
+            continue
+        if i >= sig_at and in_exhibit[i]:
+            entry, is_body = _exhibit_blank(i, blocks[i][0], blocks[i][1])
+            if entry:
+                (body_blanks if is_body else sig_blanks).append(entry)
             continue
         for rx, label in BLANK_PATTERNS:
             m = rx.search(t)
