@@ -100,7 +100,7 @@ DEED_BODY = [P(LOREM), P("Grantee: ______________"), P("Consideration: $________
 
 
 def data_exhibit(*content):
-    return BODY + SIG + EXA + [P("EXHIBIT B"), P("(Schedule of Closing Deliveries)"),
+    return BODY + SIG + EXA + [P("EXHIBIT B"), P("(Closing Certificate)"),
                                P(LOREM)] + list(content)
 
 
@@ -163,11 +163,8 @@ class TestFormRegionEndsAtNextHeadingLikeBlock(_Base):
         self.assertEqual(len(r["form_blanks"]), 1)
         self.assertFalse(r["blocking"])
 
-    def test_exhibit_reference_sentence_does_not_end_the_region(self):
-        r = self.audit(self.form_then(P("Exhibit A attached hereto describes the Land."),
-                                      P("Grantee: ________")))
-        self.assertEqual(r["body_blanks"], [])
-        self.assertFalse(r["blocking"])
+    # (round 4: a block opening with "Exhibit A ..." now ends the region -- see
+    # test_audit_completeness_rulings4.py, fail-closed)
 
 
 # ------------------------------------------------------------------ (3) caption
