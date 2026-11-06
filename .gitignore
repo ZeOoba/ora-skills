@@ -31,6 +31,10 @@ _staging/
 
 # Git worktree admin dirs (EnterWorktree / git worktree add convention, 2026-07-12)
 .claude/worktrees/
+# Linked worktrees created with `git worktree add .worktrees/<name>` (2026-11-06: three
+# registered worktrees there showed as untracked in every dirty-tree scan). NOT _archive/:
+# completed archive records under _archive/ are tracked by convention (584 files).
+.worktrees/
 
 # Eval-harness daily run output (Rev 10 R10-2, 2026-08-14): writes a run JSON +
 # a summary.csv row on every daily fire, which made this single-writer checkout
