@@ -140,9 +140,10 @@ grantor|grantee|seller|purchaser|buyer|landlord|tenant|assignor|assignee|return 
 after recording return to|send tax statements to|tax statements to|
 mail tax statements to""".replace("\n", "").split("|"))
 _VALUE_WORD_RE = re.compile(
-    r"\b(?:rents?|price|parcels?|lots?|suites?|terms?|deposits?|square\s+f(?:ee|oo)t|"
-    r"sq\.?\s*ft|acres?|commencement|expiration|closing|effective|consideration|"
-    r"dollars|amount|fees?|apn)\b", re.IGNORECASE)
+    r"\b(?:rents?|rental|rentable|prices?|parcels?|lots?|suites?|units?|terms?|deposits?|"
+    r"square\s+f(?:ee|oo)t(?:age)?|sq\.?\s*ft|acres?|commencement|expiration|closing|"
+    r"effective|consideration|dollars|amounts?|balances?|fees?|premises|address(?:es)?|"
+    r"apn|pin|tax\s+id)\b", re.IGNORECASE)
 _V1 = r"(?:state|commonwealth|county|parish)\s+of\s+[^,:()]{1,30}?\s*(?:\)\s*(?:ss\.?:?)?|ss\.?:?)"
 _V2 = r"_{2,}\s+county\s*\)"
 _VENUE_RE = re.compile(r"^(?:{0}|{1})(?:\s*(?:{0}|{1}))?\s*$".format(_V1, _V2), re.IGNORECASE)
@@ -160,6 +161,20 @@ _FORMS = [re.compile(x, re.IGNORECASE) for x in (
     r"^_{2,}\s*,?\s*notary\s+public\s*,?\s*my\s+commission\s+expires:?\s*_{2,}$",
     r"^my\s+commission\s+expires:?\s*_{2,}$",
     r"^my\s+commission\s*\(\s*is\s+permanent\s*\)\s*\(\s*expires:?\s*_{2,}\s*\)$",
+    r"^this\s+instrument\s+(?:was\s+)?prepared\s+by:?\s*_{2,}\s*,?\s*"
+    r"(?:attorney\s+at\s+law|esq\.?)?\.?$",
+    r"^(?:executed|dated|signed)(?:\s+and\s+delivered)?(?:\s+(?:as\s+of|this|on))?"
+    r"(?:\s+the)?\s+_{2,}\s+day\s+of\s+_{2,}(?:\s*,?\s*(?:(?:19|20)?_{2,}|\d{4}))?\.?$",
+    r"^dated\s+(?:as\s+of\s+)?_{2,}\s*,\s*(?:(?:19|20)_{2,}|\d{4}|_{2,})\.?$",
+    r"^receipt\s+(?:is\s+hereby\s+)?acknowledged\s+this\s+_{2,}\s+day\s+of\s+_{2,}"
+    r"(?:\s*,?\s*(?:19|20)?_{2,})?\.?$",
+)]
+# Notary acknowledgment SENTENCES (OH / IN / MD / MO / KS / WI / TN). Their prefixes
+# are not end-anchored, so they are exempt only next to a strong notary cue (a Notary
+# Public title line, a commission line, a venue / ss / TO WIT line, a notary seal),
+# never on their own and never cueing each other. They may run to 900 characters
+# (TN TCA 66-22-107 and MD / MO corporate forms exceed 400).
+_NOTARY_SENTENCES = [re.compile(x, re.IGNORECASE) for x in (
     r"^(?:the\s+foregoing\s+[a-z ]{0,40}?\s+was\s+|this\s+instrument\s+was\s+)?"
     r"acknowledged\s+before\s+me\b",
     r"^(?:subscribed\s+and\s+)?sworn\s+to\s+(?:and\s+subscribed\s+)?before\s+me\b",
@@ -169,31 +184,28 @@ _FORMS = [re.compile(x, re.IGNORECASE) for x in (
     r"^personally\s+(?:appeared|came)\s+before\s+me\b",
     r"^(?:as\s+)?witness\s+my\s+hand\b", r"^in\s+testimony\s+whereof\b",
     r"^given\s+under\s+my\s+hand\b", r"^i\s+hereby\s+certify\b",
-    r"^this\s+instrument\s+(?:was\s+)?prepared\s+by:?\s*_{2,}\s*,?\s*"
-    r"(?:attorney\s+at\s+law|esq\.?)?\.?$",
     r"^i\s+affirm,?\s+under\s+the\s+penalties\s+for\s+perjury\b.{0,200}?"
     r"\bsocial\s+security\s+number",
-    r"^(?:executed|dated|signed)(?:\s+and\s+delivered)?(?:\s+(?:as\s+of|this|on))?"
-    r"(?:\s+the)?\s+_{2,}\s+day\s+of\s+_{2,}(?:\s*,?\s*(?:(?:19|20)?_{2,}|\d{4}))?\.?$",
-    r"^dated\s+(?:as\s+of\s+)?_{2,}\s*,\s*(?:(?:19|20)_{2,}|\d{4}|_{2,})\.?$",
-    r"^receipt\s+(?:is\s+hereby\s+)?acknowledged\s+this\s+_{2,}\s+day\s+of\s+_{2,}"
-    r"(?:\s*,?\s*(?:19|20)?_{2,})?\.?$",
 )]
 _CONTEXT_FORMS = [re.compile(x, re.IGNORECASE) for x in (
     r"^_{2,},?\s+an?\s+_{2,}(?:\s+" + _ENTITY + r")?\.?$",
     r"^_{2,},?\s+an?\s+[A-Za-z][A-Za-z .-]{0,30}?\s+" + _ENTITY + r"\.?$",
 )]
-# Neighbouring lines that mark a SIGNATURE block (for party labels, entity lines and
-# a bare rule in a multi-cell table) or a NOTARY block (for a bare venue line). A
-# notary block is not a signature block: "Tenant: ____" next to "Notary Public"
-# still blocks.
+# Cue lines. A SIGNATURE cue is a signature label followed by a blank ("By: ____",
+# "Name: ____") or a seal-only line -- prose such as "Its lease expires", "Title
+# Company:" or "By-laws" is not a cue, nor is a completed "By: /s/ ...". A NOTARY cue
+# is a strong notary marker: a Notary Public title line, a commission / term /
+# appointment / county-of-residence line, a venue line ending in ")" or "ss", an MD
+# "TO WIT:" venue, or a notary seal -- never an acknowledgment sentence.
 _SIG_CUE_RE = re.compile(
-    r"^(?:by|name|title|its|signature|authorized\s+signatory|printed\s+name)\b\s*:?"
-    r"|^_{2,}\s*(?:\(\s*seal\s*\))?$|\(\s*seal\s*\)", re.IGNORECASE)
+    r"^(?:by|name|title|its|signature|print(?:ed)?(?:\s+name)?|authorized\s+signatory)"
+    r"\s*:?\s*_{2,}|^_{0,40}\s*\(\s*seal\s*\)\s*_{0,40}$", re.IGNORECASE)
 _NOTARY_CUE_RE = re.compile(
-    r"notary\s+public|acknowledged\s+before\s+me|personally\s+(?:appeared|came)"
-    r"|sworn\s+to|^\)?\s*ss\b|^(?:state|commonwealth|county|parish)\s+of\b[^,]{0,40}"
-    r"(?:\)|\bss\b)|\(\s*notary\s+seal\s*\)", re.IGNORECASE)
+    r"^(?:_{2,}\s*,?\s*)?notary\s+public\b|^my\s+commission\s+(?:expires|expiration)"
+    r"|^commission\s+(?:no\b|number)|\(\s*notary\s+seal\s*\)|^my\s+(?:term|appointment)\s+"
+    r"expires|^(?:my\s+)?county\s+of\s+residence|^\)?\s*ss\b"
+    r"|^(?:state|commonwealth|county|parish)\s+of\b[^,]{0,40}(?:\)|\bss\b)"
+    r"|,\s*to\s+wit:?\s*$|^_{2,}\s+county\s*\)", re.IGNORECASE)
 
 
 def _norm_label(x: str) -> str:
@@ -201,25 +213,31 @@ def _norm_label(x: str) -> str:
 
 
 def _classify_line(line: str, in_table: bool) -> str:
-    """'exempt'; 'context' (exempt only next to a signature cue); 'venue' (exempt
-    only next to a notary cue); or 'body'."""
+    """'exempt'; 'party' (exempt only with a signature cue on an adjacent line);
+    'context' (exempt only with a signature cue within 3 lines); 'notary' (exempt
+    only with a notary cue within 3 lines); or 'body'."""
     t = line.replace(" ", " ").strip()
-    if len(t) > 400 or "$" in t:
+    if len(t) > 900 or "$" in t:
         return "body"
     seal = bool(_SEAL_RE.search(t))
     t = re.sub(r"\s+", " ", _STATUTORY_RE.sub(" ", _SEAL_RE.sub(" ", t))).strip()
+    sentence = any(rx.match(t) for rx in _NOTARY_SENTENCES)
+    if len(t) > 400 and not sentence:
+        return "body"
     if re.fullmatch(r"_{2,}", t):
         return "exempt" if (seal or not in_table) else "context"
     if _VENUE_RE.match(t) or _MD_VENUE_RE.match(t):
         return "exempt"
     if _BARE_VENUE_RE.match(t):
-        return "venue"                   # exempt only next to a notary cue
+        return "notary"
     m = _LEAD_LABEL_RE.match(t)
     lead = _norm_label(m.group(1)) if m else None
     sig_lead = lead in _CORE_LABELS or lead in _CONTEXT_LABELS
     rest = t[m.end():] if (m and sig_lead) else t
     if _VALUE_WORD_RE.search(rest):
         return "body"
+    if sentence:
+        return "notary"
     if any(rx.match(t) for rx in _FORMS):
         return "exempt"
     if any(rx.match(t) for rx in _CONTEXT_FORMS):
@@ -230,7 +248,7 @@ def _classify_line(line: str, in_table: bool) -> str:
            _norm_label(x.group(1)) not in _CONTEXT_LABELS for x in _LABEL_RE.finditer(t)):
         return "body"
     if lead in _CONTEXT_LABELS:
-        return "context" if re.fullmatch(r"\s*_{2,}\s*", rest) else "body"
+        return "party" if re.fullmatch(r"\s*_{2,}\s*", rest) else "body"
     return "exempt"
 
 
@@ -255,20 +273,28 @@ FORM_CAPTION_RE = re.compile(
     r"\[?\s*form\s+of\s*\]?\s+(?P<rest>\S.*)$", re.IGNORECASE)
 _FORM_SUFFIX_RE = re.compile(r"\(\s*form\s*\)\s*$", re.IGNORECASE)
 _DATA_CAPTION_RE = re.compile(
-    r"\b(?:rent\s+roll|legal\s+description|property\s+description|description\s+of\s+"
-    r"(?:the\s+)?(?:property|premises|land|real\s+property)|schedule\s+of\s+leases|"
-    r"lease\s+schedule|list\s+of\s+leases|leases?\s+list)\b", re.IGNORECASE)
+    r"\b(?:rent\s+roll|legal\s+descr|(?:property|premises|land)\s+(?:legal\s+)?description|"
+    r"description\s+of\s+(?:the\s+)?(?:property|premises|land|real\s+property)|schedule|"
+    r"tenant\s+(?:list|roster|schedule)|list\s+of\s+(?:leases|tenants)|leases?\s+list)",
+    re.IGNORECASE)
+# Data phrases that a real form can also mention ("Form of Assignment of Service
+# Contracts", "... and Assumption of Leases"): data unless a form noun is present.
+_WEAK_DATA_RE = re.compile(
+    r"\b(?:leases|service\s+contracts?|permitted\s+exceptions?|lease\s+abstracts?|"
+    r"personal\s+property\s+(?:list|schedule|inventory))\b", re.IGNORECASE)
 _FORM_NOUN_RE = re.compile(
     r"\b(?:deed|assignment|estoppel|bill\s+of\s+sale|notice|letter|certificate|affidavit|"
     r"memorandum|guarant(?:y|ee)|consent|snda|subordination|release|conveyance|"
     r"agreement|assumption)\b", re.IGNORECASE)
 _CONTINUATION_RE = re.compile(
     r"^to\s+(?:the\s+)?(?:[a-z]+\s+){0,6}?(?:agreement|contract|psa)\b", re.IGNORECASE)
-# Any block that reads like the start of another exhibit / schedule ends a Form-of
-# region, recognised heading or not (EXHIBIT "D", EXHIBIT D:, SCHEDULE 1 - Rent Roll).
+# A Form-of region ends at ANY block that opens like another exhibit / schedule
+# (EXHIBIT / SCHEDULE / ANNEX / APPENDIX / ATTACHMENT / RIDER + an id, whatever
+# follows: "SCHEDULE 1 Rent Roll", "Schedule 1 (Rent Roll)", "Exhibit C, Rent Roll",
+# "Rider 1") or at a short block carrying a data caption ("RENT ROLL", "SCHEDULE OF
+# LEASES"). Ending early fails closed: what follows is judged as data.
 _HEADING_LIKE_RE = re.compile(
-    r"^\s*(?:exhibit|schedule|annex|appendix|attachment)\s+[\"'“”]?[A-Z0-9]{1,3}"
-    r"(?:-\d+)?[\"'“”]?\s*(?:[:.\-–—]\s*.{0,80})?$", re.IGNORECASE)
+    r"^\s*(?:exhibit|schedule|annex|appendix|attachment|rider)\s+\S{1,8}", re.IGNORECASE)
 
 
 def _is_form_caption(c: str) -> bool:
@@ -285,7 +311,7 @@ def _is_form_caption(c: str) -> bool:
         return False
     if _DATA_CAPTION_RE.search(c):
         return False                     # data caption overrides (ruling 2026-11-06)
-    if re.search(r"\bleases\b", c, re.IGNORECASE) and not _FORM_NOUN_RE.search(c):
+    if _WEAK_DATA_RE.search(c) and not _FORM_NOUN_RE.search(c):
         return False
     return True
 
@@ -483,11 +509,10 @@ def _block_lead_text(kind: str, el: ET.Element) -> str:
     return _joined_lines(el)
 
 
-def _form_info(blocks: list, start: int, end: int):
-    """(is_form, form_end): is the exhibit at heading block `start` captioned as a
-    real "Form of ..." exhibit, and where its form region ends (the first
-    heading-like block after the caption, else `end`)."""
-    caption, cap_j = None, None
+def _caption_of(blocks: list, start: int, end: int):
+    """(caption text, caption block) of the exhibit at heading block `start`: the
+    FIRST non-blank block after the heading (spacers, page breaks, DMS stamps and a
+    "to Purchase Agreement" heading continuation skipped)."""
     kind, el = blocks[start]
     if kind == "tbl":
         after = False
@@ -497,21 +522,37 @@ def _form_info(blocks: list, start: int, end: int):
                 after = bool(EXHIBIT_HEAD_RE.match(_text_of(para).strip()))
                 continue
             if pt and not _CONTINUATION_RE.match(pt):
-                caption, cap_j = pt, start
-                break
+                return pt, start
+    for j in range(start + 1, end):
+        pt = _block_lead_text(*blocks[j])
+        if not pt or DMS_STAMP_RE.match(pt) or _CONTINUATION_RE.match(pt):
+            continue
+        return pt, j
+    return None, None
+
+
+def _is_data_caption(c: str) -> bool:
+    c = re.sub(r"\s+", " ", c.replace(" ", " "))
+    return bool(_DATA_CAPTION_RE.search(c)) or bool(
+        _WEAK_DATA_RE.search(c) and not _FORM_NOUN_RE.search(c))
+
+
+def _form_info(blocks: list, start: int, end: int):
+    """(is_form, form_end, is_data) for the exhibit at heading block `start`:
+    is it a real "Form of ..." exhibit, where its form region ends (the first
+    block after the caption that opens like another exhibit / schedule or carries
+    a short data caption, else `end`), and is it captioned as a data exhibit."""
+    caption, cap_j = _caption_of(blocks, start, end)
     if caption is None:
-        for j in range(start + 1, end):
-            pt = _block_lead_text(*blocks[j])
-            if not pt or DMS_STAMP_RE.match(pt) or _CONTINUATION_RE.match(pt):
-                continue
-            caption, cap_j = pt, j
-            break
-    if caption is None or not _is_form_caption(caption):
-        return False, start
+        return False, start, False
+    is_data = _is_data_caption(caption)
+    if not _is_form_caption(caption):
+        return False, start, is_data
     for j in range(cap_j + 1, end):
-        if _HEADING_LIKE_RE.match(_block_lead_text(*blocks[j])):
-            return True, j
-    return True, end
+        t = _block_lead_text(*blocks[j])
+        if _HEADING_LIKE_RE.match(t) or (len(t) <= 120 and _is_data_caption(t)):
+            return True, j, False
+    return True, end, False
 
 
 def _exhibit_stream(blocks: list, start: int, end: int) -> list:
@@ -545,33 +586,29 @@ def _exhibit_stream(blocks: list, start: int, end: int) -> list:
     return out
 
 
-def _has_cue(stream: list, k: int, by_cell: dict, para_pos: dict, cue) -> bool:
-    """Is line k next to a cue line (same table cell, else within three non-empty
-    paragraph lines)?"""
-    i, cell, _multi, _line = stream[k]
-    if cell is not None:
-        return any(cue.search(stream[x][3]) for x in by_cell[cell] if x != k)
-    pos = para_pos[k]
-    plines = para_pos["order"]
-    for q in plines[max(0, pos - 3):pos] + plines[pos + 1:pos + 4]:
+def _has_cue(stream: list, k: int, pos: dict, lists: dict, cue, window: int) -> bool:
+    """Is a cue line within `window` non-empty lines of line k -- in the same table
+    cell for a cell line, else among the exhibit's paragraph lines? O(window)."""
+    key = stream[k][1]
+    lst = lists[key]
+    i = pos[k]
+    for q in lst[max(0, i - window):i] + lst[i + 1:i + 1 + window]:
         if cue.search(stream[q][3]):
             return True
     return False
 
 
-def _scan_exhibit(stream: list, form_end: int, is_form: bool):
+def _scan_exhibit(stream: list, form_end: int, is_form: bool, is_data: bool):
     """Classify the blanks of one post-signature exhibit. Returns three dicts
-    block -> entry: form (exempt template), body (blocking) and signature."""
-    by_cell, order = {}, []
+    block -> entry: form (exempt template), body (blocking) and signature.
+    Context exemptions (party labels, entity lines, bare venue, a bare rule in a
+    grid) are off in a data-captioned exhibit and after a form region ends."""
+    lists, pos = {}, {}
     for k, (_i, cell, _m, ln) in enumerate(stream):
-        if not ln:
-            continue
-        if cell is not None:
-            by_cell.setdefault(cell, []).append(k)
-        else:
-            order.append(k)
-    para_pos = {k: n for n, k in enumerate(order)}
-    para_pos["order"] = order
+        if ln:
+            lst = lists.setdefault(cell, [])
+            pos[k] = len(lst)
+            lst.append(k)
     form, body, sig = {}, {}, {}
     for k, (i, cell, multi, ln) in enumerate(stream):
         if not ln or DMS_STAMP_RE.match(ln):
@@ -583,10 +620,18 @@ def _scan_exhibit(stream: list, form_end: int, is_form: bool):
         if is_form and i < form_end:
             form.setdefault(i, entry)
             continue
+        strict = is_data or (is_form and i >= form_end)
         verdict = _classify_line(ln, multi)
-        if verdict in ("context", "venue"):
-            cue = _SIG_CUE_RE if verdict == "context" else _NOTARY_CUE_RE
-            verdict = "exempt" if _has_cue(stream, k, by_cell, para_pos, cue) else "body"
+        if verdict == "party":
+            verdict = "exempt" if (not strict and
+                                   _has_cue(stream, k, pos, lists, _SIG_CUE_RE, 1)) else "body"
+        elif verdict == "context":
+            verdict = "exempt" if (not strict and
+                                   _has_cue(stream, k, pos, lists, _SIG_CUE_RE, 3)) else "body"
+        elif verdict == "notary":
+            bare_venue = bool(_BARE_VENUE_RE.match(ln.strip()))
+            ok = _has_cue(stream, k, pos, lists, _NOTARY_CUE_RE, 3)
+            verdict = "exempt" if ok and not (strict and bare_venue) else "body"
         if verdict == "body":
             body.setdefault(i, entry)
         else:
@@ -715,8 +760,9 @@ def audit(path: Path) -> dict:
         if start < sig_at:
             continue
         end = heads[n + 1][0] if n + 1 < len(heads) else limit
-        is_form, form_end = _form_info(blocks, start, end)
-        f, b, g = _scan_exhibit(_exhibit_stream(blocks, start, end), form_end, is_form)
+        is_form, form_end, is_data = _form_info(blocks, start, end)
+        f, b, g = _scan_exhibit(_exhibit_stream(blocks, start, end), form_end, is_form,
+                                is_data)
         for j in range(start, end):
             region[j] = n
             if j in b:
