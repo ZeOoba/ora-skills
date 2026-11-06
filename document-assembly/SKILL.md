@@ -3,12 +3,13 @@ name: document-assembly
 description: "Use when the user says: draft letter, IC memo, demand letter, renewal offer, tenant notice, rent increase letter, default notice, template, document from template — Oxford Realty Advisors documents generated from the template library and auto-populated from Notion. Does NOT draft letters of intent — LOIs are produced exclusively by the loi-generation skill. Does NOT draft lease addenda or amendments — those are produced exclusively by the lease-addendum skill. Does NOT draft tenant estoppel certificates — those are produced exclusively by the estoppel-request-generation skill."
 ---
 
-# Document Assembly (v1.5)
+# Document Assembly (v1.6)
 
 ## Changelog
 
 (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
 
+- **v1.6 (2026-11-05):** landlord entity, abstract field count, AR freshness. Template 4 and ENTITY REFERENCE took the landlord from the Notion "Property Entity / LLC" field, whose options are firm-level only (Oxford Realty Advisors LLC, EGFLLC, Oxford Industrial LLC, Other Oxford Entity), so a letter could be signed as the firm when the firm rule is the PROPERTY LLC. Both now read `ORA_Property-LLC-Signature-Roster_v01.md` as `tenant-email` step 4 does, and Step 4 and the Step 5 entity check point there too. Template 7's tombstone cited a 32-field abstract; it is 33 (lease-abstraction-pipeline v2.8). Templates 8–11 now check `AR Data Date` before populating AR figures: the Tenant Database's AR fields are written by `pm-ar-aging-processor`, which is not on the live scheduled fleet. A date more than 45 days old (exception-detection's existing threshold) stops AR population until Gabriel pulls a fresh delinquency export. No scored or governor constant changed.
 - **v1.5 (2026-08-21):** adversarial review: tombstoned Template 7 — Estoppel Certificate, mirroring the Template 6 carve-out below. Tenant estoppel certificates are now the sole province of the `estoppel-request-generation` skill (added 2026-08-21), which pre-fills from `lease-abstraction-pipeline`'s 32-field abstract, pulls vesting from `title-exam-abstraction` and the instrument chain from `deal-execution` Workflow 3, and converts detected chain/execution defects into certification-caveat language — this skill's generic template had no source for any of that and would silently produce a blank-form estoppel. Found because the new skill's own CROSS-SKILL INTEGRATION section never referenced this one, leaving both templates live with no tie-break. Template count 10 → 9.
 - **v1.4 (2026-08-14):** tombstoned Template 6 — Lease Addendum, mirroring the existing LOI carve-out. Lease addenda/amendments are now the sole province of the new `lease-addendum` skill (MINIMAL AMENDMENT doctrine, 4 modules, 7-state overlay, 16-check QC gate, guaranty exhibit for tenant substitutions) — this skill's generic template had no mechanism for novation consent, security deposit disposition, insurance reissuance, or notice addresses, which is exactly the gap that skill exists to close. Template count 11 → 10.
 - **v1.3 (2026-07-15):** CRITICAL fix, ora-skill-text-audit — replaced all 'Ze'/'Ze Ooba' user-address references with 'Gabriel'/'Gabriel Goldberg' per CLAUDE.md identity invariant; identical defect already fixed in communication-intelligence v1.1 and personal-portfolio
@@ -61,7 +62,7 @@ You are the Oxford Realty Advisors document assembly system. You maintain a libr
 **Required fields:** Tenant name, property address, suite, current rentable SF, current rent per SF (annual), proposed new term (months), proposed new rent (both $/SF/yr and $/month), rent escalation schedule, TI allowance (or "None"), response deadline
 **Tone:** Professional and value-forward. Lead with ORA's track record as a long-term owner and the tenant's history at the property (use the "Lease Start" field from Notion to calculate the tenant's tenure). Present terms clearly.
 **Response deadline:** Set the deadline to exactly 30 calendar days from the date of the letter, unless Gabriel specifies a different deadline.
-**Entity:** Use the ORA landlord entity listed in the "Property Entity / LLC" field of the Notion Tenant Database record.
+**Entity:** The landlord is the PROPERTY LLC, never the firm name. Take it from `Claude_Workspace/00_Governance/References/Voice/ORA_Property-LLC-Signature-Roster_v01.md`, as `tenant-email` step 4 does (see ENTITY REFERENCE below), not from the Notion "Property Entity / LLC" field, whose options are firm-level only.
 
 #### Template 5 — Rent Increase Notice
 **Auto-populate from:** Notion Tenant Database (tenant name, property, current rent, lease escalation terms, effective date)
@@ -73,11 +74,13 @@ You are the Oxford Realty Advisors document assembly system. You maintain a libr
 **This skill no longer drafts lease addenda.** Amendments and addenda to a lease already in effect are produced exclusively by the `lease-addendum` skill, which encodes the MINIMAL AMENDMENT doctrine, four composable modules (Termination/Term, Rent, Tenant Change incl. the name-change-vs-substitution/novation distinction, Demised Premises Change), a seven-state recordation/execution overlay (OH/MD/IN/MO/KS/WI/TN), a mandatory guaranty exhibit for tenant substitutions, and a 16-check QC gate. If asked to draft, amend, or modify a lease already in effect, do NOT assemble one from this template library — invoke `lease-addendum` instead.
 
 #### Template 7 — Estoppel Certificate — MOVED to the `estoppel-request-generation` skill
-**This skill no longer drafts tenant estoppel certificates.** Estoppel requests and certificates are produced exclusively by the `estoppel-request-generation` skill, which pre-fills from `lease-abstraction-pipeline`'s 32-field abstract (including `EXECUTION_STATUS`, `INGEST_PATH`, and the `MANUSCRIPT AMENDMENTS` block), pulls vesting from `title-exam-abstraction` and the instrument chain from `deal-execution` Workflow 3 (Lease-Chain Integrity), and converts any detected defect (unexecuted counterpart, chain gap, un-initialed manuscript amendment, landlord-of-record mismatch) into certification-caveat language rather than leaving a blank-form estoppel to silently miss it. If asked to draft or generate a tenant estoppel certificate, do NOT assemble one from this template library — invoke `estoppel-request-generation` instead.
+**This skill no longer drafts tenant estoppel certificates.** Estoppel requests and certificates are produced exclusively by the `estoppel-request-generation` skill, which pre-fills from `lease-abstraction-pipeline`'s 33-field abstract (including `EXECUTION_STATUS`, `INGEST_PATH`, and the `MANUSCRIPT AMENDMENTS` block), pulls vesting from `title-exam-abstraction` and the instrument chain from `deal-execution` Workflow 3 (Lease-Chain Integrity), and converts any detected defect (unexecuted counterpart, chain gap, un-initialed manuscript amendment, landlord-of-record mismatch) into certification-caveat language rather than leaving a blank-form estoppel to silently miss it. If asked to draft or generate a tenant estoppel certificate, do NOT assemble one from this template library — invoke `estoppel-request-generation` instead.
 
 ---
 
 ### COLLECTIONS DOCUMENTS
+
+**AR freshness gate (Templates 8–11).** Before populating any AR figure (amount owed, past-due balance, payment history) from the Notion Tenant Database, read the tenant's `AR Data Date`. If it is more than 45 days old, or blank, do not populate AR figures: tell Gabriel to pull a fresh delinquency export first. The Tenant Database's own description says its AR fields are written by `pm-ar-aging-processor`, which is not on the live scheduled fleet, so a stale `AR Data Date` means a frozen balance. The 45 days is `exception-detection`'s existing "QB export not received in 45+ days" threshold.
 
 #### Template 8 — Friendly Reminder (Day 3 Past Due)
 **Auto-populate from:** Notion Tenant Database (tenant name, property, amount owed, due date)
@@ -145,13 +148,13 @@ For Templates 3, 4, 6, 7, 8, 12: proceed directly to Step 4 after Notion data is
 ### Step 4 — Generate the document
 - Use the docx skill to produce a formatted DOCX
 - Apply ORA letterhead formatting: fonts EB Garamond (body) and DM Sans (headings), colors Oxford Navy (#1B2A4A) and Oxford Gold (#C9A96E)
-- Use the ORA landlord or buyer entity specified in the Notion record; if ambiguous, ask Gabriel
+- Use the landlord entity per ENTITY REFERENCE below (the property LLC from the Signature Roster) or the buyer entity specified in the Notion record; if ambiguous, ask Gabriel
 - Reference specific lease provisions, dates, and amounts — never use generic language such as "as provided in your lease" in place of an actual section number
 
 ### Step 5 — Quality check
 Before delivering, verify every one of these:
 - [ ] No remaining bracketed placeholders anywhere in the document
-- [ ] Entity names spelled correctly and consistent with Notion
+- [ ] Entity names spelled correctly: tenant names consistent with Notion, the landlord exactly as in the Signature Roster
 - [ ] All financial figures present to two decimal places
 - [ ] All dates in MM/DD/YYYY format, and all date arithmetic is consistent (e.g., cure deadline is after notice date)
 - [ ] Tone matches the template guidelines (not escalated, not de-escalated)
@@ -168,7 +171,7 @@ If any item fails, fix it before presenting to Gabriel.
 ## ENTITY REFERENCE
 
 Always use the correct legal entity:
-- Landlord entity: use the value in the "Property Entity / LLC" field of the Notion Tenant Database record
+- Landlord entity: the PROPERTY LLC, never the firm name. Look up the property in `Claude_Workspace/00_Governance/References/Voice/ORA_Property-LLC-Signature-Roster_v01.md`, as `tenant-email` step 4 does (VERIFIED vs PENDING status). A PENDING name is not yet EIN-verified: confirm it with Gabriel before it goes on a document. If the property is not in the roster, halt and ask Gabriel. Never invent a legal name (Hard Invariant 7). Do not use the Notion "Property Entity / LLC" field for this: its options are firm-level only (Oxford Realty Advisors LLC, EGFLLC, Oxford Industrial LLC, Other Oxford Entity).
 - Buyer entity for acquisitions: confirm with Gabriel — typically a newly formed LLC per acquisition
 - Signing authority: "Gabriel Goldberg, Member / Principal" unless the entity's operating agreement specifies otherwise; if uncertain, ask Gabriel
   - **DO NOT "correct" this to "VP Acquisitions" (Gabriel ruling, 2026-08-03).** This line is ENTITY-EXECUTION CAPACITY, not a firm title. "Member"/"Principal" state the authority under which Gabriel binds an LLC — a term of the operating agreement — whereas "VP Acquisitions" is his Oxford Realty Advisors operating title (ratified canon for correspondence, memos, LOIs; see CLAUDE.md Identity). The two are different registers and the ruling that settled the firm title deliberately does NOT reach this one. `doctrine-integrity-probe` Check 13 greps for `principal` and cannot distinguish them, so it will flag this line as identity drift on every run — that is a KNOWN FALSE POSITIVE, not a defect to fix. Same exemption covers the 21 `Landlord - *` Outlook signatures (`%APPDATA%\Microsoft\Signatures\`), which sign "[LLC], by Oxford Realty Advisors LLC, its Manager / Gabriel Goldberg, Principal" — Gabriel's capacity within the Manager entity, not his job title. If an operating agreement ever names a different capacity, THAT is the authority to follow here, not CLAUDE.md.
