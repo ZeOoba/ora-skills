@@ -233,7 +233,8 @@ class TestContextAndValueWords(_Base):
     CONTEXT_LINES = ["Tenant: ________", "Landlord: ________", "Seller: ________", "Grantee: ________",
                      "Assignee: ________", "Return to: ________", "After recording return to: ________",
                      "Send tax statements to: ________", "________, a ________ limited liability company",
-                     "________, an Ohio limited liability company", "STATE OF ________", "COUNTY OF ________"]
+                     "________, an Ohio limited liability company"]
+    VENUE_LINES = ["STATE OF ________", "COUNTY OF ________"]
     BLOCK_LINES = ["County of Lorem Parcel No. ________", "State of Ohio Lot ________ Example Park",
                    "Signed: ________ Base Rent ________", "Name: ________ Suite ________",
                    "Its: ________; Lease commencement ________", "Title: Fee Simple, Parcel No. ________",
@@ -258,6 +259,28 @@ class TestContextAndValueWords(_Base):
                                             P("Name: ________")))
                 self.assertEqual(r["body_blanks"], [])
                 self.assertFalse(r["blocking"])
+
+    def test_party_and_entity_lines_need_a_signature_cue_not_a_notary_cue(self):
+        for line in self.CONTEXT_LINES:
+            with self.subTest(line=line):
+                r = self.audit(data_exhibit(P("Notary Public"), P(line),
+                                            P("My commission expires: ________")))
+                self.assertEqual(len(r["body_blanks"]), 1)
+                self.assertTrue(r["blocking"])
+
+    def test_bare_venue_lines_need_a_notary_cue(self):
+        for line in self.VENUE_LINES:
+            with self.subTest(line=line, cue="notary"):
+                r = self.audit(data_exhibit(P(line), P(") ss:"),
+                                            P("Acknowledged before me this ___ day of ________, 20__.")))
+                self.assertEqual(r["body_blanks"], [])
+                self.assertFalse(r["blocking"])
+            with self.subTest(line=line, cue="signature only"):
+                r = self.audit(data_exhibit(P(line), P("By: ________"), P("Name: ________")))
+                self.assertEqual(len(r["body_blanks"]), 1)
+                self.assertTrue(r["blocking"])
+            with self.subTest(line=line, cue="none"):
+                self.assertTrue(self.audit(data_exhibit(P(line)))["blocking"])
 
     def test_value_lines_block_even_inside_a_signature_block(self):
         for line in self.BLOCK_LINES:
