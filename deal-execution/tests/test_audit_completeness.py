@@ -456,6 +456,9 @@ class TestBlanks(_Base):
             "labelled date that is not a signature date": P("Closing Date: ________"),
             "blank in a table cell": TBL([["Suite", "Rent"], ["100", "$______"]]),
             "signature cell next to an open value": TBL([["By: ________", "$______"]]),
+            "dollar blank on a notary-worded line":
+                P("Fee payable to the notary public: $________"),
+            "dollar blank on a signature-labelled line": P("Date: payment of $________"),
         }
         for label, blk in cases.items():
             with self.subTest(case=label):
