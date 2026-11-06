@@ -234,6 +234,26 @@ automatically. Its Port Sheldon and Liberty rows also diff against the pre-rebas
 
 (29.33 / 28.67).
 
+**2026-11-05 Opus rebaseline (Gabriel-approved in-turn).** Port Sheldon, Liberty and E Fulton now
+equal the mean of 6 `claude-opus-5-5` replays on acquisition-underwriting v4.41: the 2026-10-30
+run on `997fe4b2` plus the 2026-11-05 supervised run on `d7cab49e` (snapshot
+`runs/2026-11-05T212202Z_supervised-v4.41-pre-dec-backtest.json`). Gabriel added the 10-30 run on
+2026-11-06, after an adversarial review found the 11-05 triple alone sat at the edge of the Opus
+evidence. Port Sheldon 26.81 → 30.08, Liberty 28.11 → 29.0, E Fulton 56.79 → 52.98, and 1333
+Research 11.75 → 16.67 on the 11-05 run's 3 alone (its 10-30 draws include a 43.0 outlier).
+Reason: the 2026-10-05 baseline-model limitation. Every earlier golden sample is recorded as
+a Fable replay, and E Fulton had sat below its Fable golden in all 11 runs since 2026-08-16
+(Seller & Motivation and Value-Add judgment), crossing the tolerance (−5.16) in the last of them, on
+2026-11-05, with no rule change behind it. Fable-era runs stay in each file's
+`repeatability.runs`, tagged `excluded_from_golden`, and each re-baselined golden carries
+`baselined_model`. Hamilton and 470 McCormick were NOT re-baselined: Opus replays split between
+scoring no Quality category (Combined 0–2) and scoring most of them (up to 26; two 2026-10-16 McCormick draws of 45
+and 55 contradict their own all-null breakdowns), so whether their Combined
+should gate at all is an open decision. The same run explained the unreviewed 2026-09-29 Port
+Sheldon FLAG (16.67). That run was a Sonnet 5.5 substitute after all 18 Fable replays hit the
+429 spend limit, and two of its three Port Sheldon draws left Market & Location and Value-Add
+null.
+
 ---
 
 ## Self-test (regression-detection proof)

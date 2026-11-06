@@ -6,6 +6,7 @@
   "source": "Notion Deal Sourcing Log (collection://9a6ae219-85a3-4621-899c-c757fd062f8b), queried 2026-08-14",
   "confidence": "LOW",
   "known_gaps": [
+    "REBASELINED 2026-11-05 ON OPUS 5.5 (Gabriel-approved in-turn 2026-11-05 ('Yes, rebaseline': re-baseline the goldens on Opus using that day's replays)). Golden Combined 11.75 -> 16.67 = mean of the 3 replays from the 2026-11-05 supervised run (runs 5-7: 17/17/16), all claude-opus-5-5, against acquisition-underwriting v4.41 (d7cab49e, blob 192e3fac), identical frozen inputs; snapshot runs/2026-11-05T212202Z_supervised-v4.41-pre-dec-backtest.json. Why: the harness's 2026-10-05 baseline-model limitation -- every earlier golden sample is recorded as a Fable replay (the files' own fable-pinned notes; the 2026-08-14/15 transcripts are no longer on disk), and the harness moved replays from Fable to Opus 5.5 on 2026-10-05, so the golden described an instrument future runs no longer use; a golden meant to predict future replay output should reflect the model future replays actually run on (the same reasoning as the 2026-08-15 leakage exclusion). Earlier runs stay in repeatability.runs, tagged excluded_from_golden, for audit. Range 1.0 pt (17/17/16). All 7 categories resolved in all three (the Fable-era runs left 0-3 null) -- confidence stays LOW here; whether to raise it (which would make this deal gate) is a separate decision for Gabriel. Unknown construction type now takes the strict PEMB x0.88 multiplier (v4.37): Basis is 0 at x0.88 and at x1.00, so Combined does not move on the multiplier (confirms the harness v1.2 caveat); the unknown-type PEMB construction credit (about half of the 4-pt construction sub-line) is applied in all three, and that credit does move Combined: Product & Physical rose from 5.0 (verified-Opus 10-16 run, v4.28) to 6.67, so part of this deal's +4.92 shift against the Fable golden is doctrine, not model. Kept at the 2026-11-05 n=3 by Gabriel's 2026-11-06 decision: the verified-Opus 2026-10-30 v4.41 run (25.33: 43/17/16) carries a 43.0 outlier and was not folded in; 2026-10-16 v4.28 (12.33: 14/13/10) and 2026-10-30 v4.40-wip (12.67: 16/15/7), also verified Opus, replayed other doctrine. n=3 is thinner than the Fable-era golden it replaces (n=4): fold further Opus samples in at later runs rather than widening the tolerance.",
     "RE-BASELINED 2026-08-14 (see harness README 'RCT v03 date-boundary finding'): original 2026-06-09 screen predates the 2026-07-14 RCT v03 recalibration. archived_pre_v03_reference is historical only.",
     "REBASELINED 2026-08-15 (n=1 -> n=4, first-ever repeatability check for this deal, Gabriel-directed): the 2026-08-14 golden was a single unreplicated run (Combined 9.0). The 2026-08-15 forced-repeatability run added 3 independent replays (9.0/14.0/15.0 -- one of which coincidentally also scored Combined 9.0, a different category makeup, not a re-run of the same result) under the same doctrine SHA and same frozen inputs -- no leakage risk identified on this deal. Golden Combined moved 9.0 -> 11.75 (mean of 4). This deal's own range (6.0 pts, stdev 3.20) EXCEEDS the harness's 5.0-pt harness-wide tolerance on internal dispersion alone -- consistent with, and reinforcing, its LOW-confidence/informational-only status; the input-packet nulls that drive that classification (see below) plausibly also drive the higher judgment variance across replays.",
     "Nulls vary by run: run 1 has 3 of 7 categories null (Product & Physical, Seller & Motivation, Value-Add), run 2 has 2 (Product & Physical, Value-Add), runs 3-4 have zero -- driven by input-packet incompleteness that individual replays resolved to differing degrees, not a consistent per-run gap. Quality is a partial lower bound in runs 1-2; robust PASS-band verdict holds regardless (max attainable Combined at the walk price stays well under 60 across all 4 runs).",
@@ -34,43 +35,47 @@
   },
   "repeatability": {
     "runs": [
-      {"combined": 9.0, "quality": 9.0, "economics": 0.0, "expected_score": 2.25, "p_exec_pct": 25.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": null, "market_location": 8.0, "seller_motivation": null, "tenancy_lease": 1.0, "value_add": null}, "note": "run 1 (2026-08-14 baseline, unreplicated at the time) -- as originally recorded in this file before the 2026-08-15 rebaseline"},
-      {"combined": 9.0, "quality": 9.0, "economics": 0.0, "expected_score": 2.7, "p_exec_pct": 30.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": null, "market_location": 8.0, "seller_motivation": 0.0, "tenancy_lease": 1.0, "value_add": null}, "note": "run 2 (2026-08-15 forced-repeatability run, replay A) -- shares Combined 9.0 with run 1 by coincidence, not a duplicate: different category makeup (seller_motivation resolved to 0.0 here vs null in run 1)"},
-      {"combined": 14.0, "quality": 14.0, "economics": 0.0, "expected_score": 2.8, "p_exec_pct": 20.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 4.0, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 1.0, "value_add": 0.0}, "note": "run 3 (2026-08-15 forced-repeatability run, replay B)"},
-      {"combined": 15.0, "quality": 15.0, "economics": 0.0, "expected_score": 4.5, "p_exec_pct": 30.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 5.0, "market_location": 8.0, "seller_motivation": 0.0, "tenancy_lease": 1.0, "value_add": 1.0}, "note": "run 4 (2026-08-15 forced-repeatability run, replay C)"}
+      {"combined": 9.0, "quality": 9.0, "economics": 0.0, "expected_score": 2.25, "p_exec_pct": 25.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": null, "market_location": 8.0, "seller_motivation": null, "tenancy_lease": 1.0, "value_add": null}, "note": "run 1 (2026-08-14 baseline, unreplicated at the time) -- as originally recorded in this file before the 2026-08-15 rebaseline", "excluded_from_golden": true, "exclusion_reason": "Fable-era replay (doctrine 83547a76, 2026-08-14/15); superseded by the 2026-11-05 Opus 5.5 rebaseline -- kept for audit trail, not averaged into golden"},
+      {"combined": 9.0, "quality": 9.0, "economics": 0.0, "expected_score": 2.7, "p_exec_pct": 30.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": null, "market_location": 8.0, "seller_motivation": 0.0, "tenancy_lease": 1.0, "value_add": null}, "note": "run 2 (2026-08-15 forced-repeatability run, replay A) -- shares Combined 9.0 with run 1 by coincidence, not a duplicate: different category makeup (seller_motivation resolved to 0.0 here vs null in run 1)", "excluded_from_golden": true, "exclusion_reason": "Fable-era replay (doctrine 83547a76, 2026-08-14/15); superseded by the 2026-11-05 Opus 5.5 rebaseline -- kept for audit trail, not averaged into golden"},
+      {"combined": 14.0, "quality": 14.0, "economics": 0.0, "expected_score": 2.8, "p_exec_pct": 20.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 4.0, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 1.0, "value_add": 0.0}, "note": "run 3 (2026-08-15 forced-repeatability run, replay B)", "excluded_from_golden": true, "exclusion_reason": "Fable-era replay (doctrine 83547a76, 2026-08-14/15); superseded by the 2026-11-05 Opus 5.5 rebaseline -- kept for audit trail, not averaged into golden"},
+      {"combined": 15.0, "quality": 15.0, "economics": 0.0, "expected_score": 4.5, "p_exec_pct": 30.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 5.0, "market_location": 8.0, "seller_motivation": 0.0, "tenancy_lease": 1.0, "value_add": 1.0}, "note": "run 4 (2026-08-15 forced-repeatability run, replay C)", "excluded_from_golden": true, "exclusion_reason": "Fable-era replay (doctrine 83547a76, 2026-08-14/15); superseded by the 2026-11-05 Opus 5.5 rebaseline -- kept for audit trail, not averaged into golden"},
+      {"combined": 17.0, "quality": 17.0, "economics": 0.0, "expected_score": 3.4, "p_exec_pct": 20.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 7.0, "market_location": 10.0, "seller_motivation": 0.0, "tenancy_lease": 0.0, "value_add": 0.0}, "model": "claude-opus-5-5", "note": "run 5 (2026-11-05 supervised run, replay r1, task aaf140f9d468b1d75) -- claude-opus-5-5 against acquisition-underwriting v4.41 (d7cab49e)"},
+      {"combined": 17.0, "quality": 17.0, "economics": 0.0, "expected_score": 3.4, "p_exec_pct": 20.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 7.0, "market_location": 10.0, "seller_motivation": 0.0, "tenancy_lease": 0.0, "value_add": 0.0}, "model": "claude-opus-5-5", "note": "run 6 (2026-11-05 supervised run, replay r2, task ab20b0b4b7b5e4487) -- claude-opus-5-5 against acquisition-underwriting v4.41 (d7cab49e)"},
+      {"combined": 16.0, "quality": 16.0, "economics": 0.0, "expected_score": 3.2, "p_exec_pct": 20.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 6.0, "market_location": 10.0, "seller_motivation": 0.0, "tenancy_lease": 0.0, "value_add": 0.0}, "model": "claude-opus-5-5", "note": "run 7 (2026-11-05 supervised run, replay r3, task a1f105f72dbafdaec) -- claude-opus-5-5 against acquisition-underwriting v4.41 (d7cab49e)"}
     ],
-    "combined_mean": 11.75,
-    "combined_stdev": 3.2,
-    "combined_sem": 1.6,
-    "combined_range": 6.0,
-    "n": 4,
-    "sampling_note": "First-ever repeatability check for this deal (run 1 was a lone 2026-08-14 baseline; runs 2-4 added by the 2026-08-15 forced-repeatability run, Gabriel-directed). Range 6.0 pts EXCEEDS the harness's 5.0-pt tolerance on its own -- flagged, not hidden; this deal is informational_only regardless so it does not gate, but the dispersion is worth knowing before trusting any future delta on this row."
+    "combined_mean": 16.67,
+    "combined_stdev": 0.58,
+    "combined_sem": 0.33,
+    "combined_range": 1.0,
+    "n": 3,
+    "n_raw_including_excluded": 7,
+    "sampling_note": "Since the 2026-11-05 Opus rebaseline, n / combined_mean / combined_stdev / combined_sem / combined_range describe ONLY runs 5-7: 3 independent claude-opus-5-5 replays -- runs 5-7 from the 2026-11-05 supervised run (d7cab49e) -- identical frozen inputs. Runs 1-4 are the Fable-era population (doctrine 83547a76, 2026-08-14/15), all tagged excluded_from_golden and kept for audit; their stats were n=4, mean 11.75, stdev 3.2, sem 1.6, range 6. Fable-era sampling note, verbatim: First-ever repeatability check for this deal (run 1 was a lone 2026-08-14 baseline; runs 2-4 added by the 2026-08-15 forced-repeatability run, Gabriel-directed). Range 6.0 pts EXCEEDS the harness's 5.0-pt tolerance on its own -- flagged, not hidden; this deal is informational_only regardless so it does not gate, but the dispersion is worth knowing before trusting any future delta on this row."
   },
   "golden": {
-    "baselined_date": "2026-08-15",
-    "baselined_against_skill_sha": "83547a76651c53c8f3311c2f30db53cbf16fd219",
-    "baselined_method": "mean of 4 independent replays (see repeatability block); REBASELINED 2026-08-15 from the single-run value 9.0 (no repeatability data existed before this pass)",
-    "quality": 11.75,
-    "quality_note": "Partial lower bound in every run -- Product & Physical null in 2 of 4 runs, Seller & Motivation null in 1 of 4, Value-Add null in 2 of 4, on the frozen input packet.",
+    "baselined_date": "2026-11-05",
+    "baselined_against_skill_sha": "d7cab49e96c7770677f46a7152cec7b987c44b3c",
+    "baselined_model": "claude-opus-5-5",
+    "baselined_method": "mean of 3 independent claude-opus-5-5 replays (repeatability runs 5-7): runs 5-7 from the 2026-11-05 supervised run (d7cab49e); REBASELINED 2026-11-05 from the Fable-era value 11.75 (n=4, doctrine 83547a76) per the harness's 2026-10-05 baseline-model limitation -- Gabriel-approved in-turn 2026-11-05 ('Yes, rebaseline': re-baseline the goldens on Opus using that day's replays)",
+    "quality": 16.67,
     "economics": 0.0,
-    "combined": 11.75,
-    "combined_note": "Robust despite the nulls in individual runs: max attainable Combined at the walk price stays well under 60 in every run, so PASS-band holds under any resolution.",
+    "combined": 16.67,
     "category_breakdown": {
       "basis": 0.0,
       "yield": 0.0,
-      "product_physical": 2.25,
-      "market_location": 8.25,
+      "product_physical": 6.67,
+      "market_location": 10.0,
       "seller_motivation": 0.0,
-      "tenancy_lease": 1.0,
-      "value_add": 0.25
+      "tenancy_lease": 0.0,
+      "value_add": 0.0
     },
-    "category_breakdown_sum_check": "0+0+2.25+8.25+0+1.0+0.25 = 11.75, matches Combined exactly. product_physical, seller_motivation, and value_add means treat their respective nulls as 0 points, consistent with lib/aggregate_replays.py.",
-    "expected_score": 3.06,
-    "p_exec_pct": 26.25,
-    "p_exec_pct_caveat": "Mean of 4 discrete band placements (25%/30%/20%/30%), not a real band value itself -- see the analogous caveat on other golden files (e.g. E Fulton REFUTE finding F7). Directional only.",
-    "verdict_tier": "PASS-band (<60) -- FLOOR-FLAGGED (Basis+Yield) / ENV-WATCH / DENOMINATOR-SENSITIVE / INVERTED-SPREAD / OBSOLESCENCE-WATCH; T2 ceilings non-binding at this score",
-    "floor_result": "FLOOR-FLAGGED in all 4 runs -- Basis ~60.7-64.1% discount vs 65% vintage-ramp floor (1970, RCT v03 Columbus LOW $229.65) and YoC ~6.5% vs 8.0% floor both breach; DSCR passes ~1.36x (LTV-bound refi) wherever computed; IRR directionally breached (inverted spread, negative leverage)",
-    "replay_notes": "Environmental: subject's own 1990 MEK release + adjacent contamination sources -> ENV-WATCH (Phase II HIGH probability escalators) in every run. Columbus deal near ramp floor -> OBSOLESCENCE-WATCH in every run. Bear-mode UNKNOWN -> OFF, T2 ceiling (moot below 60) in every run. P(exec) placements varied 20-30% across runs -- no documented band exactly covers a 10-25% gap with zero motivation signals, so this is a judgment placement in every run, not a mechanical read."
+    "category_breakdown_sum_check": "0+0+6.6667+10+0+0+0 = 16.6667, rounds to 16.67, matches Combined. Category means over the 3 Opus runs, a null counted as 0 points per lib/aggregate_replays.py.",
+    "expected_score": 3.33,
+    "expected_score_note": "Mean of the 3 runs' expected_score (3.4/3.4/3.2); all 3 placed P(exec) at the same band midpoint (20%), so it also equals Combined x P(exec) = 16.67 x 0.2 = 3.33.",
+    "p_exec_pct": 20.0,
+    "p_exec_pct_note": "All 3 runs placed the same discrete band midpoint, so this is a real band value, not an average across different bands.",
+    "verdict_tier": "PASS-band (<60) -- FLOOR-FLAGGED (Basis + Yield + IRR) / ENV-WATCH / INVERTED-SPREAD / OBSOLESCENCE-WATCH; T2 ceilings non-binding at this score",
+    "floor_result": "FLOOR-FLAGGED in all 3 runs -- Basis breached (55.3% discount to RCT v03 Columbus LOW at the strict unknown-type PEMB x0.88 = $202.09/SF, 17,500 effective SF, all-in $1,581,000, vs the 65% vintage-ramp floor for 1970; Basis 0 at every SF reading and at x1.00); Yield breached (YoC 6.51% vs 8.0% floor); IRR breached (~7.2-8.9% [est] vs 10.0% [UST UNVERIFIED]); DSCR not computable ([DATA-GAP: UST]); carrying-cost floor UNKNOWN (no reassessed-tax facts)",
+    "replay_notes": "2026-11-05 Opus runs: all 7 categories resolved in all 3. Product & Physical 6-7 on evidence only (unknown clear height/loading and site function score 0; the unknown-type construction line scores as PEMB, about half of 4); Market & Location 10 (established-cluster tier, Gahanna ungraded) in all 3. ENV-WATCH (1990 on-site MEK release meets Phase II escalator iv), INVERTED-SPREAD (6.65% going-in vs 7.50% exit) and OBSOLESCENCE-WATCH in all 3. The Stage -1 item 6 SF test reads differently across runs (OM 19,018 vs footprint 14,000 + 4,800 SF mezzanine), but Economics is 0 at every SF figure, so it never moves Combined. P(exec) 20% (15-25% band midpoint, no motivation signals) in all 3."
   },
   "archived_pre_v03_reference": {
     "note": "Historical only -- screened 2026-06-09, before the 2026-07-14 RCT v03 recalibration, AND internally inconsistent independent of that boundary (see known_gaps). NOT the diff target.",
@@ -85,8 +90,8 @@
   "diff_policy": {
     "primary_signal": "combined_score",
     "tolerance_combined_pts": 5.0,
-    "tolerance_rationale": "Widened harness-wide from an initial arbitrary 3.0 after a repeatability check on the 2 HIGH-confidence deals showed a 3-run range as large as 4.5 pts on identical inputs/doctrine. Moot for this LOW-confidence row's pass/fail (excluded from strict scoring regardless) but kept consistent across all 6 files.",
+    "tolerance_rationale": "Widened harness-wide from an initial arbitrary 3.0 after a repeatability check on the 2 HIGH-confidence deals showed a 3-run range as large as 4.5 pts on identical inputs/doctrine. Moot for this LOW-confidence row's pass/fail (excluded from strict scoring regardless) but kept consistent across all 6 files. 2026-11-05 Opus rebaseline: the golden is now an n=3 mean (stdev 0.58, SEM 0.33); a later 3-replay mean's dispersion against it is about sqrt(0.58^2/3 + 0.58^2/3) = 0.47 pts, so a +/-2 sigma band is about 0.95 pts inside the unchanged 5.0-pt tolerance -- fold further Opus samples into the golden at later runs rather than widening the tolerance.",
     "tier_check": "informational_only",
-    "reason": "LOW confidence: baseline replay has 3 of 7 categories null, and the pre-v03 archive was separately internally inconsistent. Runs and reports; excluded from strict pass/fail."
+    "reason": "LOW confidence: baseline replay has 3 of 7 categories null, and the pre-v03 archive was separately internally inconsistent. Runs and reports; excluded from strict pass/fail. 2026-11-05 Opus golden: 0 of 7 categories null in all 3 runs; confidence left LOW pending Gabriel's decision on whether this deal should gate."
   }
 }
