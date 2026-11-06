@@ -198,9 +198,37 @@ class TestExhibitPopulation(_Base):
         self.assertTrue(r["blocking"])
 
     def test_concatenated_dms_stamps_are_still_empty(self):
-        blocks = BODY_CLEAN + SIG + [P("EXHIBIT A"), P("12345678.v2 87654321.v10")]
+        # The caption line comes first: without it the short stamp line would be
+        # consumed as the caption and the test would pass with DMS handling removed.
+        blocks = BODY_CLEAN + SIG + [P("EXHIBIT A"), P("(Legal Description)"),
+                                     P("12345678.v2 87654321.v10")]
         r = self.audit(blocks)
         self.assertEqual(r["empty_exhibits"], ["A"])
+        self.assertTrue(r["blocking"])
+
+    def test_middle_exhibit_empty_blocks(self):
+        # A ok / B empty / C ok: the empty exhibit is not the last one, so a gate
+        # that only checks the final exhibit, or lets one exhibit's range run into
+        # the next heading, would miss it.
+        body = BODY_CLEAN + [P("4. Leases. The leases are listed on Exhibit B and the "
+                               "estoppels on Exhibit C.")]
+        blocks = body + SIG + EXHIBIT_A_OK + [P("EXHIBIT B"), P("(Rent Roll)"),
+                                              P("EXHIBIT C"), P("(Estoppels)"), P(LOREM)]
+        p = self.doc(blocks)
+        r = ac.audit(p)
+        self.assertEqual([e["letter"] for e in r["exhibits"]], ["A", "B", "C"])
+        self.assertEqual(r["empty_exhibits"], ["B"])
+        self.assertTrue(self.exhibit(r, "A")["populated"])
+        self.assertTrue(self.exhibit(r, "C")["populated"])
+        self.assertTrue(r["blocking"])
+        self.assertEqual(self.run_main(p)[0], 1)
+
+    def test_unreferenced_empty_exhibit_still_blocks(self):
+        # An empty exhibit blocks whether or not the body cites it.
+        blocks = clean_blocks() + [P("EXHIBIT B"), P("(Schedule)")]
+        r = self.audit(blocks)
+        self.assertEqual(r["unreferenced_exhibits"], ["B"])
+        self.assertEqual(r["empty_exhibits"], ["B"])
         self.assertTrue(r["blocking"])
 
     def test_struck_only_exhibit_content_is_empty(self):
@@ -239,17 +267,17 @@ class TestExhibitPopulation(_Base):
         self.assertFalse(e["thin"])
         self.assertFalse(r["blocking"])
 
-    def test_header_only_table_exhibit_is_not_thin_today(self):
-        # KNOWN DEFECT (finding completeness-empty-table-populated, target A-2): a
-        # skeleton table with only a header row counts as populated and is NOT flagged
-        # THIN, because thin requires `not tables`. A-2 flips the thin assertion; the
-        # populated/blocking assertions must stay as they are.
+    def test_header_only_table_exhibit_is_thin_advisory_not_blocking(self):
+        # Finding completeness-empty-table-populated, fixed by A-2: a skeleton table
+        # (header row, no data rows) is flagged advisory THIN. It still counts as
+        # populated and never blocks -- A-2 changed `thin` only.
         tbl = TBL([["Suite", "Tenant", "Rent"], ["", "", ""]])
         blocks = BODY_CLEAN + SIG + [P("EXHIBIT A"), P("(Rent Roll)"), tbl]
         r = self.audit(blocks)
         e = self.exhibit(r, "A")
         self.assertTrue(e["populated"])
-        self.assertFalse(e["thin"])
+        self.assertTrue(e["thin"])
+        self.assertEqual(r["thin_exhibits"], ["A"])
         self.assertFalse(r["blocking"])
 
     def test_empty_table_grid_exhibit_is_populated_today(self):
