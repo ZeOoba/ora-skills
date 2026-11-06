@@ -3,7 +3,7 @@ name: automation-health-monitor
 description: 'Use when checking whether the scheduled Oxford Realty Advisors Cowork automations ran — the scheduled health check (task ora-automation-health-monitor) of every enabled task across the dual-fleet scheduled-task registries (CC/MCP + LAMS/Cowork) plus the off-fleet substrates read-only (live Windows Task Scheduler ORA* tasks; GitHub Actions cron workflows in ora-cowork-watchdog and ora-pm; and the Notion Worker county-sales-monitor run health). Trigger phrases: automation health, task health, fleet health check, scheduled task status, automation monitor, did my tasks run. Posts the status report to the Notion Operations Hub and drafts a failure notification email to ggoldberg@oxfordra.net ONLY (no cc) if any task missed.'
 ---
 
-# Automation Health Monitor (v1.16)
+# Automation Health Monitor (v1.17)
 
 You are the automation health monitor for Oxford Realty Advisors. Your job is to verify that all scheduled Cowork tasks ran as expected and alert Gabriel immediately if any failed silently.
 
@@ -169,6 +169,29 @@ Report as one subsection line per Tier A county plus a single roll-up, e.g. `Not
 
 Report both substrates in the same Notion status page as Step 3, under their own subsection — do not fold their results into the fleet task-status table, since they aren't fleet tasks and a reader needs to know which substrate a row came from.
 
+### Step 1.8 — `ora-pm-daily-crons` script outcome from `cron.log` (added v1.17, 2026-11-05, read-only)
+
+The scheduler's run status is not evidence for this task. `list_task_runs` "succeeded" means only that the session ended. The 2026-10-13, 10-19, 10-26 and 11-02 runs all read "succeeded" while both endpoints returned HTTP 500 (Supabase project auto-paused 2026-10-12). The script's own CRON FAILURE email depends on Outlook COM, which can fail too. So judge the run by `C:\Users\Owner\ora-pm-cron\cron.log`, which the pinger writes before it tries to send anything.
+
+**Never re-run the task and never call its endpoints to "check".** `delinquency-check` posts late fees and `critical-dates-alerts` marks alerts sent. This step reads one file.
+
+1. Take `lastRunAt` for `ora-pm-daily-crons` from the live registry (Step 1's enumeration). No `lastRunAt`, or the task is absent → `PM-CRONS-UNVERIFIABLE` (⚠️); stop this step.
+2. Run `python <this skill's dir>/scripts/pm_crons_log_check.py --last-run-at <lastRunAt>`. Judge by the printed JSON `verdict`, never by the exit code alone: a crash also exits non-zero. No parseable JSON → `PM-CRONS-UNVERIFIABLE` (⚠️), with stderr's last line. If the script is not in the loaded skill, apply the rule below by hand and mark the row `[manual]`.
+3. The rule. Window = `lastRunAt` − 2 min to now. FAIL if the window holds any of:
+   - a `ping-crons  RUN FAILED:` line (`RUN-FAILED`);
+   - an endpoint result line `<ts>  <endpoint>  ->  ERROR ...` or `->  HTTP <non-2xx>` (`ENDPOINT-ERROR`);
+   - no `->` result line at all for `critical-dates-alerts` or `delinquency-check` (`ENDPOINT-MISSING`). `SEND OK`/`SEND SUPPRESSED` lines are not results. Before `lastRunAt` + 60 min this is `PENDING` (ℹ️, the run may still be in flight), not a failure.
+
+   Log timestamps carry mixed offsets (`-04:00`, `-05:00`, `+02:00`); compare in UTC.
+
+Classify and report one row in the off-fleet subsection:
+- **`PM-CRONS-RUN-FAILED` (❌):** verdict FAIL. Quote, verbatim: each finding's kind and endpoint with its status, every `cf_error=` note (e.g. `cf_error=1016 (Supabase project likely PAUSED: ...)`), and the `failure-alert=` token (`SEND OK`, `SEND FAILED exit=n`, or the `<absent ...>` marker). `failure_alert: null` means the log has no RUN FAILED line (the pre-2026-11-05 script never wrote one); say so, since then no CRON FAILURE email was attempted. `later_clean_pass: true` means a full clean pass followed in the same window: note it, the row stays ❌. Goes to Step 4's alert whatever the fleet status says.
+- **`PM-CRONS-LOG-UNREADABLE` (⚠️):** verdict UNREADABLE. Never report the run clean.
+- **`PENDING` (ℹ️)** and **OK (✅):** one line, with `lastRunAt`.
+- If `lastRunAt` is the same run the previous status page already judged (the task missed its slot since), mark the row `carried forward` and keep its severity; Step 1's lateness check owns the missed slot.
+
+*Known positives (real `cron.log`, 2026-11-05):* runs started 2026-10-13T14:11Z, 10-19T13:49Z, 10-26T15:00Z and 11-02T15:01Z each FAIL with two `ENDPOINT-ERROR 500` and `failure_alert: null`. *Known negative:* 2026-10-05T14:21Z is OK. Tests: `tests/test_pm_crons_log_check.py` (repo-only).
+
 ### Step 2 — Search Notion for evidence of execution
 
 For each task that was scheduled to run in the check window:
@@ -281,6 +304,8 @@ If any task shows ⚠️ or ❌ (and Step 3.5 didn't already fold it into a sing
 
 **`COMPS-LAG` / `WORKER-STALE` / `COVERAGE-ERROR` (Notion Worker `county-sales-monitor`):** From `C:\Users\Owner\ora-county-sales-monitor`: `ntn workers sync status`, `ntn workers runs list`, `ntn workers runs logs <runId>`. A single `COMPS-LAG` on one county is usually a transient county-endpoint failure: re-trigger `ntn workers sync trigger countySalesSync` once and re-check next cycle. Rollback is `ntn workers capabilities disable <syncName>`; never delete the Worker or either database. This monitor reports only; the re-trigger is Gabriel's action.
 
+**`PM-CRONS-RUN-FAILED` (`ora-pm-daily-crons`):** `cf_error=1016` means the Supabase project is most likely paused: Gabriel restores it from the Supabase dashboard, and the next scheduled run delivers the critical-dates backlog. Any other status or code: read the ora-pm Pages Functions log. A `failure-alert=SEND FAILED exit=6` means the CRON FAILURE email's delivery is unknown; check Sent Items. Never trigger the task or the endpoints from here: the re-run is Gabriel's call, because `delinquency-check` posts late fees.
+
 **General:** for any task not covered above, read its own `SKILL.md`/`SCHEDULED_TASK.md` (path returned by `list_scheduled_tasks`) for task-specific expected output and failure modes rather than guessing from this list.
 
 ---
@@ -297,18 +322,13 @@ If any task shows ⚠️ or ❌ (and Step 3.5 didn't already fold it into a sing
 
 **Retention rule:** keep the 6 most recent versions as full inline entries, each capped at ~2,000 characters. Adding a 7th compresses the oldest to a one-line pointer here and moves its full text, newest first, into a `versions/CHANGELOG-vA-vB.md` file named for the range it holds (open a new range file once the latest is closed out; repo-only, excluded from packaging), in the same edit that adds the new entry.
 
+- **v1.17 (2026-11-05):** New Step 1.8 judges the latest `ora-pm-daily-crons` run from `C:\Users\Owner\ora-pm-cron\cron.log`, read-only: a `RUN FAILED:` line, an endpoint `ERROR`/non-2xx line, or no result line for either endpoint in the run's window → `PM-CRONS-RUN-FAILED` (❌), with `cf_error=` and `failure-alert=` carried verbatim. It never re-runs the task or calls the endpoints. Root incident: the Supabase project auto-paused 2026-10-12; the 10-13, 10-19, 10-26 and 11-02 runs got HTTP 500 from both endpoints, `list_task_runs` read "succeeded" each time, and no email went out. The new `scripts/pm_crons_log_check.py` holds the rule (19 tests, 10/10 mutants killed). Backtested on the real log: those four runs flag and 10-05 does not. A REMEDIATION entry was added. Per the retention rule, v1.11 is compressed into `versions/CHANGELOG-v1.9-v1.12.md`. No threshold, scored or governor constant changed.
 - **v1.16 (2026-11-05):** The description said this is "the weekday 11:00 AM" check. The task was ported from LAMS to CC on 2026-10-30 with cron `5 11 * * 1` (Mondays, Gabriel's choice), so that was false. The description now names the task instead of a schedule; the live registry is the source for the cron. v1.10 compressed per the retention rule. Wording only; no step, threshold, scored or governor constant changed.
 - **v1.15 (2026-10-30, Gabriel-directed, Cowork optimization research):** New Step 1.6 enumerates the third registry, cloud scheduled tasks via `list_triggers`, and flags `SCOPE-MISSING`, `SCOPE-UNMET`, `SCOPE-OVERATTACHED` and `LOCAL-DEP-NO-DEVICE`, read-only. Root finding 2026-10-30: all three cloud tasks carried the same five connectors (HubSpot, Netlify, Claude_Code_Remote, ms365, Notion) regardless of need, and `Insurance tracker reconciliation (ORA)` needed the OneDrive folder and Outlook COM with no device or folder attached yet logged SUCCEEDED on 2026-09-14 (2m44s). No tool or UI narrows connectors per task, so over-attachment is inventory, not an alert; the `CONNECTOR SCOPE:` prompt line (register-scheduled-task v2.31) is the control this step audits. Per the 6-entry rule, v1.9 compressed; full text in new `versions/CHANGELOG-v1.9-v1.12.md`.
 - **v1.14 (2026-10-15, Gabriel-directed):** Step 1.75 gains the Notion Workers substrate check for `county-sales-monitor`: per Tier A county, newest Coverage row (Run Date within 9 days, Status) cross-checked against the Comps `Last Synced` of in-window rows. New findings `WORKER-STALE`, `COVERAGE-ERROR`, `COVERAGE-WARN`, `COMPS-LAG`, `COUNTY-EMPTY`, `WORKER-DB-UNREADABLE`. Root incident: 2026-10-15 the Baltimore Co Coverage row read OK while 37 of 37 in-window comps were still last synced 2026-10-10, because the Worker's comps pull is log-only with no retry and the coverage sync re-pulls independently. Explicit non-findings: Baltimore sale-date lag, Polk assessor staleness, `LATE-POSTED`. Read-only via Notion MCP, no new scheduled task. Applies to this skill source only; the live LAMS task file has no off-fleet step and is a separate gap (same as v1.13).
 - **v1.13 (2026-09-28, Gabriel-directed):** Step 1.75 gains the GitHub Actions capacity paragraph: a failed run whose jobs ran zero steps and whose check-run annotation names a billing or spending limit is `ACTIONS-BILLING-BLOCKED` (❌, one fleet-level line, de-duped daily), not a broken watchdog or a `BACKUP-FAILED`. The two lines that interpret a `failure` (watchdog, `ora-pm` backups) now carve out the zero-step case, and REMEDIATION GUIDANCE gains an entry. Root incident: 2026-09-28, every PR and `main` in `ZeOoba/oxford-command-center` went red for hours with no step run. Billing-quota readout is best-effort and marked unverified. Applies to this skill source only; the live LAMS task file has no off-fleet step and is a separate gap.
 - **v1.12 (2026-09-13, Fable re-review follow-up):** Step 2a rule item 6 now states that the flag-age line is excluded from FAIL-aging tracking, like the EMAIL-ONLY row. The same review lowered three `min_bytes` floors and tightened one `must_not_match` in the state file (not in this file). Rule block stays byte-identical to `ora-health-guard` v1.15 B.2(C.0c).
-- **v1.11 (2026-09-13, OI-281/OI-288):** New Step 2a, the Notion-publishing-degraded → email-only rule. It reads `~/.claude/maintenance/_state/notion-publish-degraded.json`, the single source of truth. That file holds the flag, `review_by`, the matching rules, a 51-entry producers roster (48 tasks) and `dark_producers`.
-  - **Delivery proof, not run proof.** A rostered producer's missing page becomes an `EMAIL-ONLY (Notion degraded, OI-288)` advisory only when one send-log `[OK] Sent` line satisfies all of these: it matches the pattern, it does not match `must_not_match`, it has `bytes >= min_bytes`, and it falls on the expected ET date. A too-small or `not run` / `COVERAGE GAP` notice is a `fallback notice without report body` and is flagged as before.
-  - **Downgrade only.** Flag missing, unreadable or `active:false` → unchanged behaviour. The rule never cites search-index lag while active.
-  - **Flag-age review line:** ℹ️ until `review_by`, ⚠️ after.
-  - **Self-create check:** Step 3 reports `Notion create succeeded — notion-publish-degraded.json may be clearable` if its own create works, and never clears the flag.
-  - **Revised the same day after independent review:** added `must_not_match`/`min_bytes`, dropped Sent Items as sole evidence, added ET-offset conversion, a reply/forward guard on undated patterns, the flag-age line and full roster coverage.
-  - **Rule text:** byte-identical to `ora-health-guard` v1.14 B.2(C.0c).
+- **v1.11 (2026-09-13, OI-281/OI-288):** New Step 2a, the Notion-publishing-degraded → email-only rule. Full text: `versions/CHANGELOG-v1.9-v1.12.md`.
 - **v1.10 (2026-09-12, `open-items-tracker.md#OI-229`):** Step 1.75's GitHub Actions leg covers the two money-moving `ZeOoba/ora-pm` off-host backups. Full text: `versions/CHANGELOG-v1.9-v1.12.md`.
 - **v1.9 (2026-09-03):** Step 1.75's Windows Task Scheduler roster moved to a machine-readable block in `memory/tech.md` §3h. Full text: `versions/CHANGELOG-v1.9-v1.12.md`.
 - **v1.8 (2026-08-28):** Added Step 1.25, the one-time tickler lifecycle check. Full text: `versions/CHANGELOG-v1.2-v1.8.md`.
