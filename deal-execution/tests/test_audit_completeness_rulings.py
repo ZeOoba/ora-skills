@@ -182,7 +182,7 @@ class TestFormOfExemption(_Base):
         for caption in ("Form of Deed", "(Form of Limited Warranty Deed)",
                         "FORM OF TENANT ESTOPPEL CERTIFICATE",
                         "Exhibit B – Form of Assignment and Assumption of Leases",
-                        "Exhibit B - Form of Bill of Sale", "Form of"):
+                        "Exhibit B - Form of Bill of Sale"):
             with self.subTest(caption=caption):
                 blocks = form_exhibit(caption, *self.BLANKS)
                 r = self.audit(blocks)
@@ -203,7 +203,7 @@ class TestFormOfExemption(_Base):
     def test_data_captions_are_not_forms(self):
         for caption in ("Legal Description", "(Rent Roll)", "Schedule of Leases",
                         "The form of deed is attached", "Formation Documents",
-                        "Form of Payment: $__________"):
+                        "Form of Payment: $__________", "Form of"):
             with self.subTest(caption=caption):
                 r = self.audit(form_exhibit(caption, P("Closing Date: ____________")))
                 self.assertEqual(r["form_exhibits"], [])
@@ -303,13 +303,9 @@ class TestSignatureNotaryRecordingLinesExempt(_Base):
         "Print: ________", "Attest: ________", "ATTEST: ________, Secretary",
         "WITNESSES: ________", "Witness ________", "Signature ________ (Seal)",
         "________________________ (SEAL)", "(Seal) ________",
-        "Grantor: ________", "Grantee: ________", "Seller: ________", "Purchaser: ________",
-        "Buyer: ________", "Landlord: ________", "TENANT: ________", "Assignor: ________",
-        "ASSIGNEE: ________",
-        "ASSIGNOR: ________, a ________ limited liability company",
-        "________, a ________ limited liability company",
-        "________, an Ohio limited liability company",
-        "____________________, a ____________________",
+        # Party labels, entity lines, a bare "STATE OF ____" and the tax-statement /
+        # return-to lines are exempt only inside a signature block (round 3, see
+        # test_audit_completeness_rulings3.py).
         "Notary Public ________", "________, Notary Public",
         "My commission expires: ________", "Commission Expires: ________",
         "My Commission Expiration: ________", "My term expires: ________",
@@ -317,7 +313,7 @@ class TestSignatureNotaryRecordingLinesExempt(_Base):
         "Commission No.: ________", "Printed Name of Notary: ________",
         "Notary Printed Name: ________",
         "STATE OF ________ )", "COUNTY OF ________ )", "STATE OF OHIO ) ss: COUNTY OF ________ )",
-        "STATE OF ________", "COUNTY OF ________ ) ss.",
+        "COUNTY OF ________ ) ss.",
         "Acknowledged before me this ___ day of ________, 20__.",
         "The foregoing instrument was acknowledged before me this ___ day of ________, "
         "20__, by ________, the ________ of ________.",
@@ -331,8 +327,6 @@ class TestSignatureNotaryRecordingLinesExempt(_Base):
         "Executed this ___ day of ____________, 20__.",
         "Dated as of ________, 20__",
         "This instrument prepared by: ________",
-        "Send tax statements to: ________",
-        "After recording return to: ________",
         "Receipt acknowledged this ___ day of ________, 20__",
     ]
 
