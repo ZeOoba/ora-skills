@@ -239,17 +239,17 @@ class TestExhibitPopulation(_Base):
         self.assertFalse(e["thin"])
         self.assertFalse(r["blocking"])
 
-    def test_header_only_table_exhibit_is_not_thin_today(self):
-        # KNOWN DEFECT (finding completeness-empty-table-populated, target A-2): a
-        # skeleton table with only a header row counts as populated and is NOT flagged
-        # THIN, because thin requires `not tables`. A-2 flips the thin assertion; the
-        # populated/blocking assertions must stay as they are.
+    def test_header_only_table_exhibit_is_thin_advisory_not_blocking(self):
+        # Finding completeness-empty-table-populated, fixed by A-2: a skeleton table
+        # (header row, no data rows) is flagged advisory THIN. It still counts as
+        # populated and never blocks -- A-2 changed `thin` only.
         tbl = TBL([["Suite", "Tenant", "Rent"], ["", "", ""]])
         blocks = BODY_CLEAN + SIG + [P("EXHIBIT A"), P("(Rent Roll)"), tbl]
         r = self.audit(blocks)
         e = self.exhibit(r, "A")
         self.assertTrue(e["populated"])
-        self.assertFalse(e["thin"])
+        self.assertTrue(e["thin"])
+        self.assertEqual(r["thin_exhibits"], ["A"])
         self.assertFalse(r["blocking"])
 
     def test_empty_table_grid_exhibit_is_populated_today(self):
