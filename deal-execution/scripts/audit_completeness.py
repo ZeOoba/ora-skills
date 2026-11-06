@@ -134,40 +134,77 @@ _ROW_WRAPPERS = (W + "sdt", W + "sdtContent", W + "customXml")
 
 def _table_rows(tbl: ET.Element) -> list:
     """This table's own rows, including rows wrapped in content controls (w:sdt)
-    or custom XML -- not rows of tables nested inside its cells."""
+    or custom XML -- not rows of tables nested inside its cells. Iterative: wrapper
+    nesting depth is attacker/tool controlled and must not hit the recursion limit."""
     rows = []
-    for ch in tbl:
+    stack = list(reversed(list(tbl)))
+    while stack:
+        ch = stack.pop()
         if ch.tag == W + "tr":
             rows.append(ch)
         elif ch.tag in _ROW_WRAPPERS:
-            rows.extend(_table_rows(ch))
+            stack.extend(reversed(list(ch)))
     return rows
 
 
+_DIGIT_RUN = re.compile(r"\d{3,}")
+
+
+def _row_cells(tr: ET.Element) -> list:
+    return tr.findall(W + "tc") + tr.findall(W + "sdt/" + W + "sdtContent/" + W + "tc")
+
+
+def _is_label_row(tr: ET.Element) -> bool:
+    """A column-header row: 2+ non-empty cells, each a short label (<= 40 chars)
+    with no run of 3+ digits. A single-cell row, a long cell or a value such as a
+    parcel number is content, not a header."""
+    filled = [t for t in (_text_of(tc).strip() for tc in _row_cells(tr)) if t]
+    return len(filled) >= 2 and all(len(t) <= 40 and not _DIGIT_RUN.search(t)
+                                    for t in filled)
+
+
+def _grid_span(tc: ET.Element) -> int:
+    span = tc.find(W + "tcPr/" + W + "gridSpan")
+    if span is None:
+        return 1
+    try:
+        return int(span.get(W + "val", ""))
+    except (TypeError, ValueError):  # "", "x", "²", "①" ... -> unmerged
+        return 1
+
+
 def _header_rows(rows: list) -> int:
-    """Leading header rows: at least one; more when unambiguous -- rows marked as
-    repeating headers (w:tblHeader), or a first row that is one cell merged across
-    columns (a title) followed by the column-header row."""
+    """Number of leading header rows. Normally one, and only if that row reads as
+    column labels. More when unambiguous: a run of rows marked as repeating headers
+    (w:tblHeader -- ignored when EVERY row carries it), or, in a table of 3+ rows,
+    a first row that is one cell merged across columns (a title) followed by the
+    column-label row."""
+    if not rows:
+        return 0
+    marked = [tr.find(W + "trPr/" + W + "tblHeader") is not None for tr in rows]
     n = 1
-    while n < len(rows) and rows[n].find(W + "trPr/" + W + "tblHeader") is not None \
-            and rows[n - 1].find(W + "trPr/" + W + "tblHeader") is not None:
-        n += 1
-    if rows:
+    if not all(marked):
+        while n < len(rows) and marked[n] and marked[n - 1]:
+            n += 1
+    if len(rows) > 2:
         cells = rows[0].findall(W + "tc")
-        span = cells[0].find(W + "tcPr/" + W + "gridSpan") if len(cells) == 1 else None
-        val = span.get(W + "val", "") if span is not None else ""
-        if val.isdigit() and int(val) > 1:
+        if len(cells) == 1 and _grid_span(cells[0]) > 1:
             n = max(n, 2)
+    if not _is_label_row(rows[n - 1]):
+        n -= 1  # the would-be column header is itself content
     return n
 
 
 def _table_has_data(tbl: ET.Element) -> bool:
     """True if any row after the header row(s) carries visible text (deleted text
-    excluded), in this table or in any table nested inside it."""
-    rows = _table_rows(tbl)
-    if any(_text_of(tr).strip() for tr in rows[_header_rows(rows):]):
-        return True
-    return any(_table_has_data(t) for t in tbl.iter(W + "tbl") if t is not tbl)
+    excluded), in this table or in any table nested inside it. Each table in the
+    subtree is examined once (tbl.iter includes tbl itself), so the cost is linear
+    in the number of nested tables rather than exponential in their depth."""
+    for t in tbl.iter(W + "tbl"):
+        rows = _table_rows(t)
+        if any(_text_of(tr).strip() for tr in rows[_header_rows(rows):]):
+            return True
+    return False
 
 
 def _blocks(root: ET.Element) -> list:
@@ -460,7 +497,8 @@ def main(argv: list) -> int:
         return 3
     try:
         r = audit(path)
-    except (zipfile.BadZipFile, KeyError, ET.ParseError, OSError) as exc:
+    except (zipfile.BadZipFile, KeyError, ET.ParseError, OSError,
+            ValueError, RecursionError) as exc:
         print("error: could not read {} as a .docx: {}".format(path.name, exc),
               file=sys.stderr)
         return 3
