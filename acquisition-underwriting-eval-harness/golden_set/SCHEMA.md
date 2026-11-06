@@ -41,6 +41,12 @@ One file per frozen deal in `golden_set/*.json`. Fields:
     mutated-input self-test, not by the unit suite — see harness README).
   - `floor_result`, `category_breakdown` (null where the replay could not derive a component
     from the frozen `inputs`).
+  - `baselined_date`, `baselined_against_skill_sha`, `baselined_model` — provenance of the
+    current `combined`: the date, the `acquisition-underwriting/SKILL.md` commit, and the replay
+    model whose run mean it is (`baselined_model` since the 2026-11-05 Opus rebaseline; absent
+    on older goldens, which are Fable-era means). `combined` always equals the mean of the
+    `repeatability.runs` not tagged `excluded_from_golden`, and `repeatability.n` counts exactly
+    those runs (pinned by `lib/test_aggregate_replays.py`).
   - `archived_pre_v03_reference` (sibling of `golden`, not a field within it) — the ORIGINAL
     Notion-archived score from before the 2026-07-14 RCT v03 recalibration, kept for historical
     context only. Its own tier field is named `archived_verdict_tier` and is never read by
