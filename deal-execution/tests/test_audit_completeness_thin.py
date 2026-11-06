@@ -161,11 +161,13 @@ class TestSkeletonTableIsThin(_Base):
         self.assertTrue(e["thin"])
         self.assert_gate_unchanged_populated(r)
 
-    def test_single_row_table_is_thin_advisory_false_positive(self):
-        # Accepted advisory false positive: a one-row table that IS the data (no
-        # header) cannot be told apart from a header-only skeleton.
+    def test_single_row_value_table_is_data_not_thin(self):
+        # Merge-gate (5): a one-row table that IS the data is not a header row --
+        # a header needs 2+ short, digit-run-free labels; "Parcel 000-000-000" is a
+        # value, so the row counts as data.
         r = self.audit(exhibit_blocks(TBL([["Parcel 000-000-000", "Lorem ipsum"]])))
-        self.assertEqual(r["thin_exhibits"], ["A"])
+        self.assertEqual(r["thin_exhibits"], [])
+        self.assertEqual(self.ex_a(r)["data_tables"], 1)
         self.assert_gate_unchanged_populated(r)
 
 
@@ -255,17 +257,39 @@ class TestMultiRowHeader(_Base):
 
     def test_repeat_header_rows_are_not_data(self):
         hdr = "<w:trPr><w:tblHeader/></w:trPr>"
-        tbl = "<w:tbl>{}{}</w:tbl>".format(ROW(["Rent Roll"], hdr), ROW(HEADER, hdr))
+        tbl = "<w:tbl>{}{}{}</w:tbl>".format(ROW(["Rent Roll"], hdr), ROW(HEADER, hdr),
+                                             ROW(["", "", "", ""]))
         r = self.audit(exhibit_blocks(tbl))
         self.assertEqual(r["thin_exhibits"], ["A"])
+        self.assert_gate_unchanged_populated(r)
+
+    def test_every_row_repeat_header_is_ignored(self):
+        # Merge-gate (5b): when EVERY row carries w:tblHeader the marker says
+        # nothing, so the rows after the first are data.
+        hdr = "<w:trPr><w:tblHeader/></w:trPr>"
+        tbl = "<w:tbl>{}</w:tbl>".format("".join(ROW(x, hdr) for x in [HEADER] + DATA))
+        r = self.audit(exhibit_blocks(tbl))
+        self.assertEqual(r["thin_exhibits"], [])
+        self.assertEqual(self.ex_a(r)["data_tables"], 1)
         self.assert_gate_unchanged_populated(r)
 
     def test_merged_title_row_then_column_row_is_skeleton(self):
         title = ('<w:tr><w:tc><w:tcPr><w:gridSpan w:val="4"/></w:tcPr>{}</w:tc></w:tr>'
                  .format(P("Rent Roll")))
-        tbl = "<w:tbl>{}{}</w:tbl>".format(title, ROW(HEADER))
+        tbl = "<w:tbl>{}{}{}</w:tbl>".format(title, ROW(HEADER), ROW(["", "", "", ""]))
         r = self.audit(exhibit_blocks(tbl))
         self.assertEqual(r["thin_exhibits"], ["A"])
+        self.assert_gate_unchanged_populated(r)
+
+    def test_merged_title_with_single_data_row_is_data(self):
+        # Merge-gate (5a): with only two rows, a merged title plus one row cannot be
+        # told from title + data, so the merged-title rule needs 3+ rows.
+        title = ('<w:tr><w:tc><w:tcPr><w:gridSpan w:val="4"/></w:tcPr>{}</w:tc></w:tr>'
+                 .format(P("Rent Roll")))
+        tbl = "<w:tbl>{}{}</w:tbl>".format(title, ROW(DATA[0]))
+        r = self.audit(exhibit_blocks(tbl))
+        self.assertEqual(r["thin_exhibits"], [])
+        self.assertEqual(self.ex_a(r)["data_tables"], 1)
         self.assert_gate_unchanged_populated(r)
 
     def test_merged_title_row_with_data_is_ok(self):
@@ -338,15 +362,69 @@ class TestReviewRound2(_Base):
 
     def test_deeply_nested_dataless_tables_are_fast(self):
         # C8: data detection must not be exponential in nesting depth.
-        inner = P("")
-        for _ in range(22):
-            inner = "<w:tbl>{}</w:tbl>".format(ROW([("xml", P("hdr") + inner)]))
+        inner = TBL([[""]])
+        for _ in range(21):
+            inner = "<w:tbl>{}{}</w:tbl>".format(ROW([""]), ROW([("xml", inner + P(""))]))
         p = self.doc(exhibit_blocks(inner))
         t0 = time.perf_counter()
         r = ac.audit(p)
         self.assertLess(time.perf_counter() - t0, 1.0)
         self.assertEqual(r["thin_exhibits"], ["A"])
         self.assertFalse(r["blocking"])
+
+
+LEGAL = ("Situate in Lorem County, being Lot 12 of Example Industrial Park as recorded "
+         "in Plat Book 40, Page 15, of the Recorder's Office records.")
+
+
+class TestMergeGateRound(_Base):
+    """Merge-gate review of 230f16cf (BLOCK): deep row wrappers, internal errors,
+    and header false positives that made populated tables read THIN."""
+
+    def test_deeply_wrapped_rows_do_not_recurse_out(self):
+        # (2) rows wrapped 600 levels deep in w:sdt: must not raise RecursionError.
+        rows = ROW(["Tenant One", "100"])
+        for _ in range(600):
+            rows = "<w:sdt><w:sdtContent>{}</w:sdtContent></w:sdt>".format(rows)
+        p = self.doc(exhibit_blocks("<w:tbl>{}{}</w:tbl>".format(ROW(HEADER), rows)))
+        rc, _, err = self.run_main(p)
+        self.assertEqual(rc, 0)
+        self.assertEqual(err, "")
+        r = ac.audit(p)
+        self.assertEqual(self.ex_a(r)["data_tables"], 1)
+        self.assertEqual(r["thin_exhibits"], [])
+
+    def test_internal_error_exits_3_not_1(self):
+        # (3) any remaining internal error is a tool error (3), never a block (1).
+        p = self.doc(exhibit_blocks(TBL([HEADER])))
+        real = ac.audit
+        for exc in (ValueError("x"), RecursionError("x")):
+            with self.subTest(exc=type(exc).__name__):
+                def boom(_path, _exc=exc):
+                    raise _exc
+                ac.audit = boom
+                try:
+                    rc, out, err = self.run_main(p)
+                finally:
+                    ac.audit = real
+                self.assertEqual(rc, 3)
+                self.assertEqual(out, "")
+
+    def test_header_false_positives_are_not_thin(self):
+        # (5) fp probe cases: populated single-cell / value / merged-data tables.
+        span2 = ('<w:tr><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr>{}</w:tc></w:tr>'
+                 .format(P(LEGAL)))
+        cases = {
+            "boxed legal description": TBL([[LEGAL]]),
+            "merged first row holding the data": "<w:tbl>{}{}</w:tbl>".format(
+                span2, ROW(["", ""])),
+            "key/value row": TBL([["Parcel No.", "000-123456-00"], ["", ""]]),
+        }
+        for name, tbl in cases.items():
+            with self.subTest(case=name):
+                r = self.audit(exhibit_blocks(tbl))
+                self.assertFalse(self.ex_a(r)["thin"])
+                self.assert_gate_unchanged_populated(r)
 
 
 class TestBlockingUnchanged(_Base):
