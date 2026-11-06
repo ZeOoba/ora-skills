@@ -2,13 +2,13 @@
 
 # Oxford Realty Advisors | Cowork Scheduled Task Configuration
 
-# Version: 2.2 | Created: 2026-04-04 | Synced to companion SKILL.md 2026-07-08 (Skill Text Audit finding 10 — previously stamped 1.0/2026-04-04 while SKILL.md had advanced to v2.1; this file is not versioned independently, it tracks SKILL.md) | CRITICAL fix 2026-07-16 (ora-skill-text-audit v1.6 full run, finding F1) — this file cc'd egoldberg@oxfordra.net on every auto-sent completion/failure email, contradicting the companion SKILL.md's own description ("email summary to ggoldberg@oxfordra.net ONLY") and the ggoldberg-only routing canon. All 5 cc instances removed below; SKILL.md itself required no change (it was already correct).
+# Version: not versioned independently; follows the companion SKILL.md's H1 version (the "2.2" stamp here went stale and was dropped 2026-11-05) | Created: 2026-04-04 | Synced to companion SKILL.md 2026-07-08 (Skill Text Audit finding 10 — previously stamped 1.0/2026-04-04 while SKILL.md had advanced to v2.1; this file is not versioned independently, it tracks SKILL.md) | CRITICAL fix 2026-07-16 (ora-skill-text-audit v1.6 full run, finding F1) — this file cc'd egoldberg@oxfordra.net on every auto-sent completion/failure email, contradicting the companion SKILL.md's own description ("email summary to ggoldberg@oxfordra.net ONLY") and the ggoldberg-only routing canon. All 5 cc instances removed below; SKILL.md itself required no change (it was already correct).
 
 ---
 
 ## TASK IDENTITY
 
-**Task Name:** ORA Lease Abstraction Pipeline — Scheduled Run **Skill:** lease-abstraction-pipeline (v1.1) **Owner:** Gabriel Goldberg | [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net)**Notify on completion:** [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (auto-send, no confirmation required) **Notify on failure:** [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (auto-send, subject: "❌ Lease Pipeline FAILED — \[date\]")
+**Task Name:** ORA Lease Abstraction Pipeline — Scheduled Run **Skill:** lease-abstraction-pipeline (version per its SKILL.md H1) **Owner:** Gabriel Goldberg | [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net)**Notify on completion:** [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (auto-send, no confirmation required) **Notify on failure:** [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (auto-send, subject: "❌ Lease Pipeline FAILED — \[date\]")
 
 ---
 
@@ -40,7 +40,7 @@ SettingManual RunScheduled RunPause for individual lease ambiguityNeverNeverAuto
 2. **Process each file** — ingest → extract 30 fields → compute derived metrics → apply quality flags
 3. **Build XLSX workbook** — all 6 tabs per [SKILL.md](http://SKILL.md) spec
 4. **Save XLSX to SharePoint** — folder: `Oxford Realty Advisors > Lease Abstracts > [Year]`. File naming per ORA's three standing naming schemas (ratified 2026-06-10; ORA Cowork Global Operating Prompt v3.0, 2026-07-16 — do NOT unify; supersedes the archived v2.0/2026-06-11 doc of the same ratified rule). This is a session/analysis output → use `YYYY-MM-DD_[Topic]_[DocType]_v##.ext` in an `/outputs/` subfolder. (Supersedes the single unified "ORA File-Naming Standard 2026-05-14.md," which predates the 2026-06-10 three-schema ratification and is retained only as historical provenance.)
-5. **Upsert Notion Tenant Database** — update existing, create new, skip newer records
+5. **Upsert Notion Tenant Database** — follow SKILL.md STEP 7 exactly: update only a single unambiguous match; write nothing on two-plus candidates, or on zero candidates where the portfolio-wide search finds a counterpart; create only when `EXECUTION_STATUS` = EXECUTED and the expiration is today or later; skip records Notion shows as newer than the lease document
 6. **Auto-send completion email** to [ggoldberg@oxfordra.net](mailto:ggoldberg@oxfordra.net) ONLY (see template below)
 7. **Log run** in Notion Operations Hub — "Lease Pipeline Run — \[Date\]" page
 
