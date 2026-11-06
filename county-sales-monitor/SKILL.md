@@ -12,7 +12,7 @@ description: >
   acquisition-underwriting COMPS mode.
 ---
 
-# county-sales-monitor (v0.11)
+# county-sales-monitor (v0.12)
 
 Produce a recurring digest of recently recorded industrial sales and transfers
 across ORA's target-market counties, so Gabriel sees what actually traded — at
@@ -29,7 +29,7 @@ SF, keep the row and mark SF `unpublished` — never drop it. Trailing window:
 **30 days, ratified by Gabriel 2026-08-15** (weekly was considered and
 rejected — recording lag makes a 7-day window too thin to trust, and 30 days
 gives enough volume for a real median $/SF). Geography: the
-Tier A counties only (below) — the other eight ORA clusters are Tier B/C,
+Tier A counties only (below) — the other ORA clusters are Tier B/C,
 documented as the next expansion phase, not yet in scope. No minimum price,
 no maximum price, no value band.
 
@@ -500,6 +500,10 @@ valuation input); Baltimore Co assessments run ~64% below recent industrial
 sales, so ratio-based arm's-length tests must be per-county, never global.
 
 ## Changelog
+- **v0.12 (2026-11-05):** The Geography line said "the other eight ORA clusters
+  are Tier B/C". That was true while Tier A held three clusters; with Cook IL
+  (v0.10) and the Indianapolis cluster (v0.11) promoted it is six, so the line
+  now names no count. Wording only; no county, tier or price rule changed.
 - **v0.11 (2026-10-30):** Indianapolis cluster IN (Marion, Hamilton, Boone,
   Hendricks, Johnson, Hancock) promoted to Tier A as a partial-price source. The
   Worker adapter is `src/counties/indiana.ts` + `src/sdf.ts`. Only priced
