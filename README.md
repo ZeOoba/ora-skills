@@ -43,13 +43,13 @@ flowchart TD
         PK["_pk_stage/ built .skill zips (untracked; *.skill ignored)"]
         WT[".worktrees .claude-worktrees .superpowers"]
     end
-    TM -- "SHARED_ROOT_DEPS inject at package time (7 skills)" --> Pkg
+    TM -- "SHARED_ROOT_DEPS inject at package time" --> Pkg
     T --> Pkg["package_skills.py -> .skill zip"]
     S --> Pkg
     Pkg --> PK
     PK --> Import["Manual Cowork Save skill import"]
     Import --> Cache["AppData runtime cache"]
-    Pkg -. "ora_doc_qc.py injected into 5 QC skills" .-> S
+    Pkg -. "ora_doc_qc.py injected into QC skills" .-> S
 ```
 <!-- diagram-verified: 2026-10-06 against .gitignore, tools/package_skills.py SHARED_ROOT_DEPS -->
 
@@ -329,10 +329,17 @@ commit-time gates, so `--no-verify` or a clone without `core.hooksPath` cannot s
 against the PR base). Job `skill-tests` runs `bash tools/run_skill_suites.sh`: it first runs
 `skill_ci_gates.py packaged-layout` (packages each skill that declares a shared `.py` dependency into a
 temp dir outside the repo and confirms its scripts resolve the packaged copy), then runs the skill-level
-test suites listed in `GATED_SKILL_SUITES` in `tools/skill_ci_gates.py` through `tools/run_suite.sh`
-(same zero-fail / zero-skip / zero-empty / no-bare-test rules). `skill_ci_gates.py suites` refuses to
-list suites if any `test_*.py` under a skill dir is neither gated nor in `EXCLUDED_SKILL_SUITES`, so a new
-suite cannot silently go ungated. Run locally with `bash tools/run_skill_suites.sh`.
+test suites (every `test_*.py` under a skill dir, auto-discovered) through `tools/run_suite.sh`
+(same zero-fail / zero-skip / zero-empty / no-bare-test rules). A file opts out only with a top-level
+`CI_EXCLUDE = "<reason>"` line; an empty reason fails the gate. Run locally with `bash tools/run_skill_suites.sh`.
+`skill_ci_gates.py suite-continuity --base auto` (CI only; the local runner does not run it)
+fails if a suite present at the PR base is no longer discovered on HEAD, unless (a) some file
+added in base..HEAD under `_archive/` has a path ending `<skill>/<rest>` or
+`<skill>_retired-YYYY-MM-DD/<rest>` (any depth under `_archive/`; only the path is checked, not
+that the content is the moved file), or (b) any commit in base..HEAD has a line starting
+`Suite-Removed: <path>` (it need not be the removing commit or in the trailer block, because
+GitHub squash bodies place a branch commit's trailer mid-body). Recommended practice is stricter
+than the gate: `git mv <skill> _archive/<skill>_retired-YYYY-MM-DD` and a trailer on the removing commit.
 
 ## Conventions
 

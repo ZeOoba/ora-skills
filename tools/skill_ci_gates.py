@@ -20,13 +20,26 @@ Subcommands (each exits 0 clean, 1 on a finding, 2 on a usage/environment error)
                            re-run against the PR base so a --no-verify commit can't skip it).
                            R may be `auto` (resolved from GITHUB_REF / GITHUB_EVENT_BEFORE).
   suites                   print the gated skill test files (repo-relative, one per line) for
-                           tools/run_suite.sh, after checking that every test_*.py under a
-                           skill dir is either gated or explicitly excluded.
+                           tools/run_suite.sh: every test_*.py under a skill dir, minus any
+                           file declaring a top-level CI_EXCLUDE = "<reason>" (listed on stderr).
+  suite-continuity --base R  fail if a skill test file present at R is no longer discovered on HEAD
+                           (renamed, deleted, or its SKILL.md removed), unless it moved to
+                           (a) some file added in R..HEAD under `_archive/` has a path ending
+                           `<skill>/<rest>` or `<skill>_retired-YYYY-MM-DD/<rest>` (any depth;
+                           path-only, content not compared), or (b) any commit in R..HEAD has a
+                           line starting `Suite-Removed: <path>`. (Recommended practice is a git mv
+                           to `_archive/<skill>_retired-YYYY-MM-DD` and a trailer on the removing
+                           commit; the gate is looser.) Excused
+                           suites are listed on stdout. Also fails if the AST-parsed SKIP
+                           (last top-level assignment) of HEAD's tools/package_skills.py differs
+                           from the imported value (e.g. a mutation via .add/.discard/|=/rebind). R may be `auto`, as for
+                           target-markets. Runs in CI only, not in tools/run_skill_suites.sh.
   packaged-layout          package() every skill that declares a SHARED_ROOT_DEPS .py file into
                            a temp dir OUTSIDE the repo (so the dev-checkout sys.path fallback
                            to tools/ cannot resolve), extract it, and confirm each staged
                            script that imports the shared module resolves the packaged copy.
 """
+import ast
 import json
 import os
 import re
@@ -52,41 +65,6 @@ from package_skills import (  # noqa: E402
 
 TARGET_MARKETS = 'target-markets.json'
 
-# ---------------------------------------------------------------------------
-# Skill-level test suites (F1). Every test_*.py that lives under a skill directory
-# must appear in exactly one of these two lists -- `suites` fails on any file in
-# neither, so a newly added suite can never silently go ungated.
-# Entries are repo-relative globs, expanded by tools/run_suite.sh.
-# ---------------------------------------------------------------------------
-GATED_SKILL_SUITES = [
-    'lease-form-qc/tests/test_*.py',
-    'lease-addendum/tests/test_*.py',
-    'listing-agreement-qc/tests/test_*.py',
-    'lease-generation/tests/test_*.py',
-    'dirty-tree-triage/tests/test_*.py',
-    'land/tests/test_*.py',
-    'rent-roll-reconciliation/tests/test_*.py',
-    'website-perfection/tests/test_*.py',
-    'masterlease-jurisdiction-rebase/scripts/test_*.py',
-    'acquisition-underwriting-eval-harness/lib/test_aggregate_replays.py',
-    'acquisition-underwriting-eval-harness/lib/test_diff_verdict.py',
-    'acquisition-underwriting-eval-harness/lib/test_doctrine_skip_gate.py',
-    'acquisition-underwriting-eval-harness/lib/test_record_run.py',
-    'acquisition-underwriting-eval-harness/lib/test_resolve_run_dir.py',
-    'debt-management/tests/test_*.py',
-]
-
-# path-glob -> reason. Excluded suites are follow-ups, not permanent exemptions: fix the
-# cause, then move the entry to GATED_SKILL_SUITES. (pma-qc/tests and vendor-management/tests
-# hold fixture .txt files only, no test_*.py, so there is nothing to gate or exclude there.)
-EXCLUDED_SKILL_SUITES: dict[str, str] = {
-    # Passes on Windows (local, 2026-10-03) and fails on ubuntu-latest (first skill-gates
-    # run, 2026-10-03): the code/tests lean on Windows' case-insensitive filesystem.
-    'acquisition-underwriting-eval-harness/lib/test_parse_replays.py':
-        'case-sensitive filesystem: duplicate_agent_ids expects case-folding',
-}
-
-
 def skill_dirs(repo: Path = REPO) -> list[Path]:
     return [d for d in sorted(repo.iterdir())
             if d.is_dir() and d.name not in package_skills.SKIP and (d / 'SKILL.md').is_file()]
@@ -103,33 +81,54 @@ def discover_skill_test_files(repo: Path = REPO) -> list[str]:
     return found
 
 
-def _expand(globs, repo: Path) -> dict[str, list[str]]:
-    return {g: sorted(p.relative_to(repo).as_posix() for p in repo.glob(g) if p.is_file())
-            for g in globs}
+# ---------------------------------------------------------------------------
+# Skill-level test suites (F1; auto-discovery since 2026-11-05, maintenance-reduction
+# bundle 1 -- the hand-kept GATED/EXCLUDED lists were a recurring follow-up-commit source).
+# Every test_*.py under a skill directory is gated automatically. To keep one out of CI,
+# put a top-level assignment in that file (parsed with ast, so docstring text never counts):
+#     CI_EXCLUDE = "<reason>"
+# An exclusion is a follow-up, not a permanent exemption: fix the cause, delete the line.
+# The suite-continuity gate (below) catches suites that vanish versus the PR base.
+# ---------------------------------------------------------------------------
+def ci_exclude_reason(path: Path) -> str | None:
+    """The stripped CI_EXCLUDE reason of `path`, or None if it declares none.
+
+    A reason exists only when the module body has a top-level plain assignment
+    `CI_EXCLUDE = <str literal>` (single target; trailing comments are fine). Anything else --
+    marker text inside a docstring, expressions, annotated assignments, non-str values, a
+    nested assignment, a file that does not parse -- leaves the file gated; a syntax error
+    surfaces when the suite runs. The returned reason may be '' (callers treat it as an error)."""
+    try:
+        tree = ast.parse(path.read_text(encoding='utf-8', errors='replace'))
+    except (SyntaxError, ValueError):
+        return None
+    for node in tree.body:
+        if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name) and node.targets[0].id == 'CI_EXCLUDE'
+                and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)):
+            return node.value.value.strip()
+    return None
 
 
-def suite_coverage(repo: Path = REPO, gated=None, excluded=None) -> tuple[list[str], list[str]]:
-    """Return (gated_files, errors). errors lists: a gated/excluded glob matching nothing
-    (a renamed suite must not silently vanish), a file both gated and excluded, and a
-    discovered skill test file in neither list."""
-    gated = GATED_SKILL_SUITES if gated is None else gated
-    excluded = EXCLUDED_SKILL_SUITES if excluded is None else excluded
-    errors = []
-    g_map, x_map = _expand(gated, repo), _expand(list(excluded), repo)
-    for label, m in (('gated', g_map), ('excluded', x_map)):
-        for glob, files in m.items():
-            if not files:
-                errors.append(f'{label} suite glob {glob!r} matches no file')
-    g_files = sorted({f for fs in g_map.values() for f in fs})
-    x_files = {f for fs in x_map.values() for f in fs}
-    for f in sorted(set(g_files) & x_files):
-        errors.append(f'{f}: listed as both gated and excluded')
-    for f in discover_skill_test_files(repo):
-        if f not in g_files and f not in x_files:
-            errors.append(f'{f}: skill test file is neither gated nor excluded -- add it to '
-                          f'GATED_SKILL_SUITES (or EXCLUDED_SKILL_SUITES with a reason) in '
-                          f'tools/skill_ci_gates.py')
-    return g_files, errors
+def excluded_suites(repo: Path = REPO) -> dict[str, str]:
+    """Skill test files carrying a CI_EXCLUDE marker -> their (possibly empty) reason."""
+    out = {}
+    for rel in discover_skill_test_files(repo):
+        reason = ci_exclude_reason(repo / rel)
+        if reason is not None:
+            out[rel] = reason
+    return out
+
+
+def suite_coverage(repo: Path = REPO) -> tuple[list[str], list[str]]:
+    """Return (gated_files, errors). Gated = every discovered skill test file without a
+    CI_EXCLUDE marker. errors lists any marker whose reason is empty -- an exclusion must
+    say why, or it is indistinguishable from an accident."""
+    excluded = excluded_suites(repo)
+    errors = [f'{rel}: CI_EXCLUDE has an empty reason -- state why it is excluded, or delete '
+              f'the line to gate it' for rel, reason in excluded.items() if not reason]
+    gated = [rel for rel in discover_skill_test_files(repo) if rel not in excluded]
+    return gated, errors
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +283,186 @@ def cmd_target_markets(base_arg: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Suite continuity vs the PR base: auto-discovery gates what exists, so a renamed or deleted
+# suite file (or a deleted SKILL.md, which stops discovery of its tests) would otherwise drop
+# out of CI silently.
+# ---------------------------------------------------------------------------
+_SUITE_REMOVED = re.compile(r'^Suite-Removed:[ \t]*(\S.*?)[ \t]*$', re.M)
+
+
+def _archived_as(rel: str, head_archive_paths: set[str]) -> bool:
+    """True if some added archive path is `rel` re-homed under `_archive/`: the skill dir keeps its
+    name or takes the standard `<skill>_retired-YYYY-MM-DD` form, and the skill-relative rest is
+    identical. Anchored at a path-segment boundary so `_archive/ab/...` never excuses skill `a`."""
+    skill, _, rest = rel.partition('/')
+    pat = re.compile(rf'(?:^|/){re.escape(skill)}(?:_retired-[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})?/'
+                     rf'{re.escape(rest)}$')
+    return any(pat.search(a) for a in head_archive_paths)
+
+
+def suite_continuity_report(base_files: set[str], head_files: set[str],
+                            head_archive_paths: set[str], declared_removed: set[str]
+                            ) -> tuple[list[str], dict[str, str]]:
+    """(errors, excused). Each base suite file absent from head is excused when a commit declared
+    its removal via a Suite-Removed trailer ('Suite-Removed') or it moved under `_archive/` in this
+    range ('archive'); otherwise it is an error."""
+    errors, excused = [], {}
+    for rel in sorted(base_files - head_files):
+        if rel in declared_removed:
+            excused[rel] = 'Suite-Removed'
+        elif _archived_as(rel, head_archive_paths):
+            excused[rel] = 'archive'
+        else:
+            errors.append(f'{rel}: suite present at the PR base is no longer discovered on HEAD '
+                          f'(renamed, deleted, or its SKILL.md removed). Restore it, move it to '
+                          f'_archive/<skill>/ or _archive/<skill>_retired-YYYY-MM-DD/, or add a '
+                          f'"Suite-Removed: {rel}" trailer to the removing commit')
+    return errors, excused
+
+
+def vanished_suites(base_files: set[str], head_files: set[str], head_archive_paths: set[str],
+                    declared_removed: set[str]) -> list[str]:
+    """Errors only; see suite_continuity_report."""
+    return suite_continuity_report(base_files, head_files, head_archive_paths, declared_removed)[0]
+
+
+_DEFAULT_SKIP = frozenset({'_archive', 'tools', '.git'})
+
+
+def _parse_skip(source: str) -> set[str] | None:
+    """The LAST top-level `SKIP = <literal>` (or annotated) assignment in `source`, evaluated with
+    literal_eval (last wins, as Python rebinding does); None if there is none or it is not a
+    literal collection of str. `SKIP.add(...)`-style mutation is invisible here by design; the
+    head self-consistency check in cmd_suite_continuity catches it."""
+    try:
+        nodes = ast.parse(source).body
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
+        return None
+    value = None
+    for node in nodes:
+        if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == 'SKIP' for t in node.targets):
+            value = node.value
+        elif (isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+              and node.target.id == 'SKIP' and node.value is not None):
+            value = node.value
+    if value is None:
+        return None
+    if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
+            and value.func.id in ('set', 'frozenset') and len(value.args) == 1
+            and not value.keywords):
+        value = value.args[0]
+    try:
+        got = ast.literal_eval(value)
+    except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
+        return None
+    if isinstance(got, (set, frozenset, list, tuple)) and all(isinstance(x, str) for x in got):
+        return set(got)
+    return None
+
+
+def base_skip_set(base: str, repo: Path = REPO) -> set[str]:
+    """SKIP as written in `tools/package_skills.py` AT `base` (the last top-level assignment,
+    parsed with ast and evaluated with literal_eval). Falls back to the default set on ANY
+    `git show` failure (file absent at base, bad ref, git error) and when the assignment is
+    absent or not a literal. Deliberately not head's SKIP: a head edit that adds a skill to SKIP
+    must not hide that skill's base suites."""
+    r = _git('show', f'{base}:tools/package_skills.py', repo=repo)
+    if r.returncode == 0:
+        got = _parse_skip(r.stdout)
+        if got is not None:
+            return got
+    return set(_DEFAULT_SKIP)
+
+
+def head_skip_inconsistency(repo: Path = REPO) -> bool:
+    """True if HEAD's tools/package_skills.py SKIP, as the AST sees it, differs from the SKIP the
+    running tool imported (a mutation via `.add`/`.discard`/`|=`, a rebind inside a block, or a computed value would make the
+    base-side AST parse untrustworthy). False when the file is absent at HEAD (nothing to check)."""
+    r = _git('show', 'HEAD:tools/package_skills.py', repo=repo)
+    if r.returncode != 0:
+        return False
+    return _parse_skip(r.stdout) != set(package_skills.SKIP)
+
+
+def base_suite_files(base: str, repo: Path = REPO) -> set[str]:
+    """test_*.py paths at `base` under a top-level skill dir (one that held a SKILL.md at base),
+    minus the dirs in the BASE commit's SKIP (so a merged SKIP addition stops being reported on
+    later PRs, while a SKIP edit made on head cannot hide suites). Raises RuntimeError if
+    `git ls-tree` fails."""
+    r = _git('ls-tree', '-r', '--name-only', '-z', base, repo=repo)
+    if r.returncode != 0:
+        raise RuntimeError(f'git ls-tree -r {base} failed (rc {r.returncode}): {r.stderr.strip()}')
+    skip = base_skip_set(base, repo)
+    names = [n for n in r.stdout.split('\0') if n]
+    skills = {n.split('/')[0] for n in names if n.count('/') == 1 and n.endswith('/SKILL.md')} - skip
+    return {n for n in names
+            if n.split('/')[0] in skills and '/' in n and '__pycache__' not in n.split('/')
+            and n.rsplit('/', 1)[-1].startswith('test_') and n.endswith('.py')}
+
+
+def declared_removed_suites(base: str, repo: Path = REPO) -> set[str]:
+    """Paths named by `Suite-Removed: <repo-relative path>` lines in base..HEAD commit messages.
+    Matches at any line start, not only the final trailer block, deliberately: GitHub squash
+    bodies concatenate the PR's commit messages, so a trailer lands mid-body. Raises RuntimeError
+    if `git log` fails."""
+    r = _git('log', '--format=%B', f'{base}..HEAD', repo=repo)
+    if r.returncode != 0:
+        raise RuntimeError(f'git log {base}..HEAD failed (rc {r.returncode}): {r.stderr.strip()}')
+    return {m.group(1) for m in _SUITE_REMOVED.finditer(r.stdout)}
+
+
+def archived_suite_paths(base: str, repo: Path = REPO) -> set[str]:
+    """`_archive/` test files ADDED in base..HEAD (-M, A only). With the `_archive/` pathspec a
+    move from outside the archive always shows as A, never R; an R would only be a copy that
+    already lived under `_archive/` at base, which cannot account for a suite deleted in this
+    range. Raises RuntimeError if `git diff` fails."""
+    r = _git('diff', '--name-only', '-z', '-M', '--diff-filter=A', base, 'HEAD', '--', '_archive/',
+             repo=repo)
+    if r.returncode != 0:
+        raise RuntimeError(f'git diff {base} HEAD -- _archive/ failed (rc {r.returncode}): '
+                           f'{r.stderr.strip()}')
+    return {n for n in r.stdout.split('\0')
+            if n and '__pycache__' not in n.split('/')
+            and n.rsplit('/', 1)[-1].startswith('test_') and n.endswith('.py')}
+
+
+def cmd_suite_continuity(base_arg: str, repo: Path = REPO) -> int:
+    base = resolve_base(base_arg, repo=repo)
+    ok = _git('rev-parse', '--verify', '--quiet', f'{base}^{{commit}}', repo=repo)
+    if ok.returncode != 0:
+        print(f'suite-continuity: base {base!r} is not a commit in this clone (fetch-depth: 0?)',
+              file=sys.stderr)
+        return 2
+    try:
+        base_files = base_suite_files(base, repo)
+        archived = archived_suite_paths(base, repo)
+        declared = declared_removed_suites(base, repo)
+    except RuntimeError as e:
+        print(f'suite-continuity: {e}', file=sys.stderr)
+        return 2
+    if head_skip_inconsistency(repo):
+        print('tools/package_skills.py SKIP must be a single top-level literal set (AST parse '
+              'disagrees with the imported value)', file=sys.stderr)
+        return 1
+    errors, excused = suite_continuity_report(
+        base_files, set(discover_skill_test_files(repo)), archived, declared)
+    for e in errors:
+        print(e, file=sys.stderr)
+    if errors:
+        return 1
+    sha = _git('rev-parse', base, repo=repo).stdout.strip() or base
+    for rel, how in sorted(excused.items()):
+        print(f'excused: {rel} ({how})')
+    if excused:
+        print(f'suite-continuity: {len(base_files)} base suite(s), {len(excused)} excused, '
+              f'{len(base_files) - len(excused)} present versus base {sha[:12]}')
+    else:
+        print(f'suite-continuity: {len(base_files)} base suite(s) all present versus base {sha[:12]}')
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Packaged-layout import check (F1 shared-file staging)
 # ---------------------------------------------------------------------------
 def staged_import_targets(skill: str, staged_root: Path, deps=None) -> list[tuple[Path, str]]:
@@ -352,12 +531,19 @@ def main(argv=None) -> int:
             print('usage: skill_ci_gates.py target-markets --base <ref|auto>', file=sys.stderr)
             return 2
         return cmd_target_markets(argv[2])
+    if cmd == 'suite-continuity':
+        if len(argv) != 3 or argv[1] != '--base':
+            print('usage: skill_ci_gates.py suite-continuity --base <ref|auto>', file=sys.stderr)
+            return 2
+        return cmd_suite_continuity(argv[2])
     if cmd == 'suites':
         files, errors = suite_coverage()
         for e in errors:
             print(e, file=sys.stderr)
         if errors:
             return 1
+        for rel, reason in sorted(excluded_suites().items()):
+            print(f'excluded (CI_EXCLUDE): {rel} -- {reason}', file=sys.stderr)
         print('\n'.join(files))
         return 0
     if cmd == 'packaged-layout':
