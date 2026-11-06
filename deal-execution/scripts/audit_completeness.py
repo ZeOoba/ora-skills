@@ -183,6 +183,7 @@ def audit(path: Path) -> dict:
     for n, (start, letter) in enumerate(heads):
         end = heads[n + 1][0] if n + 1 < len(heads) else limit
         chars = media = tables = 0
+        data_tables = prose_chars = 0
         caption = ""
         for j in range(start + 1, end):
             kind, el = blocks[j]
@@ -191,6 +192,11 @@ def audit(path: Path) -> dict:
             if kind == "tbl":
                 tables += 1
                 chars += len(t)
+                # A header row with no non-blank row after it (a skeleton rent roll
+                # or schedule) is populated but says nothing: advisory THIN only.
+                rows = el.findall(W + "tr")
+                if any(_text_of(tr).strip() for tr in rows[1:]):
+                    data_tables += 1
                 continue
             if DMS_STAMP_RE.match(t):
                 continue  # law-firm document stamp, not exhibit content
@@ -199,12 +205,16 @@ def audit(path: Path) -> dict:
                 caption = t
                 continue
             chars += len(t)
+            prose_chars += len(t)
         populated = bool(chars or media or tables)
         exhibits.append({
             "letter": letter, "caption": caption, "block": start,
             "text_chars": chars, "images": media, "tables": tables,
+            "data_tables": data_tables,
             "populated": populated,
-            "thin": populated and chars < 60 and not tables,
+            "thin": populated and ((chars < 60 and not tables)
+                                   or (tables and not data_tables
+                                       and prose_chars < 60)),
         })
 
     # ---- 2. cross-references ---------------------------------------------
@@ -322,11 +332,20 @@ def render(r: dict) -> str:
         add("   !! Trace what depends on it before signing: definitions,")
         add("   !! representation carve-outs and delivery obligations commonly")
         add("   !! hang off exhibits and fail silently when they are blank.")
-    if r["thin_exhibits"]:
+    skeleton = [e["letter"] for e in r["exhibits"]
+                if e["thin"] and e["tables"] and not e.get("data_tables")]
+    prose_thin = [x for x in r["thin_exhibits"] if x not in skeleton]
+    if prose_thin:
         add("   ?  THIN: {} — ask whether a third party could draft from it. A "
-            "recordable".format(", ".join(r["thin_exhibits"])))
+            "recordable".format(", ".join(prose_thin)))
         add("      instrument cannot be prepared from an aerial markup, nor a deed "
             "from a parcel number.")
+    if skeleton:
+        add("   ?  THIN: {} — table has a header row and no data rows (skeleton "
+            "rent roll".format(", ".join(skeleton)))
+        add("      or schedule). Anything defined by reference to it is empty; "
+            "populate it or")
+        add("      confirm it is intentionally blank.")
 
     add("")
     add("-- 2. CROSS-REFERENCES " + "-" * 54)
