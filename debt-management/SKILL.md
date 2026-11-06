@@ -3,7 +3,7 @@ name: "debt-management"
 description: "Use when the user mentions: refinance, refi, term sheet, lender selection, loan negotiation, DSCR, debt yield, LTV, debt covenant, lender call, prepayment, defeasance, swap, rate cap, hedge, balloon, maturity, loan reserves, lender package, capital stack, recap, mezzanine, preferred equity — ORA debt and capital-markets skill. Also on an uploaded term sheet, commitment letter, lender proposal or amortization schedule. SOLE path for PAYOFF STATEMENTS in either direction: payoff letter or figure, per diem, title company payoff request or authorization, seller-financed note payoff or release, auditing a payoff quoted TO us. Strategic hold/refi/1031/sell decisions route to disposition-analysis first."
 ---
 
-# Debt Management (v1.6)
+# Debt Management (v1.7)
 
 Manage and optimize ORA's debt across the loan lifecycle: origination, monitoring, covenant compliance, refinance evaluation, lender relationships — and payoff statements on notes ORA **holds** as well as notes ORA **owes**.
 
@@ -17,9 +17,10 @@ Refinance evaluation, term-sheet redline, lender call prep, covenant test, DSCR/
 
 ## Inputs
 
-- Notion debt schedule (linked from Operations Hub `32b6ecd8`)
+- The live ORA Master Workbook (SharePoint, per Notion pointer page `3706ecd8-9e59-813a-b4c7-ecbc2c213fa8`), `External Loans Summary` sheet. Read it FIRST for current loan terms and balances: the firm's read order puts the Master Workbook first for firm figures. JV rows on that sheet (e.g. 9050 Red Branch Rd) are Oxford-share, i.e. halved. Payoff, prepayment, loan sizing and lender covenants use the full-basis balance (the loan's amortization tab, or the instrument). A ratio is unaffected only when both of its sides use the share basis.
+- Notion debt schedule / Loans DB (linked from Operations Hub `32b6ecd8`). Fallback only, and state its last-refreshed date whenever a figure comes from it: on 2026-09-21 it held balances up to five payments stale (per the stranded `ora-loan-balance-check` task spec).
 - Loan documents in SharePoint `/Loans External/[entity]/` and cross-referenced property folders
-- The `loans-external-register` Cowork artifact (register of record for tracked terms — read-only input, never edit from a summary)
+- The `loans-external-register` Cowork artifact (register of record for tracked terms — read-only input, never edit from a summary). It has no live maintainer: the LAMS/Cowork fleet is dark.
 - Term sheets, amortization schedules, payoff authorizations uploaded by user
 - Capital-markets benchmarks (10Y Treasury, SOFR, BBB CMBS spreads, life-co spreads)
 
@@ -150,7 +151,7 @@ Report variances with the arithmetic shown; do not accept a lender's total on it
 ## Standard Workflows (non-payoff)
 
 ### Refinance Evaluation
-1. Pull current loan terms from Notion debt schedule.
+1. Pull current loan terms from the live Master Workbook `External Loans Summary` sheet. Use the Notion debt schedule only as a fallback, with its last-refreshed date stated (see Inputs).
 2. Calculate breakeven refi rate including prepay penalty, defeasance, points, legal.
 3. Build NPV comparison: hold-current vs. refi-now vs. refi-at-maturity.
 4. Survey market: 3+ lender quotes. Use HubSpot lender-relationship database for outreach.
@@ -198,11 +199,12 @@ Report variances with the arithmetic shown; do not accept a lender's total on it
 - communication-intelligence skill (for lender/title-company email drafts)
 - xlsx skill (for sensitivity models)
 - docx skill (for memo and payoff-letter deliverables)
-- `ora-loan-terms-reconciliation` scheduled task (monthly register-vs-instrument drift check)
+- `ora-loan-terms-reconciliation` (monthly register-vs-instrument drift check) — a LAMS/Cowork task, currently disabled with the rest of that fleet; it was last hand-run 2026-10-29; nothing runs it on a schedule. Do not assume a recent run.
 - `references/ltv-interim-netting-checklist.md` (INTERIM aggregate-LTV test, step 5 and step 0), Gabriel's ledger it names (read only), and the live Master Workbook
 
 ## Changelog
 
+- v1.7 (2026-11-05): source-of-record order for loan terms. Inputs and Refinance Evaluation step 1 pulled current loan terms from the Notion debt schedule. The live Master Workbook `External Loans Summary` sheet now comes first (firm read order), and the Notion debt schedule / Loans DB is a fallback only, with its last-refreshed date stated: on 2026-09-21 it held balances up to five payments stale (stranded `ora-loan-balance-check` task spec). Inputs now says the `loans-external-register` artifact has no live maintainer (the LAMS/Cowork fleet is dark). Dependencies now states that `ora-loan-terms-reconciliation` is a disabled LAMS/Cowork task, last hand-run 2026-10-29, with nothing running it on a schedule. Review corrections applied the same day: that line replaced an earlier wrong "no such task" tombstone, and Inputs now says the `External Loans Summary` JV rows are Oxford-share while payoff, prepayment, sizing and covenants use the full-basis balance. No scored or governor constant changed.
 - v1.6 (2026-10-26): **INTERIM portfolio-aggregate LTV test** (Gabriel, in-turn, 2026-10-26; simplified at his direction the same day to a minimal, Gabriel-run, fail-closed procedure). New Refinance Evaluation step 5 and Term-Sheet step 0 point to the new `references/ltv-interim-netting-checklist.md` and its Gabriel-owned pending ledger, closing by procedure the gap that the STAGE 2.3 all-cash governor sees only booked debt. No script or register. **No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).**
 - v1.5 (2026-10-17): Corrected the A3 30/360 day count (the old formula had no year term and returned −316 for Dec 1 → Jan 15; correct is 44) and added `scripts/daycount.py` with tests (Bond Basis, US/SIA end-of-February, 30E/360; NASD refused). No governor constant, trigger vocabulary or QC gate touched.
 - v1.4 (2026-09-07): ORA Automation Audit R23-9-adjacent — a full pairwise trigger sweep found "refinance" shared with disposition-analysis (strategic hold/refi/1031/sell decision vs. this skill's execution). Added a one-clause deferral: strategic refi-vs-other-exit calls route to disposition-analysis first. Reciprocal clause added there. No procedure, QC gate, or trigger vocabulary otherwise changed.
