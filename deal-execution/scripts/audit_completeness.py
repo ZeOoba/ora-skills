@@ -103,78 +103,187 @@ BLANK_PATTERNS = [
 ]
 # Inside an exhibit that follows the signature page, a blank is a BODY blank
 # (blocking) unless its LINE is a genuine signature, notary or recording-form line
-# (Gabriel's ruling, 2026-11-06). Paragraphs are split on w:br / w:cr first. The
-# test is deliberately narrow (see _is_signature_line): a line carrying "$" is never
-# exempt; every "Label:" on the line must be a signature/notary/recording label;
-# any parenthetical other than a seal marker disqualifies the line; a bare signature
-# rule is exempt as a paragraph but not inside a table cell (a blank rent-roll cell);
-# venue lines must have the venue shape ("STATE OF OHIO ) ss:"), so a legal
-# description that starts "State of Ohio, County of ..., Parcel No. ____" blocks;
-# notary wording counts only in its anchored sentence or title forms.
-_SEAL_RE = re.compile(r"\(\s*(?:seal|l\.?\s?s\.?)\s*\)", re.IGNORECASE)
+# (Gabriel's rulings, 2026-11-06). Paragraphs are split on w:br / w:cr first and
+# each line is classified by _classify_line:
+#   exempt  -- signature labels with nothing but the blank (By:, Name:, Title:,
+#              Its:, Date:, Authorized Signatory:, Attest: ...), a bare rule, a
+#              (SEAL) line, venue lines in venue shape ("STATE OF OHIO ) ss:",
+#              "____ COUNTY )", MD "..., TO WIT:"), and the notary acknowledgment
+#              forms used in OH / IN / MD / MO / KS / WI / TN
+#   context -- exempt only inside a signature block (a By:/Name:/notary/venue cue
+#              within 3 lines, or in the same table cell): party labels (Tenant:,
+#              Seller:, Grantee:, Return to: ...) with nothing after the blank,
+#              entity lines ("____, a ____ limited liability company"), a bare
+#              "COUNTY OF ____", and a bare rule in a multi-cell table
+#   body    -- everything else: any line with "$", a value word (rent, price,
+#              parcel, lot, suite, term, deposit ...) after its signature label, a
+#              second non-signature label, or a non-seal parenthetical.
+# Lines over 400 characters are never exempt. Every pattern is anchored and bounded
+# (no nested quantifiers): a 10k-character line is judged in microseconds.
+_SEAL_RE = re.compile(r"\(\s*(?:notary\s+)?(?:seal|l\.?\s?s\.?)\s*\)", re.IGNORECASE)
+_STATUTORY_RE = re.compile(
+    r"\(\s*(?:date|state|name|title|name\s+of\s+(?:officer|company|entity|corporation|"
+    r"partnership|limited\s+liability\s+company|llc|signer|acknowledger)|"
+    r"title\s+of\s+(?:officer|signer))\s*\)", re.IGNORECASE)   # OH statutory short form
 _LABEL_RE = re.compile(r"([A-Za-z][A-Za-z.'/ ]{0,40}?)\s*:")
-_SIGNATURE_LABELS = frozenset("""
+_LEAD_LABEL_RE = re.compile(r"^([A-Za-z][A-Za-z.'/ ]{0,40}?)\s*:")
+_CORE_LABELS = frozenset("""
 by|name|title|its|date|dated|signature|signed|print|print name|printed name|witness|
 witnesses|attest|authorized signatory|authorized signature|name and title|name/title|
-date signed|grantor|grantee|seller|purchaser|buyer|landlord|tenant|assignor|assignee|
-notary|notary public|my commission expires|commission expires|my commission expiration|
-commission expiration|my term expires|my appointment expires|my county of residence|
-county of residence|commission no.|commission no|commission number|
-printed name of notary|notary printed name|notary name|this instrument prepared by|
-prepared by|send tax statements to|tax statements to|after recording return to|
-return to|ss|ss.""".replace("\n", "").split("|"))
-_VENUE_RE = re.compile(
-    r"^(?:(?:state|commonwealth|county|parish)\s+of\s+[^,:()]{0,30}?\s*\)?\s*"
-    r"(?:ss\.?:?\s*)?)+$", re.IGNORECASE)
+date signed|notary|notary public|signature of notary public|my commission expires|
+commission expires|my commission expiration|commission expiration|my term expires|
+my appointment expires|my county of residence|county of residence|commission no.|
+commission no|commission number|printed name of notary|notary printed name|notary name|
+this instrument prepared by|prepared by|ss|ss.""".replace("\n", "").split("|"))
+_CONTEXT_LABELS = frozenset("""
+grantor|grantee|seller|purchaser|buyer|landlord|tenant|assignor|assignee|return to|
+after recording return to|send tax statements to|tax statements to|
+mail tax statements to""".replace("\n", "").split("|"))
+_VALUE_WORD_RE = re.compile(
+    r"\b(?:rents?|price|parcels?|lots?|suites?|terms?|deposits?|square\s+f(?:ee|oo)t|"
+    r"sq\.?\s*ft|acres?|commencement|expiration|closing|effective|consideration|"
+    r"dollars|amount|fees?|apn)\b", re.IGNORECASE)
+_V1 = r"(?:state|commonwealth|county|parish)\s+of\s+[^,:()]{1,30}?\s*(?:\)\s*(?:ss\.?:?)?|ss\.?:?)"
+_V2 = r"_{2,}\s+county\s*\)"
+_VENUE_RE = re.compile(r"^(?:{0}|{1})(?:\s*(?:{0}|{1}))?\s*$".format(_V1, _V2), re.IGNORECASE)
+_MD_VENUE_RE = re.compile(
+    r"^state\s+of\s+[a-z ]{1,30},\s*(?:city|county)\s+of\s+[^,]{1,30},\s*to\s+wit:?$",
+    re.IGNORECASE)
+_BARE_VENUE_RE = re.compile(r"^(?:state|commonwealth|county|parish)\s+of\s+_{2,}$", re.IGNORECASE)
 _ENTITY = (r"(?:limited\s+liability\s+company|corporation|limited\s+partnership|"
            r"general\s+partnership|partnership|trust|company|llc|l\.l\.c\.)")
-_SIGNATURE_FORMS = [re.compile(x, re.IGNORECASE) for x in (
-    r"^(?:by|its|witness|signature|print|attest)\s+_{2,}\s*$",        # "By ____"
-    r"^notary\s+public\s*_{2,}\s*$", r"^_{2,}\s*,?\s*notary\s+public\.?\s*$",
-    r"^(?:the\s+foregoing\s+[a-z ]{0,40}?\s+was\s+)?acknowledged\s+before\s+me\b",
+_FORMS = [re.compile(x, re.IGNORECASE) for x in (
+    r"^(?:by|its|witness|signature|print|attest)\s+_{2,}$",
+    r"^notary\s+public\s*_{2,}$", r"^_{2,}\s*,?\s*notary\s+public\.?$",
+    r"^notary\s+public\s*,?\s+_{2,}\s+county\s*,?\s*[a-z ]{0,20}$",
+    r"^notary\s+public\s*[-,]\s*state\s+of\s+[a-z ]{1,20}\s*_{2,}$",
+    r"^_{2,}\s*,?\s*notary\s+public\s*,?\s*my\s+commission\s+expires:?\s*_{2,}$",
+    r"^my\s+commission\s+expires:?\s*_{2,}$",
+    r"^my\s+commission\s*\(\s*is\s+permanent\s*\)\s*\(\s*expires:?\s*_{2,}\s*\)$",
+    r"^(?:the\s+foregoing\s+[a-z ]{0,40}?\s+was\s+|this\s+instrument\s+was\s+)?"
+    r"acknowledged\s+before\s+me\b",
     r"^(?:subscribed\s+and\s+)?sworn\s+to\s+(?:and\s+subscribed\s+)?before\s+me\b",
+    r"^subscribed\s+and\s+sworn\b",
     r"^before\s+me,?\s.*\bpersonally\s+appeared\b",
-    r"^on\s+[^.]{0,80}?\bbefore\s+me\b.*\bpersonally\s+appeared\b",
-    r"^personally\s+appeared\s+before\s+me\b",
-    r"^_{2,},?\s+an?\s+_{2,}(?:\s+" + _ENTITY + r")?\.?\s*$",       # entity lines
-    r"^_{2,},?\s+an?\s+[A-Za-z][A-Za-z .-]{0,30}?\s+" + _ENTITY + r"\.?\s*$",
+    r"^on\s+[^.]{0,80}?\bbefore\s+me\b.*\bappeared\b",
+    r"^personally\s+(?:appeared|came)\s+before\s+me\b",
+    r"^(?:as\s+)?witness\s+my\s+hand\b", r"^in\s+testimony\s+whereof\b",
+    r"^given\s+under\s+my\s+hand\b", r"^i\s+hereby\s+certify\b",
+    r"^this\s+instrument\s+(?:was\s+)?prepared\s+by:?\s*_{2,}\s*,?\s*"
+    r"(?:attorney\s+at\s+law|esq\.?)?\.?$",
+    r"^i\s+affirm,?\s+under\s+the\s+penalties\s+for\s+perjury\b.{0,200}?"
+    r"\bsocial\s+security\s+number",
     r"^(?:executed|dated|signed)(?:\s+and\s+delivered)?(?:\s+(?:as\s+of|this|on))?"
-    r"(?:\s+the)?\s+_{2,}\s+day\s+of\s+_{2,}(?:\s*,?\s*(?:(?:19|20)?_{2,}|\d{4}))?\.?\s*$",
-    r"^dated\s+(?:as\s+of\s+)?_{2,}\s*,?\s*(?:(?:19|20)?_{2,}|\d{4})?\.?\s*$",
+    r"(?:\s+the)?\s+_{2,}\s+day\s+of\s+_{2,}(?:\s*,?\s*(?:(?:19|20)?_{2,}|\d{4}))?\.?$",
+    r"^dated\s+(?:as\s+of\s+)?_{2,}\s*,\s*(?:(?:19|20)_{2,}|\d{4}|_{2,})\.?$",
     r"^receipt\s+(?:is\s+hereby\s+)?acknowledged\s+this\s+_{2,}\s+day\s+of\s+_{2,}"
-    r"(?:\s*,?\s*(?:19|20)?_{2,})?\.?\s*$",
+    r"(?:\s*,?\s*(?:19|20)?_{2,})?\.?$",
 )]
+_CONTEXT_FORMS = [re.compile(x, re.IGNORECASE) for x in (
+    r"^_{2,},?\s+an?\s+_{2,}(?:\s+" + _ENTITY + r")?\.?$",
+    r"^_{2,},?\s+an?\s+[A-Za-z][A-Za-z .-]{0,30}?\s+" + _ENTITY + r"\.?$",
+)]
+# A neighbouring line that marks a signature / notary block.
+_SIG_CUE_RE = re.compile(
+    r"^(?:by|name|title|its|signature|authorized\s+signatory|printed\s+name)\b\s*:?"
+    r"|^_{2,}\s*(?:\(\s*seal\s*\))?$|\(\s*(?:notary\s+)?seal\s*\)|notary\s+public"
+    r"|acknowledged\s+before\s+me|personally\s+(?:appeared|came)|sworn\s+to"
+    r"|^\)?\s*ss\b|^(?:state|commonwealth|county|parish)\s+of\b[^,]{0,40}(?:\)|\bss\b)",
+    re.IGNORECASE)
+
+
+def _norm_label(x: str) -> str:
+    return re.sub(r"\s+", " ", x).strip().lower()
+
+
+def _classify_line(line: str, in_table: bool) -> str:
+    """'exempt', 'context' (exempt only inside a signature block) or 'body'."""
+    t = line.replace(" ", " ").strip()
+    if len(t) > 400 or "$" in t:
+        return "body"
+    seal = bool(_SEAL_RE.search(t))
+    t = re.sub(r"\s+", " ", _STATUTORY_RE.sub(" ", _SEAL_RE.sub(" ", t))).strip()
+    if re.fullmatch(r"_{2,}", t):
+        return "exempt" if (seal or not in_table) else "context"
+    if _VENUE_RE.match(t) or _MD_VENUE_RE.match(t):
+        return "exempt"
+    if _BARE_VENUE_RE.match(t):
+        return "context"
+    m = _LEAD_LABEL_RE.match(t)
+    lead = _norm_label(m.group(1)) if m else None
+    sig_lead = lead in _CORE_LABELS or lead in _CONTEXT_LABELS
+    rest = t[m.end():] if (m and sig_lead) else t
+    if _VALUE_WORD_RE.search(rest):
+        return "body"
+    if any(rx.match(t) for rx in _FORMS):
+        return "exempt"
+    if any(rx.match(t) for rx in _CONTEXT_FORMS):
+        return "context"
+    if "(" in t or ")" in t or not sig_lead:
+        return "body"
+    if any(_norm_label(x.group(1)) not in _CORE_LABELS and
+           _norm_label(x.group(1)) not in _CONTEXT_LABELS for x in _LABEL_RE.finditer(t)):
+        return "body"
+    if lead in _CONTEXT_LABELS:
+        return "context" if re.fullmatch(r"\s*_{2,}\s*", rest) else "body"
+    return "exempt"
 
 
 def _is_signature_line(line: str, in_table: bool) -> bool:
-    t = line.strip()
-    if "$" in t:
-        return False
-    seal = bool(_SEAL_RE.search(t))
-    t = re.sub(r"\s+", " ", _SEAL_RE.sub(" ", t)).strip()
-    if re.fullmatch(r"_{2,}", t):
-        return seal or not in_table   # bare rule: not a blank rent-roll cell
-    if _VENUE_RE.match(t):
-        return True
-    if "(" in t or ")" in t:
-        return False                  # e.g. 'Name: ____ (Purchaser)', '(the "Date")'
-    labels = [re.sub(r"\s+", " ", m.group(1)).strip().lower()
-              for m in _LABEL_RE.finditer(t)]
-    if any(lb not in _SIGNATURE_LABELS for lb in labels):
-        return False                  # e.g. 'By: ____ Purchase Price: ____'
-    if labels and _LABEL_RE.match(t):
-        return True                   # line starts with a signature label
-    return any(rx.match(t) for rx in _SIGNATURE_FORMS)
+    """True if the line is exempt on its own (no signature-block context needed)."""
+    return _classify_line(line, in_table) == "exempt"
 
 
-# Gabriel's ruling, 2026-11-06: an exhibit captioned "Form of ..." (form of deed,
-# assignment, estoppel ...) is a template completed at closing; its blanks never
-# block. The caption is one of the first two blocks after the heading (or a later
-# paragraph of a heading table), starts with "Form of" (optionally after
-# "Exhibit X -" or "("), and carries no blank itself.
+# Gabriel's rulings, 2026-11-06: an exhibit captioned "Form of ..." (form of deed,
+# assignment, estoppel, bill of sale, notice letter ...) is a template completed at
+# closing; its blanks never block -- but a DATA caption (rent roll, legal
+# description, property description, schedule / list of leases, "leases" without a
+# form noun) overrides the exemption. The caption is the FIRST non-blank block after
+# the heading (spacers, page breaks and a "to Purchase Agreement" heading
+# continuation skipped; soft breaks joined). Accepted shapes: "Form of X",
+# "(Form of X)", "[FORM OF] X", "X (Form)", "Exhibit B - Form of X",
+# "Exhibit B to Purchase Agreement: Form of X". Rejected: bare "Form of", a caption
+# that says "attached", a body-text colon after "Form of", a caption with a blank.
 FORM_CAPTION_RE = re.compile(
-    r"^\(?\s*(?:exhibit\s+[A-Z](?:-\d+)?\s*[-–—:.]?\s*)?form\s+of\b",
-    re.IGNORECASE)
+    r"^\(?\s*(?:exhibit\s+[\"'“”]?[A-Z0-9]{1,3}(?:-\d+)?[\"'“”]?"
+    r"(?:\s+to\s+[^:–—]{1,80}?)?\s*[-–—:.]\s*)?"
+    r"\[?\s*form\s+of\s*\]?\s+(?P<rest>\S.*)$", re.IGNORECASE)
+_FORM_SUFFIX_RE = re.compile(r"\(\s*form\s*\)\s*$", re.IGNORECASE)
+_DATA_CAPTION_RE = re.compile(
+    r"\b(?:rent\s+roll|legal\s+description|property\s+description|description\s+of\s+"
+    r"(?:the\s+)?(?:property|premises|land|real\s+property)|schedule\s+of\s+leases|"
+    r"lease\s+schedule|list\s+of\s+leases|leases?\s+list)\b", re.IGNORECASE)
+_FORM_NOUN_RE = re.compile(
+    r"\b(?:deed|assignment|estoppel|bill\s+of\s+sale|notice|letter|certificate|affidavit|"
+    r"memorandum|guarant(?:y|ee)|consent|snda|subordination|release|conveyance|"
+    r"agreement|assumption)\b", re.IGNORECASE)
+_CONTINUATION_RE = re.compile(
+    r"^to\s+(?:the\s+)?(?:[a-z]+\s+){0,6}?(?:agreement|contract|psa)\b", re.IGNORECASE)
+# Any block that reads like the start of another exhibit / schedule ends a Form-of
+# region, recognised heading or not (EXHIBIT "D", EXHIBIT D:, SCHEDULE 1 - Rent Roll).
+_HEADING_LIKE_RE = re.compile(
+    r"^\s*(?:exhibit|schedule|annex|appendix|attachment)\s+[\"'“”]?[A-Z0-9]{1,3}"
+    r"(?:-\d+)?[\"'“”]?\s*(?:[:.\-–—]\s*.{0,80})?$", re.IGNORECASE)
+
+
+def _is_form_caption(c: str) -> bool:
+    c = re.sub(r"\s+", " ", c.replace(" ", " ")).strip()
+    if not c or len(c) > 150 or re.search(r"\battached\b", c, re.IGNORECASE):
+        return False
+    if any(rx.search(c) for rx, _ in BLANK_PATTERNS):
+        return False
+    m = FORM_CAPTION_RE.match(c)
+    if m:
+        if ":" in m.group("rest"):
+            return False                 # "Form of payment: wire transfer"
+    elif not _FORM_SUFFIX_RE.search(c):
+        return False
+    if _DATA_CAPTION_RE.search(c):
+        return False                     # data caption overrides (ruling 2026-11-06)
+    if re.search(r"\bleases\b", c, re.IGNORECASE) and not _FORM_NOUN_RE.search(c):
+        return False
+    return True
+
 
 KNOWLEDGE_DEF_RE = re.compile(
     r"(?:to\s+(?:the\s+)?(?:Seller|Purchaser|Buyer)(?:'s|’s)?\s+(?:actual\s+)?knowledge"
@@ -353,50 +462,130 @@ def _first_blank(t: str):
     return None
 
 
-def _exhibit_blank(i: int, kind: str, el: ET.Element, skip_heading: bool = False):
-    """A blank in a block inside a post-signature exhibit, checked LINE by line
-    (paragraphs split at soft breaks; a table is checked cell paragraph by cell
-    paragraph). Returns (entry, is_body): body if any blank sits on a line that is
-    not a signature/notary/recording line, signature if every blank does, (None,
-    False) if there is none. skip_heading skips the EXHIBIT X paragraph of a heading
-    table."""
-    paras = [el] if kind == "p" else (list(el.iter(W + "p")) or [el])
-    in_table = kind == "tbl"
-    sig_hit = None
-    for para in paras:
-        if skip_heading and EXHIBIT_HEAD_RE.match(_text_of(para).strip()):
-            continue
-        for line in _para_lines(para):
-            lt = line.strip()
-            if not lt or DMS_STAMP_RE.match(lt):
-                continue
-            hit = _first_blank(lt)
-            if not hit:
-                continue
-            entry = {"block": i, "kind": hit[0], "context": hit[1]}
-            if not _is_signature_line(lt, in_table):
-                return entry, True
-            sig_hit = sig_hit or entry
-    return sig_hit, False
+def _joined_lines(el: ET.Element) -> str:
+    return " ".join(x.strip() for x in _para_lines(el) if x.strip())
 
 
-def _form_caption(blocks: list, texts: list, start: int, end: int) -> bool:
-    """True if the exhibit at heading block `start` is captioned "Form of ..."."""
-    cands = []
+def _block_lead_text(kind: str, el: ET.Element) -> str:
+    """A block's text for caption / heading-like tests: a paragraph's joined lines,
+    or a table's first non-empty paragraph."""
+    if kind == "tbl":
+        for para in el.iter(W + "p"):
+            t = _joined_lines(para)
+            if t:
+                return t
+        return ""
+    return _joined_lines(el)
+
+
+def _form_info(blocks: list, start: int, end: int):
+    """(is_form, form_end): is the exhibit at heading block `start` captioned as a
+    real "Form of ..." exhibit, and where its form region ends (the first
+    heading-like block after the caption, else `end`)."""
+    caption, cap_j = None, None
     kind, el = blocks[start]
     if kind == "tbl":
         after = False
         for para in el.iter(W + "p"):
-            pt = _text_of(para).strip()
-            if after and pt:
-                cands.append(pt)
-            if EXHIBIT_HEAD_RE.match(pt):
-                after = True
-        cands = cands[:2]
-    for j in range(start + 1, min(start + 3, end)):
-        cands.append(texts[j].strip())
-    return any(c and len(c) <= 150 and FORM_CAPTION_RE.match(c) and not _first_blank(c)
-               for c in cands)
+            pt = _joined_lines(para)
+            if not after:
+                after = bool(EXHIBIT_HEAD_RE.match(_text_of(para).strip()))
+                continue
+            if pt and not _CONTINUATION_RE.match(pt):
+                caption, cap_j = pt, start
+                break
+    if caption is None:
+        for j in range(start + 1, end):
+            pt = _block_lead_text(*blocks[j])
+            if not pt or DMS_STAMP_RE.match(pt) or _CONTINUATION_RE.match(pt):
+                continue
+            caption, cap_j = pt, j
+            break
+    if caption is None or not _is_form_caption(caption):
+        return False, start
+    for j in range(cap_j + 1, end):
+        if _HEADING_LIKE_RE.match(_block_lead_text(*blocks[j])):
+            return True, j
+    return True, end
+
+
+def _exhibit_stream(blocks: list, start: int, end: int) -> list:
+    """Lines of a post-signature exhibit, in order: (block, cell, multi_cell, line).
+    `cell` identifies the table cell a line sits in (None for a paragraph line);
+    `multi_cell` is True for a line in a table of more than one cell. The EXHIBIT X
+    paragraph of a heading block is skipped."""
+    out = []
+    for i in range(start, end):
+        kind, el = blocks[i]
+        if i == start and kind != "tbl":
+            continue
+        if kind != "tbl":
+            paras = [el] if kind == "p" else (list(el.iter(W + "p")) or [el])
+            for para in paras:
+                for ln in _para_lines(para):
+                    out.append((i, None, False, ln.strip()))
+            continue
+        owner = {}
+        cells = list(el.iter(W + "tc"))
+        for tc in cells:
+            for para in tc.iter(W + "p"):
+                owner[para] = tc      # innermost cell wins (document order)
+        multi = len(cells) > 1
+        for para in el.iter(W + "p"):
+            if i == start and EXHIBIT_HEAD_RE.match(_text_of(para).strip()):
+                continue
+            cell = owner.get(para)
+            for ln in _para_lines(para):
+                out.append((i, id(cell) if cell is not None else None, multi, ln.strip()))
+    return out
+
+
+def _in_signature_block(stream: list, k: int, by_cell: dict, para_pos: dict) -> bool:
+    """Is line k next to a signature / notary cue (same table cell, else within
+    three non-empty paragraph lines)?"""
+    i, cell, _multi, _line = stream[k]
+    if cell is not None:
+        return any(_SIG_CUE_RE.search(stream[x][3]) for x in by_cell[cell] if x != k)
+    pos = para_pos[k]
+    plines = para_pos["order"]
+    for q in plines[max(0, pos - 3):pos] + plines[pos + 1:pos + 4]:
+        if _SIG_CUE_RE.search(stream[q][3]):
+            return True
+    return False
+
+
+def _scan_exhibit(stream: list, form_end: int, is_form: bool):
+    """Classify the blanks of one post-signature exhibit. Returns three dicts
+    block -> entry: form (exempt template), body (blocking) and signature."""
+    by_cell, order = {}, []
+    for k, (_i, cell, _m, ln) in enumerate(stream):
+        if not ln:
+            continue
+        if cell is not None:
+            by_cell.setdefault(cell, []).append(k)
+        else:
+            order.append(k)
+    para_pos = {k: n for n, k in enumerate(order)}
+    para_pos["order"] = order
+    form, body, sig = {}, {}, {}
+    for k, (i, cell, multi, ln) in enumerate(stream):
+        if not ln or DMS_STAMP_RE.match(ln):
+            continue
+        hit = _first_blank(ln)
+        if not hit:
+            continue
+        entry = {"block": i, "kind": hit[0], "context": hit[1]}
+        if is_form and i < form_end:
+            form.setdefault(i, entry)
+            continue
+        verdict = _classify_line(ln, multi)
+        if verdict == "context":
+            verdict = "exempt" if _in_signature_block(stream, k, by_cell, para_pos) else "body"
+        if verdict == "body":
+            body.setdefault(i, entry)
+        else:
+            sig.setdefault(i, entry)
+    return form, body, sig
 
 
 def audit(path: Path) -> dict:
@@ -461,7 +650,7 @@ def audit(path: Path) -> dict:
             "letter": letter, "caption": caption, "block": start,
             "text_chars": chars, "images": media, "tables": tables,
             "data_tables": data_tables,
-            "form": _form_caption(blocks, texts, start, end),
+            "form": _form_info(blocks, start, end)[0],
             "populated": populated,
             "thin": populated and ((chars < 60 and not tables)
                                    or (tables and not data_tables
@@ -511,32 +700,33 @@ def audit(path: Path) -> dict:
     # ---- 3. unfilled blanks ----------------------------------------------
     body_blanks, sig_blanks, form_blanks = [], [], []
     # Exhibit ranges after the signature page, built ONLY from headings at or after
-    # IN WITNESS WHEREOF: an exhibit list or an exhibit placed before it must not
-    # swallow the signature page. The heading block itself is included (a heading
-    # table can hold the exhibit's rows).
+    # IN WITNESS WHEREOF (an exhibit list or an exhibit placed before it must not
+    # swallow the signature page). The heading block is in range (a heading table
+    # can hold the exhibit's rows). Each exhibit is scanned line by line once.
     region = [None] * limit
+    verdicts = {}
     for n, (start, _letter) in enumerate(heads):
         if start < sig_at:
             continue
         end = heads[n + 1][0] if n + 1 < len(heads) else limit
+        is_form, form_end = _form_info(blocks, start, end)
+        f, b, g = _scan_exhibit(_exhibit_stream(blocks, start, end), form_end, is_form)
         for j in range(start, end):
             region[j] = n
+            if j in b:
+                verdicts[j] = ("body", b[j])
+            elif j in g:
+                verdicts[j] = ("sig", g[j])
+            elif j in f:
+                verdicts[j] = ("form", f[j])
     for i in range(limit):
         t = texts[i]
         if not t.strip() or DMS_STAMP_RE.match(t.strip()):
             continue
-        n = region[i]
-        if n is not None:
-            kind, el = blocks[i]
-            head = i == heads[n][0]
-            if head and kind != "tbl":
-                continue
-            entry, is_body = _exhibit_blank(i, kind, el, skip_heading=head)
-            if entry:
-                if exhibits[n]["form"]:
-                    form_blanks.append(entry)   # template completed at closing
-                else:
-                    (body_blanks if is_body else sig_blanks).append(entry)
+        if region[i] is not None:
+            if i in verdicts:
+                kind_, entry = verdicts[i]
+                {"body": body_blanks, "sig": sig_blanks, "form": form_blanks}[kind_].append(entry)
             continue
         for rx, label in BLANK_PATTERNS:
             m = rx.search(t)
