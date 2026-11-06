@@ -59,15 +59,52 @@ class TestCoreAggregation(unittest.TestCase):
         self.assertEqual(out["aggregate"]["combined_range"], 7.0)
         self.assertEqual(out["aggregate"]["combined_stdev"], 2.31)
 
-    def REDACTED-075n8_2026_08_15_leakage_excluded_reproduces_current_golden(self):
-        """The 8 samples golden_set/REDACTED-024.json's golden.combined
-        is actually computed from (run 1, the 32.0 SKILL.md-citation leak, excluded) must
-        yield 26.81 -- pins the CURRENT golden, unlike the historical test above."""
+    def REDACTED-075n8_2026_08_15_leakage_excluded_fable_era_golden(self):
+        """HISTORICAL regression pin: the 8 Fable-era samples that
+        golden_set/REDACTED-024.json's golden.combined was computed from
+        between 2026-08-15 and the 2026-11-05 Opus rebaseline (run 1, the 32.0
+        SKILL.md-citation leak, excluded) must yield 26.81. The CURRENT golden is pinned by
+        the n6 Opus test below."""
         samples = [27.5, 28.5, 25.0, 28.5, 27.0, 25.0, 26.0, 27.0]
         out = aggregate_replays([_replay(s) for s in samples])
         self.assertEqual(out["combined"], 26.81)
         self.assertEqual(out["aggregate"]["combined_range"], 3.5)
         self.assertEqual(out["aggregate"]["combined_stdev"], 1.39)
+
+    def REDACTED-075n6_2026_11_05_opus_reproduces_current_golden(self):
+        """The 6 claude-opus-5-5 samples that golden_set/REDACTED-024.json's
+        golden.combined is computed from since the Opus rebaseline (the 2026-10-30 v4.41 run
+        on 997fe4b2 + the 2026-11-05 supervised run on d7cab49e) must yield 30.08 -- pins the
+        CURRENT golden. Their 5.5-pt range exceeds the 5.0-pt tolerance; that file records
+        it, not smooths it."""
+        samples = [29.0, 30.0, 30.0, 28.0, 30.0, 33.5]
+        out = aggregate_replays([_replay(s) for s in samples])
+        self.assertEqual(out["combined"], 30.08)
+        self.assertEqual(out["aggregate"]["combined_range"], 5.5)
+        self.assertEqual(out["aggregate"]["combined_stdev"], 1.86)
+        self.assertEqual(out["aggregate"]["combined_sem"], 0.76)
+
+    def test_every_golden_combined_is_the_mean_of_its_non_excluded_runs(self):
+        """Real-file guard (added with the 2026-11-05 Opus rebaseline): in every
+        golden_set/*.json, golden.combined must equal the aggregate_replays() mean of the
+        repeatability.runs NOT tagged excluded_from_golden, and repeatability.n must count
+        exactly those runs -- so a rebaseline that moves golden.combined without its
+        evidence trail (or the trail without the golden) fails here."""
+        import json
+        from pathlib import Path
+
+        golden_dir = Path(__file__).resolve().parent.parent / "golden_set"
+        paths = sorted(golden_dir.glob("*.json"))
+        self.assertTrue(paths, "no golden_set/*.json found")
+        for path in paths:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            kept = [r for r in data["repeatability"]["runs"]
+                    if not r.get("excluded_from_golden")]
+            with self.subTest(file=path.name):
+                self.assertTrue(kept, "every golden needs at least one counted run")
+                out = aggregate_replays([_replay(r["combined"]) for r in kept])
+                self.assertEqual(out["combined"], data["golden"]["combined"])
+                self.assertEqual(data["repeatability"]["n"], len(kept))
 
 
 class TestSingleSample(unittest.TestCase):
