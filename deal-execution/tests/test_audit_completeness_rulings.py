@@ -314,15 +314,8 @@ class TestSignatureNotaryRecordingLinesExempt(_Base):
         "Notary Printed Name: ________",
         "STATE OF ________ )", "COUNTY OF ________ )", "STATE OF OHIO ) ss: COUNTY OF ________ )",
         "COUNTY OF ________ ) ss.",
-        "Acknowledged before me this ___ day of ________, 20__.",
-        "The foregoing instrument was acknowledged before me this ___ day of ________, "
-        "20__, by ________, the ________ of ________.",
-        "Before me, a Notary Public in and for said County and State, personally "
-        "appeared ________",
-        "On ________, before me, ________, personally appeared ________",
-        "Personally appeared before me, ________, a Notary Public",
-        "Sworn to before me this ___ day of ________",
-        "Subscribed and sworn to before me this ___ day of ________",
+        # Notary acknowledgment sentences are exempt only inside a notary block
+        # (round 4, test_audit_completeness_rulings4.py).
         "Executed as of the ___ day of ________, 20__.",
         "Executed this ___ day of ____________, 20__.",
         "Dated as of ________, 20__",
