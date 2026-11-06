@@ -129,6 +129,84 @@ def _count_media(el: ET.Element) -> int:
     return sum(1 for n in el.iter() if n.tag in (A_BLIP, V_IMAGE))
 
 
+_ROW_WRAPPERS = (W + "sdt", W + "sdtContent", W + "customXml")
+
+
+def _table_rows(tbl: ET.Element) -> list:
+    """This table's own rows, including rows wrapped in content controls (w:sdt)
+    or custom XML -- not rows of tables nested inside its cells. Iterative: wrapper
+    nesting depth is attacker/tool controlled and must not hit the recursion limit."""
+    rows = []
+    stack = list(reversed(list(tbl)))
+    while stack:
+        ch = stack.pop()
+        if ch.tag == W + "tr":
+            rows.append(ch)
+        elif ch.tag in _ROW_WRAPPERS:
+            stack.extend(reversed(list(ch)))
+    return rows
+
+
+_DIGIT_RUN = re.compile(r"\d{3,}")
+
+
+def _row_cells(tr: ET.Element) -> list:
+    return tr.findall(W + "tc") + tr.findall(W + "sdt/" + W + "sdtContent/" + W + "tc")
+
+
+def _is_label_row(tr: ET.Element) -> bool:
+    """A column-header row: 2+ non-empty cells, each a short label (<= 40 chars)
+    with no run of 3+ digits. A single-cell row, a long cell or a value such as a
+    parcel number is content, not a header."""
+    filled = [t for t in (_text_of(tc).strip() for tc in _row_cells(tr)) if t]
+    return len(filled) >= 2 and all(len(t) <= 40 and not _DIGIT_RUN.search(t)
+                                    for t in filled)
+
+
+def _grid_span(tc: ET.Element) -> int:
+    span = tc.find(W + "tcPr/" + W + "gridSpan")
+    if span is None:
+        return 1
+    try:
+        return int(span.get(W + "val", ""))
+    except (TypeError, ValueError):  # "", "x", "²", "①" ... -> unmerged
+        return 1
+
+
+def _header_rows(rows: list) -> int:
+    """Number of leading header rows. Normally one, and only if that row reads as
+    column labels. More when unambiguous: a run of rows marked as repeating headers
+    (w:tblHeader -- ignored when EVERY row carries it), or, in a table of 3+ rows,
+    a first row that is one cell merged across columns (a title) followed by the
+    column-label row."""
+    if not rows:
+        return 0
+    marked = [tr.find(W + "trPr/" + W + "tblHeader") is not None for tr in rows]
+    n = 1
+    if not all(marked):
+        while n < len(rows) and marked[n] and marked[n - 1]:
+            n += 1
+    if len(rows) > 2:
+        cells = rows[0].findall(W + "tc")
+        if len(cells) == 1 and _grid_span(cells[0]) > 1:
+            n = max(n, 2)
+    if not _is_label_row(rows[n - 1]):
+        n -= 1  # the would-be column header is itself content
+    return n
+
+
+def _table_has_data(tbl: ET.Element) -> bool:
+    """True if any row after the header row(s) carries visible text (deleted text
+    excluded), in this table or in any table nested inside it. Each table in the
+    subtree is examined once (tbl.iter includes tbl itself), so the cost is linear
+    in the number of nested tables rather than exponential in their depth."""
+    for t in tbl.iter(W + "tbl"):
+        rows = _table_rows(t)
+        if any(_text_of(tr).strip() for tr in rows[_header_rows(rows):]):
+            return True
+    return False
+
+
 def _blocks(root: ET.Element) -> list:
     body = root.find(W + "body")
     if body is None:
@@ -183,6 +261,7 @@ def audit(path: Path) -> dict:
     for n, (start, letter) in enumerate(heads):
         end = heads[n + 1][0] if n + 1 < len(heads) else limit
         chars = media = tables = 0
+        data_tables = prose_chars = 0
         caption = ""
         for j in range(start + 1, end):
             kind, el = blocks[j]
@@ -191,6 +270,10 @@ def audit(path: Path) -> dict:
             if kind == "tbl":
                 tables += 1
                 chars += len(t)
+                # A header row with no non-blank row after it (a skeleton rent roll
+                # or schedule) is populated but says nothing: advisory THIN only.
+                if _table_has_data(el):
+                    data_tables += 1
                 continue
             if DMS_STAMP_RE.match(t):
                 continue  # law-firm document stamp, not exhibit content
@@ -199,12 +282,16 @@ def audit(path: Path) -> dict:
                 caption = t
                 continue
             chars += len(t)
+            prose_chars += len(t)
         populated = bool(chars or media or tables)
         exhibits.append({
             "letter": letter, "caption": caption, "block": start,
             "text_chars": chars, "images": media, "tables": tables,
+            "data_tables": data_tables,
             "populated": populated,
-            "thin": populated and chars < 60 and not tables,
+            "thin": populated and ((chars < 60 and not tables)
+                                   or (tables and not data_tables
+                                       and prose_chars < 60)),
         })
 
     # ---- 2. cross-references ---------------------------------------------
@@ -322,11 +409,20 @@ def render(r: dict) -> str:
         add("   !! Trace what depends on it before signing: definitions,")
         add("   !! representation carve-outs and delivery obligations commonly")
         add("   !! hang off exhibits and fail silently when they are blank.")
-    if r["thin_exhibits"]:
+    skeleton = [e["letter"] for e in r["exhibits"]
+                if e["thin"] and e["tables"] and not e.get("data_tables")]
+    prose_thin = [x for x in r["thin_exhibits"] if x not in skeleton]
+    if prose_thin:
         add("   ?  THIN: {} — ask whether a third party could draft from it. A "
-            "recordable".format(", ".join(r["thin_exhibits"])))
+            "recordable".format(", ".join(prose_thin)))
         add("      instrument cannot be prepared from an aerial markup, nor a deed "
             "from a parcel number.")
+    if skeleton:
+        add("   ?  THIN: {} — table has a header row and no data rows (skeleton "
+            "rent roll".format(", ".join(skeleton)))
+        add("      or schedule). Anything defined by reference to it is empty; "
+            "populate it or")
+        add("      confirm it is intentionally blank.")
 
     add("")
     add("-- 2. CROSS-REFERENCES " + "-" * 54)
@@ -401,7 +497,8 @@ def main(argv: list) -> int:
         return 3
     try:
         r = audit(path)
-    except (zipfile.BadZipFile, KeyError, ET.ParseError, OSError) as exc:
+    except (zipfile.BadZipFile, KeyError, ET.ParseError, OSError,
+            ValueError, RecursionError) as exc:
         print("error: could not read {} as a .docx: {}".format(path.name, exc),
               file=sys.stderr)
         return 3
