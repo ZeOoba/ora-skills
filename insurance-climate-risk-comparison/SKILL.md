@@ -3,7 +3,7 @@ name: insurance-climate-risk-comparison
 description: "Use when the user mentions: insurance cost comparison, climate risk, natural disaster risk, climate change risk, disaster exposure, hazard risk, FEMA National Risk Index, how a market compares on insurance or climate, or is evaluating a new/entry-phase Oxford Realty Advisors target market and needs its insurance-cost and natural-disaster/climate-change risk profile benchmarked against the national average and the other target markets, for underwriting and market-entry decisions. Distinct from insurance-renewal-review (single-property premium history/renewal decisions) and ora-flood-zoning-dd (single-parcel FEMA flood-zone/zoning DD-Critical gate) — this skill is MARKET-level and comparative, and never gates a deal."
 ---
 
-# Insurance & Climate Risk Market Comparison (ORA) (v1.1)
+# Insurance & Climate Risk Market Comparison (ORA) (v1.2)
 
 Purpose: given a target market, answer "how exposed is this market to insurance cost and natural-disaster/climate risk, relative to the national picture and to ORA's other target markets" — for underwriting judgment and market-entry decisions. This is reference context, not a gate: it does not touch acquisition-underwriting's Buy Box scorecard, Stage 1 floors, or any governor constant (DSCR/LTV). Gabriel applies the judgment; this skill supplies the sourced comparison.
 
@@ -11,7 +11,7 @@ Purpose: given a target market, answer "how exposed is this market to insurance 
 
 - **insurance-renewal-review** owns premium HISTORY and the renewal decision for ORA's own already-owned properties, built from carrier declarations. This skill READS its output (the latest Premium-History workbook) for realized $/SF — it never re-derives or second-guesses that data, and it never opens or OCRs a declarations PDF itself.
 - **ora-flood-zoning-dd** resolves FEMA flood-zone (NFHL) and zoning at the SINGLE-PARCEL level as a DD-Critical acquisition gate (SFHA on the pad = gate flag). This skill is MARKET-level, uses FEMA's National Risk Index (a county-level composite hazard score across 18 hazard types, not a parcel flood-zone determination), and never gates anything. If a specific parcel is already in DD, ora-flood-zoning-dd is still the authority on its flood/zoning status — this skill's output is broader market context, not a substitute.
-- **market-monitor / target-markets.json** is the canonical list of ORA's 10 target-market clusters (Columbus OH, Cincinnati OH, Kansas City MO/KS, Indianapolis IN, Maryland/Baltimore-DC, Madison WI, Grand Rapids MI, Richmond VA, Des Moines IA, Louisville KY) and owns market fundamentals (vacancy, rent, cap rates, replacement cost). This skill treats that cluster list as the fixed comparison universe. **If target-markets.json and this skill's market list ever diverge, target-markets.json wins** — same convention every other consumer of that file follows.
+- **market-monitor / target-markets.json** is the canonical list of ORA's target-market clusters and owns market fundamentals (vacancy, rent, cap rates, replacement cost). This skill treats that cluster list as the fixed comparison universe and reads it from the file each run; it keeps no list of its own, so the two cannot diverge.
 
 ## Design decision: no static county map
 
@@ -21,7 +21,7 @@ It would be tempting to hardcode a cluster→county table once and reuse it. **D
 
 ### Step 1 — Resolve each market to a representative county
 
-For the target market and for each of the other 9 clusters:
+For the target market and for each of the other clusters in `target-markets.json`:
 
 1. Pull the cluster's current submarket/property list from `target-markets.json` (preferred) or `market-monitor`.
 2. Take one representative address already on record — an ORA-owned property if the cluster has exposure (`has_existing_exposure: true`), otherwise a named submarket center.
@@ -44,7 +44,7 @@ Source and field reference: `references/data-sources.md`. In short — query the
 
 ### Step 4 — Build the comparison table
 
-One row per: target market, national reference, and each of the other 9 clusters (fewer if the user asked for a narrower comparison set). Columns:
+One row per: target market, national reference, and each of the other clusters in `target-markets.json` (fewer if the user asked for a narrower comparison set). Columns:
 
 | Market | NRI Composite Score | NRI Rating | Top 3 Hazards (score) | Insurance $/SF | Tier |
 |---|---|---|---|---|---|
@@ -68,5 +68,6 @@ Default: markdown comparison table + narrative memo, inline in chat. Only write 
 
 ## Changelog
 
+- **v1.2 (2026-11-05):** The skill named "10 target-market clusters" and compared against "the other 9", so Chicago–Greater Cook County IL (the 11th cluster, ratified 2026-09-29) dropped out of every comparison. It now reads the cluster set from `target-markets.json` and restates no count or list; `tools/doctrine_consistency.py` guards the count. Wording only. No scored or governor constant changed.
 - **v1.1 (2026-11-05):** Corrected the cross-reference to ora-flood-zoning-dd: building-pad SFHA is a gate flag, not a kill (Ruling 5; ora-flood-zoning-dd v1.7). Wording only. No scored or governor constant changed.
 - **v1.0 (2026-09-11):** Initial skill, built from a brainstormed and Gabriel-approved design. FEMA NRI Counties ArcGIS FeatureServer endpoint and field names verified live the same day (`references/data-sources.md`). No clean free primary source exists for state-level commercial property insurance rates — documented the two-rung PROXY ladder and the ACTUAL/PROXY-GOV/PROXY-AGGREGATOR tagging convention rather than presenting proxy figures as equivalent-confidence to ORA's own realized premiums.
