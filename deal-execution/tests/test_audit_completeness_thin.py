@@ -242,6 +242,16 @@ class TestWrappedAndNestedRows(_Base):
         tbl = "<w:tbl>{}</w:tbl>".format(ROW([("xml", "<w:p/>" + inner)]))
         self._check_populated_ok(tbl)
 
+    def test_nested_data_inside_a_label_header_row_is_data(self):
+        # The outer table's only row reads as labels, so the data is found only by
+        # examining the nested table itself.
+        inner = TBL([["Tenant", "Suite"], ["Acme", "Beta"]])
+        tbl = "<w:tbl>{}</w:tbl>".format(ROW(["Schedule", ("xml", P("Leases") + inner)]))
+        r = self.audit(exhibit_blocks(tbl))
+        self.assertEqual(self.ex_a(r)["data_tables"], 1)
+        self.assertEqual(r["thin_exhibits"], [])
+        self.assert_gate_unchanged_populated(r)
+
     def test_skeleton_rows_inside_sdt_still_thin(self):
         tbl = ("<w:tbl><w:sdt><w:sdtContent>{}{}</w:sdtContent></w:sdt></w:tbl>"
                .format(ROW(HEADER), ROW(["", "", "", ""])))
@@ -267,11 +277,23 @@ class TestMultiRowHeader(_Base):
         # Merge-gate (5b): when EVERY row carries w:tblHeader the marker says
         # nothing, so the rows after the first are data.
         hdr = "<w:trPr><w:tblHeader/></w:trPr>"
-        tbl = "<w:tbl>{}</w:tbl>".format("".join(ROW(x, hdr) for x in [HEADER] + DATA))
+        tbl = "<w:tbl>{}</w:tbl>".format("".join(
+            ROW(x, hdr) for x in [HEADER, ["Tenant One", "Suite A", "Lorem", "Ipsum"]]))
         r = self.audit(exhibit_blocks(tbl))
         self.assertEqual(r["thin_exhibits"], [])
         self.assertEqual(self.ex_a(r)["data_tables"], 1)
         self.assert_gate_unchanged_populated(r)
+
+    def test_marked_row_after_unmarked_header_is_data(self):
+        # A w:tblHeader run must start at the first row: a stray marked row after
+        # an unmarked header is data.
+        hdr = "<w:trPr><w:tblHeader/></w:trPr>"
+        tbl = "<w:tbl>{}{}{}</w:tbl>".format(
+            ROW(HEADER), ROW(["Tenant One", "Suite A", "Lorem", "Ipsum"], hdr),
+            ROW(["", "", "", ""]))
+        r = self.audit(exhibit_blocks(tbl))
+        self.assertEqual(r["thin_exhibits"], [])
+        self.assertEqual(self.ex_a(r)["data_tables"], 1)
 
     def test_merged_title_row_then_column_row_is_skeleton(self):
         title = ('<w:tr><w:tc><w:tcPr><w:gridSpan w:val="4"/></w:tcPr>{}</w:tc></w:tr>'
@@ -330,8 +352,8 @@ class TestReviewRound2(_Base):
         # crash exits 1 and reads as BLOCKING. A malformed span must count as 1.
         title = ('<w:tr><w:tc><w:tcPr><w:gridSpan w:val="²"/></w:tcPr>{}</w:tc></w:tr>'
                  .format(P("Rent Roll")))
-        p = self.doc(exhibit_blocks("<w:tbl>{}{}</w:tbl>".format(
-            title, ROW(["100", "Tenant One", "1,000", "2030-01-31"]))))
+        p = self.doc(exhibit_blocks("<w:tbl>{}{}{}</w:tbl>".format(
+            title, ROW(HEADER), ROW(["100", "Tenant One", "1,000", "2030-01-31"]))))
         rc, _, err = self.run_main(p)
         self.assertEqual(rc, 0)
         self.assertEqual(err, "")
@@ -344,8 +366,8 @@ class TestReviewRound2(_Base):
             with self.subTest(val=val):
                 title = ('<w:tr><w:tc><w:tcPr><w:gridSpan w:val="{}"/></w:tcPr>{}</w:tc>'
                          '</w:tr>').format(escape(val, {'"': "&quot;"}), P("Rent Roll"))
-                p = self.doc(exhibit_blocks("<w:tbl>{}{}</w:tbl>".format(title,
-                                                                         ROW(HEADER))))
+                p = self.doc(exhibit_blocks("<w:tbl>{}{}{}</w:tbl>".format(
+                    title, ROW(HEADER), ROW(["", "", "", ""]))))
                 self.assertEqual(self.run_main(p)[0], 0)
 
     def test_long_header_skeleton_table_is_thin(self):
@@ -419,6 +441,8 @@ class TestMergeGateRound(_Base):
             "merged first row holding the data": "<w:tbl>{}{}</w:tbl>".format(
                 span2, ROW(["", ""])),
             "key/value row": TBL([["Parcel No.", "000-123456-00"], ["", ""]]),
+            "two-column legal row": TBL([["Legal description", LEGAL], ["", ""]]),
+            "single short cell row": TBL([["Lot 12 of Example Park"], [""]]),
         }
         for name, tbl in cases.items():
             with self.subTest(case=name):
