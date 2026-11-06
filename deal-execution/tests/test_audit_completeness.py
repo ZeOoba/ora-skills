@@ -486,7 +486,7 @@ class TestBlanks(_Base):
         ]
         sig_table = TBL([["By: ____________", "By: ____________"],
                          ["Name: __________", "Name: __________"]])
-        p = self.doc(BODY_CLEAN + SIG + [P("EXHIBIT A"), P("(Form of Deed)"), P(LOREM)]
+        p = self.doc(BODY_CLEAN + SIG + [P("EXHIBIT A"), P("(Closing Certificate)"), P(LOREM)]
                      + form + [sig_table])
         r = ac.audit(p)
         self.assertEqual(r["body_blanks"], [])
