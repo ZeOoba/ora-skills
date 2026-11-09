@@ -264,15 +264,30 @@ _PSF_RE = re.compile(r"\$\s*(\d{1,3}\.\d{2})\s*(?:per|/)\s*(?:rentable\s+)?(?:sq
 
 
 def _per_sf_rsf(t, row1_annual):
-    """The premises RSF for per-SF convention (v), or None. Accepted only when the document
-    states a per-SF rate and an RSF whose product is exactly the row-1 annual rent, so a
-    project or building area elsewhere in the text can never stand in for it."""
-    rates = {Decimal(m.group(1)) for m in _PSF_RE.finditer(t)}
-    for m in _RSF_RE.finditer(t):
-        rsf = Decimal(m.group(1).replace(",", ""))
-        if rsf > 0 and any(_cents(r * rsf) == row1_annual for r in rates):
-            return rsf
+    """The premises RSF for per-SF convention (v), or None. Accepted only when ONE sentence
+    that names rent states both a per-SF rate and an RSF whose product is exactly the row-1
+    annual rent. A project or building area, or an operating-cost rate per SF, stated in some
+    other sentence can never be paired with it (REFUTE round 3: '$0.60 per square foot'
+    operating costs x a 40,000 SF project coincidentally equalled the row-1 annual)."""
+    for sentence in _SENTENCE_SPLIT_RE.split(t):
+        # A rent sentence, or a Premises-size sentence that is not about expenses or share
+        # ('The Premises contain 10,000 rentable square feet at $8.00 per square foot').
+        if not (_RENT_WORD_RE.search(sentence)
+                or (_PREMISES_RE.search(sentence) and not _EXPENSE_WORD_RE.search(sentence))):
+            continue
+        rates = {Decimal(m.group(1)) for m in _PSF_RE.finditer(sentence)}
+        for m in _RSF_RE.finditer(sentence):
+            rsf = Decimal(m.group(1).replace(",", ""))
+            if rsf > 0 and any(_cents(r * rsf) == row1_annual for r in rates):
+                return rsf
     return None
+
+
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.;!?])\s+")
+_RENT_WORD_RE = re.compile(r"\brent\b", re.I)
+_PREMISES_RE = re.compile(r"\bpremises\b", re.I)
+_EXPENSE_WORD_RE = re.compile(
+    r"\b(?:operating|expenses?|CAM|common\s+area|tax(?:es)?|insurance|proportionate|share)\b", re.I)
 
 
 def _cents(value):

@@ -1497,6 +1497,62 @@ class TestLoiConformanceRegressionFixes(TempDirCase):
         row = self._rent_row({"type": "fixed_pct", "value": 3.0}, text)
         self.assertEqual(row["status"], "CONFLICT", row)
 
+    # REFUTE round 3 (2026-11-08): run the real master-form fixtures.
+    _FIXTURE_TEMPLATES = (
+        "ORA_MasterLease_ShallowBay_MD-Columbia-9050RedBranchRoad_v2.7_TEMPLATE.docx",
+        "ORA_MasterLease_ShallowBay_OH-SingleTenant-NNN_v2.7_TEMPLATE.docx",
+    )
+
+    def _clause_modules_rent_clause(self, pct):
+        md = (REPO / "lease-generation" / "references" / "clause-modules.md").read_text(encoding="utf-8")
+        line = next(l for l in md.splitlines() if "increases by {ESC_PCT} percent" in l)
+        text = line.lstrip("> ").replace("{ESC_PCT}", pct)
+        text = re.sub(r"\{TARGET_DATE\}", "March 1, 2026", text)
+        text = re.sub(r"\{([^}|]*)\|[^}]*\}", r"\1", text)      # {gross|modified gross} -> gross
+        text = re.sub(r"\{([^}]*)\}", r"\1", text)
+        return norm(text)
+
+    def test_rent_real_master_fixtures_with_ora_rent_clause_conform(self):
+        for name in self._FIXTURE_TEMPLATES:
+            with self.subTest(fixture=name):
+                body, _meta = extract(str(HERE / "fixtures" / name))
+                text = norm(body) + " " + self._RENT_ONLY + " " + self._clause_modules_rent_clause("3")
+                row = self._rent_row({"type": "fixed_pct", "value": 3.0}, text)
+                self.assertEqual(row["status"], "CONFORMS", row)
+
+    def test_rent_real_master_fixtures_with_wrong_rate_conflict(self):
+        for name in self._FIXTURE_TEMPLATES:
+            with self.subTest(fixture=name):
+                body, _meta = extract(str(HERE / "fixtures" / name))
+                text = norm(body) + " " + self._RENT_ONLY + " " + self._clause_modules_rent_clause("3.5")
+                row = self._rent_row({"type": "fixed_pct", "value": 3.0}, text)
+                self.assertEqual(row["status"], "CONFLICT", row)
+
+    def test_rent_round3_repros(self):
+        """Pinned from the round-3 REFUTE probes (p7.py / p8.py)."""
+        cases = [
+            ("Base Rent for Lease Year 1 is $24,000.00. Thereafter, it shall increase by 3.5% "
+             "annually. During the Option Term, Rent shall increase by 3% annually.", "CONFLICT"),
+            ("Thereafter the amount payable shall increase by three and one-half percent (3.5%) "
+             "on each anniversary. Option Term Base Rent shall increase 3% annually.", "CONFLICT"),
+            ("Annual Rent Escalation: 3%", "CONFORMS"),
+            ("Base Rent: 3.0% annual escalation.", "CONFORMS"),
+            ("Base Rent shall increase on each anniversary by 3% (i.e., to 103% of the prior "
+             "Lease Year's rent).", "CONFORMS"),
+            ("Base Rent shall increase annually by the greater of 3% or the CPI change.", "PARTIAL"),
+            ("Annual Base Rent increases by 3% on each anniversary. The Basic Lease Information "
+             "shows: Escalation: 3.5%.", "CONFLICT"),
+            ("Rent shall increase on each anniversary (see Sec. 4) by 3.5%. Option rent shall "
+             "increase 3%.", "CONFLICT"),
+            ("If more than 25% of the Premises is taken by condemnation, Rent shall be adjusted "
+             "in proportion. Annual Base Rent increases by 3% on each anniversary.", "CONFORMS"),
+        ]
+        for extra, want in cases:
+            with self.subTest(extra=extra[:60]):
+                row = self._rent_row({"type": "fixed_pct", "value": 3.0},
+                                     "Monthly Rent for Lease Year 1 shall be $2,000.00 per month. " + extra)
+                self.assertEqual(row["status"], want, row)
+
     def test_rent_fixed_pct_lease_year_and_step_wording_conforms(self):
         for phrase in ("Rent steps up 3% each Lease Year.",
                        "Base Rent shall be subject to 3% bumps."):
