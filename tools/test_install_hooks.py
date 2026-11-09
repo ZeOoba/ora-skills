@@ -203,6 +203,50 @@ class EndToEnd(Base):
         with open(os.path.join(self.sb.work, common, "stdin.txt"), encoding="utf-8") as f:
             self.assertIn("refs/heads/main", f.read(), "ref lines must reach the tracked hook")
 
+    def _add_real_gate(self, cwd=None):
+        with open(os.path.join(TRACKED_HOOKS, "pre-push"), encoding="utf-8") as f:
+            self.sb.write("tools/hooks/pre-push", f.read(), cwd)
+        with open(SCAN, encoding="utf-8") as f:
+            self.sb.write("tools/prepush_confidential_scan.py", f.read(), cwd)
+        self.sb.git(cwd or self.sb.work, "add", "-A")
+        self.sb.git(cwd or self.sb.work, "commit", "-q", "--no-verify", "-m", "add gate")
+
+    def test_uncommitted_noop_edit_to_tracked_pre_push_is_still_blocked(self):
+        # REFUTE E1: the worktree's tracked hook is a live, editable file; the pinned scan
+        # beside the shim must still run.
+        self.installed()
+        wt = os.path.join(self.sb.root, "wt feat")
+        self.sb.git(self.sb.work, "worktree", "add", "-q", "-b", "feat", wt, "main")
+        self._add_real_gate(wt)
+        self.sb.write("tools/hooks/pre-push", "#!/bin/sh\nexit 0\n", wt)
+        self.sb.write("tools/prepush_confidential_scan.py", "import sys; sys.exit(0)\n", wt)
+        self.sb.write("deal.md", "%s\n" % TERM, wt)
+        self.sb.git(wt, "add", "deal.md")
+        self.sb.git(wt, "commit", "-q", "--no-verify", "-m", "x")
+        self.assertBlocked(*self.sb.push("feat", cwd=wt))
+
+    def test_committed_noop_tracked_pre_push_is_still_blocked(self):
+        self.installed()
+        self.sb.commit("tools/hooks/pre-push", "#!/bin/sh\nexit 0\n")
+        self.sb.commit("deal.md", "%s\n" % TERM)
+        self.assertBlocked(*self.sb.push())
+
+    def test_no_python_blocks(self):
+        self.installed()
+        fake = os.path.join(self.sb.root, "fakebin")
+        os.makedirs(fake)
+        for n in ("python", "python3", "py"):
+            p = os.path.join(fake, n)
+            with open(p, "w", newline="\n") as f:
+                f.write("#!/bin/sh\nexit 9\n")
+            os.chmod(p, 0o755)
+        self.sb.env["PATH"] = fake + os.pathsep + self.sb.env["PATH"]
+        self.sb.commit("notes.md", "nothing confidential\n")
+        rc, err = self.sb.push()
+        self.assertNotEqual(rc, 0, err)
+        self.assertIn("pre-push BLOCKED", err)
+        self.assertIn("Python", err)
+
     def test_repo_tracked_hooks_run_through_shim(self):
         # The real tracked pre-push from this repo, run via the shim, blocks a term push.
         self.installed()
@@ -339,6 +383,43 @@ class Installer(Base):
         rc, out = self.sb.install()
         self.assertNotEqual(rc, 0, out)
         self.assertIn("worktree", out.lower())
+        self.assertFalse(os.path.exists(self.sb.hooks_dir()), "refusal must write nothing")
+        self.assertEqual(self.sb.git(self.sb.work, "config", "--local", "--get", "core.hooksPath",
+                                     check=False).stdout, b"")
+
+    def test_failed_reinstall_never_leaves_shim_missing(self):
+        # REFUTE E2: a failure while swapping files must not leave git with no pre-push.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("install_hooks_mod", INSTALLER)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        self.installed()
+        hd = self.sb.hooks_dir()
+        with open(os.path.join(hd, "pre-push"), "a", newline="\n") as f:
+            f.write("# drifted\n")
+        real_replace = mod.os.replace
+
+        def boom(src, dst):
+            raise OSError(28, "No space left on device (simulated)")
+        mod.os.replace = boom
+        try:
+            with self.assertRaises(OSError):
+                mod.install(self.sb.work, lambda _m: None)
+        finally:
+            mod.os.replace = real_replace
+        with open(os.path.join(hd, "pre-push"), encoding="utf-8") as f:
+            self.assertIn("ORA-HOOKS-SHIM", f.read(), "live pre-push shim must survive")
+        self.sb.commit("deal.md", "%s\n" % TERM)
+        self.assertBlocked(*self.sb.push())
+
+    def test_oserror_exits_2_without_traceback(self):
+        hd = self.sb.hooks_dir()
+        os.makedirs(os.path.dirname(hd), exist_ok=True)
+        with open(hd, "w") as f:      # a FILE where the hooks dir should be
+            f.write("x")
+        rc, out = self.sb.install()
+        self.assertEqual(rc, 2, out)
+        self.assertNotIn("Traceback", out)
 
     def test_not_a_git_repo_fails(self):
         d = os.path.join(self.sb.root, "plain")
