@@ -666,5 +666,46 @@ class RunSuiteGlobArgs(unittest.TestCase):
         self.assertIn('files: 1  failed: 0', r.stdout)
 
 
+class MemoryFiles(TempRepo):
+    """2026-11-08 audit finding eventlog-memory-committed-to-repo: full copies of the private
+    ORA event_log memory file were git-tracked under _archive/. No tracked file may look like a
+    Claude memory file."""
+
+    MEMORY = ('---\nname: some_note\ndescription: d\nmetadata:\n  node_type: memory\n  type: log\n'
+              '---\nbody\n')
+    EVENT_LOG = ('---\nname: event_log\ndescription: "ORA append-only event log of changes"\n'
+                 '---\n- entry\n')
+
+    def test_nested_node_type_memory_is_flagged(self):
+        self.assertTrue(g.looks_like_memory_file(self.MEMORY))
+
+    def test_top_level_and_quoted_node_type_is_flagged(self):
+        self.assertTrue(g.looks_like_memory_file("---\nname: x\nnode_type: 'memory'\n---\n"))
+
+    def test_event_log_with_append_only_phrase_is_flagged(self):
+        self.assertTrue(g.looks_like_memory_file(self.EVENT_LOG))
+        self.assertTrue(g.looks_like_memory_file('﻿' + self.EVENT_LOG.replace('\n', '\r\n')))
+
+    def test_event_log_name_without_phrase_passes(self):
+        self.assertFalse(g.looks_like_memory_file('---\nname: event_log\ndescription: a skill\n---\n'))
+
+    def test_body_mentions_and_skill_frontmatter_pass(self):
+        self.assertFalse(g.looks_like_memory_file('---\nname: demo\ndescription: d\n---\nnode_type: memory\n'))
+        self.assertFalse(g.looks_like_memory_file('# notes\n---\nnode_type: memory\n---\n'))
+        self.assertFalse(g.looks_like_memory_file(''))
+
+    def test_tracked_files_are_scanned_untracked_are_not(self):
+        subprocess.run(['git', 'init', '-q', str(self.root)], check=True)
+        (self.root / 'keep.md').write_text('---\nname: k\ndescription: d\n---\n', encoding='utf-8')
+        (self.root / '_archive').mkdir()
+        (self.root / '_archive' / 'blob.bin').write_text(self.EVENT_LOG, encoding='utf-8')
+        (self.root / 'local.md').write_text(self.MEMORY, encoding='utf-8')
+        subprocess.run(['git', '-C', str(self.root), 'add', 'keep.md', '_archive/blob.bin'], check=True)
+        self.assertEqual(g.tracked_memory_files(self.root), ['_archive/blob.bin'])
+
+    def test_real_repo_tracks_no_memory_file(self):
+        self.assertEqual(g.tracked_memory_files(REPO), [])
+
+
 if __name__ == '__main__':
     unittest.main()

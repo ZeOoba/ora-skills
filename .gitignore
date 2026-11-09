@@ -44,3 +44,19 @@ _staging/
 acquisition-underwriting-eval-harness/runs/
 # pytest run state (never skill content; package_skills.is_bundled also excludes it)
 .pytest_cache/
+
+# Claude memory files (event_log copies) -- private, never tracked. Untracked 2026-11-08 without a
+# history rewrite (Gabriel's decision); kept on disk only. CI: skill_ci_gates.py memory-files.
+/_archive/2026-08-16_eventlog-commit-scratch/el_base_UNEXECUTED-ATTEMPT.md
+/_archive/2026-08-16_eventlog-commit-scratch/el_base_plus_mine_UNEXECUTED-ATTEMPT.md
+/_archive/2026-08-16_eventlog-commit-scratch/el_base_plus_mine_py.md
+/_archive/2026-08-16_eventlog-commit-scratch/el_base_py.md
+/_archive/2026-08-16_eventlog-commit-scratch/true_blob.md
+/_archive/2026-08-21_eventlog-isolated-commit-splice/new_blob.bin
+/_archive/2026-08-21_staging-full-sweep-triage/2026-08-15/head_base.md
+/_archive/2026-08-21_staging-full-sweep-triage/2026-08-15/head_plus_mine.md
+/_archive/2026-08-21_staging-full-sweep-triage/2026-08-16/el_base_v2.md
+/_archive/2026-08-22_eventlog-localmainlog-splice/new_blob.bin
+/_archive/2026-08-22_eventlog-register-scheduled-task-splice/new_blob.bin
+/event_log.md
+**/memory/event_log.md

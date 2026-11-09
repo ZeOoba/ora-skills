@@ -65,6 +65,9 @@ jobs:
       - name: Frontmatter (all skills) + tree hygiene + shared-dep declarations
         run: python tools/skill_ci_gates.py frontmatter
 
+      - name: No tracked Claude memory files (node_type memory / event_log frontmatter)
+        run: python tools/skill_ci_gates.py memory-files
+
       - name: target-markets.json version bump vs base
         env:
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
