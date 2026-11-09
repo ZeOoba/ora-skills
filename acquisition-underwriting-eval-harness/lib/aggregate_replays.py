@@ -31,6 +31,7 @@ block back in as its own observed value -- golden-vs-golden trivially matched ke
 so the mismatch could not surface until the first genuine replay-to-golden diff.
 """
 
+import math
 import statistics
 from numbers import Real
 
@@ -49,8 +50,10 @@ _SCALAR_FIELDS = ("quality", "economics", "expected_score", "p_exec_pct")
 
 
 def _is_number(value):
-    """True for real, non-bool numbers. Guards against bool being a Real subclass."""
-    return isinstance(value, Real) and not isinstance(value, bool)
+    """True for real, non-bool, FINITE numbers. Guards against bool being a Real subclass,
+    and against NaN/Infinity, which would poison the mean and slip past the tolerance gate
+    (audit row eval-harness-nan-passes, 2026-11-08)."""
+    return isinstance(value, Real) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def normalize_category_keys(breakdown, key_map=None):
@@ -181,7 +184,7 @@ def aggregate_replays(replays, key_map=None):
         value = r.get("combined")
         if not _is_number(value):
             raise ValueError(
-                f"replays[{i}]['combined'] must be a number, got {value!r} -- a "
+                f"replays[{i}]['combined'] must be a number (finite), got {value!r} -- a "
                 "replay that failed to produce a usable score must be reported as "
                 "an error, never silently dropped from or averaged into the mean"
             )
