@@ -60,3 +60,8 @@ acquisition-underwriting-eval-harness/runs/
 /_archive/2026-08-22_eventlog-register-scheduled-task-splice/new_blob.bin
 /event_log.md
 **/memory/event_log.md
+
+# Former lease-generation example register (contained real tenant data). Untracked 2026-11-08
+# without a history rewrite (Gabriel's no-rewrite precedent); kept on disk only, never re-add.
+# Its replacement is lease-generation/references/example-register-synthetic.json.
+/_archive/2026-11-08_example-register-pii/
