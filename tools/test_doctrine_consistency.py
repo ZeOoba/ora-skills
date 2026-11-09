@@ -198,6 +198,111 @@ class AggregateLtvTests(unittest.TestCase):
             'DSCR cushion at each deal\'s refi-sizing basis, and aggregate LTV against the 40% ceiling'), [])
 
 
+class FloorAtLesserOfTests(unittest.TestCase):
+    """Gabriel in-turn ratification 2026-11-08: the per-property 1.25x floor is DSCR at a loan sized
+    to 65% LTV. A DSCR computed on the lesser-of loan is >= 1.25x by construction, so a floor stated
+    against that loan can never flag (audit finding dscr-floor-unbreachable-at-lesser-of-sizing)."""
+
+    def flags(self, line):
+        return len(dc.dscr_floor_at_lesser_of(line))
+
+    def test_pre_ratification_wordings_flag(self):
+        for line in [
+            # acquisition-underwriting STAGE 1, pre-v4.44
+            '- **DSCR floor (per-property governor — v3.8):** post-refi DSCR must be ≥1.25x at the market-rate '
+            'refi terms in UNDERWRITING CONVENTIONS (LESSER of 65% LTV per-property and 1.25x DSCR).',
+            # deal-comparison pre-v1.7
+            "**FLOOR FLAG (Ruling 5):** DSCR <1.25x at the deal's refi-sizing basis (the LESSER of 65% LTV "
+            'per-property and 1.25x DSCR — see acquisition-underwriting Stage 1) = flag, not a kill.',
+            '| DSCR at refi sizing (lesser of 65% LTV / 1.25x DSCR) | 10 | ≥2.5x=10; 1.25-1.99x=5; <1.25x=0 (FLOOR-FLAGGED) |',
+            '| Any | Any | FLOOR-FLAGGED if DSCR <1.25x at refi sizing (Ruling 5 — flag, not a kill) |',
+            '  DSCR @ refi sizing        X.Xx [X]   X.Xx [X]   <- lesser of 65% LTV / 1.25x DSCR',
+            'FLOOR-FLAGGED?                       Y/N        Y/N   <- DSCR <1.25x at refi sizing (flag, not a kill)',
+            # portfolio-growth pre-v1.3
+            "Test DSCR at the deal's refi-sizing basis: the LESSER of 65% LTV per-property and 1.25x DSCR. "
+            'If DSCR falls below 1.25x on that basis, size the loan down.',
+            # variants
+            'On the lesser-of loan, DSCR must clear 1.25x.',
+            'Debt service coverage below 1.25x on the lesser-of-65%-LTV/1.25x-DSCR loan is FLOOR-FLAGGED.',
+        ]:
+            self.assertGreaterEqual(self.flags(line), 1, line)
+
+    def test_ratified_basis_passes(self):
+        for line in [
+            '- **DSCR floor:** DSCR at a loan sized to 65% LTV, at the market refi terms, must be ≥1.25x; '
+            'below 1.25x = FLOOR-FLAGGED. Lesser-of sizing (65% LTV / 1.25x DSCR) still sets refi proceeds.',
+            '| DSCR at 65% LTV (floor basis; never the lesser-of loan) | 10 | ≥2.5x=10; <1.25x=0 (FLOOR-FLAGGED) |',
+            'FLOOR-FLAGGED?   Y/N   Y/N   <- DSCR <1.25x on a 65%-LTV loan, i.e. DSCR binds under lesser-of sizing',
+            'DSCR <1.25x at 65% LTV = flag, not a kill; equivalently DSCR, not LTV, binds under lesser-of sizing.',
+            'The floor is never tested on the lesser-of loan, which clears 1.25x by construction.',
+        ]:
+            self.assertEqual(self.flags(line), 0, line)
+
+    def test_review_round_one_misses(self):
+        """2026-11-08 adversarial review: wordings the first version let through."""
+        for line in [
+            'Report PASS/BREACH: DSCR >=1.25x on the refi loan as sized.',
+            'DSCR must clear 1.25x on the min(65% LTV, 1.25x DSCR) loan.',
+            'DSCR must be >=1.25x at the smaller of 65% LTV and 1.25x DSCR.',
+            'DSCR must be >=1.25x at the lower of 65% LTV and 1.25x DSCR.',
+            'DSCR is tested against the 1.25x floor at refinance sizing.',
+            'DSCR on refi-sized debt must be >=1.25x.',
+            'DSCR (not debt yield) must be >=1.25x at the lesser-of loan.',
+            'DSCR >=1.25x (cf. UNDERWRITING CONVENTIONS, i.e. the lesser of 65% LTV and 1.25x DSCR).',
+            '| DSCR floor 1.25x | lesser of 65% LTV / 1.25x DSCR |',
+            'Both DSCRs must be >=1.25x at refi sizing.',
+            'The DSCR floor of 1.25x is tested on the modeled refi.',
+        ]:
+            self.assertGreaterEqual(self.flags(line), 1, line)
+
+    def test_review_round_two_bare_numbers_are_not_sizing_caps(self):
+        """Round 2 (C4b): a bare integer before DSCR ("Stage 1", "Year 1", "Module 2") is a label,
+        not the "1.25x DSCR" sizing cap; x is required unless the number has a decimal or "minimum"."""
+        for line in [
+            'The Stage 1 DSCR floor of 1.25x is tested at refi sizing.',
+            'Year 1 DSCR must be >=1.25x on the lesser-of loan.',
+            'The Module 2 DSCR Check tests the 1.25x floor at refi sizing.',
+            # portfolio-growth/SKILL.md:101 before v1.3
+            "- DSCR cushion over the 1.25x floor on the scenario's own modeled debt (40% aggregate LTV), and "
+            "the portfolio's aggregate LTV against the 40% ceiling. A specific deal's 65% / 1.25x refi-sizing "
+            "test is the Module 2 DSCR Check, not a scenario output",
+        ]:
+            self.assertGreaterEqual(self.flags(line), 1, line)
+
+    def test_review_round_two_65_ltv_paired_with_dscr_cap_is_not_trusted(self):
+        """Round 2 (C4c): "65% LTV / 1.25x DSCR" names the lesser-of pair, not a 65%-LTV loan."""
+        self.assertGreaterEqual(self.flags('DSCR must be >=1.25x at refi sizing (65% LTV / 1.25x DSCR).'), 1)
+        self.assertGreaterEqual(self.flags('DSCR floor 1.25x: tested on the refi-sized loan (65% LTV and 1.25x DSCR).'), 1)
+        self.assertEqual(self.flags('DSCR must be >=1.25x at a 65% LTV loan; refi sizing is separate.'), 0)
+
+    def test_review_round_one_false_flags(self):
+        for line in [
+            'FLOOR-FLAG whenever DSCR is the binding constraint under lesser-of sizing.',
+            'Flag below 1.25x: DSCR binds under lesser-of sizing.',
+            'Report DSCR on the lesser-of loan too, but the 1.25x floor is tested at a 65%-LTV loan.',
+            'Size the refi to the LESSER of 65% LTV and a 1.25 DSCR.',
+            'Size the refi to the LESSER of 65% LTV and a 1.25x minimum DSCR.',
+            'per UNDERWRITING CONVENTIONS: LESSER of 65% LTV and 1.25x DSCR, 25-yr amort — state which of LTV/DSCR binds',
+        ]:
+            self.assertEqual(self.flags(line), 0, line)
+
+    def test_sizing_and_governor_summaries_pass(self):
+        for line in [
+            '- **All-cash bid + refi post-close (per-property governor: LESSER of 65% LTV and 1.25x DSCR).**',
+            'refi sized to the LESSER of **65% LTV** (stabilized value at exit cap) **and 1.25x DSCR** (never exceed).',
+            'DSCR binds whenever the exit cap is below 65% × 1.25 × the debt constant and LTV binds above it.',
+            'No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).',
+            'Three-scenario levered IRR through the full debt-sizing (LESSER of 65% LTV and 1.25x DSCR).',
+        ]:
+            self.assertEqual(self.flags(line), 0, line)
+
+    def test_scan_reports_the_check(self):
+        text = '# Demo (v1.0)\nFLOOR-FLAGGED if DSCR <1.25x at refi sizing.\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            findings = dc.scan(make_repo(tmp, text))
+        self.assertEqual([(f.line, f.check) for f in findings], [(2, 'dscr-floor-at-lesser-of')])
+
+
 class HistorySkipTests(unittest.TestCase):
     def test_changelog_sections_and_version_bullets_are_skipped(self):
         text = '\n'.join([

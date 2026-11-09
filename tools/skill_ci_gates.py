@@ -38,6 +38,9 @@ Subcommands (each exits 0 clean, 1 on a finding, 2 on a usage/environment error)
                            a temp dir OUTSIDE the repo (so the dev-checkout sys.path fallback
                            to tools/ cannot resolve), extract it, and confirm each staged
                            script that imports the shared module resolves the packaged copy.
+  memory-files             fail if any git-tracked file (any path, _archive/ included) opens with
+                           frontmatter marking a Claude memory file: `node_type: memory` at any
+                           indent, or `name: event_log` with "append-only event log" (2026-11-08).
 """
 import ast
 import json
@@ -209,6 +212,63 @@ def cmd_frontmatter() -> int:
           f'finding(s); shared-root-dep declarations: {len(sd)} finding(s); '
           f'README inventory: {len(rd)} finding(s)')
     return 1 if (fm or hy or sd or rd) else 0
+
+
+# ---------------------------------------------------------------------------
+# Claude memory files must never be tracked (2026-11-08 audit finding
+# eventlog-memory-committed-to-repo: full private event_log copies sat under _archive/)
+# ---------------------------------------------------------------------------
+_FM_NODE_TYPE_MEMORY = re.compile(r'^\s*node_type:\s*["\']?memory["\']?\s*$', re.M)
+_FM_NAME_EVENT_LOG = re.compile(r'^\s*name:\s*["\']?event_log["\']?\s*$', re.M)
+_APPEND_ONLY = re.compile(r'append-only event log', re.I)
+_MEMORY_SNIFF_BYTES = 16384
+
+
+def looks_like_memory_file(text: str) -> bool:
+    """True when the file opens with YAML frontmatter that marks a Claude memory file:
+    `node_type: memory` at any indent, or `name: event_log` plus "append-only event log"."""
+    text = text.lstrip('﻿').replace('\r\n', '\n')
+    lines = text.split('\n')
+    if not lines or lines[0].strip() != '---':
+        return False
+    try:
+        end = next(i for i, line in enumerate(lines[1:200], 1) if line.strip() == '---')
+    except StopIteration:
+        return False
+    fm = '\n'.join(lines[1:end])
+    return bool(_FM_NODE_TYPE_MEMORY.search(fm)
+                or (_FM_NAME_EVENT_LOG.search(fm) and _APPEND_ONLY.search(fm)))
+
+
+def tracked_memory_files(repo: Path = REPO) -> list[str]:
+    """Every git-tracked path (any directory, _archive/ and .rgignore'd paths included) whose
+    head looks like a Claude memory file. Raises RuntimeError if git cannot list the tree."""
+    r = subprocess.run(['git', '-C', str(repo), 'ls-files', '-z'], capture_output=True)
+    if r.returncode != 0:
+        raise RuntimeError(r.stderr.decode('utf-8', 'replace').strip() or 'git ls-files failed')
+    found = []
+    for rel in filter(None, r.stdout.decode('utf-8', 'replace').split('\0')):
+        try:
+            with open(repo / rel, 'rb') as f:
+                head = f.read(_MEMORY_SNIFF_BYTES)
+        except OSError:
+            continue  # tracked but absent from the worktree (e.g. deleted, unstaged)
+        if looks_like_memory_file(head.decode('utf-8', 'replace')):
+            found.append(rel)
+    return sorted(found)
+
+
+def cmd_memory_files() -> int:
+    try:
+        found = tracked_memory_files()
+    except RuntimeError as exc:
+        print(f'memory-files: cannot list tracked files: {exc}', file=sys.stderr)
+        return 2
+    for rel in found:
+        print(f'{rel}: looks like a Claude memory file (frontmatter); untrack it with '
+              f'`git rm --cached` and keep memory out of this repo', file=sys.stderr)
+    print(f'memory-files: {len(found)} tracked memory file(s)')
+    return 1 if found else 0
 
 
 # ---------------------------------------------------------------------------
@@ -548,6 +608,8 @@ def main(argv=None) -> int:
         return 0
     if cmd == 'packaged-layout':
         return cmd_packaged_layout()
+    if cmd == 'memory-files':
+        return cmd_memory_files()
     print(f'unknown subcommand {cmd!r}', file=sys.stderr)
     return 2
 
