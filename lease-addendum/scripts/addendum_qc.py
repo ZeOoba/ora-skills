@@ -58,6 +58,7 @@ import os
 import re
 import sys
 import zipfile
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 # Dev-checkout fallback: Python already puts this script's own directory at sys.path[0] on
@@ -218,16 +219,47 @@ def check_rent_arithmetic(t):
     window = _rent_schedule_window(t)
     rate_match = ESCALATION_RATE_RE.search(t[window[0]:window[1]]) if window else None
     if rate_match and len(rows) >= 2:
-        rate = float(rate_match.group(1)) / 100
-        # larger of each pair is the annual figure (order-agnostic, same as the pair above).
-        annuals = [larger for _smaller, larger in rows]
-        for i in range(1, len(annuals)):
-            expected = annuals[i - 1] * (1 + rate)
-            if abs(annuals[i] - expected) > max(1.00, expected * 0.005):
-                return (f"row {i + 1} annual rent {annuals[i]:.2f} does not compound onto row {i} "
-                        f"({annuals[i - 1]:.2f}) at the stated {rate * 100:.2f}% escalation "
-                        f"(expected {expected:.2f})")
+        rate = Decimal(rate_match.group(1)) / 100
+        # Cent-level test, mirroring lease-form-qc's _d2 (audit row
+        # addendum-escalation-tolerance-50bp, 2026-11-08). The old tolerance was
+        # max($1.00, 0.5% of the expected annual) -- wide enough that a 3.5% step under a
+        # stated 3% passed. Each row must now reproduce from the PRIOR row, within $0.01 per
+        # month of the year (12 cents on the annual), under one recognised rounding convention:
+        #   (i)   annual compounded:          round(prev_annual x (1+e), 2)
+        #   (ii)  monthly rounded each year:  round(prev_monthly x (1+e), 2) x 12
+        #   (iii) monthly whole-dollar:       round(prev_monthly x (1+e), 0) x 12
+        #   (iv)  annual whole-dollar:        round(prev_annual x (1+e), 0)
+        # A schedule built from a per-SF rate rounded to the cent is NOT recognised: it fails
+        # with the message below and must be verified by hand (fail-closed; a per-SF
+        # convention keyed on RSF text is on a separate branch pending design review).
+        # Rows are (smaller, larger) = (monthly, annual), order-agnostic as above.
+        tol = _ESCALATION_CENT_TOL * 12
+        for i in range(1, len(rows)):
+            prev_m, prev_a = (Decimal(str(v)) for v in rows[i - 1])
+            annual = Decimal(str(rows[i][1]))
+            step = 1 + rate
+            expected = [_cents(prev_a * step), _cents(prev_m * step) * 12,
+                        _dollars(prev_m * step) * 12, _dollars(prev_a * step)]
+            if all(abs(annual - e) > tol for e in expected):
+                return (f"row {i + 1} annual rent {annual:,.2f} does not compound onto row {i} "
+                        f"at the stated {rate * 100:.2f}% escalation (expected {expected[0]:,.2f} "
+                        f"annual-compounded or {expected[1]:,.2f} monthly-rounded, within "
+                        f"${tol:.2f}; whole-dollar conventions also tried) -- verify the rate "
+                        f"or the rounding by hand (a per-SF-rounded schedule is not recognised)")
     return False
+
+
+# $0.01 per month of the lease year: the most a cent-rounding convention can move the
+# annual figure. Anything wider is a different rate, not a rounding variant.
+_ESCALATION_CENT_TOL = Decimal("0.01")
+
+
+def _cents(value):
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _dollars(value):
+    return value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
 
 
 def check_party_consent(t, m3b):
