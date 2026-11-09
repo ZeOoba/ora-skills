@@ -43,7 +43,11 @@ Subcommands (each exits 0 clean, 1 on a finding, 2 on a usage/environment error)
                            indent, or `name: event_log` with "append-only event log" (2026-11-08);
                            or whose first lines are diff-shaped and carry that frontmatter as diff
                            context or an event_log.md diff header; UTF-16 heads are decoded
-                           (triage row X3, 2026-11-08).
+                           (triage row X3, 2026-11-08); or that is a single-entry event_log
+                           draft: a draft-shaped name (event_log_entry*, *EventLogEntry*,
+                           *_event_entry*, my_entry*; any suffix) or, outside code files, a first
+                           non-blank line opening with a dated heading (`#`-`####` or **bold**
+                           YYYY-MM-DD) (Gabriel in-turn ruling 2026-11-09).
 """
 import ast
 import json
@@ -260,6 +264,31 @@ def looks_like_memory_excerpt(text: str) -> bool:
     return bool(_DIFF_MEMORY_FM.search(head) or _DIFF_EVENT_LOG_HEADER.search(head))
 
 
+# Gabriel in-turn ruling 2026-11-09: single-entry event_log drafts (no frontmatter, no diff header)
+# are memory content too. Two signals: a draft-shaped file name, or a first non-blank line that is a
+# dated entry heading ("## 2026-08-21 ..."). A draft-shaped name counts whatever the suffix; the
+# heading test skips real code (a script that merely handles the event log, isolate_event_log.py or
+# event_log_append.ps1, is not a draft). Data formats (.json/.yml/.toml) are not exempt.
+# Tightened after the 2026-11-09 Opus review (suffix bypass, heading variants, bare my_entry).
+_DRAFT_NAME = re.compile(
+    r'event[_-]?log[_-]?entr(?:y|ies)|event[_-]entr(?:y|ies)|eventlog[_-]\w*entr(?:y|ies)|^my_entry(?:\.|$)',
+    re.I)
+_DRAFT_HEADING = re.compile(r'^\s*(?:#{1,4}\s*\**|\*\*)\s*\[?\d{4}-\d{2}-\d{2}(?![\d-])')
+_CODE_SUFFIXES = {'.py', '.ps1', '.psm1', '.sh', '.bash', '.js', '.mjs', '.cjs', '.ts', '.bat', '.cmd'}
+
+
+def looks_like_memory_draft(name: str, text: str) -> bool:
+    """True when a file is shaped like a single-entry event_log draft: a draft-shaped base name (any
+    suffix), or, outside code files, a first non-blank line that opens with a date: `## YYYY-MM-DD`,
+    `# ...`, `#### ...`, `**YYYY-MM-DD**`."""
+    if _DRAFT_NAME.search(name):
+        return True
+    if Path(name).suffix.lower() in _CODE_SUFFIXES:
+        return False
+    first = next((line for line in text.lstrip('﻿').splitlines() if line.strip()), '')
+    return bool(_DRAFT_HEADING.match(first))
+
+
 def looks_like_memory_file(text: str) -> bool:
     """True when the file opens with YAML frontmatter that marks a Claude memory file:
     `node_type: memory` at any indent, or `name: event_log` plus "append-only event log";
@@ -292,7 +321,8 @@ def tracked_memory_files(repo: Path = REPO) -> list[str]:
                 head = f.read(_MEMORY_SNIFF_BYTES)
         except OSError:
             continue  # tracked but absent from the worktree (e.g. deleted, unstaged)
-        if looks_like_memory_file(decode_head(head)):
+        text = decode_head(head)
+        if looks_like_memory_file(text) or looks_like_memory_draft(Path(rel).name, text):
             found.append(rel)
     return sorted(found)
 
