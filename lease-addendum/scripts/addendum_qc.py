@@ -58,6 +58,7 @@ import os
 import re
 import sys
 import zipfile
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 # Dev-checkout fallback: Python already puts this script's own directory at sys.path[0] on
@@ -218,16 +219,99 @@ def check_rent_arithmetic(t):
     window = _rent_schedule_window(t)
     rate_match = ESCALATION_RATE_RE.search(t[window[0]:window[1]]) if window else None
     if rate_match and len(rows) >= 2:
-        rate = float(rate_match.group(1)) / 100
-        # larger of each pair is the annual figure (order-agnostic, same as the pair above).
-        annuals = [larger for _smaller, larger in rows]
-        for i in range(1, len(annuals)):
-            expected = annuals[i - 1] * (1 + rate)
-            if abs(annuals[i] - expected) > max(1.00, expected * 0.005):
-                return (f"row {i + 1} annual rent {annuals[i]:.2f} does not compound onto row {i} "
-                        f"({annuals[i - 1]:.2f}) at the stated {rate * 100:.2f}% escalation "
-                        f"(expected {expected:.2f})")
+        rate = Decimal(rate_match.group(1)) / 100
+        # Cent-level test, mirroring lease-form-qc's _d2 (audit row
+        # addendum-escalation-tolerance-50bp, 2026-11-08). The old tolerance was
+        # max($1.00, 0.5% of the expected annual) -- wide enough that a 3.5% step under a
+        # stated 3% passed. Each row must now reproduce from the PRIOR row, within $0.01 per
+        # month of the year (12 cents on the annual), under one recognised rounding convention:
+        #   (i)   annual compounded:          round(prev_annual x (1+e), 2)
+        #   (ii)  monthly rounded each year:  round(prev_monthly x (1+e), 2) x 12
+        #   (iii) monthly whole-dollar:       round(prev_monthly x (1+e), 0) x 12
+        #   (iv)  annual whole-dollar:        round(prev_annual x (1+e), 0)
+        #   (v)   per-SF rate to the cent:    round(prev_annual / RSF x (1+e), 2) x RSF,
+        #         only when the document states a per-SF rate and an RSF whose product
+        #         is exactly the row-1 annual (see _per_sf_rsf; REFUTE round 2: taking the
+        #         first 'N square feet' let a project RSF widen the rounding step to $400).
+        # Rows are (smaller, larger) = (monthly, annual), order-agnostic as above.
+        tol = _ESCALATION_CENT_TOL * 12
+        rsf = _per_sf_rsf(t, Decimal(str(rows[0][1])))
+        for i in range(1, len(rows)):
+            prev_m, prev_a = (Decimal(str(v)) for v in rows[i - 1])
+            annual = Decimal(str(rows[i][1]))
+            step = 1 + rate
+            expected = [_cents(prev_a * step), _cents(prev_m * step) * 12,
+                        _dollars(prev_m * step) * 12, _dollars(prev_a * step)]
+            if rsf:
+                expected.append(_cents(_cents(prev_a / rsf) * step) * rsf)
+            if all(abs(annual - e) > tol for e in expected):
+                return (f"row {i + 1} annual rent {annual:,.2f} does not compound onto row {i} "
+                        f"at the stated {rate * 100:.2f}% escalation (expected {expected[0]:,.2f} "
+                        f"annual-compounded or {expected[1]:,.2f} monthly-rounded, within "
+                        f"${tol:.2f}; whole-dollar"
+                        + (" and per-SF" if rsf else "")
+                        + " conventions also tried) -- verify the rate or the rounding by hand")
     return False
+
+
+# $0.01 per month of the lease year: the most a cent-rounding convention can move the
+# annual figure. Anything wider is a different rate, not a rounding variant.
+_ESCALATION_CENT_TOL = Decimal("0.01")
+
+
+_RSF_RE = re.compile(r"(?<![\d,])(\d{1,3}(?:,\d{3})+|\d{3,7})\s*(?:rentable\s+)?(?:square\s+feet|RSF|SF)\b", re.I)
+_PSF_RE = re.compile(r"\$\s*(\d{1,3}\.\d{2})\s*(?:per|/)\s*(?:rentable\s+)?(?:square\s+(?:foot|feet)|RSF|SF)\b", re.I)
+
+
+def _per_sf_rsf(t, row1_annual):
+    """The premises RSF for per-SF convention (v), or None. Accepted only when ONE sentence
+    that names rent states both a per-SF rate and an RSF whose product is exactly the row-1
+    annual rent. A project or building area, or an operating-cost rate per SF, stated in some
+    other sentence can never be paired with it (REFUTE round 3: '$0.60 per square foot'
+    operating costs x a 40,000 SF project coincidentally equalled the row-1 annual)."""
+    for sentence in _SENTENCE_SPLIT_RE.split(t):
+        # A rent sentence, or a Premises-size sentence that is not about expenses or share
+        # ('The Premises contain 10,000 rentable square feet at $8.00 per square foot').
+        if not (_RENT_WORD_RE.search(sentence)
+                or (_PREMISES_RE.search(sentence) and not _EXPENSE_WORD_RE.search(sentence))):
+            continue
+        # Expense, share or additional-rent sentences never pair, even when they name rent
+        # (REFUTE round 5 optional hardening).
+        if (_ALLOWANCE_RE.search(sentence) or _EXPENSE_WORD_RE.search(sentence)
+                or _ADDITIONAL_RENT_RE.search(sentence)):
+            continue
+        # Round 4: the per-SF rate must come AFTER a rent term in the sentence ('Base Rent
+        # ... is $12.00 per square foot'), and an RSF followed by Building/Project/Park is the
+        # project area, never the premises.
+        rent_pos = [m.end() for m in _RENT_WORD_RE.finditer(sentence)]
+        rates = {Decimal(m.group(1)) for m in _PSF_RE.finditer(sentence)
+                 if any(p <= m.start() for p in rent_pos)}
+        for m in _RSF_RE.finditer(sentence):
+            if _PROJECT_AFTER_RE.match(sentence, m.end()):
+                continue
+            rsf = Decimal(m.group(1).replace(",", ""))
+            if rsf > 0 and any(_cents(r * rsf) == row1_annual for r in rates):
+                return rsf
+    return None
+
+
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.;!?])\s+")
+_RENT_WORD_RE = re.compile(r"\brent\b", re.I)
+_PREMISES_RE = re.compile(r"\bpremises\b", re.I)
+_ALLOWANCE_RE = re.compile(r"\ballowance\b", re.I)
+_ADDITIONAL_RENT_RE = re.compile(r"\badditional\s+rent\b", re.I)
+_PROJECT_AFTER_RE = re.compile(
+    r"\s*(?:\w+\s+){0,2}?(?:building|project|park|center|centre|complex)\b", re.I)
+_EXPENSE_WORD_RE = re.compile(
+    r"\b(?:operating|expenses?|CAM|common\s+area|tax(?:es)?|insurance|proportionate|share)\b", re.I)
+
+
+def _cents(value):
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _dollars(value):
+    return value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
 
 
 def check_party_consent(t, m3b):

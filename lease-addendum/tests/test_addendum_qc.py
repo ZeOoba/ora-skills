@@ -649,6 +649,119 @@ class TestRentArithmeticUnparsedAndEscalation(TempDirCase):
         new = _new_verdicts(path)
         self.assertFalse(new["3"], "correctly-compounded escalation must not fire")
 
+    # Audit row addendum-escalation-tolerance-50bp (2026-11-08): the compounding check
+    # allowed max($1.00, 0.5% of the expected annual), wide enough that a 3.5% step stated
+    # as 3% passed. Now cent-level: each row must reproduce from the prior row under
+    # (i) annual compounded or (ii) monthly compounded and rounded each year, within
+    # $0.01 x 12 months.
+    def _escalation_doc(self, name, rows, rate="3.00"):
+        return make_docx(
+            self.tmp / name,
+            ["Base Rent shall be payable in accordance with the following schedule, "
+             f"escalating at {rate}% annually:"],
+            table_rows=rows,
+        )
+
+    def test_3_5_pct_step_stated_as_3_pct_fires(self):
+        path = self._escalation_doc("step_35_as_3.docx", [
+            ("1/2024-12/2024", "$1,000.00", "$12,000.00"),
+            ("1/2025-12/2025", "$1,035.00", "$12,420.00"),
+        ])
+        self.assertTrue(_new_verdicts(path)["3"], "a 3.5% step under a stated 3% must fail")
+
+    def test_3_25_pct_step_stated_as_3_pct_fires(self):
+        path = self._escalation_doc("step_325_as_3.docx", [
+            ("1/2024-12/2024", "$1,000.00", "$12,000.00"),
+            ("1/2025-12/2025", "$1,032.50", "$12,390.00"),
+        ])
+        self.assertTrue(_new_verdicts(path)["3"])
+
+    def test_one_dollar_annual_drift_fires(self):
+        path = self._escalation_doc("one_dollar_drift.docx", [
+            ("1/2024-12/2024", "$1,000.00", "$12,000.00"),
+            ("1/2025-12/2025", "$1,030.08", "$12,361.00"),
+        ])
+        self.assertTrue(_new_verdicts(path)["3"], "a $1.00 annual drift is not a rounding variant")
+
+    def test_annual_compounded_rounding_variant_passes(self):
+        # (i) annual x 1.03 rounded to the cent; monthly = annual / 12.
+        path = self._escalation_doc("method_i.docx", [
+            ("1/2024-12/2024", "$1,234.56", "$14,814.72"),
+            ("1/2025-12/2025", "$1,271.60", "$15,259.16"),
+            ("1/2026-12/2026", "$1,309.74", "$15,716.93"),
+        ])
+        self.assertFalse(_new_verdicts(path)["3"])
+
+    def test_monthly_rounded_each_year_variant_passes(self):
+        # (ii) monthly x 1.03 rounded each year; annual = monthly x 12.
+        path = self._escalation_doc("method_ii.docx", [
+            ("1/2024-12/2024", "$1,234.56", "$14,814.72"),
+            ("1/2025-12/2025", "$1,271.60", "$15,259.20"),
+            ("1/2026-12/2026", "$1,309.75", "$15,717.00"),
+        ])
+        self.assertFalse(_new_verdicts(path)["3"])
+
+    # REFUTE pass (2026-11-08): whole-dollar and per-SF schedules are legitimate rounding
+    # conventions the cent-level check must still recognise.
+    def test_whole_dollar_monthly_schedule_passes(self):
+        path = self._escalation_doc("whole_dollar.docx", [
+            ("1/2024-12/2024", "$1,000.00", "$12,000.00"),
+            ("1/2025-12/2025", "$1,030.00", "$12,360.00"),
+            ("1/2026-12/2026", "$1,061.00", "$12,732.00"),
+        ])
+        self.assertFalse(_new_verdicts(path)["3"])
+
+    def _psf_doc(self, name, rows):
+        return make_docx(
+            self.tmp / name,
+            ["Base Rent for the Premises' 10,000 rentable square feet is initially "
+             "$8.00 per square foot per year.",
+             "Base Rent shall be payable in accordance with the following schedule, "
+             "escalating at 3.00% annually:"],
+            table_rows=rows,
+        )
+
+    def test_per_sf_rounded_schedule_passes_when_rsf_stated(self):
+        path = self._psf_doc("per_sf.docx", [
+            ("1/2024-12/2024", "$6,666.67", "$80,000.00"),
+            ("1/2025-12/2025", "$6,866.67", "$82,400.00"),
+            ("1/2026-12/2026", "$7,075.00", "$84,900.00"),
+        ])
+        self.assertFalse(_new_verdicts(path)["3"])
+
+    def test_per_sf_without_a_stated_rate_is_not_assumed(self):
+        path = make_docx(
+            self.tmp / "per_sf_no_rate.docx",
+            ["The Premises contain 10,000 rentable square feet.",
+             "Base Rent shall be payable in accordance with the following schedule, "
+             "escalating at 3.00% annually:"],
+            table_rows=[("1/2024-12/2024", "$6,666.67", "$80,000.00"),
+                        ("1/2025-12/2025", "$6,866.67", "$82,400.00"),
+                        ("1/2026-12/2026", "$7,075.00", "$84,900.00")])
+        self.assertTrue(_new_verdicts(path)["3"])
+
+    def test_project_rsf_cannot_widen_the_rounding_step(self):
+        # REFUTE round 2: first-match RSF picked the 40,000 SF project, so a $400 step
+        # let a 3.33% increase pass under a stated 3%.
+        path = make_docx(
+            self.tmp / "project_rsf.docx",
+            ["Tenant's Proportionate Share of the Premises is 5.00%, being 2,000 / 40,000 "
+             "rentable square feet. Base Rent for the Premises' 2,000 rentable square feet is "
+             "$12.00 per square foot per year.",
+             "Base Rent shall be payable in accordance with the following schedule, "
+             "escalating at 3.00% annually:"],
+            table_rows=[("1/2024-12/2024", "$2,000.00", "$24,000.00"),
+                        ("1/2025-12/2025", "$2,066.67", "$24,800.00")])
+        self.assertTrue(_new_verdicts(path)["3"])
+
+    def test_per_sf_path_does_not_admit_a_wrong_rate(self):
+        # $8.00 -> $8.28/SF is 3.5%, stated 3%.
+        path = self._psf_doc("per_sf_wrong.docx", [
+            ("1/2024-12/2024", "$6,666.67", "$80,000.00"),
+            ("1/2025-12/2025", "$6,900.00", "$82,800.00"),
+        ])
+        self.assertTrue(_new_verdicts(path)["3"])
+
     # cc-audit-army code-review finding (2026-08-22): ESCALATION_RATE_RE used to scan the
     # WHOLE document, so an unrelated clause elsewhere could be picked up as the rent
     # escalation rate. Scoped to a window around the rent-schedule anchor instead.
@@ -682,6 +795,122 @@ class TestRentArithmeticUnparsedAndEscalation(TempDirCase):
 # --------------------------------------------------------------------------
 # 4. Full parity sweep — every check, several fixtures, several flag combos
 # --------------------------------------------------------------------------
+
+class TestEscalationRound3Repros(unittest.TestCase):
+    """Pinned from the round-3 REFUTE probe rr3_add.py (2026-11-08): plain-text schedules
+    fed straight to check_rent_arithmetic (one table cell per line)."""
+
+    @staticmethod
+    def _doc(rows, pre="", rate="3.00"):
+        lines = [pre + "Base Rent shall be payable in accordance with the following schedule, "
+                 f"escalating at {rate}% annually:"]
+        for i, (m, a) in enumerate(rows):
+            lines += [f"1/{2024 + i}-12/{2024 + i}", f"${m:,.2f}", f"${a:,.2f}"]
+        return chr(10).join(lines)
+
+    @staticmethod
+    def _c(x):
+        from decimal import Decimal, ROUND_HALF_UP
+        return Decimal(x).quantize(Decimal("0.01"), ROUND_HALF_UP)
+
+    def setUp(self):
+        import addendum_qc
+        self.q = addendum_qc
+
+    def test_building_rsf_without_a_stated_rate_is_not_used(self):
+        pre = ("The Premises are located in the 40,000 SF building and contain 2,000 rentable "
+               "square feet. ")
+        self.assertTrue(self.q.check_rent_arithmetic(
+            self._doc([(2000, 24000), (2066.67, 24800)], pre=pre)))
+
+    def test_coincident_operating_cost_rate_cannot_pair_with_project_rsf(self):
+        from decimal import Decimal
+        for pre in (
+            "Tenant's Proportionate Share is 5.00%, being 2,000 / 40,000 rentable square feet; "
+            "estimated Operating Costs are $0.60 per square foot. The Premises contain 2,000 "
+            "rentable square feet at $12.00 per square foot per year. ",
+            "Tenant's Proportionate Share of the Premises is 5.00%, being 2,000 / 40,000 rentable "
+            "square feet, and estimated Operating Costs are $0.60 per square foot. ",
+        ):
+            with self.subTest(pre=pre[:50]):
+                doc = self._doc([(2000, 24000), (2066.67, 24800)], pre=pre)
+                self.assertNotEqual(self.q._per_sf_rsf(doc, Decimal("24000.00")), Decimal("40000"))
+                self.assertTrue(self.q.check_rent_arithmetic(doc))
+
+    def _psf_rows(self, rsf, psf0, years=5):
+        from decimal import Decimal
+        psf = [Decimal(psf0)]
+        for _ in range(years - 1):
+            psf.append(self._c(psf[-1] * Decimal("1.03")))
+        return [(float(self._c(p * rsf / 12)), float(p * rsf)) for p in psf]
+
+    def test_per_sf_rate_without_a_rent_term_fails_closed(self):
+        # Round 4 rule: the per-SF rate must follow a rent term in the same sentence.
+        pre = "The Premises contain 10,000 rentable square feet at $8.00 per square foot per year. "
+        self.assertTrue(self.q.check_rent_arithmetic(self._doc(self._psf_rows(10000, "8.00"), pre=pre)))
+
+    def test_round4_repros(self):
+        """Pinned from rr4_add.py (REFUTE round 4)."""
+        from decimal import Decimal
+        bad = [(2000, 24000), (2066.67, 24800)]
+        for pre in (
+            "Base Rent is in addition to Tenant's share of the 40,000 SF Project's costs, "
+            "estimated at $0.60 per square foot. ",
+            "Base Rent for the 2,000 rentable square feet of Premises in the 40,000 SF Building "
+            "is $12.00 per square foot, plus additional rent of $0.60 per square foot. ",
+            "The Premises are in the 40,000 SF Building; TI allowance $0.60 per square foot. ",
+            "The Premises are part of the 40,000 SF Building and Landlord shall provide an "
+            "allowance of $0.60 per square foot. ",
+            "Base Rent for the Premises' 2,000 rentable square feet is $12.00 per square foot "
+            "per year. ",
+        ):
+            with self.subTest(pre=pre[:50]):
+                doc = self._doc(bad, pre=pre)
+                self.assertNotEqual(self.q._per_sf_rsf(doc, Decimal("24000.00")), Decimal("40000"))
+                self.assertTrue(self.q.check_rent_arithmetic(doc), "a 3.33% step must fail")
+        for pre in ("Base Rent: $8.00/SF on 10,000 RSF. ",
+                    "Base Rent shall be $8.00 per square foot per annum (10,000 SF). "):
+            with self.subTest(legit=pre):
+                self.assertFalse(self.q.check_rent_arithmetic(
+                    self._doc(self._psf_rows(10000, "8.00"), pre=pre)))
+        # Round 5 hardening: expense / additional-rent sentences and a 'Complex' area never pair.
+        for pre in ("Base Rent and Tenant's share of Operating Costs for the 40,000 SF Project "
+                    "are $0.60 per square foot. ",
+                    "Additional rent for the 40,000 rentable square feet is $0.60 per square foot. ",
+                    "Base Rent is $0.60 per square foot of the 40,000 SF Complex. "):
+            with self.subTest(hardening=pre[:40]):
+                doc = self._doc(bad, pre=pre)
+                self.assertIsNone(self.q._per_sf_rsf(doc, Decimal("24000.00")))
+                self.assertTrue(self.q.check_rent_arithmetic(doc))
+        # Two-sentence phrasings are not paired (fail closed, verify by hand).
+        for pre in ("The Premises contain 10,000 rentable square feet. Base Rent is $8.00 per "
+                    "square foot per year. ",
+                    "The Premises consist of 10,000 rentable square feet; Base Rent is $8.00 per "
+                    "rentable square foot. "):
+            with self.subTest(fail_closed=pre[:40]):
+                self.assertTrue(self.q.check_rent_arithmetic(
+                    self._doc(self._psf_rows(10000, "8.00"), pre=pre)))
+
+    def test_per_sf_schedule_with_wrong_rate_fails(self):
+        from decimal import Decimal
+        pre = "The Premises contain 10,000 rentable square feet at $8.00 per square foot per year. "
+        for wrong in ("3.04", "3.1", "3.25", "3.5"):
+            with self.subTest(step=wrong):
+                a2 = self._c(Decimal(80000) * (1 + Decimal(wrong) / 100))
+                doc = self._doc([(6666.67, 80000), (float(self._c(a2 / 12)), float(a2))], pre=pre)
+                self.assertTrue(self.q.check_rent_arithmetic(doc))
+
+    def test_large_rsf_admits_only_the_stated_rate(self):
+        from decimal import Decimal
+        pre = "The Premises contain 45,000 rentable square feet at $6.00 per square foot per year. "
+        passing = []
+        for bp in range(250, 360):
+            a2 = self._c(Decimal(270000) * (1 + Decimal(bp) / 10000))
+            if not self.q.check_rent_arithmetic(
+                    self._doc([(22500, 270000), (float(self._c(a2 / 12)), float(a2))], pre=pre)):
+                passing.append(bp)
+        self.assertEqual(passing, [300])
+
 
 class TestFullParitySweep(TempDirCase):
 
