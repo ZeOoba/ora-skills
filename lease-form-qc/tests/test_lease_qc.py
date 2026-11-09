@@ -1463,6 +1463,40 @@ class TestLoiConformanceRegressionFixes(TempDirCase):
         row = self._rent_row({"type": "fixed_pct", "value": 3.0}, text)
         self.assertNotEqual(row["status"], "CONFORMS", row)
 
+    # REFUTE round 2 (2026-11-08): only rent-escalation clauses count.
+    _ORA_RENT_CLAUSE = (
+        "Annual Base Rent increases by {p} percent ({p}%) on the first day of each Lease "
+        "Year after the first, throughout the Primary Term and the Option Term, as reflected "
+        "in the schedule above. The Lease Year dates set forth above assume a Commencement "
+        "Date of March 1, 2026 and shall be adjusted to correspond to the actual "
+        "Commencement Date.")
+    _ORA_OTHER_CLAUSES = (
+        " Any Rent not paid when due shall bear interest at the lesser of eighteen percent "
+        "(18%) per annum or the maximum rate permitted by applicable law. Tenant shall not be "
+        "required to pay any additional rent on account of Taxes, and there shall be no annual "
+        "estimate or reconciliation of Operating Costs under this Lease. (b) \"Tenant's "
+        "Proportionate Share\" means 3.00%, subject to adjustment if the Project is remeasured. "
+        "Operating Costs shall not increase by more than 3% per year. The management fee is "
+        "3% of annual gross receipts.")
+
+    def test_rent_ora_template_wrong_rate_with_3pct_share_does_not_conform(self):
+        text = (self._RENT_ONLY + " " + self._ORA_RENT_CLAUSE.format(p="3.5")
+                + self._ORA_OTHER_CLAUSES)
+        row = self._rent_row({"type": "fixed_pct", "value": 3.0}, text)
+        self.assertEqual(row["status"], "CONFLICT", row)
+
+    def test_rent_ora_template_right_rate_conforms_despite_other_percentages(self):
+        text = (self._RENT_ONLY + " " + self._ORA_RENT_CLAUSE.format(p="3")
+                + self._ORA_OTHER_CLAUSES)
+        row = self._rent_row({"type": "fixed_pct", "value": 3.0}, text)
+        self.assertEqual(row["status"], "CONFORMS", row)
+
+    def test_rent_option_term_match_does_not_mask_primary_mismatch(self):
+        text = (self._RENT_ONLY + " Base Rent increases by 3.5% annually during the Primary "
+                "Term. Option Term rent: 3% increases.")
+        row = self._rent_row({"type": "fixed_pct", "value": 3.0}, text)
+        self.assertEqual(row["status"], "CONFLICT", row)
+
     def test_rent_fixed_pct_lease_year_and_step_wording_conforms(self):
         for phrase in ("Rent steps up 3% each Lease Year.",
                        "Base Rent shall be subject to 3% bumps."):
