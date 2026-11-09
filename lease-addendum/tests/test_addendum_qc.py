@@ -844,9 +844,43 @@ class TestEscalationRound3Repros(unittest.TestCase):
             psf.append(self._c(psf[-1] * Decimal("1.03")))
         return [(float(self._c(p * rsf / 12)), float(p * rsf)) for p in psf]
 
-    def test_legit_per_sf_schedule_passes(self):
+    def test_per_sf_rate_without_a_rent_term_fails_closed(self):
+        # Round 4 rule: the per-SF rate must follow a rent term in the same sentence.
         pre = "The Premises contain 10,000 rentable square feet at $8.00 per square foot per year. "
-        self.assertFalse(self.q.check_rent_arithmetic(self._doc(self._psf_rows(10000, "8.00"), pre=pre)))
+        self.assertTrue(self.q.check_rent_arithmetic(self._doc(self._psf_rows(10000, "8.00"), pre=pre)))
+
+    def test_round4_repros(self):
+        """Pinned from rr4_add.py (REFUTE round 4)."""
+        from decimal import Decimal
+        bad = [(2000, 24000), (2066.67, 24800)]
+        for pre in (
+            "Base Rent is in addition to Tenant's share of the 40,000 SF Project's costs, "
+            "estimated at $0.60 per square foot. ",
+            "Base Rent for the 2,000 rentable square feet of Premises in the 40,000 SF Building "
+            "is $12.00 per square foot, plus additional rent of $0.60 per square foot. ",
+            "The Premises are in the 40,000 SF Building; TI allowance $0.60 per square foot. ",
+            "The Premises are part of the 40,000 SF Building and Landlord shall provide an "
+            "allowance of $0.60 per square foot. ",
+            "Base Rent for the Premises' 2,000 rentable square feet is $12.00 per square foot "
+            "per year. ",
+        ):
+            with self.subTest(pre=pre[:50]):
+                doc = self._doc(bad, pre=pre)
+                self.assertNotEqual(self.q._per_sf_rsf(doc, Decimal("24000.00")), Decimal("40000"))
+                self.assertTrue(self.q.check_rent_arithmetic(doc), "a 3.33% step must fail")
+        for pre in ("Base Rent: $8.00/SF on 10,000 RSF. ",
+                    "Base Rent shall be $8.00 per square foot per annum (10,000 SF). "):
+            with self.subTest(legit=pre):
+                self.assertFalse(self.q.check_rent_arithmetic(
+                    self._doc(self._psf_rows(10000, "8.00"), pre=pre)))
+        # Two-sentence phrasings are not paired (fail closed, verify by hand).
+        for pre in ("The Premises contain 10,000 rentable square feet. Base Rent is $8.00 per "
+                    "square foot per year. ",
+                    "The Premises consist of 10,000 rentable square feet; Base Rent is $8.00 per "
+                    "rentable square foot. "):
+            with self.subTest(fail_closed=pre[:40]):
+                self.assertTrue(self.q.check_rent_arithmetic(
+                    self._doc(self._psf_rows(10000, "8.00"), pre=pre)))
 
     def test_per_sf_schedule_with_wrong_rate_fails(self):
         from decimal import Decimal

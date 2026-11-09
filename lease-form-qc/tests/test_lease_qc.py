@@ -1553,6 +1553,69 @@ class TestLoiConformanceRegressionFixes(TempDirCase):
                                      "Monthly Rent for Lease Year 1 shall be $2,000.00 per month. " + extra)
                 self.assertEqual(row["status"], want, row)
 
+    def test_rent_all_master_fixtures_round4(self):
+        """rr4_lq.py: every master fixture (tests/fixtures plus masterlease-jurisdiction-rebase
+        v2.6-v3.1) reads no escalation on its own, CONFORMS with the clause-modules rent
+        clause at 3% and 2.5%, and CONFLICTs at 3.5% against a 3% register."""
+        paths = sorted((HERE / "fixtures").glob("ORA_MasterLease_ShallowBay*.docx")) + sorted(
+            (REPO / "masterlease-jurisdiction-rebase" / "scripts" / "fixtures").glob("*.docx"))
+        self.assertGreaterEqual(len(paths), 7)
+        for path in paths:
+            with self.subTest(fixture=path.name):
+                body, _meta = extract(str(path))
+                t = norm(body) + " " + self._RENT_ONLY + " "
+                self.assertEqual(lease_qc._escalation_pcts(norm(body)), ([], False))
+                for reg, pct, want in ((3.0, "3", "CONFORMS"), (2.5, "2.5", "CONFORMS"),
+                                       (3.0, "3.5", "CONFLICT")):
+                    row = self._rent_row({"type": "fixed_pct", "value": reg},
+                                         t + self._clause_modules_rent_clause(pct))
+                    self.assertEqual(row["status"], want, (pct, row))
+
+    def test_rent_round4_repros(self):
+        """Pinned from rr4_lq.py (REFUTE round 4)."""
+        cases = [
+            ("Annual Base Rent shall increase on the first day of each Lease Year after the first "
+             "Lease Year by an amount equal to three and one-half percent (3.5%) of the prior "
+             "year's Annual Base Rent. Option Term Base Rent shall increase 3% annually.", "CONFLICT"),
+            ("Annual Base Rent shall increase on the first day of each Lease Year after the first "
+             "Lease Year by an amount equal to three and one-half percent (3.5%) of the prior "
+             "year's Annual Base Rent.", "CONFLICT"),
+            ("Tenant's Proportionate Share is 3%. Base Rent shall, on each anniversary of the "
+             "Commencement Date during the Primary Term, increase by three and one-half percent "
+             "(3.5%).", "CONFLICT"),
+            ("Tenant's Proportionate Share is 3%. Base Rent shall, on each anniversary of the "
+             "Commencement Date during the Primary Term, be increased by 3.5%.", "CONFLICT"),
+            ("Base Rent is $24,000.00 per year, and Tenant's share of Operating Costs is 3% of the "
+             "total; Base Rent increases by 3.5% each Lease Year.", "CONFLICT"),
+            ("Base Rent: $24,000.00 per year, payable monthly, with annual increases of 3.5%, "
+             "late charge 3%.", "CONFLICT"),
+            ("Base Rent: $24,000.00/yr. Escalation: 3%. Late Charge: 10%. Default Rate: 18% per "
+             "annum.", "CONFORMS"),
+            ("Base Rent shall increase by 3% per annum (but not the 3.5% CPI-linked amount).",
+             "NOT_CONFORMS"),
+            ("Rent shall increase 3% annually. The Consumer Price Index shall not apply.", "CONFORMS"),
+            ("Base Rent increases by 3% annually. Security Deposit: $2,000.00. Thereafter the "
+             "deposit shall increase by 10%.", "CONFORMS"),
+            ("Base Rent is payable monthly in advance. The Operating Costs shall not increase by "
+             "more than 5% per year.", "PARTIAL"),
+            ("Rent increases 3% on each anniversary. Notwithstanding the foregoing, beginning in "
+             "Lease Year 4 the increase shall be 3.5%.", "CONFLICT"),
+            ("Base Rent increases 3% on each anniversary. Notwithstanding the foregoing, for Lease "
+             "Years 4-5 the increase shall be 3.5%.", "CONFLICT"),
+            ("Base Rent: Year 1 $24,000; Year 2 increased by 3%; Year 3 increased by 3.5%.",
+             "CONFLICT"),
+            ("Base Rent increases three percent (3%) per year, except that the increase on the "
+             "third anniversary of the Commencement Date shall be four percent (4%).", "CONFLICT"),
+        ]
+        for extra, want in cases:
+            with self.subTest(extra=extra[:70]):
+                row = self._rent_row({"type": "fixed_pct", "value": 3.0},
+                                     "Monthly Rent for Lease Year 1 shall be $2,000.00 per month. " + extra)
+                if want == "NOT_CONFORMS":
+                    self.assertNotEqual(row["status"], "CONFORMS", row)
+                else:
+                    self.assertEqual(row["status"], want, row)
+
     def test_rent_fixed_pct_lease_year_and_step_wording_conforms(self):
         for phrase in ("Rent steps up 3% each Lease Year.",
                        "Base Rent shall be subject to 3% bumps."):

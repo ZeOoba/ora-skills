@@ -275,8 +275,17 @@ def _per_sf_rsf(t, row1_annual):
         if not (_RENT_WORD_RE.search(sentence)
                 or (_PREMISES_RE.search(sentence) and not _EXPENSE_WORD_RE.search(sentence))):
             continue
-        rates = {Decimal(m.group(1)) for m in _PSF_RE.finditer(sentence)}
+        if _ALLOWANCE_RE.search(sentence):
+            continue
+        # Round 4: the per-SF rate must come AFTER a rent term in the sentence ('Base Rent
+        # ... is $12.00 per square foot'), and an RSF followed by Building/Project/Park is the
+        # project area, never the premises.
+        rent_pos = [m.end() for m in _RENT_WORD_RE.finditer(sentence)]
+        rates = {Decimal(m.group(1)) for m in _PSF_RE.finditer(sentence)
+                 if any(p <= m.start() for p in rent_pos)}
         for m in _RSF_RE.finditer(sentence):
+            if _PROJECT_AFTER_RE.match(sentence, m.end()):
+                continue
             rsf = Decimal(m.group(1).replace(",", ""))
             if rsf > 0 and any(_cents(r * rsf) == row1_annual for r in rates):
                 return rsf
@@ -286,6 +295,8 @@ def _per_sf_rsf(t, row1_annual):
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.;!?])\s+")
 _RENT_WORD_RE = re.compile(r"\brent\b", re.I)
 _PREMISES_RE = re.compile(r"\bpremises\b", re.I)
+_ALLOWANCE_RE = re.compile(r"\ballowance\b", re.I)
+_PROJECT_AFTER_RE = re.compile(r"\s*(?:\w+\s+){0,2}?(?:building|project|park|center|centre)\b", re.I)
 _EXPENSE_WORD_RE = re.compile(
     r"\b(?:operating|expenses?|CAM|common\s+area|tax(?:es)?|insurance|proportionate|share)\b", re.I)
 

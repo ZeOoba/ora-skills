@@ -1955,34 +1955,70 @@ def _escalation_pcts(text):
     unpunctuated Basic Lease Information block is therefore not read as an
     escalation (REFUTE round 3).
 
+    Round 4: the backward search stays inside the clause (a 3% share in the
+    PREVIOUS sentence is never a step); the forward search may run into the
+    next clause ('Sec. 4) by 3.5%'). A qualifying clause with an escalation
+    verb but no percentage within _ESC_PCT_GAP contributes EVERY percentage in
+    it ('increase ... by an amount equal to three and one-half percent
+    (3.5%)'). The chain runs forward through consecutive escalation-verb
+    clauses ('Notwithstanding the foregoing, ... the increase shall be 3.5%'),
+    but never into a clause whose subject is an expense term and that does not
+    name rent ('The Operating Costs shall not increase by more than 5%').
+
     Returns (pcts, indexed): indexed is True when a qualifying clause ties the
     step to CPI / a price index, which a fixed % cannot verify."""
     pcts_all = [(m.start(), m.end(), float(m.group(1))) for m in _PCT_RE.finditer(text)]
-    out, indexed = [], False
-    prev_names_rent = False
-    pos = 0
+    spans, pos = [], 0
     for sep in list(_CLAUSE_SPLIT_RE.finditer(text)) + [None]:
         end = sep.start() if sep else len(text)
-        clause_start, clause = pos, text[pos:end]
+        spans.append((pos, end))
         pos = sep.end() if sep else len(text)
+    out, indexed = [], False
+    chain = False
+    for i, (cs, ce) in enumerate(spans):
+        clause = text[cs:ce]
         names_rent = bool(_RENT_TERM_RE.search(clause))
-        if names_rent or prev_names_rent:
+        has_esc = bool(_ESC_CONTEXT_RE.search(clause))
+        expense_subject = (not names_rent) and bool(_EXPENSE_SUBJECT_RE.match(clause))
+        qualifies = names_rent or (chain and not expense_subject)
+        if qualifies and has_esc:
+            fwd_end = spans[i + 1][1] if i + 1 < len(spans) else ce
+            got_any = False
             for k in _ESC_CONTEXT_RE.finditer(clause):
-                ks, ke = clause_start + k.start(), clause_start + k.end()
+                ks, ke = cs + k.start(), cs + k.end()
                 best = None
                 for s, e, v in pcts_all:
-                    gap = s - ke if s >= ke else ks - e
-                    if 0 <= gap <= _ESC_PCT_GAP and (best is None or gap < best[0]):
+                    if s >= ke:
+                        gap = s - ke
+                        ok = gap <= _ESC_PCT_GAP and e <= fwd_end
+                    else:
+                        gap = ks - e
+                        ok = 0 <= gap <= _ESC_PCT_GAP and s >= cs
+                    if ok and (best is None or gap < best[0]):
                         best = (gap, v)
                 if best is not None:
                     out.append(best[1])
-                if _INDEX_RE.search(clause):
-                    indexed = True
-        prev_names_rent = names_rent
+                    got_any = True
+            if not got_any and len(clause) <= _READ_ALL_MAX_CLAUSE:
+                # Only for sentence-sized clauses: an unpunctuated Basic Lease
+                # Information block runs thousands of characters and holds the
+                # late-charge and default-rate percentages.
+                out.extend(v for s, e, v in pcts_all if s >= cs and e <= ce)
+            if _INDEX_RE.search(clause):
+                indexed = True
+        # The chain starts at a clause naming rent and continues through
+        # consecutive qualifying escalation-verb clauses.
+        chain = names_rent or (qualifies and has_esc)
     return out, indexed
 
 
 _ESC_PCT_GAP = 50
+_READ_ALL_MAX_CLAUSE = 400
+_EXPENSE_SUBJECT_RE = re.compile(
+    r"\W*(?:the\s+)?(?:tenant'?s\s+(?:proportionate\s+)?share\s+of\s+(?:the\s+)?)?"
+    r"(?:operating\s+(?:costs?|expenses?)|common\s+area|CAM\b|(?:real\s+estate\s+)?taxes"
+    r"|insurance|expenses?)",
+    re.I)
 _INDEX_RE = re.compile(r'\b(?:CPI|consumer\s+price\s+index|price\s+index)\b', re.I)
 
 
