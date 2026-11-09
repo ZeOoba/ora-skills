@@ -649,6 +649,58 @@ class TestRentArithmeticUnparsedAndEscalation(TempDirCase):
         new = _new_verdicts(path)
         self.assertFalse(new["3"], "correctly-compounded escalation must not fire")
 
+    # Audit row addendum-escalation-tolerance-50bp (2026-11-08): the compounding check
+    # allowed max($1.00, 0.5% of the expected annual), wide enough that a 3.5% step stated
+    # as 3% passed. Now cent-level: each row must reproduce from the prior row under
+    # (i) annual compounded or (ii) monthly compounded and rounded each year, within
+    # $0.01 x 12 months.
+    def _escalation_doc(self, name, rows, rate="3.00"):
+        return make_docx(
+            self.tmp / name,
+            ["Base Rent shall be payable in accordance with the following schedule, "
+             f"escalating at {rate}% annually:"],
+            table_rows=rows,
+        )
+
+    def test_3_5_pct_step_stated_as_3_pct_fires(self):
+        path = self._escalation_doc("step_35_as_3.docx", [
+            ("1/2024-12/2024", "$1,000.00", "$12,000.00"),
+            ("1/2025-12/2025", "$1,035.00", "$12,420.00"),
+        ])
+        self.assertTrue(_new_verdicts(path)["3"], "a 3.5% step under a stated 3% must fail")
+
+    def test_3_25_pct_step_stated_as_3_pct_fires(self):
+        path = self._escalation_doc("step_325_as_3.docx", [
+            ("1/2024-12/2024", "$1,000.00", "$12,000.00"),
+            ("1/2025-12/2025", "$1,032.50", "$12,390.00"),
+        ])
+        self.assertTrue(_new_verdicts(path)["3"])
+
+    def test_one_dollar_annual_drift_fires(self):
+        path = self._escalation_doc("one_dollar_drift.docx", [
+            ("1/2024-12/2024", "$1,000.00", "$12,000.00"),
+            ("1/2025-12/2025", "$1,030.08", "$12,361.00"),
+        ])
+        self.assertTrue(_new_verdicts(path)["3"], "a $1.00 annual drift is not a rounding variant")
+
+    def test_annual_compounded_rounding_variant_passes(self):
+        # (i) annual x 1.03 rounded to the cent; monthly = annual / 12.
+        path = self._escalation_doc("method_i.docx", [
+            ("1/2024-12/2024", "$1,234.56", "$14,814.72"),
+            ("1/2025-12/2025", "$1,271.60", "$15,259.16"),
+            ("1/2026-12/2026", "$1,309.74", "$15,716.93"),
+        ])
+        self.assertFalse(_new_verdicts(path)["3"])
+
+    def test_monthly_rounded_each_year_variant_passes(self):
+        # (ii) monthly x 1.03 rounded each year; annual = monthly x 12.
+        path = self._escalation_doc("method_ii.docx", [
+            ("1/2024-12/2024", "$1,234.56", "$14,814.72"),
+            ("1/2025-12/2025", "$1,271.60", "$15,259.20"),
+            ("1/2026-12/2026", "$1,309.75", "$15,717.00"),
+        ])
+        self.assertFalse(_new_verdicts(path)["3"])
+
     # cc-audit-army code-review finding (2026-08-22): ESCALATION_RATE_RE used to scan the
     # WHOLE document, so an unrelated clause elsewhere could be picked up as the rent
     # escalation rate. Scoped to a window around the rent-schedule anchor instead.
