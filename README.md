@@ -236,13 +236,16 @@ Git hooks live in `tools/hooks/` and are wired per clone by `python tools/instal
 (run once per clone from a current checkout, re-run after pulling hook or scanner changes;
 `--check` verifies without writing). The installer writes small shims into the clone's
 untracked `<git-common-dir>/ora-hooks/` and points `core.hooksPath` there, so the active hook
-set no longer depends on which branch the main checkout has checked out. Each shim runs
-`tools/hooks/<name>` from the tree being committed or pushed when that file exists. When it
-does not (a branch cut before the hook landed), `pre-push` runs the installer's fallback copy
-of `prepush_confidential_scan.py` or blocks, and never allows; every other hook does nothing,
-as git would for a missing hook. The installer never deletes: a differing file already in
-`ora-hooks/` is renamed `<name>.bak-<UTC stamp>`, identical files are left alone. Tests:
-`tools/test_install_hooks.py`. They keep the two local stores (the Code-surface `~/.claude/skills/<skill>` mirror and the Cowork
+set no longer depends on which branch the main checkout has checked out. `pre-push` ALWAYS
+runs the installer's pinned copy of `prepush_confidential_scan.py` from `ora-hooks/` first
+(missing copy, no Python 3.8+ or a hit blocks), then the tree's tracked `tools/hooks/pre-push`
+if present, so neither an old branch nor an edited working copy can switch the gate off.
+Every other shim runs `tools/hooks/<name>` from the tree being committed when that file
+exists and otherwise does nothing, as git would for a missing hook. The installer never
+deletes: a differing file already in `ora-hooks/` is copied to `<name>.bak-<UTC stamp>` and
+then atomically replaced; identical files are left alone. Tests: `tools/test_install_hooks.py`.
+
+The hooks keep the two local stores (the Code-surface `~/.claude/skills/<skill>` mirror and the Cowork
 AppData runtime cache) aligned with this repo, which stays canonical. Cowork itself only
 re-imports when a `.skill` is manually imported via "Save skill".
 
