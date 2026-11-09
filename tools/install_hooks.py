@@ -90,6 +90,7 @@ done
 [ -n "$PY" ] || block "no Python 3.8+ found to run the confidentiality scan."
 REFS=$(mktemp "${{TMPDIR:-/tmp}}/ora-prepush.XXXXXX") || block "cannot create a temp file for the ref lines."
 trap 'rm -f "$REFS"' EXIT
+trap 'rm -f "$REFS"; exit 1' INT TERM HUP
 cat > "$REFS" || block "cannot buffer the ref lines from git."
 "$PY" "$SCAN" "$@" < "$REFS" || exit 1
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
