@@ -5,7 +5,7 @@
   "type": "object",
   "required": ["deal_id", "landlord", "tenant", "premises", "term", "rent", "expense_structure", "security_deposit", "maintenance", "broker", "source_documents"],
   "properties": {
-    "deal_id": {"type": "string", "description": "e.g. NORTHWOOD-15A-IMPACT-2026-09"},
+    "deal_id": {"type": "string", "description": "e.g. EXAMPLE-15A-ZEPHYR-2026-01 (property-suite-tenant-yyyy-mm)"},
     "source_documents": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "type": {"enum": ["LOI", "email", "term sheet", "prior lease", "Notion", "verbal"]}, "date": {"type": "string"}}}},
     "template": {"type": "object", "properties": {"property_key": {"type": "string", "description": "Northwood | Easton | Salisbury | Raytown | Columbia | … (rebase output)"}, "state": {"enum": ["OH", "MD", "IN", "MO", "KS", "WI", "TN"]}, "file": {"type": "string"}}},
     "landlord": {"type": "object", "required": ["entity", "state_of_formation", "notice_address"], "properties": {"entity": {"type": "string"}, "entity_type": {"type": "string"}, "state_of_formation": {"type": "string"}, "notice_address": {"type": "string"}, "copy_to": {"type": "string"}, "signatory": {"type": "string"}, "signatory_title": {"type": "string"}}},
