@@ -35,6 +35,19 @@ covers DSCR/LTV numbers. This covers three semantic restatements:
                          "never/not/instead of/rather than" directly before the basis excuses it, and
                          so does a DSCR followed by "binds"/"binding constraint" (the ratified
                          equivalence: DSCR binding under lesser-of sizing IS the flag).
+  dscr-floor-year1-noi   The 1.25x DSCR floor stated on Year-1 NOI ("DSCR = Year 1 NOI / debt service
+                         ... >= 1.25x", "Year-1 DSCR must be >=1.25x"). Gabriel in-turn ruling
+                         2026-11-08 (acquisition-underwriting v4.45): the floor DSCR uses STABILIZED
+                         NOI, the NOI the refi is sized on; Year-1 DSCR is reported as its own coverage
+                         line and is not the floor. "Year 1/Year-1/Year one/Y1/first-year/going-in"
+                         before NOI, net operating income or DSCR(s) flags when a DSCR and 1.25, a
+                         floor or FLOOR-FLAG sit within 300 characters of it on the same physical line
+                         (the whole line, not one clause), unless a "not/never/rather than/instead
+                         of" sits directly before the phrase, or "not/never the (DSCR) floor" (not
+                         "... floor basis") or "separate(ly)" follows within 120 characters in the
+                         same sentence (it may cross a ';', so an unrelated "...; X is not the floor"
+                         later in the sentence also excuses it). Fails closed: a line that reports
+                         Year-1 NOI next to an unrelated floor sentence is flagged.
 
 History is exempt: changelog sections, version bullets and index rows, versions/ and _archive/
 may quote old values.
@@ -145,6 +158,17 @@ _WRONG_BASIS = re.compile(r'\blesser\b|\b(?:lower|smaller)\s+of\b|\bmin\s*\(|'
 _RIGHT_BASIS = re.compile(r'\b65\s*%[- ]?(?:LTV|loan[- ]to[- ]value)\b', re.I)
 _NEGATION = re.compile(r'\b(?:never|not|no longer|instead of|rather than)\b[^,;()]{0,15}$', re.I)
 _BASIS_REACH = 200
+# dscr-floor-year1-noi (Gabriel in-turn ruling 2026-11-08, acquisition-underwriting v4.45)
+_Y1 = r'(?:Year[- ]?(?:1|one)|Y1|first[- ]year|going[- ]in)'
+_Y1_NOI = re.compile(r'\b%s\s+(?:NOI|net operating income)\b' % _Y1, re.I)
+_Y1_DSCR = re.compile(r'\b%s\s+%ss?\b' % (_Y1, _DSCR_WORD), re.I)
+# Read in the text right AFTER the Year-1 phrase, within one sentence: "Year-1 DSCR ... is not the
+# floor", "...; it is never the floor", "(going-in NOI is reported separately)". "never the floor
+# BASIS" is the v4.44 wording about the lesser-of loan, so it excuses nothing.
+_NOT_THE_FLOOR_AFTER = re.compile(
+    r"^[^.]{0,120}?(?:\b(?:not|never|no longer|isn['’]t)\s+(?:the|a)\s+(?:DSCR\s+)?floor\b(?!\s+basis)"
+    r"|\bseparate(?:ly)?\b)", re.I)
+_Y1_REACH = 300  # the floor wording and a DSCR must sit this close to the Year-1 phrase
 _HISTORY_HEADING = re.compile(
     r'^(#{1,6})\s.*\b(changelog|change log|version history|revision history|release notes)\b', re.I)
 _HEADING = re.compile(r'^(#{1,6})\s')
@@ -318,6 +342,31 @@ def dscr_floor_at_lesser_of(line):
     return found
 
 
+def dscr_floor_year1_noi(line):
+    """[(message, phrase)] when a line states the 1.25x DSCR floor on Year-1 (going-in) NOI.
+
+    Unlike the lesser-of check this reads the whole physical line, not one clause: live floor
+    statements put the floor wording and the NOI basis on either side of a ';' or an "incl."
+    (2026-11-08 review). A Year-1 phrase counts when a DSCR and the floor wording (1.25, floor,
+    FLOOR-FLAG) both sit within _Y1_REACH characters of it; it is excused by a negation directly
+    before it ("not Year-1 NOI") or a "not/never ... floor" / "separate(ly)" right after it.
+    """
+    found = []
+    for match in list(_Y1_NOI.finditer(line)) + list(_Y1_DSCR.finditer(line)):
+        window = line[max(0, match.start() - _Y1_REACH):match.end() + _Y1_REACH]
+        if not _FLOOR_CONTEXT.search(window) or not _DSCR_METRIC.search(window):
+            continue
+        if _NEGATION.search(line[max(0, match.start() - 40):match.start()]):
+            continue  # "stabilized NOI, not Year-1 NOI"
+        if _NOT_THE_FLOOR_AFTER.search(line[match.end():]):
+            continue  # "Year-1 DSCR is reported as its own coverage line and is not the floor"
+        found.append(('"%s": the 1.25x floor DSCR uses stabilized NOI, the NOI the refi is sized on '
+                      '(Gabriel in-turn ruling 2026-11-08); Year-1 DSCR is a reported coverage line, '
+                      'not the floor' % ' '.join(match.group(0).split()), _phrase(match.group(0))))
+        break
+    return found
+
+
 def live_lines(text):
     """(line number, line) for lines outside changelog sections, version bullets and index rows."""
     history_level = None
@@ -385,6 +434,7 @@ def scan(repo):
             items += [('target-geography', m, p) for m, p in target_geography(line, clusters)]
             items += [('dscr-at-aggregate-ltv', m, p) for m, p in dscr_at_aggregate(line)]
             items += [('dscr-floor-at-lesser-of', m, p) for m, p in dscr_floor_at_lesser_of(line)]
+            items += [('dscr-floor-year1-noi', m, p) for m, p in dscr_floor_year1_noi(line)]
             for check, message, phrase in items:
                 raw.append((rel, number, check, message, phrase, line_key(line)))
     seen = Counter()
