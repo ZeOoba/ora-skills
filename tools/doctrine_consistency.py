@@ -21,6 +21,20 @@ covers DSCR/LTV numbers. This covers three semantic restatements:
   dscr-at-aggregate-ltv  DSCR tested, or debt sized, "at 40% LTV". 40% is the portfolio-aggregate
                          governor; per-property debt is sized at the lesser of 65% LTV and 1.25x
                          DSCR (acquisition-underwriting UNDERWRITING CONVENTIONS).
+  dscr-floor-at-lesser-of
+                         The per-property 1.25x DSCR floor stated against the lesser-of loan
+                         ("DSCR <1.25x at refi sizing", "DSCR must be >=1.25x ... (LESSER of 65% LTV
+                         and 1.25x DSCR)"). That loan clears 1.25x by construction, so the floor could
+                         never flag. Gabriel in-turn ratification 2026-11-08: the floor is DSCR at a
+                         loan sized to 65% LTV at the market refi terms; lesser-of sizing still sets
+                         refi proceeds. A clause is read when it names DSCR as the tested metric (not
+                         the "1.25x DSCR" sizing constraint) and mentions 1.25, a floor or
+                         FLOOR-FLAGGED; the nearest basis after that DSCR (else the nearest before it)
+                         decides: "lesser/lower/smaller of", "min(", "refi(nance) sizing/sized",
+                         "as-sized" and "modeled refi" are wrong, any other "65% LTV" is right. A
+                         "never/not/instead of/rather than" directly before the basis excuses it, and
+                         so does a DSCR followed by "binds"/"binding constraint" (the ratified
+                         equivalence: DSCR binding under lesser-of sizing IS the flag).
 
 History is exempt: changelog sections, version bullets and index rows, versions/ and _archive/
 may quote old values.
@@ -39,6 +53,11 @@ pinned in tools/test_doctrine_consistency.py, not every possible wording. Known 
     reads as a holdings statement and is skipped, and a state annotated as a watch market
     ("TN (watch ...)") is not treated as a target claim.
   * Geography is checked only where 'target' sits within 160 characters before the list or 40 after.
+  * The floor check reads one clause (split at '.' and ';'; "e.g./i.e./cf./vs." do not split) at a
+    time, on one physical line, so a floor and its lesser-of basis stated in separate sentences, on
+    hard-wrapped lines, or more than 200 characters apart, is not seen. Wordings outside the basis
+    vocabulary above are not seen either, and a clause that also names a 65%-LTV loan (outside
+    "lesser of 65% LTV") is trusted as stating the ratified basis.
 A new phrasing that drifts needs a new pattern and a test.
 
 Usage: python tools/doctrine_consistency.py [--repo PATH]
@@ -110,6 +129,22 @@ _DSCR_PATTERNS = [
 # A correct governor summary ("leverage capped at 40% LTV aggregate") is not a DSCR test basis.
 _AGGREGATE_CONTEXT = re.compile(r'^\s*(?:portfolio[- ])?aggregate\b', re.I)
 _CAP_CONTEXT = re.compile(r'\b(?:cap(?:ped)?|ceiling|limit(?:ed)?)\s*$', re.I)
+# dscr-floor-at-lesser-of (Gabriel in-turn ratification 2026-11-08)
+_CLAUSE_SPLIT = re.compile(r'(?<=[.;])\s+')
+_ABBREV = re.compile(r'\b(e\.g|i\.e|cf|vs)\.', re.I)
+_DSCR_METRIC = re.compile(r'\b%ss?\b' % _DSCR_WORD, re.I)
+_BINDING = re.compile(r'^[^.;]{0,30}?\b(?:binds|is the binding|binding constraint)\b', re.I)
+# "1.25x DSCR", "1.25 DSCR", "1.25x minimum DSCR" are the sizing cap; a bare integer
+# ("Stage 1 DSCR", "Year 1 DSCR", "Module 2 DSCR Check") is a label, not a cap.
+_SIZING_CONSTRAINT = re.compile(
+    r'(?:\d+\s*x|\d+\.\d+\s*x?|\d+(?:\.\d+)?\s*x?\s*minimum)\s*(?:minimum\s+)?[*_]*\s*$', re.I)
+_DSCR_CAP_AFTER = re.compile(r'^[^.;]{0,40}?\b1\.25\s*x?\s*(?:minimum\s+)?%s' % _DSCR_WORD, re.I)
+_FLOOR_CONTEXT = re.compile(r'1\.25|\bfloor|FLOOR-FLAG', re.I)
+_WRONG_BASIS = re.compile(r'\blesser\b|\b(?:lower|smaller)\s+of\b|\bmin\s*\(|'
+                          r'\brefi(?:nance)?[- ]siz(?:ing|ed)\b|\bas[- ]sized\b|\bmodeled refi\b', re.I)
+_RIGHT_BASIS = re.compile(r'\b65\s*%[- ]?(?:LTV|loan[- ]to[- ]value)\b', re.I)
+_NEGATION = re.compile(r'\b(?:never|not|no longer|instead of|rather than)\b[^,;()]{0,15}$', re.I)
+_BASIS_REACH = 200
 _HISTORY_HEADING = re.compile(
     r'^(#{1,6})\s.*\b(changelog|change log|version history|revision history|release notes)\b', re.I)
 _HEADING = re.compile(r'^(#{1,6})\s')
@@ -240,6 +275,49 @@ def dscr_at_aggregate(line):
     return []
 
 
+def _bases(clause):
+    hits = [(m.start(), m.end(), 'wrong') for m in _WRONG_BASIS.finditer(clause)]
+    for m in _RIGHT_BASIS.finditer(clause):
+        # "LESSER of 65% LTV" is the lesser-of loan, not a 65%-LTV loan; so is "65% LTV / 1.25x
+        # DSCR" (the sizing pair), so a 65% LTV followed within 40 characters by 1.25x DSCR is untrusted
+        if (not _WRONG_BASIS.search(clause[max(0, m.start() - 20):m.start()])
+                and not _DSCR_CAP_AFTER.search(clause[m.end():])):
+            hits.append((m.start(), m.end(), 'right'))
+    return sorted(hits)
+
+
+def dscr_floor_at_lesser_of(line):
+    """[(message, phrase)] when a clause tests the 1.25x DSCR floor on the lesser-of loan."""
+    found = []
+    for clause in _CLAUSE_SPLIT.split(_ABBREV.sub(r'\1', line)):
+        if not _FLOOR_CONTEXT.search(clause):
+            continue
+        bases = _bases(clause)
+        if not bases or any(kind == 'right' for _, _, kind in bases):
+            continue  # a clause that names the 65%-LTV loan states the ratified basis
+        for metric in _DSCR_METRIC.finditer(clause):
+            if _SIZING_CONSTRAINT.search(clause[max(0, metric.start() - 20):metric.start()]):
+                continue
+            if _BINDING.search(clause[metric.end():]):
+                continue
+            after = [b for b in bases if metric.end() <= b[0] <= metric.end() + _BASIS_REACH]
+            before = [b for b in bases if metric.start() - _BASIS_REACH <= b[1] <= metric.start()]
+            if after:
+                start, end, kind = after[0]
+            elif before:
+                start, end, kind = before[-1]
+            else:
+                continue
+            if kind != 'wrong' or _NEGATION.search(clause[max(0, start - 40):start]):
+                continue
+            phrase = clause[min(metric.start(), start):max(metric.end(), end)]
+            found.append(('"%s": the 1.25x floor is DSCR at a loan sized to 65%% LTV (Gabriel in-turn '
+                          'ratification 2026-11-08); the lesser-of loan clears 1.25x by construction'
+                          % ' '.join(phrase.split()), _phrase(phrase)))
+            break
+    return found
+
+
 def live_lines(text):
     """(line number, line) for lines outside changelog sections, version bullets and index rows."""
     history_level = None
@@ -306,6 +384,7 @@ def scan(repo):
             items = list(count_claims(line, clusters.count))
             items += [('target-geography', m, p) for m, p in target_geography(line, clusters)]
             items += [('dscr-at-aggregate-ltv', m, p) for m, p in dscr_at_aggregate(line)]
+            items += [('dscr-floor-at-lesser-of', m, p) for m, p in dscr_floor_at_lesser_of(line)]
             for check, message, phrase in items:
                 raw.append((rel, number, check, message, phrase, line_key(line)))
     seen = Counter()

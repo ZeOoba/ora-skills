@@ -3,7 +3,7 @@ name: model-bulk-edit
 description: "Use when the user says: rebase the models, update the refi rate everywhere, change an assumption across all deals, bulk edit workbooks, propagate a constant to the models, sweep the underwriting models, or after any UNDERWRITING CONVENTIONS constant moves in acquisition-underwriting -- safely changes the same input across many ORA financial models at once. Also the SOLE path for the cached-value audit (workbooks whose formulas carry no cached values) -- trigger on: nulls in the QC gate, model reads blank, dead workbook, formulas but no values, why is DSCR empty. Historical models for closed or passed deals are rebased only on Gabriel's explicit instruction."
 ---
 
-# model-bulk-edit — Oxford Realty Advisors (v1.1)
+# model-bulk-edit — Oxford Realty Advisors (v1.2)
 
 One input, many workbooks. This skill exists because the dangerous part of a bulk model
 edit is never the edit — it is the write mechanism, the models you did not know existed,
@@ -101,8 +101,11 @@ old → new, every metric that moved, and **explicitly, every metric that did no
 metric is a finding, not an absence of one — when refi proceeds hold flat under a rate cut, the
 LTV ceiling is binding rather than DSCR, which is real information about the deal.
 
-Then run the floor tests: for every DSCR row, report `PASS/BREACH` before and after and flag
-any **floor state change**. A rebase that flips a Stage 1 floor has changed a verdict, and that
+Then run the floor tests: for every DSCR floor-test row, report `PASS/BREACH` before and after and flag
+any **floor state change**. The DSCR floor row is DSCR at a loan sized to 65% LTV (stabilized value at exit cap) at the refi terms
+(acquisition-underwriting STAGE 1 v4.44, Gabriel in-turn ratification 2026-11-08); a DSCR row computed on the
+refi loan as sized (lesser of 65% LTV and 1.25x DSCR) reads >=1.25x by construction, so report it but
+do not treat it as the floor test. A rebase that flips a Stage 1 floor has changed a verdict, and that
 goes to Gabriel as a finding, not into a summary line.
 
 Confirm `0 null cached values` across every touched workbook. If any appear, STEP 3 was done
@@ -141,6 +144,7 @@ archive folder naming authority, method, per-model deltas, and what was delibera
 
 ## Changelog
 
+- v1.2 (2026-11-08): STEP 5 names the DSCR floor-test basis, DSCR at a 65%-LTV loan (Gabriel in-turn ratification 2026-11-08, acquisition-underwriting v4.44), so a rebase reports floor state on that row rather than on the lesser-of refi loan. No governor constant changed (DSCR 1.25x; 65% per-property; 40% aggregate).
 - v1.1 (2026-08-22, same day as v1.0 — shipped defect, found by running it): `cached_value_lint.py`
   loaded each workbook twice with openpyxl's **default full-object-tree mode**, holding both trees
   at once. Launched across the Business tree it reached **9.1 GB RSS** and exhausted the machine's
