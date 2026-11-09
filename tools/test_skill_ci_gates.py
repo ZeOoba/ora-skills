@@ -788,5 +788,75 @@ class MemoryExcerpts(TempRepo):
         self.assertEqual(sorted(ignored), sorted(paths))
 
 
+class MemoryDrafts(TempRepo):
+    """Gabriel in-turn ruling 2026-11-09: every single-entry event_log draft under _archive/ is
+    untracked. Drafts carry no memory frontmatter and no diff header, so the gate reads two other
+    signals: a draft-shaped file name, or a first non-blank line that is a dated event_log entry
+    heading (`## YYYY-MM-DD ...`) in a non-code file."""
+
+    ENTRY = '## 2026-08-21 — reimport batch 4\n- did a thing\n'
+
+    def test_draft_names_are_flagged(self):
+        for name in ['event_log_entry.md', 'event_log_entry_2026-08-22b.md', 'event_log_entry2.txt',
+                     '2026-08-13_skill-install-batch_EventLogEntry_v02.md', '_event_entry.md',
+                     'event-log-entry.md', 'event_entries_2026-08-14_skill-installs.md',
+                     'event_entry_county-skills-first-install.md', 'eventlog_followup_entry.md',
+                     'my_entry.bin', 'my_entry.txt']:
+            self.assertTrue(g.looks_like_memory_draft(name, 'plain text\n'), name)
+
+    def test_code_and_unrelated_names_pass(self):
+        for name in ['isolate_event_log.py', 'commit_event_log.ps1', 'event_log_append.ps1',
+                     'build_isolated_patch.py', 'SKILL.md', 'entry_points.md', 'time-entry.md']:
+            self.assertFalse(g.looks_like_memory_draft(name, 'plain text\n'), name)
+
+    def test_dated_entry_heading_is_flagged_in_text_files(self):
+        for name in ['notes.md', 'la_eventlog.md', 'x.txt', 'blob.bin']:
+            self.assertTrue(g.looks_like_memory_draft(name, self.ENTRY), name)
+            self.assertTrue(g.looks_like_memory_draft(name, '﻿\n\n### 2026-09-23 x\n'), name)
+
+    def test_review_2026_11_09_bypasses_are_flagged(self):
+        """Opus review of f883f2e0: a draft name with a code/data suffix, data suffixes with a dated
+        heading, and heading variants all slipped through."""
+        for name in ['event_log_entry.yml', 'event_log_entry.json', 'event_log_entry.ps1', 'my_entry',
+                     'my_entry.py']:
+            self.assertTrue(g.looks_like_memory_draft(name, 'plain\n'), name)
+        for name in ['notes.yml', 'notes.json', 'notes.toml', 'notes']:
+            self.assertTrue(g.looks_like_memory_draft(name, self.ENTRY), name)
+        for first in ['# 2026-08-21 x', '#### 2026-08-21 x', '  ## 2026-08-21 x', '##2026-08-21 x',
+                      '## **2026-08-21** x', '**2026-08-21** x', '## 2026-08-21: install x',
+                      '## 2026-08-21—x', '## [2026-08-21] x']:
+            self.assertTrue(g.looks_like_memory_draft('notes.md', first + '\n- body\n'), first)
+
+    def test_heading_in_code_or_later_line_passes(self):
+        self.assertFalse(g.looks_like_memory_draft('gen.py', self.ENTRY))
+        self.assertFalse(g.looks_like_memory_draft('notes.md', '# Title\n## 2026-08-21 entry\n'))
+        self.assertFalse(g.looks_like_memory_draft('notes.md', '## 2026 roadmap\n'))
+        self.assertFalse(g.looks_like_memory_draft('notes.md', 'Released 2026-08-21.\n'))
+
+    def test_tracked_drafts_are_reported(self):
+        subprocess.run(['git', 'init', '-q', str(self.root)], check=True)
+        (self.root / 'a').mkdir()
+        (self.root / 'a' / 'event_log_entry.md').write_text('plain\n', encoding='utf-8')
+        (self.root / 'a' / 'note.md').write_text(self.ENTRY, encoding='utf-8')
+        (self.root / 'a' / 'keep.md').write_text('# keep\n', encoding='utf-8')
+        (self.root / 'a' / 'local_event_log_entry.md').write_text(self.ENTRY, encoding='utf-8')
+        subprocess.run(['git', '-C', str(self.root), 'add', 'a/event_log_entry.md', 'a/note.md', 'a/keep.md'],
+                       check=True)
+        self.assertEqual(g.tracked_memory_files(self.root), ['a/event_log_entry.md', 'a/note.md'])
+
+    def test_ruling_2026_11_09_drafts_are_untracked_on_disk_and_ignored(self):
+        tracked = subprocess.run(['git', '-C', str(REPO), 'ls-files', '--', '_archive'],
+                                 capture_output=True, text=True, check=True).stdout.split()
+        self.assertEqual([p for p in tracked if g.looks_like_memory_draft(Path(p).name, '')], [])
+        listed = [line.strip().lstrip('/') for line in
+                  (REPO / '.gitignore').read_text(encoding='utf-8').splitlines()
+                  if line.strip().startswith('/_archive/') and g.looks_like_memory_draft(
+                      Path(line.strip()).name, '')]
+        self.assertGreaterEqual(len(listed), 30)
+        ignored = subprocess.run(['git', '-C', str(REPO), 'check-ignore', '--no-index', '--', *listed],
+                                 capture_output=True, text=True).stdout.split()
+        self.assertEqual(sorted(ignored), sorted(listed))
+
+
 if __name__ == '__main__':
     unittest.main()
