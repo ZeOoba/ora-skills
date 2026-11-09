@@ -74,3 +74,8 @@ acquisition-underwriting-eval-harness/runs/
 /_archive/2026-08-21_staging-full-sweep-triage/2026-08-15/isolated_event_log.patch
 /event_log.md
 **/memory/event_log.md
+
+# Former lease-generation example register (contained real tenant data). Untracked 2026-11-08
+# without a history rewrite (Gabriel's no-rewrite precedent); kept on disk only, never re-add.
+# Its replacement is lease-generation/references/example-register-synthetic.json.
+/_archive/2026-11-08_example-register-pii/
