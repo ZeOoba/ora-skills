@@ -40,7 +40,10 @@ Subcommands (each exits 0 clean, 1 on a finding, 2 on a usage/environment error)
                            script that imports the shared module resolves the packaged copy.
   memory-files             fail if any git-tracked file (any path, _archive/ included) opens with
                            frontmatter marking a Claude memory file: `node_type: memory` at any
-                           indent, or `name: event_log` with "append-only event log" (2026-11-08).
+                           indent, or `name: event_log` with "append-only event log" (2026-11-08);
+                           or whose first lines are diff-shaped and carry that frontmatter as diff
+                           context or an event_log.md diff header; UTF-16 heads are decoded
+                           (triage row X3, 2026-11-08).
 """
 import ast
 import json
@@ -222,12 +225,48 @@ _FM_NODE_TYPE_MEMORY = re.compile(r'^\s*node_type:\s*["\']?memory["\']?\s*$', re
 _FM_NAME_EVENT_LOG = re.compile(r'^\s*name:\s*["\']?event_log["\']?\s*$', re.M)
 _APPEND_ONLY = re.compile(r'append-only event log', re.I)
 _MEMORY_SNIFF_BYTES = 16384
+# Triage row X3 (2026-11-08): diff excerpts of event_log.md do not open with frontmatter, so the
+# frontmatter test above missed them. In the first lines of a diff-shaped file (a hunk, +++ or
+# diff --git line), flag the memory frontmatter carried as diff context (`node_type: memory`, or
+# `name: event_log`, with a leading ' ', '+' or '-'), or a diff header naming event_log.md.
+_EXCERPT_HEAD_LINES = 200
+_DIFF_SHAPE = re.compile(r'^(?:@@ |\+\+\+ |--- (?:a/|/dev/null)|diff --git )', re.M)
+_DIFF_MEMORY_FM = re.compile(
+    r'^[ +\-]\s*(?:node_type:\s*["\']?memory["\']?|name:\s*["\']?event_log["\']?)\s*$', re.M)
+# Any header form: git a/ b/, --no-prefix, mnemonic i/ w/, plain `diff -u` paths, absolute paths.
+_DIFF_EVENT_LOG_HEADER = re.compile(
+    r'^(?:\+\+\+|---|diff --git)[ \t]+(?:\S*[/\\])?event_log\.md\b', re.M)
+
+
+def decode_head(raw: bytes) -> str:
+    """Decode a file head as UTF-16 (BOM, or NUL-interleaved ASCII as PowerShell writes it) or
+    UTF-8, BOM stripped. Errors are replaced: this sniffs, it never round-trips content."""
+    if raw[:2] in (b'\xff\xfe', b'\xfe\xff'):
+        return raw.decode('utf-16', 'replace').lstrip('﻿')
+    sample = raw[:256]
+    if len(sample) >= 4 and sample.count(b'\x00') * 3 >= len(sample):
+        odd_nuls = sample[1::2].count(b'\x00')
+        even_nuls = sample[0::2].count(b'\x00')
+        return raw.decode('utf-16-le' if odd_nuls >= even_nuls else 'utf-16-be', 'replace')
+    return raw.decode('utf-8', 'replace').lstrip('﻿')
+
+
+def looks_like_memory_excerpt(text: str) -> bool:
+    """True when a diff-shaped file carries Claude memory content in its first lines: memory
+    frontmatter as diff context, or a diff header for event_log.md (triage row X3)."""
+    head = '\n'.join(text.lstrip('﻿').replace('\r\n', '\n').split('\n')[:_EXCERPT_HEAD_LINES])
+    if not _DIFF_SHAPE.search(head):
+        return False
+    return bool(_DIFF_MEMORY_FM.search(head) or _DIFF_EVENT_LOG_HEADER.search(head))
 
 
 def looks_like_memory_file(text: str) -> bool:
     """True when the file opens with YAML frontmatter that marks a Claude memory file:
-    `node_type: memory` at any indent, or `name: event_log` plus "append-only event log"."""
+    `node_type: memory` at any indent, or `name: event_log` plus "append-only event log";
+    or when it is a diff excerpt of memory content (looks_like_memory_excerpt)."""
     text = text.lstrip('﻿').replace('\r\n', '\n')
+    if looks_like_memory_excerpt(text):
+        return True
     lines = text.split('\n')
     if not lines or lines[0].strip() != '---':
         return False
@@ -253,7 +292,7 @@ def tracked_memory_files(repo: Path = REPO) -> list[str]:
                 head = f.read(_MEMORY_SNIFF_BYTES)
         except OSError:
             continue  # tracked but absent from the worktree (e.g. deleted, unstaged)
-        if looks_like_memory_file(head.decode('utf-8', 'replace')):
+        if looks_like_memory_file(decode_head(head)):
             found.append(rel)
     return sorted(found)
 

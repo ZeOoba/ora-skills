@@ -3,11 +3,11 @@ name: deal-comparison
 description: "Use when comparing 2+ acquisition candidates side by side, scoring deals against Oxford Realty Advisors portfolio fit, or benchmarking against historical Oxford deals. Triggers: compare deals, side by side, which deal is better, deal comparison, portfolio fit, score deal, rank acquisitions, compare to historical, deal matrix."
 ---
 
-# Deal Comparison (v1.7)
+# Deal Comparison (v1.8)
 
 You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side-by-side analysis of 2+ acquisition candidates scored on financial merit and portfolio fit. Pull deal data from Notion Acquisition Pipeline Tracker when available. For deals not in Notion, ask Gabriel to provide key inputs.
 
-**FLOOR FLAG (Ruling 5):** DSCR <1.25x at a loan sized to 65% LTV per-property, on the acquisition-underwriting refi value basis and terms (stabilized value at the exit cap; 10-yr UST + 200 bps; 25-yr amortization) (acquisition-underwriting STAGE 1 v4.44, Gabriel in-turn ratification 2026-11-08; equivalently, DSCR rather than LTV binds under lesser-of sizing, which still sets refi proceeds — this is the per-property governor, NOT the separate 40% portfolio-aggregate LTV governor checked elsewhere; that test is all-cash — the deal adds no acquisition debt to its numerator, per acquisition-underwriting STAGE 2.3 v4.29 — while this DSCR flag stays on the levered 65%-LTV basis) = flag, not a kill. State the compensating factor if pursued. Check this first.
+**FLOOR FLAG (Ruling 5):** DSCR <1.25x at a loan sized to 65% LTV per-property, on the acquisition-underwriting refi value basis and terms (stabilized value at the exit cap; 10-yr UST + 200 bps; 25-yr amortization), with DSCR on stabilized NOI, the NOI the refi is sized on (acquisition-underwriting v4.45, Gabriel in-turn ruling 2026-11-08; Year-1 DSCR is a reported coverage line, not the floor) (acquisition-underwriting STAGE 1 v4.44, Gabriel in-turn ratification 2026-11-08; equivalently, DSCR rather than LTV binds under lesser-of sizing, which still sets refi proceeds — this is the per-property governor, NOT the separate 40% portfolio-aggregate LTV governor checked elsewhere; that test is all-cash — the deal adds no acquisition debt to its numerator, per acquisition-underwriting STAGE 2.3 v4.29 — while this DSCR flag stays on the levered 65%-LTV basis) = flag, not a kill. State the compensating factor if pursued. Check this first.
 
 ---
 
@@ -20,7 +20,7 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 | Going-In Cap Rate | 10 | ≥8.5%=10; 7.5-8.4%=8; 6.5-7.4%=5; <6.5%=2 |
 | Unlevered IRR (10-yr) | 10 | ≥13%=10; 11.5-12.9%=8; 10-11.4%=5; <10%=2 (v1.5: was levered 10-yr ≥18/15/12. The old 10-yr levered floor (12%) sat at the 5-pt edge with sub-floor deals earning 2; the new bands keep that shape — the 10.0% unlevered floor is the 5-pt edge and any sub-floor deal earns 2. When UST10 + 550 bps exceeds 10.0%, a deal below that rate-linked floor is FLOOR-FLAGGED and scores 2 regardless of band) |
 | Price vs. Replacement Cost | 5 | Linear: 0 at the deal's own **vintage-ramp floor** (LOW-end RCT v03 per-market — floor = 65% discount at ≤1995 vintage → 60% at ≥2005, linear ramp; same rule as acquisition-underwriting Stage 1) → 5 at ≥76% discount. **Below the floor = FLOOR-FLAGGED (Ruling 5, not disqualified)** — same as DSCR above (0 pts at the floor is the worst *passing* score, not a fail; Basis is governed by the identical "flags, not kills" doctrine acquisition-underwriting Stage 1 states for every Stage 1 floor). A fixed cutoff is WRONG here — the floor moves with vintage; do not substitute a flat percentage. |
-| DSCR at a 65%-LTV loan (floor basis per acquisition-underwriting STAGE 1 v4.44; the lesser-of loan clears 1.25x by construction and is never scored here) | 10 | ≥2.5x=10; 2.0-2.49x=8; 1.25-1.99x=5; <1.25x=0 (FLOOR-FLAGGED — Ruling 5, not disqualified) |
+| DSCR at a 65%-LTV loan on stabilized NOI (floor basis per acquisition-underwriting STAGE 1 v4.44, NOI basis v4.45; the lesser-of loan clears 1.25x by construction and is never scored here) | 10 | ≥2.5x=10; 2.0-2.49x=8; 1.25-1.99x=5; <1.25x=0 (FLOOR-FLAGGED — Ruling 5, not disqualified) |
 
 > **Price vs. Replacement changed 2026-07-14 (10 → 5 pts, bands re-cut TWICE).** Fixes:
 > (1) *Bands now respect the hard floor.* The original bands awarded points to deals
@@ -136,7 +136,7 @@ FINANCIAL (35)
   Cap Rate                  X.X% [X]   X.X% [X]
   Unlevered IRR (10-yr)     X.X% [X]   X.X% [X]   <- v1.5; levered IRR reported in notes only
   Price/Replacement         XX%  [X]   XX%  [X]   <- 0 at/above the deal's OWN vintage-ramp floor (not a fixed %; see Category 1)
-  DSCR @ 65% LTV            X.Xx [X]   X.Xx [X]   <- loan sized to 65% LTV of stabilized value at exit cap (floor basis)
+  DSCR @ 65% LTV            X.Xx [X]   X.Xx [X]   <- stabilized NOI / debt service, loan sized to 65% LTV of stabilized value at exit cap (floor basis)
   Subtotal                      /35        /35
 
 PHYSICAL & MARKET (30)              /30        /30
@@ -157,6 +157,7 @@ Save output as `ORA_DealComparison_[Deal1]_vs_[Deal2]_[YYYY-MM-DD].xlsx` or HTML
 
 ## Changelog
 
+- v1.8 (2026-11-08): Floor DSCR NOI basis stated (Gabriel in-turn ruling 2026-11-08, acquisition-underwriting v4.45): the FLOOR FLAG line, the 10-pt DSCR scoring row and the output template use DSCR on stabilized NOI, the NOI the refi is sized on; Year-1 DSCR is a reported coverage line, not the floor. Scoring bands, point values and governor constants unchanged (DSCR 1.25x; 65% per-property; 40% aggregate). A rescale of the DSCR bands to the 65%-LTV distribution (triage row X2) is pending Gabriel's ratification of the values in a later session; the bands above are the current ratified ones.
 - v1.7 (2026-11-08): DSCR floor basis restated (Gabriel in-turn ratification 2026-11-08, acquisition-underwriting v4.44; audit finding dscr-floor-unbreachable-at-lesser-of-sizing). The FLOOR FLAG line, the 10-pt DSCR scoring row, the recommendation-threshold row and the output template now test DSCR at a loan sized to 65% LTV at the refi terms. The old basis, the lesser-of loan, is sized to 1.25x DSCR whenever DSCR binds, so it could never score below 1.25x and every deal took at least 5 of 10 points. Lesser-of sizing still sets refi proceeds. Scoring bands, point values and governor constants unchanged (DSCR 1.25x; 65% per-property; 40% aggregate).
 - v1.6 (2026-10-27; unknown-type, Yield and Hybrid wording 2026-10-28): Consumer sweep for acquisition-underwriting v4.37: Price vs. Replacement divides by the construction-type-adjusted RCT LOW (pointer); the PEMB <15% SUSPECT flag is withdrawn; an unknown type takes the strictest applicable multiplier with its Yield (only) scored at the ×1.00 walk; Hybrid is classified only as block wainscot + metal panel on PEMB. No band, weight or constant changed.
 - v1.5 (2026-10-18): Category 1 IRR metric switched from levered to 10-yr unlevered IRR (bands ≥13/11.5/10%, sub-floor = 2), parity with acquisition-underwriting v4.33 (Gabriel, in-turn, 2026-10-18). Point values and the 35-pt Financial category unchanged.

@@ -707,5 +707,86 @@ class MemoryFiles(TempRepo):
         self.assertEqual(g.tracked_memory_files(REPO), [])
 
 
+class MemoryExcerpts(TempRepo):
+    """Triage row X3 (2026-11-08): unified-diff excerpts of event_log.md were tracked under
+    _archive/ and the frontmatter-only memory-files check missed them, because they do not open
+    with frontmatter. They carry the memory frontmatter as diff context, or an event_log.md diff
+    header, in their first lines; some were written by PowerShell as UTF-16."""
+
+    HUNK_WITH_FRONTMATTER = ('diff --git a/memory/notes.md b/memory/notes.md\n'
+                             '--- a/memory/notes.md\n+++ b/memory/notes.md\n@@ -1,6 +1,9 @@\n'
+                             ' ---\n name: notes\n metadata:\n   node_type: memory\n ---\n+## 2026-08-16 entry\n')
+    EVENT_LOG_HEADER = ('diff --git a/x/memory/event_log.md b/x/memory/event_log.md\n'
+                        'index 1111111..2222222 100644\n--- a/x/memory/event_log.md\n'
+                        '+++ b/x/memory/event_log.md\n@@ -10,3 +10,40 @@\n+## 2026-08-16 entry\n')
+    REVIEW_DUMP = ('Review of the staged diff\n\n' + EVENT_LOG_HEADER)
+    SKILL_DIFF = ('diff --git a/demo/SKILL.md b/demo/SKILL.md\n--- a/demo/SKILL.md\n+++ b/demo/SKILL.md\n'
+                  '@@ -1,4 +1,4 @@\n ---\n name: demo\n-description: old\n+description: new\n ---\n')
+
+    def test_diff_with_memory_frontmatter_context_is_flagged(self):
+        self.assertTrue(g.looks_like_memory_file(self.HUNK_WITH_FRONTMATTER))
+        added = self.HUNK_WITH_FRONTMATTER.replace('   node_type: memory', '+  node_type: memory')
+        self.assertTrue(g.looks_like_memory_file(added))
+
+    def test_event_log_diff_header_is_flagged(self):
+        self.assertTrue(g.looks_like_memory_file(self.EVENT_LOG_HEADER))
+        self.assertTrue(g.looks_like_memory_file(self.EVENT_LOG_HEADER.replace('x/memory/', '')))
+        self.assertTrue(g.looks_like_memory_file(self.REVIEW_DUMP))
+
+    def test_unprefixed_and_plain_diff_headers_are_flagged(self):
+        """2026-11-08 review: --no-prefix, mnemonic prefixes, diff -u and absolute paths."""
+        hunk = '@@ -1,2 +1,3 @@\n+## 2026-08-16 entry\n'
+        for header in ['--- event_log.md\n+++ event_log.md\n',
+                       '--- i/memory/event_log.md\n+++ w/memory/event_log.md\n',
+                       '--- old/memory/event_log.md\t2026-08-16\n+++ new/memory/event_log.md\t2026-08-16\n',
+                       '--- C:/Users/x/memory/event_log.md\n+++ C:/Users/x/memory/event_log.md\n',
+                       'diff --git event_log.md event_log.md\n']:
+            self.assertTrue(g.looks_like_memory_file(header + hunk), header)
+
+    def test_ordinary_skill_diff_passes(self):
+        self.assertFalse(g.looks_like_memory_file(self.SKILL_DIFF))
+        self.assertFalse(g.looks_like_memory_file(
+            'diff --git a/tools/x.py b/tools/x.py\n+++ b/tools/x.py\n@@ -1 +1 @@\n+# mentions event_log.md in a comment\n'))
+
+    def test_marker_past_the_first_lines_passes(self):
+        filler = ''.join('line %d\n' % i for i in range(g._EXCERPT_HEAD_LINES + 5))
+        self.assertFalse(g.looks_like_memory_file(filler + self.EVENT_LOG_HEADER))
+
+    def test_body_node_type_without_diff_shape_still_passes(self):
+        self.assertFalse(g.looks_like_memory_file('# notes on memory files\nnode_type: memory\n'))
+
+    def test_utf16_excerpt_is_flagged_on_disk(self):
+        subprocess.run(['git', 'init', '-q', str(self.root)], check=True)
+        (self.root / 'a.patch').write_bytes(self.EVENT_LOG_HEADER.replace('\n', '\r\n').encode('utf-16'))
+        (self.root / 'b.patch').write_bytes(self.HUNK_WITH_FRONTMATTER.encode('utf-16-le'))
+        (self.root / 'c.patch').write_bytes(self.SKILL_DIFF.encode('utf-16'))
+        subprocess.run(['git', '-C', str(self.root), 'add', 'a.patch', 'b.patch', 'c.patch'], check=True)
+        self.assertEqual(g.tracked_memory_files(self.root), ['a.patch', 'b.patch'])
+
+    def test_decode_head_handles_utf8_utf16_and_bom(self):
+        self.assertEqual(g.decode_head('abc'.encode('utf-8')), 'abc')
+        self.assertEqual(g.decode_head('abc'.encode('utf-16')), 'abc')
+        self.assertEqual(g.decode_head('abc'.encode('utf-16-be')), 'abc')
+        self.assertEqual(g.decode_head('abc'.encode('utf-16-le')), 'abc')
+        self.assertEqual(g.decode_head(b'\xef\xbb\xbfabc'), 'abc')
+
+    def test_x3_excerpts_are_untracked_and_ignored(self):
+        """The X3 files stay on disk (untracked) and .gitignore keeps them out."""
+        d = '_archive/2026-08-16_eventlog-commit-scratch/'
+        paths = [d + n for n in (
+            'el_isolated_py.patch', 'el_isolated_retargeted_py.patch', 'el_isolated_UNEXECUTED-ATTEMPT.patch',
+            'el_isolated_retargeted_UNEXECUTED-ATTEMPT.patch', 'eventlog_diff_review.txt', 'cached_diff_review.txt',
+            'event_log_entry_pss_v119.md', 'event_log_entry_rar_UNRELIABLE.md',
+            'event_log_entry_repo-architecture-review_FINAL.md',
+            'event_log_entry_repo-architecture-review_UNRELIABLE.md')]
+        paths.append('_archive/2026-08-21_staging-full-sweep-triage/2026-08-15/isolated_event_log.patch')
+        tracked = subprocess.run(['git', '-C', str(REPO), 'ls-files', '--', *paths],
+                                 capture_output=True, text=True, check=True).stdout.split()
+        self.assertEqual(tracked, [])
+        ignored = subprocess.run(['git', '-C', str(REPO), 'check-ignore', '--no-index', '--', *paths],
+                                 capture_output=True, text=True).stdout.split()
+        self.assertEqual(sorted(ignored), sorted(paths))
+
+
 if __name__ == '__main__':
     unittest.main()
