@@ -58,5 +58,19 @@ acquisition-underwriting-eval-harness/runs/
 /_archive/2026-08-21_staging-full-sweep-triage/2026-08-16/el_base_v2.md
 /_archive/2026-08-22_eventlog-localmainlog-splice/new_blob.bin
 /_archive/2026-08-22_eventlog-register-scheduled-task-splice/new_blob.bin
+# event_log diff excerpts and single-entry drafts (triage row X3), untracked 2026-11-08, same ruling
+# (no history rewrite; kept on disk). The gate catches diff excerpts by content; the drafts and the
+# marker-less UTF-16 patch carry no content marker, so these exact paths are what keeps them out.
+/_archive/2026-08-16_eventlog-commit-scratch/el_isolated_py.patch
+/_archive/2026-08-16_eventlog-commit-scratch/el_isolated_retargeted_py.patch
+/_archive/2026-08-16_eventlog-commit-scratch/el_isolated_UNEXECUTED-ATTEMPT.patch
+/_archive/2026-08-16_eventlog-commit-scratch/el_isolated_retargeted_UNEXECUTED-ATTEMPT.patch
+/_archive/2026-08-16_eventlog-commit-scratch/eventlog_diff_review.txt
+/_archive/2026-08-16_eventlog-commit-scratch/cached_diff_review.txt
+/_archive/2026-08-16_eventlog-commit-scratch/event_log_entry_pss_v119.md
+/_archive/2026-08-16_eventlog-commit-scratch/event_log_entry_rar_UNRELIABLE.md
+/_archive/2026-08-16_eventlog-commit-scratch/event_log_entry_repo-architecture-review_FINAL.md
+/_archive/2026-08-16_eventlog-commit-scratch/event_log_entry_repo-architecture-review_UNRELIABLE.md
+/_archive/2026-08-21_staging-full-sweep-triage/2026-08-15/isolated_event_log.patch
 /event_log.md
 **/memory/event_log.md
