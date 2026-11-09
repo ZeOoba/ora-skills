@@ -14,6 +14,7 @@ arithmetic inconsistencies, e.g. quality + economics != combined on the REDACTED
 `archived_pre_v03_reference` and are never read by this module.
 """
 
+import math
 import re
 from numbers import Real
 
@@ -173,16 +174,33 @@ def _check_floor_constants(golden_floor_result, observed_floor_result):
     return notes, drift_detected
 
 
+def _is_finite_number(value):
+    """True for a real, non-bool, FINITE number.
+
+    NaN and +/-Infinity are rejected: `abs(NaN) > tol` is False, so a NaN combined
+    score or tolerance would otherwise fall through to PASS (audit row
+    eval-harness-nan-passes, 2026-11-08).
+    An int too large to convert to float (math.isfinite raises OverflowError) is
+    rejected too, so the caller sees ValueError, never an OverflowError traceback.
+    """
+    if not isinstance(value, Real) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
 def _require_number(value, label):
-    """Return value if it is a real (non-bool) number, else raise ValueError."""
-    if isinstance(value, Real) and not isinstance(value, bool):
+    """Return value as float if it is a real, non-bool, finite number, else raise ValueError."""
+    if _is_finite_number(value):
         return float(value)
-    raise ValueError(f"{label} must be a number, got {value!r}")
+    raise ValueError(f"{label} must be a finite number, got {value!r}")
 
 
 def _is_number_or_none(value):
-    """True for None or a real (non-bool) number -- guards optional aggregate fields."""
-    return value is None or (isinstance(value, Real) and not isinstance(value, bool))
+    """True for None or a real, non-bool, finite number -- guards optional aggregate fields."""
+    return value is None or _is_finite_number(value)
 
 
 def _normalize_tier(tier):
@@ -212,8 +230,11 @@ def _category_deltas(golden_bd, observed_bd):
     for key, golden_val in golden_bd.items():
         if not (isinstance(golden_val, Real) and not isinstance(golden_val, bool)):
             continue  # annotation entry like 'basis_flag': '[est]'
+        if not _is_finite_number(golden_val):
+            deltas[key] = None  # non-finite golden: report the gap, never a NaN delta
+            continue
         observed_val = observed_bd.get(key)
-        if isinstance(observed_val, Real) and not isinstance(observed_val, bool):
+        if _is_finite_number(observed_val):
             deltas[key] = float(observed_val) - float(golden_val)
         else:
             deltas[key] = None
@@ -338,11 +359,12 @@ def diff_verdict(golden: dict, observed: dict) -> dict:
                 f"degraded measurement: mean built from only {n} replay(s) -- "
                 "the harness gates on a 3-replay mean (SKILL.md Step 1)"
             )
-        if (
-            _is_number_or_none(observed_range)
-            and observed_range is not None
-            and observed_range > tolerance_pts
-        ):
+        if not _is_number_or_none(observed_range):
+            raise ValueError(
+                f"observed['aggregate']['combined_range'] must be a finite number or None, "
+                f"got {observed_range!r}"
+            )
+        if observed_range is not None and observed_range > tolerance_pts:
             notes.append(
                 f"replay spread ({observed_range} pts) exceeds this deal's own "
                 f"tolerance ({tolerance_pts} pts) -- the replays disagreed with "

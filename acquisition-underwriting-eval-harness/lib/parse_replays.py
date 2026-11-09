@@ -43,6 +43,7 @@ JSON `error`, never a traceback: a caller reads the exit code and the JSON, not 
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -60,6 +61,48 @@ class ReplayParseError(ValueError):
     """A replay response that cannot be used as a sample (Step 2 failure)."""
 
 
+def _reject_constant(name):
+    raise ValueError(f"non-finite JSON literal {name!r} is not a usable number")
+
+
+def _finite_float(text):
+    value = float(text)
+    if not math.isfinite(value):
+        raise ValueError(f"JSON number {text!r} overflows to a non-finite float")
+    return value
+
+
+def _bounded_int(text):
+    value = int(text)
+    try:
+        float(value)
+    except OverflowError:
+        raise ValueError(f"JSON integer of {len(text)} digits is too large to be a usable number")
+    return value
+
+
+def _is_finite_real(value):
+    if not isinstance(value, Real) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
+def load_json_strict(text):
+    """json.loads that refuses NaN/Infinity/-Infinity literals, overflowing floats and
+    integers too large to convert to float.
+
+    Python's json accepts those non-standard literals by default; a NaN combined score
+    or tolerance then slips past every `abs(delta) > tol` gate as PASS (audit row
+    eval-harness-nan-passes, 2026-11-08). Raises ValueError (json.JSONDecodeError is a
+    ValueError subclass, so existing handlers keep working).
+    """
+    return json.loads(text, parse_constant=_reject_constant, parse_float=_finite_float,
+                      parse_int=_bounded_int)
+
+
 def extract_json_block(text):
     """Return the single fenced json object in `text`; raise on zero, several, or invalid."""
     blocks = _FENCED_JSON.findall(text or "")
@@ -69,8 +112,8 @@ def extract_json_block(text):
             "guess which block was intended"
         )
     try:
-        value = json.loads(blocks[0])
-    except json.JSONDecodeError as exc:
+        value = load_json_strict(blocks[0])
+    except ValueError as exc:
         raise ReplayParseError(f"fenced json block is not valid JSON: {exc}") from exc
     if not isinstance(value, dict):
         raise ReplayParseError("fenced json block is not a JSON object")
@@ -222,8 +265,8 @@ def _parse_entries(entries, out):
                         "-- failed replay (SKILL.md Step 1.5)")
         return out
     combined = parsed[0].get("combined")
-    if not isinstance(combined, Real) or isinstance(combined, bool):
-        out["error"] = f"'combined' is not a number ({combined!r})"
+    if not _is_finite_real(combined):
+        out["error"] = f"'combined' is not a finite number ({combined!r})"
         return out
     out["status"], out["result"] = "ok", parsed[0]
     return out
@@ -244,7 +287,7 @@ def collect_replays(subagents_dir, golden_dir, agent_ids=None, failed_agent_ids=
     failed_agent_ids = set(flagged_order)
     goldens = {}
     for g in sorted(golden_dir.glob("*.json")):
-        data = json.loads(g.read_text(encoding="utf-8"))
+        data = load_json_strict(g.read_text(encoding="utf-8"))
         deal_id = data.get("deal_id") or g.stem
         # deals is keyed by deal_id, so a second file carrying the same id silently
         # overwrote the first and dropped a whole deal out of the gate (PR #65 review, F3).
@@ -376,7 +419,7 @@ def main(argv=None):
             unusable = True
         else:
             try:
-                golden = json.loads(Path(bucket["golden_path"]).read_text(encoding="utf-8"))
+                golden = load_json_strict(Path(bucket["golden_path"]).read_text(encoding="utf-8"))
                 diff = diff_verdict(golden, aggregate_replays(bucket["replays"]))
             except (ValueError, TypeError, KeyError) as exc:
                 entry["status"], entry["error"] = "ERROR", f"aggregate/diff failed: {exc}"
