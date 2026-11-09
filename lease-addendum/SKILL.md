@@ -269,10 +269,12 @@ paragraph the correct numbering/style rather than defaulting to Normal).
   max($1.00, 0.5% of the expected annual), so a 3.5% step under a stated 3% passed. Each row
   must now reproduce from the prior row, within $0.01 x 12 months, under one recognised
   rounding convention: (i) annual compounded or (ii) monthly compounded and rounded each year
-  (the two `lease-form-qc` D2 methods), or (iii) monthly or (iv) annual rounded to the whole
-  dollar. A schedule built from a per-SF rate rounded to the cent is not recognised and fails
-  closed with a verify-by-hand message (a per-SF convention is pending design review on a
-  separate branch). 15 new tests in `tests/test_addendum_qc.py` (43 pass). Check
+  (the two `lease-form-qc` D2 methods), (iii) monthly or (iv) annual rounded to the whole
+  dollar, or (v) a per-SF rate rounded to the cent, only when ONE sentence states, after a
+  rent term, a per-SF rate and an RSF (not followed by Building/Project/Park/Center/Complex)
+  whose product is exactly the row-1 annual, and the sentence mentions no allowance, expense,
+  share or additional rent. Other per-SF phrasings fail closed (verify by hand). 16 new
+  tests in `tests/test_addendum_qc.py` (44 pass). Check
   tolerance only: the 3% compounding convention and every governor are unchanged.
 - **v1.1** (2026-09-23) — new-lease routing corrected in the description, the route table
   and the failure modes: a brand-new lease goes to `lease-generation` (the new-lease
