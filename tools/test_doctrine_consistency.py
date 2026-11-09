@@ -17,6 +17,7 @@ The adversarial review of the first version (2026-11-05) supplied the misses and
 positives pinned in RoundTwo* below. The last class runs the checks on this repo: it is the gate.
 """
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -301,6 +302,87 @@ class FloorAtLesserOfTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             findings = dc.scan(make_repo(tmp, text))
         self.assertEqual([(f.line, f.check) for f in findings], [(2, 'dscr-floor-at-lesser-of')])
+
+
+class FloorNoiBasisTests(unittest.TestCase):
+    """Gabriel in-turn ruling 2026-11-08 (v4.45): the per-property floor DSCR at a 65%-LTV loan uses
+    STABILIZED NOI, the NOI the refi is sized on. Year-1 DSCR is reported as its own coverage line and
+    is not the floor."""
+
+    def flags(self, line):
+        return len(dc.dscr_floor_year1_noi(line))
+
+    def test_year1_floor_statements_flag(self):
+        for line in [
+            # portfolio-growth/SKILL.md:75 at v1.3
+            'DSCR = Year 1 NOI / Annual Debt Service on a loan sized to 65% LTV ≥ 1.25x',
+            'DSCR on Year-1 NOI at a 65%-LTV loan must be >=1.25x.',
+            'The floor DSCR uses Year 1 NOI.',
+            'Year 1 DSCR must be >=1.25x at a loan sized to 65% LTV.',
+            'FLOOR-FLAGGED if Year-1 DSCR <1.25x.',
+            'Test the 1.25x DSCR floor on first-year NOI.',
+            'DSCR floor: Y1 NOI over debt service at 65% LTV, >=1.25x.',
+            'The DSCR floor is tested on going-in NOI at a 65%-LTV loan.',
+            'Floor DSCR = Year One net operating income / debt service >= 1.25x.',
+        ]:
+            self.assertGreaterEqual(self.flags(line), 1, line)
+
+    def test_stabilized_basis_and_reported_year1_pass(self):
+        for line in [
+            'DSCR = Stabilized NOI / Annual Debt Service on a loan sized to 65% LTV ≥ 1.25x',
+            'The floor DSCR uses stabilized NOI, the same NOI the refi is sized on.',
+            'Year-1 DSCR is reported as its own coverage line and is not the floor.',
+            'Year 1 DSCR (Year 1 NOI / debt service on the same 65%-LTV loan) is reported; it is never the floor.',
+            'The floor uses stabilized NOI, not Year-1 NOI.',
+            'Report Year 1 NOI and going-in cap on the Returns tab.',
+            'DSCR at maturity is reported under the refi-shock sub-case.',
+            'The floor DSCR uses stabilized NOI rather than Year 1 NOI.',
+        ]:
+            self.assertEqual(self.flags(line), 0, line)
+
+    def test_review_round_one_misses(self):
+        """2026-11-08 adversarial review of v4.45: plural DSCRs, a "never the floor basis" elsewhere in
+        the line, and a floor word split from the NOI phrase by ';' or "incl." all slipped through."""
+        for line in [
+            'Year-1 DSCRs below 1.25x are FLOOR-FLAGGED.',
+            'The floor DSCR uses Year 1 NOI at a 65%-LTV loan, and the lesser-of loan is never the floor basis.',
+            'FLOOR FLAG: DSCR <1.25x at a 65%-LTV loan; DSCR on Year-1 NOI, the NOI the refi is sized on.',
+            'floors incl. per-property DSCR at a 65%-LTV loan on Year-1 NOI (v4.45) and the IRR floor',
+        ]:
+            self.assertGreaterEqual(self.flags(line), 1, line)
+
+    def test_review_round_one_false_flags(self):
+        for line in [
+            'Year-1 DSCR is a coverage line separate from the 1.25x floor.',
+            'The 1.25x floor DSCR uses stabilized NOI (going-in NOI is reported separately).',
+        ]:
+            self.assertEqual(self.flags(line), 0, line)
+
+    def test_fails_closed_on_a_year1_figure_next_to_floor_wording(self):
+        """Known, accepted noise: the whole-line read cannot tell a cited Year-1 value from a Year-1
+        floor, so this correct line is flagged; reword it or allowlist the line."""
+        self.assertEqual(self.flags('The floor uses stabilized NOI, not Year-1 NOI; a lease-up deal at 0.9x '
+                                    'Year-1 DSCR still passes at 1.30x.'), 1)
+
+    def test_every_live_stabilized_floor_line_flags_when_mutated_to_year1(self):
+        """Mutation check over the live repo: each live line that states the floor on stabilized NOI
+        must be flagged once 'stabilized NOI' is swapped for 'Year-1 NOI'."""
+        mutated = []
+        for path, rel in dc._files(dc.REPO):
+            for number, line in dc.live_lines(path.read_text(encoding='utf-8')):
+                if re.search(r'stabilized NOI', line, re.I) and re.search(r'DSCR', line) \
+                        and re.search(r'65\s*%[- ]?LTV', line) and dc._FLOOR_CONTEXT.search(line):
+                    mutated.append(('%s:%d' % (rel, number),
+                                    re.sub(r'stabilized NOI', 'Year-1 NOI', line, flags=re.I)))
+        self.assertGreaterEqual(len(mutated), 8, 'expected the v4.45 floor locations')
+        missed = [where for where, line in mutated if not self.flags(line)]
+        self.assertEqual(missed, [])
+
+    def test_scan_reports_the_check(self):
+        text = '# Demo (v1.0)\nDSCR = Year 1 NOI / debt service on a loan sized to 65% LTV >= 1.25x\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            findings = dc.scan(make_repo(tmp, text))
+        self.assertEqual([(f.line, f.check) for f in findings], [(2, 'dscr-floor-year1-noi')])
 
 
 class HistorySkipTests(unittest.TestCase):
