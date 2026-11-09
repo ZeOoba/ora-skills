@@ -1915,32 +1915,36 @@ def _check_options(reg, text):
 
 
 # Words that mark a percentage as a rent escalation rather than some other
-# percentage in the lease (late charge, default rate, pro rata share). A
-# fixed_pct match must sit within _ESC_WINDOW characters of one of these.
+# percentage in the lease (late charge, default rate, pro rata share).
 _ESC_CONTEXT_RE = re.compile(
-    r'\b(?:escalat\w*|increas\w*|adjust\w*|per\s+annum|annual(?:ly)?|anniversar\w*)\b',
+    r'\b(?:escalat\w*|increas\w*|adjust\w*|per\s+annum|annual(?:ly)?|anniversar\w*'
+    r'|(?:each|per|every)\s+lease\s+year|step(?:s|ped)?\s+up|bumps?)\b',
     re.I)
 _ESC_WINDOW = 200
 
-
-def _pct_pattern(value):
-    """Anchored percentage pattern: 3 -> matches '3%', '3.0%', '3 %', '3 percent'
-    but not '13%' or '3.5%' (audit row leaseqc-checkrent-escalation-failopen,
-    2026-11-08: re.escape('3%') also matched inside '13%')."""
-    num = f"{float(value):g}"
-    if "." in num:
-        whole, frac = num.split(".")
-        core = re.escape(whole) + r'\.' + re.escape(frac) + r'0*'
-    else:
-        core = re.escape(num) + r'(?:\.0+)?'
-    return r'(?<![\d.])' + core + r'\s*(?:%|percent\b)'
+# Any stated percentage. Anchored: the lookbehind rejects a digit, a decimal
+# point or a fraction slash, so '13%', '3.5%' and '2-1/2%' never yield a bare
+# '3%' / '5%' / '2%' (audit row leaseqc-checkrent-escalation-failopen,
+# 2026-11-08, plus the REFUTE pass on it: re.escape('3%') matched inside '13%').
+_PCT_RE = re.compile(r'(?<![\d./])(\d+(?:\.\d+)?)\s*(?:%|percent\b)', re.I)
 
 
 def _find_escalation_pct(text, value):
-    """True when the register's fixed % appears in an escalation context."""
-    for m in re.finditer(_pct_pattern(value), text, re.I):
-        lo, hi = max(0, m.start() - _ESC_WINDOW), m.end() + _ESC_WINDOW
-        if _ESC_CONTEXT_RE.search(text[lo:hi]):
+    """True when, for some escalation keyword, the NEAREST stated percentage
+    within _ESC_WINDOW characters equals the register's fixed %. Nearest, not
+    any: '... increases by 3.5% annually. Tenant's share is 3%.' must not
+    satisfy a 3% register through the share figure."""
+    pcts = [(m.start(), m.end(), float(m.group(1))) for m in _PCT_RE.finditer(text)]
+    if not pcts:
+        return False
+    target = float(value)
+    for k in _ESC_CONTEXT_RE.finditer(text):
+        best = None
+        for s, e, v in pcts:
+            dist = s - k.end() if s >= k.end() else k.start() - e
+            if dist <= _ESC_WINDOW and (best is None or dist < best[0]):
+                best = (dist, v)
+        if best is not None and abs(best[1] - target) < 1e-9:
             return True
     return False
 

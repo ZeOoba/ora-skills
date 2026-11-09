@@ -220,25 +220,36 @@ def check_rent_arithmetic(t):
     rate_match = ESCALATION_RATE_RE.search(t[window[0]:window[1]]) if window else None
     if rate_match and len(rows) >= 2:
         rate = Decimal(rate_match.group(1)) / 100
-        # Cent-level two-method test, mirroring lease-form-qc's _d2 (audit row
+        # Cent-level test, mirroring lease-form-qc's _d2 (audit row
         # addendum-escalation-tolerance-50bp, 2026-11-08). The old tolerance was
         # max($1.00, 0.5% of the expected annual) -- wide enough that a 3.5% step under a
-        # stated 3% passed. Each row must now reproduce from the PRIOR row under either
-        # (i) annual compounded, annual = round(prev_annual x (1+e), 2), or
-        # (ii) monthly compounded and rounded each year, annual = round(prev_monthly x (1+e), 2) x 12,
-        # within $0.01 per month of the year (12 cents on the annual) for rounding drift.
+        # stated 3% passed. Each row must now reproduce from the PRIOR row, within $0.01 per
+        # month of the year (12 cents on the annual), under one recognised rounding convention:
+        #   (i)   annual compounded:          round(prev_annual x (1+e), 2)
+        #   (ii)  monthly rounded each year:  round(prev_monthly x (1+e), 2) x 12
+        #   (iii) monthly whole-dollar:       round(prev_monthly x (1+e), 0) x 12
+        #   (iv)  annual whole-dollar:        round(prev_annual x (1+e), 0)
+        #   (v)   per-SF rate to the cent:    round(prev_annual / RSF x (1+e), 2) x RSF,
+        #         only when the document states the RSF.
         # Rows are (smaller, larger) = (monthly, annual), order-agnostic as above.
         tol = _ESCALATION_CENT_TOL * 12
+        rsf_m = _RSF_RE.search(t)
+        rsf = Decimal(rsf_m.group(1).replace(",", "")) if rsf_m else None
         for i in range(1, len(rows)):
             prev_m, prev_a = (Decimal(str(v)) for v in rows[i - 1])
             annual = Decimal(str(rows[i][1]))
-            exp_i = _cents(prev_a * (1 + rate))
-            exp_ii = _cents(prev_m * (1 + rate)) * 12
-            if abs(annual - exp_i) > tol and abs(annual - exp_ii) > tol:
+            step = 1 + rate
+            expected = [_cents(prev_a * step), _cents(prev_m * step) * 12,
+                        _dollars(prev_m * step) * 12, _dollars(prev_a * step)]
+            if rsf:
+                expected.append(_cents(_cents(prev_a / rsf) * step) * rsf)
+            if all(abs(annual - e) > tol for e in expected):
                 return (f"row {i + 1} annual rent {annual:,.2f} does not compound onto row {i} "
-                        f"at the stated {rate * 100:.2f}% escalation (expected {exp_i:,.2f} "
-                        f"annual-compounded or {exp_ii:,.2f} monthly-rounded, within "
-                        f"${tol:.2f})")
+                        f"at the stated {rate * 100:.2f}% escalation (expected {expected[0]:,.2f} "
+                        f"annual-compounded or {expected[1]:,.2f} monthly-rounded, within "
+                        f"${tol:.2f}; whole-dollar"
+                        + (" and per-SF" if rsf else "")
+                        + " conventions also tried) -- verify the rate or the rounding by hand")
     return False
 
 
@@ -247,8 +258,15 @@ def check_rent_arithmetic(t):
 _ESCALATION_CENT_TOL = Decimal("0.01")
 
 
+_RSF_RE = re.compile(r"([\d,]{3,7})\s*(?:rentable\s+)?(?:square\s+feet|RSF|SF)\b", re.I)
+
+
 def _cents(value):
     return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _dollars(value):
+    return value.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
 
 
 def check_party_consent(t, m3b):

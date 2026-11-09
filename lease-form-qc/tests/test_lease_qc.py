@@ -1448,6 +1448,29 @@ class TestLoiConformanceRegressionFixes(TempDirCase):
         row = self._rent_row({"type": "fixed_pct", "value": 3.0}, text)
         self.assertNotEqual(row["status"], "CONFORMS", row)
 
+    # REFUTE pass on the above (2026-11-08).
+    def test_rent_fixed_pct_fraction_does_not_yield_a_bare_percentage(self):
+        for value, phrase in ((2.0, "two and one-half percent (2-1/2%)"),
+                              (2.0, "2 1/2%"), (4.0, "three and one-quarter percent (3-1/4%)")):
+            with self.subTest(phrase=phrase):
+                row = self._rent_row({"type": "fixed_pct", "value": value},
+                                     self._RENT_ONLY + f" Annual Base Rent increases by {phrase} each year.")
+                self.assertNotEqual(row["status"], "CONFORMS", row)
+
+    def test_rent_fixed_pct_nearest_percentage_governs(self):
+        text = (self._RENT_ONLY + " Base Rent increases by 3.5% annually. "
+                "Tenant's Proportionate Share is 3%.")
+        row = self._rent_row({"type": "fixed_pct", "value": 3.0}, text)
+        self.assertNotEqual(row["status"], "CONFORMS", row)
+
+    def test_rent_fixed_pct_lease_year_and_step_wording_conforms(self):
+        for phrase in ("Rent steps up 3% each Lease Year.",
+                       "Base Rent shall be subject to 3% bumps."):
+            with self.subTest(phrase=phrase):
+                row = self._rent_row({"type": "fixed_pct", "value": 3.0},
+                                     self._RENT_ONLY + " " + phrase)
+                self.assertEqual(row["status"], "CONFORMS", row)
+
     def test_signage_freetext_description_conforms_when_realistically_implemented(self):
         """The register's signage value is human-written prose, not an
         enum -- requiring every word verbatim (including a stray '+' and
