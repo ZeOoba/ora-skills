@@ -676,10 +676,13 @@ Year-1 rent alone when the register's escalation block could not be verified: `f
 with no (or a non-numeric) `value`, or a block with a missing or unknown `type`. It now
 returns PARTIAL (MISSING when the Year-1 rent is also absent); PARTIAL is blocking, so the
 mode exits 1. A register with no escalation block at all is unchanged. The `fixed_pct`
-match is anchored (`(?<![\d.])3(?:\.0+)?\s*(?:%|percent)`, so `13%` and `3.5%` no longer
-satisfy 3%) and must sit within 200 characters of escalation wording (escalat-, increas-,
-adjust-, per annum, annual(ly), anniversar-), so a 3% late charge cannot stand in for it.
-10 new tests in `tests/test_lease_qc.py`; `test_lease_qc.py` 155, `test_lease_qc_v30.py` 30
+match now reads every stated percentage with an anchored pattern (the lookbehind rejects a
+digit, `.` or `/`, so `13%`, `3.5%` and `2-1/2%` no longer yield 3% or 2%), and requires the
+percentage NEAREST to some escalation keyword, within 200 characters, to equal the register
+value (keywords: escalat-, increas-, adjust-, per annum, annual(ly), anniversar-, each/per/
+every Lease Year, step(s) up, bump(s)). A 3% late charge or a 3% proportionate share next to a
+3.5% escalation cannot stand in for it. "103% of the prior Lease Year" wording still reads
+PARTIAL (verify by hand). 13 new tests in `tests/test_lease_qc.py`; `test_lease_qc.py` 158, `test_lease_qc_v30.py` 30
 and the mutation suite pass. v2.7's full entry moved to `versions/CHANGELOG-v2.5-v2.7.md`
 (renamed from `-v2.6`) under the retention rule. No standard-scan check or governor changed.
 

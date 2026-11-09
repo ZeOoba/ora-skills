@@ -701,6 +701,41 @@ class TestRentArithmeticUnparsedAndEscalation(TempDirCase):
         ])
         self.assertFalse(_new_verdicts(path)["3"])
 
+    # REFUTE pass (2026-11-08): whole-dollar and per-SF schedules are legitimate rounding
+    # conventions the cent-level check must still recognise.
+    def test_whole_dollar_monthly_schedule_passes(self):
+        path = self._escalation_doc("whole_dollar.docx", [
+            ("1/2024-12/2024", "$1,000.00", "$12,000.00"),
+            ("1/2025-12/2025", "$1,030.00", "$12,360.00"),
+            ("1/2026-12/2026", "$1,061.00", "$12,732.00"),
+        ])
+        self.assertFalse(_new_verdicts(path)["3"])
+
+    def _psf_doc(self, name, rows):
+        return make_docx(
+            self.tmp / name,
+            ["The Premises contain 10,000 rentable square feet.",
+             "Base Rent shall be payable in accordance with the following schedule, "
+             "escalating at 3.00% annually:"],
+            table_rows=rows,
+        )
+
+    def test_per_sf_rounded_schedule_passes_when_rsf_stated(self):
+        path = self._psf_doc("per_sf.docx", [
+            ("1/2024-12/2024", "$6,666.67", "$80,000.00"),
+            ("1/2025-12/2025", "$6,866.67", "$82,400.00"),
+            ("1/2026-12/2026", "$7,075.00", "$84,900.00"),
+        ])
+        self.assertFalse(_new_verdicts(path)["3"])
+
+    def test_per_sf_path_does_not_admit_a_wrong_rate(self):
+        # $8.00 -> $8.28/SF is 3.5%, stated 3%.
+        path = self._psf_doc("per_sf_wrong.docx", [
+            ("1/2024-12/2024", "$6,666.67", "$80,000.00"),
+            ("1/2025-12/2025", "$6,900.00", "$82,800.00"),
+        ])
+        self.assertTrue(_new_verdicts(path)["3"])
+
     # cc-audit-army code-review finding (2026-08-22): ESCALATION_RATE_RE used to scan the
     # WHOLE document, so an unrelated clause elsewhere could be picked up as the rent
     # escalation rate. Scoped to a window around the rent-schedule anchor instead.

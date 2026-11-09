@@ -267,9 +267,11 @@ paragraph the correct numbering/style rather than defaulting to Normal).
 - **v1.2** (2026-11-08) — QC item 3 (rent arithmetic) escalation tolerance tightened (audit
   row `addendum-escalation-tolerance-50bp`). `check_rent_arithmetic` allowed
   max($1.00, 0.5% of the expected annual), so a 3.5% step under a stated 3% passed. Each row
-  must now reproduce from the prior row, to the cent, under (i) annual compounded or
-  (ii) monthly compounded and rounded each year (the same two methods as `lease-form-qc` D2),
-  within $0.01 x 12 months. 5 new tests in `tests/test_addendum_qc.py` (33 pass). Check
+  must now reproduce from the prior row, within $0.01 x 12 months, under one recognised
+  rounding convention: (i) annual compounded or (ii) monthly compounded and rounded each year
+  (the two `lease-form-qc` D2 methods), (iii) monthly or (iv) annual rounded to the whole
+  dollar, or (v) a per-SF rate rounded to the cent, only when the addendum states the RSF.
+  8 new tests in `tests/test_addendum_qc.py` (36 pass). Check
   tolerance only: the 3% compounding convention and every governor are unchanged.
 - **v1.1** (2026-09-23) — new-lease routing corrected in the description, the route table
   and the failure modes: a brand-new lease goes to `lease-generation` (the new-lease
