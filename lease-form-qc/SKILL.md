@@ -682,11 +682,14 @@ percentages from rent-escalation clauses: a sentence/clause (split at `.`, `;`, 
 `:`) that names rent, or directly follows one that does, AND carries an escalation verb
 (escalat-, increas-, anniversar-, step(s) up, bump(s); not adjust-, which the master form's
 condemnation clause uses). Each keyword contributes only its nearest percentage within 50
-characters. The register value must appear; any OTHER percentage read that way is a CONFLICT;
+characters (backward only inside its own clause, forward into the next); a sentence-sized
+clause (≤400 chars) with no such percentage contributes every percentage in it. The chain
+runs forward through consecutive escalation-verb clauses, never into a clause whose subject
+is an expense term (Operating Costs/CAM/Taxes/insurance) and that does not name rent. The register value must appear; any OTHER percentage read that way is a CONFLICT;
 a clause tied to CPI reads PARTIAL. A 3% late charge, proportionate share, management fee or
 expense cap cannot stand in for it, and the default-rate clause ("18% per annum") is not read
 as an escalation. Both real master fixtures in `tests/fixtures/` plus the `clause-modules.md`
-rent clause CONFORM at 3% and CONFLICT at 3.5%. 19 new tests in `tests/test_lease_qc.py`; `test_lease_qc.py` 164, `test_lease_qc_v30.py` 30
+rent clause, and the masterlease-jurisdiction-rebase v2.6–v3.1 masters, CONFORM at 3% and CONFLICT at 3.5%. 21 new tests in `tests/test_lease_qc.py`; `test_lease_qc.py` 166, `test_lease_qc_v30.py` 30
 and the mutation suite pass. v2.7's full entry moved to `versions/CHANGELOG-v2.5-v2.7.md`
 (renamed from `-v2.6`) under the retention rule. No standard-scan check or governor changed.
 
