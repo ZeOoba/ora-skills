@@ -1914,6 +1914,37 @@ def _check_options(reg, text):
     return {"status": "PARTIAL", "detail": f"only {hits} of {len(opts)} option(s) found"}
 
 
+# Words that mark a percentage as a rent escalation rather than some other
+# percentage in the lease (late charge, default rate, pro rata share). A
+# fixed_pct match must sit within _ESC_WINDOW characters of one of these.
+_ESC_CONTEXT_RE = re.compile(
+    r'\b(?:escalat\w*|increas\w*|adjust\w*|per\s+annum|annual(?:ly)?|anniversar\w*)\b',
+    re.I)
+_ESC_WINDOW = 200
+
+
+def _pct_pattern(value):
+    """Anchored percentage pattern: 3 -> matches '3%', '3.0%', '3 %', '3 percent'
+    but not '13%' or '3.5%' (audit row leaseqc-checkrent-escalation-failopen,
+    2026-11-08: re.escape('3%') also matched inside '13%')."""
+    num = f"{float(value):g}"
+    if "." in num:
+        whole, frac = num.split(".")
+        core = re.escape(whole) + r'\.' + re.escape(frac) + r'0*'
+    else:
+        core = re.escape(num) + r'(?:\.0+)?'
+    return r'(?<![\d.])' + core + r'\s*(?:%|percent\b)'
+
+
+def _find_escalation_pct(text, value):
+    """True when the register's fixed % appears in an escalation context."""
+    for m in re.finditer(_pct_pattern(value), text, re.I):
+        lo, hi = max(0, m.start() - _ESC_WINDOW), m.end() + _ESC_WINDOW
+        if _ESC_CONTEXT_RE.search(text[lo:hi]):
+            return True
+    return False
+
+
 def _check_rent(reg, text):
     schedule = ((reg.get("rent") or {}).get("schedule")) or []
     if not schedule:
@@ -1924,9 +1955,30 @@ def _check_rent(reg, text):
     esc_type = esc.get("type")
     esc_found = False
     esc_label = None
-    if esc_type == "fixed_pct" and esc.get("value") is not None:
-        esc_label = f"{esc['value']:g}%"
-        esc_found = bool(re.search(re.escape(esc_label), text))
+    esc_value = esc.get("value")
+    if esc and (esc_type not in ("none", "fixed_pct", "cpi", "fixed_amount")
+                or (esc_type == "fixed_pct"
+                    and (isinstance(esc_value, bool)
+                         or not isinstance(esc_value, (int, float))
+                         or esc_value != esc_value))):
+        # The register HAS an escalation block, but one this checker cannot
+        # verify: a missing/unknown type, or fixed_pct with no usable value.
+        # Used to leave esc_label=None and fall through to CONFORMS on the
+        # Year-1 rent alone (audit row leaseqc-checkrent-escalation-failopen,
+        # 2026-11-08). PARTIAL is blocking, so the gate now fails.
+        why = (f"fixed_pct escalation with no usable value ({esc_value!r})"
+               if esc_type == "fixed_pct"
+               else f"escalation block with missing/unknown type ({esc_type!r})")
+        if found_rent:
+            return {"status": "PARTIAL",
+                    "detail": f"Year-1 rent {found_rent} found; the register's {why} "
+                              f"could not be verified -- fix the register or verify by hand"}
+        return {"status": "MISSING",
+                "detail": f"Year-1 rent figure not found; the register's {why} "
+                          f"could not be verified either"}
+    if esc_type == "fixed_pct":
+        esc_label = f"{esc_value:g}%"
+        esc_found = _find_escalation_pct(text, esc_value)
     elif esc_type == "none":
         esc_found = True
         esc_label = "flat (no escalation)"

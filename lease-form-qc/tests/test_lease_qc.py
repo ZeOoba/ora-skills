@@ -1383,6 +1383,71 @@ class TestLoiConformanceRegressionFixes(TempDirCase):
         row = lease_qc._check_rent(register, "Base Rent for Lease Year 1 shall be $2,000.00 per month.")
         self.assertEqual(row["status"], "PARTIAL", row)
 
+    # Audit row leaseqc-checkrent-escalation-failopen (2026-11-08): an
+    # escalation block the checker could not verify used to fall through to
+    # CONFORMS. PARTIAL is a blocking status (--loi-conformance exits 1).
+    _RENT_ONLY = "Base Rent for Lease Year 1 shall be $2,000.00 per month."
+
+    def _rent_row(self, escalation, text=None):
+        register = {"rent": {"schedule": [{"lease_year": 1, "monthly": 2000.00}],
+                             "escalation": escalation}}
+        return lease_qc._check_rent(register, text if text is not None else self._RENT_ONLY)
+
+    def test_rent_fixed_pct_with_no_value_is_partial_not_conforms(self):
+        row = self._rent_row({"type": "fixed_pct"})
+        self.assertEqual(row["status"], "PARTIAL", row)
+        row = self._rent_row({"type": "fixed_pct", "value": None})
+        self.assertEqual(row["status"], "PARTIAL", row)
+
+    def test_rent_escalation_block_with_missing_type_is_partial(self):
+        row = self._rent_row({"value": 3.0})
+        self.assertEqual(row["status"], "PARTIAL", row)
+
+    def test_rent_escalation_unknown_type_is_partial(self):
+        row = self._rent_row({"type": "stepped_pct", "value": 3.0})
+        self.assertEqual(row["status"], "PARTIAL", row)
+
+    def test_rent_unverifiable_escalation_without_rent_is_missing(self):
+        row = self._rent_row({"type": "fixed_pct"}, text="No rent language here.")
+        self.assertEqual(row["status"], "MISSING", row)
+
+    def test_rent_no_escalation_block_still_conforms_on_rent(self):
+        register = {"rent": {"schedule": [{"lease_year": 1, "monthly": 2000.00}]}}
+        row = lease_qc._check_rent(register, self._RENT_ONLY)
+        self.assertEqual(row["status"], "CONFORMS", row)
+
+    def test_rent_fixed_pct_13_percent_does_not_satisfy_3_percent(self):
+        text = self._RENT_ONLY + " Base Rent shall increase by 13% on each anniversary."
+        row = self._rent_row({"type": "fixed_pct", "value": 3.0}, text)
+        self.assertNotEqual(row["status"], "CONFORMS", row)
+
+    def test_rent_fixed_pct_3_5_percent_does_not_satisfy_3_percent(self):
+        text = self._RENT_ONLY + " Base Rent shall increase by 3.5% on each anniversary."
+        row = self._rent_row({"type": "fixed_pct", "value": 3.0}, text)
+        self.assertNotEqual(row["status"], "CONFORMS", row)
+
+    def test_rent_fixed_pct_matching_escalation_conforms(self):
+        for phrase in ("increase by three percent (3%) annually",
+                       "escalate 3.0% per annum",
+                       "increase by 3 % on each anniversary"):
+            with self.subTest(phrase=phrase):
+                row = self._rent_row({"type": "fixed_pct", "value": 3.0},
+                                     self._RENT_ONLY + f" Base Rent shall {phrase}.")
+                self.assertEqual(row["status"], "CONFORMS", row)
+
+    def test_rent_fixed_pct_fractional_value_matches(self):
+        row = self._rent_row({"type": "fixed_pct", "value": 2.5},
+                             self._RENT_ONLY + " Base Rent shall increase 2.50% annually.")
+        self.assertEqual(row["status"], "CONFORMS", row)
+
+    def test_rent_fixed_pct_unrelated_percentage_elsewhere_does_not_conform(self):
+        """A 3% figure outside any escalation context (a late charge) must
+        not stand in for the rent escalation."""
+        text = (self._RENT_ONLY + " " + "Tenant shall maintain the Premises in good order. " * 8
+                + "Any late payment incurs a late charge of 3% of the amount due.")
+        row = self._rent_row({"type": "fixed_pct", "value": 3.0}, text)
+        self.assertNotEqual(row["status"], "CONFORMS", row)
+
     def test_signage_freetext_description_conforms_when_realistically_implemented(self):
         """The register's signage value is human-written prose, not an
         enum -- requiring every word verbatim (including a stray '+' and
