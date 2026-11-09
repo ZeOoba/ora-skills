@@ -1,5 +1,5 @@
 #!/bin/sh
-# ora-skills pre-commit (canonical, versioned; core.hooksPath=tools/hooks — set locally per clone).
+# ora-skills pre-commit (canonical, versioned; run by the per-clone shim that tools/install_hooks.py writes).
 #
 # Check 1 (2026-07-16): any staged change to the repo-root target-markets.json — the canonical
 # shared data source injected into 5 skills at package time — must bump its "version" field.

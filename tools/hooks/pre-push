@@ -1,6 +1,6 @@
 #!/bin/sh
 # ORA-PREPUSH-CONFIDENTIAL-SCAN -- git pre-push shim (Hard Invariant 3, fail-closed).
-# ora-skills pre-push (canonical, versioned; core.hooksPath=tools/hooks -- set locally per clone).
+# ora-skills pre-push (canonical, versioned; run by the per-clone shim that tools/install_hooks.py writes).
 # Runs the tracked confidentiality scan from the tree being pushed; if that tree predates
 # the scan, falls back to the copy beside this hook directory (tools/). No scan script or no usable
 # Python 3 => the push is BLOCKED. git's ref lines reach the scan on stdin unchanged.

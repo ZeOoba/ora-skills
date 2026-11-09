@@ -232,8 +232,17 @@ injected at package time into `acquisition-underwriting`, `daily-brief`, `deal-c
 
 ## Sync, packaging and CI flow
 
-Git hooks live in `tools/hooks/` (`core.hooksPath=tools/hooks`, set locally per clone). They
-keep the two local stores (the Code-surface `~/.claude/skills/<skill>` mirror and the Cowork
+Git hooks live in `tools/hooks/` and are wired per clone by `python tools/install_hooks.py`
+(run once per clone from a current checkout, re-run after pulling hook or scanner changes;
+`--check` verifies without writing). The installer writes small shims into the clone's
+untracked `<git-common-dir>/ora-hooks/` and points `core.hooksPath` there, so the active hook
+set no longer depends on which branch the main checkout has checked out. Each shim runs
+`tools/hooks/<name>` from the tree being committed or pushed when that file exists. When it
+does not (a branch cut before the hook landed), `pre-push` runs the installer's fallback copy
+of `prepush_confidential_scan.py` or blocks, and never allows; every other hook does nothing,
+as git would for a missing hook. The installer never deletes: a differing file already in
+`ora-hooks/` is renamed `<name>.bak-<UTC stamp>`, identical files are left alone. Tests:
+`tools/test_install_hooks.py`. They keep the two local stores (the Code-surface `~/.claude/skills/<skill>` mirror and the Cowork
 AppData runtime cache) aligned with this repo, which stays canonical. Cowork itself only
 re-imports when a `.skill` is manually imported via "Save skill".
 
@@ -309,9 +318,10 @@ path is not documented here.
   never printed, only roster indices. While a deal is active, a push adding a PDF or an
   unsupported archive (7z/rar/zstd) also blocks: verify it by hand, then `--no-verify`.
   Tests: `tools/test_prepush_confidential_scan.py`. The same scanner is committed to
-  website-canonical and ora-pm; keep the copies identical. Because `core.hooksPath` points at
-  the MAIN checkout's working tree, the gate is live only while that checkout is on `main` (or
-  any branch cut after this hook landed); keep the main checkout on `main`.
+  website-canonical and ora-pm; keep the copies identical. With the `install_hooks.py` shims
+  the gate is live on every branch and worktree, including branches cut before it landed
+  (they run the fallback scanner copy in `ora-hooks/`). A clone whose `core.hooksPath` still
+  points at a tracked `tools/hooks` directory has no gate on such branches: run the installer.
 - Emergency bypass is `git commit --no-verify` (`git push --no-verify` for pre-push).
 
 **`tools/` scripts (non-test).** CI gates: `skill_ci_gates.py`, `run_skill_suites.sh`. Packaging: `package_skills.py`, `build_plugin.py`,
@@ -321,7 +331,7 @@ path is not documented here.
 `verify_install.ps1`, `verify_installed_cache.py`, `sync_appdata_mirror.py`,
 `sync_local_skills_mirror.py`, `catch_up_main.py` (safe forward-merge of `origin/main` into the
 long-lived local `main`). Frontmatter and lint: `description_budget.py`, `desc_lengths.py`,
-`frontmatter_sweep.py`, `script_resource_lint.py`. Other: `ora_doc_qc.py` (shared QC harness),
+`frontmatter_sweep.py`, `script_resource_lint.py`. Hooks: `install_hooks.py` (per-clone untracked shim install, see above), `prepush_confidential_scan.py`. Other: `ora_doc_qc.py` (shared QC harness),
 `pause_resume.py` (bounded-pause resume generator), `notion_fetch_digest.py`, `usage_ledger.py`. Runtime-cache capture: `capture_runtime_cache.py` + `register_capture_task.ps1` (Windows Task Scheduler job "ORA Skill Cache Capture", every 10 min, commits cache-only skills to a `capture/runtime-cache-*` branch and a DO-NOT-MERGE PR).
 
 **Tests and CI.** Every `tools/test_*.py` is a stdlib `unittest` file (one plain-assert script,
