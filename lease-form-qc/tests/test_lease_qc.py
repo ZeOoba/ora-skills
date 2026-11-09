@@ -1920,7 +1920,7 @@ class TestOpenItemsRow(TempDirCase):
         self.assertEqual(r["status"], "MISSING")
 
     def test_example_register_and_schema(self):
-        ex = REPO / "lease-generation" / "references" / "example-register-northwood-15a.json"
+        ex = REPO / "lease-generation" / "references" / "example-register-synthetic.json"
         reg = json.loads(ex.read_text(encoding="utf-8"))
         schema = json.loads((REPO / "lease-generation" / "references"
                              / "deal-terms-register.schema.json").read_text(encoding="utf-8"))
