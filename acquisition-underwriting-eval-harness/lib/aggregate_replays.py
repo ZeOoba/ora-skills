@@ -53,7 +53,12 @@ def _is_number(value):
     """True for real, non-bool, FINITE numbers. Guards against bool being a Real subclass,
     and against NaN/Infinity, which would poison the mean and slip past the tolerance gate
     (audit row eval-harness-nan-passes, 2026-11-08)."""
-    return isinstance(value, Real) and not isinstance(value, bool) and math.isfinite(value)
+    if not isinstance(value, Real) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:  # an int too large for a float is not a usable score either
+        return False
 
 
 def normalize_category_keys(breakdown, key_map=None):

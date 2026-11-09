@@ -181,12 +181,15 @@ def _is_finite_number(value):
     NaN and +/-Infinity are rejected: `abs(NaN) > tol` is False, so a NaN combined
     score or tolerance would otherwise fall through to PASS (audit row
     eval-harness-nan-passes, 2026-11-08).
+    An int too large to convert to float (math.isfinite raises OverflowError) is
+    rejected too, so the caller sees ValueError, never an OverflowError traceback.
     """
-    return (
-        isinstance(value, Real)
-        and not isinstance(value, bool)
-        and math.isfinite(value)
-    )
+    if not isinstance(value, Real) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 def _require_number(value, label):

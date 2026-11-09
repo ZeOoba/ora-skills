@@ -72,15 +72,35 @@ def _finite_float(text):
     return value
 
 
+def _bounded_int(text):
+    value = int(text)
+    try:
+        float(value)
+    except OverflowError:
+        raise ValueError(f"JSON integer of {len(text)} digits is too large to be a usable number")
+    return value
+
+
+def _is_finite_real(value):
+    if not isinstance(value, Real) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
 def load_json_strict(text):
-    """json.loads that refuses NaN/Infinity/-Infinity literals and overflowing floats.
+    """json.loads that refuses NaN/Infinity/-Infinity literals, overflowing floats and
+    integers too large to convert to float.
 
     Python's json accepts those non-standard literals by default; a NaN combined score
     or tolerance then slips past every `abs(delta) > tol` gate as PASS (audit row
     eval-harness-nan-passes, 2026-11-08). Raises ValueError (json.JSONDecodeError is a
     ValueError subclass, so existing handlers keep working).
     """
-    return json.loads(text, parse_constant=_reject_constant, parse_float=_finite_float)
+    return json.loads(text, parse_constant=_reject_constant, parse_float=_finite_float,
+                      parse_int=_bounded_int)
 
 
 def extract_json_block(text):
@@ -245,7 +265,7 @@ def _parse_entries(entries, out):
                         "-- failed replay (SKILL.md Step 1.5)")
         return out
     combined = parsed[0].get("combined")
-    if not isinstance(combined, Real) or isinstance(combined, bool) or not math.isfinite(combined):
+    if not _is_finite_real(combined):
         out["error"] = f"'combined' is not a finite number ({combined!r})"
         return out
     out["status"], out["result"] = "ok", parsed[0]
