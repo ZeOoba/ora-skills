@@ -3,7 +3,7 @@ name: "lease-generation"
 description: "Oxford Realty Advisors NEW-LEASE production skill: LOI, term sheet or typed deal terms to an execution-ready lease on ORA paper, with redline and LOI conformance memo. Use when the user says: generate the lease, draft the lease from this LOI, fill in the lease template, new lease for [suite/tenant], lease from these terms, or uploads an LOI/proposal and wants a lease. NOT amendments (lease-addendum), template maintenance (masterlease-jurisdiction-rebase), counterparty paper (legal-intelligence), LOIs (loi-generation), or grading an EXISTING lease against its LOI (lease-form-qc LOI-Lease Audit mode). Draft only; send needs confirmation."
 ---
 
-# lease-generation — LOI/term sheet → execution-ready ORA lease (v1.2)
+# lease-generation — LOI/term sheet → execution-ready ORA lease (v1.3)
 
 Per-deal production skill. It sits between the two skills that already exist on either side of it:
 `masterlease-jurisdiction-rebase` **maintains** the property templates; `lease-form-qc` **grades** a lease.
@@ -32,7 +32,7 @@ An LOI can compel a departure (a gross deal, an option). Record it in the regist
 
 ### 0. Intake → DEAL-TERMS-REGISTER
 Read the LOI/term sheet/e-mail. Build `deal-terms-register.json` per `references/deal-terms-register.schema.json`
-(`references/example-register-northwood-15a.json` is a filled example). Compute the rent schedule for **every**
+(`references/example-register-synthetic.json` is a filled example). Compute the rent schedule for **every**
 lease year including option years (escalation type from the LOI; if the LOI is silent, flat for the primary term and
 raise a decision gate for option rent — recommend 3% compounding). Compute proportionate share from Notion Property
 Register total SF. Pull landlord entity/notice block from the property's executed leases. List `decision_gates` and
@@ -102,7 +102,7 @@ notice-to-quit waiver, state-specific items).
   Requires `lxml` (non-stdlib): `pip install lxml`.
 - `scripts/xref_audit.py` — reconstructs auto-numbering; flags missing numeric/title targets, fragile
   "this Section N", unattached exhibits, undefined quoted terms, unfilled tokens. Also requires `lxml`.
-- `references/deal-terms-register.schema.json` — register schema. `references/example-register-northwood-15a.json` — filled example.
+- `references/deal-terms-register.schema.json` — register schema. `references/example-register-synthetic.json` — filled example.
 - `references/clause-modules.md` — M-01…M-13 landlord-drafted modules with parameters and scanner-canonical phrasing.
 
 ## Handoffs (Code surface)
@@ -115,6 +115,13 @@ notice-to-quit waiver, state-specific items).
 - `package-and-stage-skill`: package into ora-skills via tools/package_skills.py.
 
 ## Changelog
+- v1.3 (2026-11-08) — the filled example register is now fully synthetic: `references/example-register-synthetic.json`
+  (fictional parties marked "Example"/"fictional", Example addresses, round-number rent). The former example
+  was built from a real deal and carried tenant data (audit row `tenant-pii-in-shipped-example-register`); it is
+  untracked without a history rewrite and kept on disk only. The schema's `deal_id` example is neutralised.
+  New CI gate `tools/test_example_registers_synthetic.py`: every `*example*register*.json` outside `_archive/`
+  must carry `"_synthetic": true` and example/fictional markers on every party, person, address and email field.
+  No procedure, module, engine or governor change.
 - v1.2 (2026-09-24) — routing/handoff note only. Gate 4 notes that `lease_qc.py --loi-audit` runs Gate 3 and Gate 4
   in one call; the Code-surface handoff to lease-form-qc is marked shipped (v2.8). The register schema's
   `open_items` gained an object form (`resolution`, `lease_clause`) — see `references/`. No procedure, module or
