@@ -1,7 +1,0 @@
-## 2026-09-11 -- vendor-contract-qc retirement confirmed (ORA Setup Audit Revision 25 remediation, cont.)
-vendor-contract-qc retired/unpublished by Gabriel via the Skills page. Confirmed two ways:
-ListSkills account call returns only vendor-management for vendor/contract-QC keywords (v2.0,
-enabled=true); tools/skill_drift_report.py --publish-status flipped vendor-contract-qc from
-CACHE-ONLY (17:25:28Z) to UNKNOWN/not found in either store (17:27:20Z), i.e. the local
-AppData cache mirror caught up with the unpublish. No stale duplicate remains to collide with
-vendor-management's QC-mode triggers.
