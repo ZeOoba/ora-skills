@@ -714,7 +714,7 @@ class TestRentArithmeticUnparsedAndEscalation(TempDirCase):
     def _psf_doc(self, name, rows):
         return make_docx(
             self.tmp / name,
-            ["The Premises contain 10,000 rentable square feet at an initial rate of "
+            ["Base Rent for the Premises' 10,000 rentable square feet is initially "
              "$8.00 per square foot per year.",
              "Base Rent shall be payable in accordance with the following schedule, "
              "escalating at 3.00% annually:"],
@@ -746,7 +746,7 @@ class TestRentArithmeticUnparsedAndEscalation(TempDirCase):
         path = make_docx(
             self.tmp / "project_rsf.docx",
             ["Tenant's Proportionate Share of the Premises is 5.00%, being 2,000 / 40,000 "
-             "rentable square feet. The Premises contain 2,000 rentable square feet at "
+             "rentable square feet. Base Rent for the Premises' 2,000 rentable square feet is "
              "$12.00 per square foot per year.",
              "Base Rent shall be payable in accordance with the following schedule, "
              "escalating at 3.00% annually:"],
@@ -795,6 +795,79 @@ class TestRentArithmeticUnparsedAndEscalation(TempDirCase):
 # --------------------------------------------------------------------------
 # 4. Full parity sweep — every check, several fixtures, several flag combos
 # --------------------------------------------------------------------------
+
+class TestEscalationRound3Repros(unittest.TestCase):
+    """Pinned from the round-3 REFUTE probe rr3_add.py (2026-11-08): plain-text schedules
+    fed straight to check_rent_arithmetic (one table cell per line)."""
+
+    @staticmethod
+    def _doc(rows, pre="", rate="3.00"):
+        lines = [pre + "Base Rent shall be payable in accordance with the following schedule, "
+                 f"escalating at {rate}% annually:"]
+        for i, (m, a) in enumerate(rows):
+            lines += [f"1/{2024 + i}-12/{2024 + i}", f"${m:,.2f}", f"${a:,.2f}"]
+        return chr(10).join(lines)
+
+    @staticmethod
+    def _c(x):
+        from decimal import Decimal, ROUND_HALF_UP
+        return Decimal(x).quantize(Decimal("0.01"), ROUND_HALF_UP)
+
+    def setUp(self):
+        import addendum_qc
+        self.q = addendum_qc
+
+    def test_building_rsf_without_a_stated_rate_is_not_used(self):
+        pre = ("The Premises are located in the 40,000 SF building and contain 2,000 rentable "
+               "square feet. ")
+        self.assertTrue(self.q.check_rent_arithmetic(
+            self._doc([(2000, 24000), (2066.67, 24800)], pre=pre)))
+
+    def test_coincident_operating_cost_rate_cannot_pair_with_project_rsf(self):
+        from decimal import Decimal
+        for pre in (
+            "Tenant's Proportionate Share is 5.00%, being 2,000 / 40,000 rentable square feet; "
+            "estimated Operating Costs are $0.60 per square foot. The Premises contain 2,000 "
+            "rentable square feet at $12.00 per square foot per year. ",
+            "Tenant's Proportionate Share of the Premises is 5.00%, being 2,000 / 40,000 rentable "
+            "square feet, and estimated Operating Costs are $0.60 per square foot. ",
+        ):
+            with self.subTest(pre=pre[:50]):
+                doc = self._doc([(2000, 24000), (2066.67, 24800)], pre=pre)
+                self.assertNotEqual(self.q._per_sf_rsf(doc, Decimal("24000.00")), Decimal("40000"))
+                self.assertTrue(self.q.check_rent_arithmetic(doc))
+
+    def _psf_rows(self, rsf, psf0, years=5):
+        from decimal import Decimal
+        psf = [Decimal(psf0)]
+        for _ in range(years - 1):
+            psf.append(self._c(psf[-1] * Decimal("1.03")))
+        return [(float(self._c(p * rsf / 12)), float(p * rsf)) for p in psf]
+
+    def test_legit_per_sf_schedule_passes(self):
+        pre = "The Premises contain 10,000 rentable square feet at $8.00 per square foot per year. "
+        self.assertFalse(self.q.check_rent_arithmetic(self._doc(self._psf_rows(10000, "8.00"), pre=pre)))
+
+    def test_per_sf_schedule_with_wrong_rate_fails(self):
+        from decimal import Decimal
+        pre = "The Premises contain 10,000 rentable square feet at $8.00 per square foot per year. "
+        for wrong in ("3.04", "3.1", "3.25", "3.5"):
+            with self.subTest(step=wrong):
+                a2 = self._c(Decimal(80000) * (1 + Decimal(wrong) / 100))
+                doc = self._doc([(6666.67, 80000), (float(self._c(a2 / 12)), float(a2))], pre=pre)
+                self.assertTrue(self.q.check_rent_arithmetic(doc))
+
+    def test_large_rsf_admits_only_the_stated_rate(self):
+        from decimal import Decimal
+        pre = "The Premises contain 45,000 rentable square feet at $6.00 per square foot per year. "
+        passing = []
+        for bp in range(250, 360):
+            a2 = self._c(Decimal(270000) * (1 + Decimal(bp) / 10000))
+            if not self.q.check_rent_arithmetic(
+                    self._doc([(22500, 270000), (float(self._c(a2 / 12)), float(a2))], pre=pre)):
+                passing.append(bp)
+        self.assertEqual(passing, [300])
+
 
 class TestFullParitySweep(TempDirCase):
 

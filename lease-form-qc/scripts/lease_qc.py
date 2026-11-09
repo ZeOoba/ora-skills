@@ -1919,12 +1919,16 @@ def _check_options(reg, text):
 # reads 'eighteen percent (18%) per annum', so those words do not mark a
 # percentage as a rent escalation.
 _ESC_CONTEXT_RE = re.compile(
-    r'\b(?:escalat\w*|increas\w*|adjust\w*|anniversar\w*|step(?:s|ped)?\s+up|bumps?)\b',
+    r'\b(?:escalat\w*|increas\w*|anniversar\w*|step(?:s|ped)?\s+up|bumps?)\b',
     re.I)
+# 'adjust-' is deliberately absent (REFUTE round 3): ORA's master form has a
+# condemnation clause in which Rent is 'adjusted' beside a 25% taking
+# threshold, which made every master-form lease CONFLICT.
 _RENT_TERM_RE = re.compile(r'\brent\b', re.I)
-# Sentence/clause boundary: '.', ';' or ':' followed by whitespace (a decimal
-# point inside '3.5%' has no whitespace after it, so it never splits).
-_CLAUSE_SPLIT_RE = re.compile(r'(?<=[.;:!?])\s+')
+# Sentence/clause boundary: '.', ';', '!' or '?' followed by whitespace (a
+# decimal point inside '3.5%' has no whitespace after it, so it never
+# splits). NOT ':' -- 'Base Rent: ... 3.0%' must stay one clause.
+_CLAUSE_SPLIT_RE = re.compile(r'(?<=[.;!?])\s+')
 
 # Any stated percentage. Anchored: the lookbehind rejects a digit, a decimal
 # point or a fraction slash, so '13%', '3.5%' and '2-1/2%' never yield a bare
@@ -1939,25 +1943,61 @@ def _escalation_pcts(text):
     management fee or expense cap elsewhere never qualifies (REFUTE pass,
     2026-11-08: a 'nearest percentage to any keyword' rule let ORA's own 3.00%
     proportionate-share clause satisfy a 3% register next to a 3.5% rent
-    escalation)."""
-    out = []
-    for clause in _CLAUSE_SPLIT_RE.split(text):
-        if _RENT_TERM_RE.search(clause) and _ESC_CONTEXT_RE.search(clause):
-            out.extend(float(m.group(1)) for m in _PCT_RE.finditer(clause))
-    return out
+    escalation). A clause with an escalation verb that directly FOLLOWS a
+    clause naming rent also qualifies ('Base Rent for Lease Year 1 is $X.
+    Thereafter, it shall increase by 3.5% annually.'), since the step clause
+    need not repeat the word.
+
+    Within a qualifying clause, each escalation keyword contributes only the
+    percentage NEAREST to it, within _ESC_PCT_GAP characters, searched in the
+    full text so an abbreviation such as 'Sec. 4)' cannot split the keyword
+    from its rate. A late-charge or default-rate percentage further along an
+    unpunctuated Basic Lease Information block is therefore not read as an
+    escalation (REFUTE round 3).
+
+    Returns (pcts, indexed): indexed is True when a qualifying clause ties the
+    step to CPI / a price index, which a fixed % cannot verify."""
+    pcts_all = [(m.start(), m.end(), float(m.group(1))) for m in _PCT_RE.finditer(text)]
+    out, indexed = [], False
+    prev_names_rent = False
+    pos = 0
+    for sep in list(_CLAUSE_SPLIT_RE.finditer(text)) + [None]:
+        end = sep.start() if sep else len(text)
+        clause_start, clause = pos, text[pos:end]
+        pos = sep.end() if sep else len(text)
+        names_rent = bool(_RENT_TERM_RE.search(clause))
+        if names_rent or prev_names_rent:
+            for k in _ESC_CONTEXT_RE.finditer(clause):
+                ks, ke = clause_start + k.start(), clause_start + k.end()
+                best = None
+                for s, e, v in pcts_all:
+                    gap = s - ke if s >= ke else ks - e
+                    if 0 <= gap <= _ESC_PCT_GAP and (best is None or gap < best[0]):
+                        best = (gap, v)
+                if best is not None:
+                    out.append(best[1])
+                if _INDEX_RE.search(clause):
+                    indexed = True
+        prev_names_rent = names_rent
+    return out, indexed
+
+
+_ESC_PCT_GAP = 50
+_INDEX_RE = re.compile(r'\b(?:CPI|consumer\s+price\s+index|price\s+index)\b', re.I)
 
 
 def _find_escalation_pct(text, value):
-    """(found, conflicting): found when some rent-escalation clause states the
-    register's fixed %; conflicting = the other percentages those clauses
-    state. Any conflicting percentage blocks CONFORMS, even when the register
-    value also appears (e.g. a 3% option-term step beside a 3.5% primary-term
-    step against a 3% register)."""
+    """(found, conflicting, indexed): found when some rent-escalation keyword's
+    nearest percentage is the register's fixed %; conflicting = the other
+    percentages read that way. Any conflicting percentage blocks CONFORMS, even
+    when the register value also appears (e.g. a 3% option-term step beside a
+    3.5% primary-term step against a 3% register). indexed: the clause ties the
+    step to CPI ('greater of 3% or CPI'), which a fixed % cannot confirm."""
     target = float(value)
-    pcts = _escalation_pcts(text)
+    pcts, indexed = _escalation_pcts(text)
     found = any(abs(p - target) < 1e-9 for p in pcts)
     conflicting = sorted({p for p in pcts if abs(p - target) >= 1e-9})
-    return found, conflicting
+    return found, conflicting, indexed
 
 
 def _check_rent(reg, text):
@@ -1993,7 +2033,11 @@ def _check_rent(reg, text):
                           f"could not be verified either"}
     if esc_type == "fixed_pct":
         esc_label = f"{esc_value:g}%"
-        esc_found, esc_conflicts = _find_escalation_pct(text, esc_value)
+        esc_found, esc_conflicts, esc_indexed = _find_escalation_pct(text, esc_value)
+        if esc_indexed and not esc_conflicts:
+            return {"status": "PARTIAL",
+                    "detail": f"rent escalation clause ties the step to a price index (CPI); "
+                              f"the register's fixed {esc_label} cannot be confirmed -- verify by hand"}
         if esc_conflicts:
             stated = ", ".join(f"{p:g}%" for p in esc_conflicts)
             return {"status": "CONFLICT",

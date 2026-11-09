@@ -270,9 +270,10 @@ paragraph the correct numbering/style rather than defaulting to Normal).
   must now reproduce from the prior row, within $0.01 x 12 months, under one recognised
   rounding convention: (i) annual compounded or (ii) monthly compounded and rounded each year
   (the two `lease-form-qc` D2 methods), (iii) monthly or (iv) annual rounded to the whole
-  dollar, or (v) a per-SF rate rounded to the cent, only when the addendum states a per-SF
-  rate and an RSF whose product is exactly the row-1 annual (a project or building area
-  elsewhere in the text is never used). 10 new tests in `tests/test_addendum_qc.py` (38 pass). Check
+  dollar, or (v) a per-SF rate rounded to the cent, only when ONE rent sentence (or a
+  Premises-size sentence that is not about expenses or share) states a per-SF rate and an RSF
+  whose product is exactly the row-1 annual; a project/building area or an operating-cost
+  rate elsewhere is never paired with it. 15 new tests in `tests/test_addendum_qc.py` (43 pass). Check
   tolerance only: the 3% compounding convention and every governor are unchanged.
 - **v1.1** (2026-09-23) — new-lease routing corrected in the description, the route table
   and the failure modes: a brand-new lease goes to `lease-generation` (the new-lease
