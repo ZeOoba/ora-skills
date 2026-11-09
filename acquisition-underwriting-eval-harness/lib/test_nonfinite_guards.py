@@ -118,6 +118,19 @@ class TestStrictJsonLoading(unittest.TestCase):
         with self.assertRaises(ValueError):
             load_json_strict('{"combined": 1e999}')
 
+    def test_load_json_strict_rejects_int_too_large_for_float(self):
+        with self.assertRaises(ValueError):
+            load_json_strict('{"combined": 1%s}' % ("0" * 400))
+
+    def test_huge_int_combined_raises_valueerror_not_overflowerror(self):
+        huge = 10 ** 400
+        with self.assertRaises(ValueError):
+            diff_verdict(_golden(), _observed(combined=huge))
+        with self.assertRaises(ValueError):
+            diff_verdict(_golden(tolerance=huge), _observed())
+        with self.assertRaises(ValueError):
+            aggregate_replays([{"combined": huge}])
+
     def test_load_json_strict_accepts_ordinary_json(self):
         self.assertEqual(load_json_strict('{"combined": 1.5}'), {"combined": 1.5})
 
