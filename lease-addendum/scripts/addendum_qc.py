@@ -230,11 +230,12 @@ def check_rent_arithmetic(t):
         #   (iii) monthly whole-dollar:       round(prev_monthly x (1+e), 0) x 12
         #   (iv)  annual whole-dollar:        round(prev_annual x (1+e), 0)
         #   (v)   per-SF rate to the cent:    round(prev_annual / RSF x (1+e), 2) x RSF,
-        #         only when the document states the RSF.
+        #         only when the document states a per-SF rate and an RSF whose product
+        #         is exactly the row-1 annual (see _per_sf_rsf; REFUTE round 2: taking the
+        #         first 'N square feet' let a project RSF widen the rounding step to $400).
         # Rows are (smaller, larger) = (monthly, annual), order-agnostic as above.
         tol = _ESCALATION_CENT_TOL * 12
-        rsf_m = _RSF_RE.search(t)
-        rsf = Decimal(rsf_m.group(1).replace(",", "")) if rsf_m else None
+        rsf = _per_sf_rsf(t, Decimal(str(rows[0][1])))
         for i in range(1, len(rows)):
             prev_m, prev_a = (Decimal(str(v)) for v in rows[i - 1])
             annual = Decimal(str(rows[i][1]))
@@ -258,7 +259,20 @@ def check_rent_arithmetic(t):
 _ESCALATION_CENT_TOL = Decimal("0.01")
 
 
-_RSF_RE = re.compile(r"([\d,]{3,7})\s*(?:rentable\s+)?(?:square\s+feet|RSF|SF)\b", re.I)
+_RSF_RE = re.compile(r"(?<![\d,])(\d{1,3}(?:,\d{3})+|\d{3,7})\s*(?:rentable\s+)?(?:square\s+feet|RSF|SF)\b", re.I)
+_PSF_RE = re.compile(r"\$\s*(\d{1,3}\.\d{2})\s*(?:per|/)\s*(?:rentable\s+)?(?:square\s+(?:foot|feet)|RSF|SF)\b", re.I)
+
+
+def _per_sf_rsf(t, row1_annual):
+    """The premises RSF for per-SF convention (v), or None. Accepted only when the document
+    states a per-SF rate and an RSF whose product is exactly the row-1 annual rent, so a
+    project or building area elsewhere in the text can never stand in for it."""
+    rates = {Decimal(m.group(1)) for m in _PSF_RE.finditer(t)}
+    for m in _RSF_RE.finditer(t):
+        rsf = Decimal(m.group(1).replace(",", ""))
+        if rsf > 0 and any(_cents(r * rsf) == row1_annual for r in rates):
+            return rsf
+    return None
 
 
 def _cents(value):

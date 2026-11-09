@@ -1914,13 +1914,17 @@ def _check_options(reg, text):
     return {"status": "PARTIAL", "detail": f"only {hits} of {len(opts)} option(s) found"}
 
 
-# Words that mark a percentage as a rent escalation rather than some other
-# percentage in the lease (late charge, default rate, pro rata share).
+# Escalation verbs. Deliberately NOT 'annual'/'per annum'/'Lease Year' on
+# their own: 'Annual Base Rent' is a defined term and the default-rate clause
+# reads 'eighteen percent (18%) per annum', so those words do not mark a
+# percentage as a rent escalation.
 _ESC_CONTEXT_RE = re.compile(
-    r'\b(?:escalat\w*|increas\w*|adjust\w*|per\s+annum|annual(?:ly)?|anniversar\w*'
-    r'|(?:each|per|every)\s+lease\s+year|step(?:s|ped)?\s+up|bumps?)\b',
+    r'\b(?:escalat\w*|increas\w*|adjust\w*|anniversar\w*|step(?:s|ped)?\s+up|bumps?)\b',
     re.I)
-_ESC_WINDOW = 200
+_RENT_TERM_RE = re.compile(r'\brent\b', re.I)
+# Sentence/clause boundary: '.', ';' or ':' followed by whitespace (a decimal
+# point inside '3.5%' has no whitespace after it, so it never splits).
+_CLAUSE_SPLIT_RE = re.compile(r'(?<=[.;:!?])\s+')
 
 # Any stated percentage. Anchored: the lookbehind rejects a digit, a decimal
 # point or a fraction slash, so '13%', '3.5%' and '2-1/2%' never yield a bare
@@ -1929,24 +1933,31 @@ _ESC_WINDOW = 200
 _PCT_RE = re.compile(r'(?<![\d./])(\d+(?:\.\d+)?)\s*(?:%|percent\b)', re.I)
 
 
+def _escalation_pcts(text):
+    """Every percentage stated in a rent-escalation clause: a sentence/clause
+    that names rent AND carries an escalation verb. A 3% proportionate share,
+    management fee or expense cap elsewhere never qualifies (REFUTE pass,
+    2026-11-08: a 'nearest percentage to any keyword' rule let ORA's own 3.00%
+    proportionate-share clause satisfy a 3% register next to a 3.5% rent
+    escalation)."""
+    out = []
+    for clause in _CLAUSE_SPLIT_RE.split(text):
+        if _RENT_TERM_RE.search(clause) and _ESC_CONTEXT_RE.search(clause):
+            out.extend(float(m.group(1)) for m in _PCT_RE.finditer(clause))
+    return out
+
+
 def _find_escalation_pct(text, value):
-    """True when, for some escalation keyword, the NEAREST stated percentage
-    within _ESC_WINDOW characters equals the register's fixed %. Nearest, not
-    any: '... increases by 3.5% annually. Tenant's share is 3%.' must not
-    satisfy a 3% register through the share figure."""
-    pcts = [(m.start(), m.end(), float(m.group(1))) for m in _PCT_RE.finditer(text)]
-    if not pcts:
-        return False
+    """(found, conflicting): found when some rent-escalation clause states the
+    register's fixed %; conflicting = the other percentages those clauses
+    state. Any conflicting percentage blocks CONFORMS, even when the register
+    value also appears (e.g. a 3% option-term step beside a 3.5% primary-term
+    step against a 3% register)."""
     target = float(value)
-    for k in _ESC_CONTEXT_RE.finditer(text):
-        best = None
-        for s, e, v in pcts:
-            dist = s - k.end() if s >= k.end() else k.start() - e
-            if dist <= _ESC_WINDOW and (best is None or dist < best[0]):
-                best = (dist, v)
-        if best is not None and abs(best[1] - target) < 1e-9:
-            return True
-    return False
+    pcts = _escalation_pcts(text)
+    found = any(abs(p - target) < 1e-9 for p in pcts)
+    conflicting = sorted({p for p in pcts if abs(p - target) >= 1e-9})
+    return found, conflicting
 
 
 def _check_rent(reg, text):
@@ -1982,7 +1993,13 @@ def _check_rent(reg, text):
                           f"could not be verified either"}
     if esc_type == "fixed_pct":
         esc_label = f"{esc_value:g}%"
-        esc_found = _find_escalation_pct(text, esc_value)
+        esc_found, esc_conflicts = _find_escalation_pct(text, esc_value)
+        if esc_conflicts:
+            stated = ", ".join(f"{p:g}%" for p in esc_conflicts)
+            return {"status": "CONFLICT",
+                    "detail": f"rent escalation clause(s) state {stated} vs the register's "
+                              f"{esc_label}"
+                              + (f" (the register's {esc_label} also appears)" if esc_found else "")}
     elif esc_type == "none":
         esc_found = True
         esc_label = "flat (no escalation)"

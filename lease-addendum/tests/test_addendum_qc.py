@@ -714,7 +714,8 @@ class TestRentArithmeticUnparsedAndEscalation(TempDirCase):
     def _psf_doc(self, name, rows):
         return make_docx(
             self.tmp / name,
-            ["The Premises contain 10,000 rentable square feet.",
+            ["The Premises contain 10,000 rentable square feet at an initial rate of "
+             "$8.00 per square foot per year.",
              "Base Rent shall be payable in accordance with the following schedule, "
              "escalating at 3.00% annually:"],
             table_rows=rows,
@@ -727,6 +728,31 @@ class TestRentArithmeticUnparsedAndEscalation(TempDirCase):
             ("1/2026-12/2026", "$7,075.00", "$84,900.00"),
         ])
         self.assertFalse(_new_verdicts(path)["3"])
+
+    def test_per_sf_without_a_stated_rate_is_not_assumed(self):
+        path = make_docx(
+            self.tmp / "per_sf_no_rate.docx",
+            ["The Premises contain 10,000 rentable square feet.",
+             "Base Rent shall be payable in accordance with the following schedule, "
+             "escalating at 3.00% annually:"],
+            table_rows=[("1/2024-12/2024", "$6,666.67", "$80,000.00"),
+                        ("1/2025-12/2025", "$6,866.67", "$82,400.00"),
+                        ("1/2026-12/2026", "$7,075.00", "$84,900.00")])
+        self.assertTrue(_new_verdicts(path)["3"])
+
+    def test_project_rsf_cannot_widen_the_rounding_step(self):
+        # REFUTE round 2: first-match RSF picked the 40,000 SF project, so a $400 step
+        # let a 3.33% increase pass under a stated 3%.
+        path = make_docx(
+            self.tmp / "project_rsf.docx",
+            ["Tenant's Proportionate Share of the Premises is 5.00%, being 2,000 / 40,000 "
+             "rentable square feet. The Premises contain 2,000 rentable square feet at "
+             "$12.00 per square foot per year.",
+             "Base Rent shall be payable in accordance with the following schedule, "
+             "escalating at 3.00% annually:"],
+            table_rows=[("1/2024-12/2024", "$2,000.00", "$24,000.00"),
+                        ("1/2025-12/2025", "$2,066.67", "$24,800.00")])
+        self.assertTrue(_new_verdicts(path)["3"])
 
     def test_per_sf_path_does_not_admit_a_wrong_rate(self):
         # $8.00 -> $8.28/SF is 3.5%, stated 3%.
