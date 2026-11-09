@@ -3,7 +3,7 @@ name: verified-deal-recon
 description: "Use whenever ONE named acquisition target — a street address, a property name, or a single offering memorandum — needs a real pursue/pass decision before underwriting: Oxford Realty Advisors' adversarially-verified SINGLE-TARGET PRE-SCREEN DEFAULT. Trigger on: pre-screen this, screen this property, is this worth underwriting, first look, recon this deal, verified deal recon, should we pursue, worth a look. NOT for batch-triaging a broker inbox and NOT for off-market owner lead-lists. Does NOT underwrite — hands off to acquisition-underwriting."
 ---
 
-# Verified Deal Recon — ORA single-target pre-screen (v1.5)
+# Verified Deal Recon — ORA single-target pre-screen (v1.6)
 
 Runs the `verified-deal-recon` workflow: one recon pass, three adversarial verifiers working independently, one synthesized brief. The verifiers do their own research and are instructed to refute the recon — that adversarial step is the whole point, and it is what separates this from the bare `deal-recon` agent (instant first-look only).
 
@@ -34,7 +34,7 @@ The brief is the only input. Put everything known into it — address, SF, acrea
 
 ## What comes back
 
-A `brief` object: verdict, one-line thesis, snapshot, verified rent and sale comps, basis read, submarket demand, kill risks, pre-mortem, open items, confidence. Plus `reconSoloVerdict` (what the recon said before verification), `verifierCount`, and `anyFlip` — **`anyFlip: true` means at least one verifier flipped the recommendation, which is the single most informative field in the return.** Read it first.
+A `brief` object: verdict, one-line thesis, snapshot, verified rent and sale comps, basis read, `basisClearsFloor` (YES / NO / UNKNOWN against the vintage-ramp floor), submarket demand, kill risks, pre-mortem, open items, confidence. Plus `reconSoloVerdict` (what the recon said before verification), `verifierCount`, and `anyFlip` — **`anyFlip: true` means at least one verifier flipped the recommendation, which is the single most informative field in the return.** Read it first. **PURSUE requires the all-in basis to clear the vintage-ramp floor (v1.6):** a floor miss caps the verdict at NEEDS_MORE whatever the value-add upside, and the script enforces it after synthesis: a PURSUE without `basisClearsFloor: YES` comes back as NEEDS_MORE, with `verdictCap` recording the change and an open item to re-test the basis.
 
 ## After the run — three standing rules
 
@@ -58,6 +58,7 @@ If `.claude/agents/deal-recon.md` is later edited on the Code surface, re-inline
 
 ## Changelog
 
+- **v1.6 (2026-11-08, Gabriel in-turn ruling 2026-11-08):** a vintage-ramp floor miss caps the verdict at NEEDS_MORE whatever the value-add upside. `references/verified-deal-recon.js` read "below-replacement OR clear value-add upside -> PURSUE" in its synthesis rule, against the floor its own recon prompt states. The synthesis rule, the recon prompt and the comps-basis lens now match the `~/.claude` workflow copy (ora-claude-config `fix/vdr-pursue-floor`) word for word; the brief carries a required `basisClearsFloor`, and a PURSUE without YES is capped to NEEDS_MORE after synthesis (`verdictCap`). Test: `tools/test_verified_deal_recon_floor.py`. No score, gate, floor or governor value changed; the vintage-ramp floor itself (65% at or before 1995 to 60% at or after 2005) is unchanged.
 - **v1.5 (2026-11-06; renumbered from v1.4 after #215 landed):** rule 3 gains the write-once first-sighting never-write rule (`Verdict at First Sighting`, `Score at First Sighting`) and records a ratified PASS as `Go / No-Go` = 🔴 Pass, reserving `Status = Dead` for listings that are gone (Gabriel-approved, business-loops review F-11); also re-query the Sourcing Log by natural key immediately before any create, and any row it marks as a duplicate gets both `Exclude from Calibration` and `Duplicate Of`, through which the back-test recovers the scan's first-sighting prediction (merge-gate F-001 on #214). No score, gate, floor or governor value changed.
 - **v1.4 (2026-11-05):** The recon prompt's buy-box sentence named only the seven holdings states (OH, MD, IN, WI, MO, KS, TN), so the analyst read Grand Rapids, Richmond, Des Moines, Louisville and Chicago as out of scope and TN as a target. It now names the eleven clusters in `target-markets.json`, re-inlines the Amendment H portfolio clause that `.claude/agents/deal-recon.md` gained in ora-claude-config #396, and splits LTV into the 40% portfolio aggregate and the 65% per-property refi ceiling. `tools/doctrine_consistency.py` now fails CI if this line drops a cluster state. The agent file still carries the old state list; that fix belongs to ora-claude-config. No scored or governor constant changed.
 - **v1.3 (2026-10-27):** recon checklist item 5 also pulls the last recorded sale; seller acquired within 24 months → ask vs. seller basis in the brief (parity with `acquisition-underwriting` v4.37 Stage -1 item 10); item 6 also notes the construction type (tilt-up baseline vs PEMB/masonry/brick, per the Construction-Type Multiplier).
