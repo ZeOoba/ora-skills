@@ -276,7 +276,10 @@ class TestFalsePassesBlock(_Base):
         self.assertTrue(r["blocking"])
 
     def test_bare_signature_rule_as_a_paragraph_is_still_exempt(self):
-        r = self.audit(data_exhibit(P("______________________")))
+        # A bare rule in a DATA exhibit is a signature rule only beside a signature
+        # cue -- By:, seal, notary or signature caption (v1.15); a cue-less rule there is the missing data and blocks
+        # (test_audit_completeness_bare_rule.py).
+        r = self.audit(data_exhibit(P("______________________"), P("By: Jane Q. Doe")))
         self.assertEqual(r["body_blanks"], [])
         self.assertFalse(r["blocking"])
 
