@@ -208,6 +208,163 @@ _NOTARY_CUE_RE = re.compile(
     r"|,\s*to\s+wit:?\s*$|^_{2,}\s+county\s*\)", re.IGNORECASE)
 
 
+# Strict context (a data-captioned exhibit, or past the end of a Form-of region;
+# merge-gate REFUTE C3 and round-2 R1, 2026-11-08): a bare rule ("________") or an
+# unfilled Name: / Title: / Date: label (_GATED_LABEL_RE) is a signature blank only
+# inside a signature stack anchored by a STRONG cue. A strong cue is a WHOLE line:
+#   - an unfilled By: line ("By: ________");
+#   - a filled By: line whose rest is a personal name ("By: Jane Q. Doe[, Manager]"),
+#     or that has a Name: / Title: / Its: line directly beside it;
+#   - a seal-only line ("________ (SEAL)", "(L.S.)");
+#   - a Notary Public title line, a commission expires / number line, or a full
+#     venue line ("STATE OF OHIO )", "COUNTY OF FRANKLIN ) ss:");
+#   - a signature caption used as a whole label -- (Signature), Signature,
+#     Authorized Signatory / Signature, Print(ed) Name -- followed by nothing, a
+#     blank or a personal name.
+# Mid-prose matches never count ("..., to wit:", 'County of Franklin (the
+# "County")', "Monument stamped (SEAL)", "I hereby certify", "Signature Aviation
+# LLC", "By: Acme LLC"). Weak labels (Name: / Title: / Its: / Date: / Dated /
+# Witness / Attest ...) never anchor a stack, filled or not -- "Name: Acme LLC" and
+# "Date: October 31, 2026" are rent-roll data -- but link it: the stack is walked
+# outward over at most _STACK_REACH weak-label lines (reach 3 = By / Name / Title /
+# Date). A stack holds at most one rule: a rule met during the walk fails it.
+_BARE_RULE_RE = re.compile(r"_{2,}")
+_WEAK_LABEL_RE = re.compile(
+    r"^(?:name(?:\s*(?:and|/)\s*title)?|title|its|date(?:\s+signed)?|witness(?:es)?|"
+    r"attest)\s*(?::|_{2,}|$)|^(?:dated|executed|signed)(?:\s*:|\s+_{2,}|"
+    r"\s+(?:and\s+delivered\s+)?(?:as\s+of|this|on\s+(?:this|the)|the)\b)",
+    re.IGNORECASE)
+_STACK_REACH = 3
+# Unfilled weak labels that read as data fields in a data exhibit and so need a
+# stack (REFUTE C3 case 6). Signature-only words (Its, Attest, Witness, Date
+# Signed, Name and Title, Dated as of / Executed this ... day of) stay exempt on
+# their own per the 2026-11-06 line-level ruling.
+_GATED_LABEL_RE = re.compile(r"^(?:name|title|date)\s*:", re.IGNORECASE)
+_NAME_TITLE_ITS_RE = re.compile(r"^(?:name|title|its)\s*:", re.IGNORECASE)
+_BY_RE = re.compile(r"^by\s*(?::\s*|(?=_))(?P<rest>.*)$", re.IGNORECASE)
+_CAPTION_RE = re.compile(
+    r"^\(?\s*(?:signature|authorized\s+signat(?:ory|ure)|print(?:ed)?\s+name)\s*"
+    r"(?:\)\s*$|:\s*|(?=_)|$)(?P<rest>.*)$", re.IGNORECASE)
+# A personal name: 2-3 words (Unicode letters, inner apostrophes / hyphens), each
+# starting upper-case (all-caps allowed), an optional middle initial, and an
+# optional ", Title" -- never an entity word or a placeholder word (round 3).
+_NAME_WORD_RE = re.compile(r"[^\W\d_](?:[^\W\d_]|['\u2019-](?=[^\W\d_]))*")
+_INITIAL_RE = re.compile(r"[^\W\d_]\.")
+_PLACEHOLDER_WORD_RE = re.compile(
+    r"\b(?:to\s+be|tbd|tba|see|pending|will|provided|follows?|following|deliver(?:ed|y)?|"
+    r"list|n/?a|none|unknown|later|yet|available|forthcoming|counsel)\b", re.IGNORECASE)
+_ENTITY_WORD_RE = re.compile(
+    r"\b(?:llc|l\.l\.c|inc|corp|corporation|co|company|holdings?|trust|partners|"
+    r"partnership|lp|llp|ltd|bank|group|properties|realty|associates|industrial|"
+    r"park|capital|ventures|enterprises|investments?|fund|management)\b\.?",
+    re.IGNORECASE)
+# Seal tokens for the seal-only cue line: (SEAL), [SEAL], (Corporate Seal),
+# (Notary Seal), (L.S.) / [L.S.].
+_SEAL_ANY_RE = re.compile(
+    r"[(\[]\s*(?:corporate\s+|notary\s+)?(?:seal|l\.?\s?s\.?)\s*[)\]]", re.IGNORECASE)
+_NOTARY_LINE_RE = re.compile(
+    r"^(?:_{2,}\s*,?\s*)?notary\s+public\.?(?:\s*[,-]?\s*(?:in\s+and\s+for\s+)?"
+    r"(?:the\s+)?(?:state\s+of\s+[a-z ]{1,25}|[a-z ]{1,25}\s+county))?\s*(?:_{2,})?$"
+    r"|^my\s+commission\s+(?:expires|expiration)(?:\s+on)?\s*:?\s*(?:_{2,}|"
+    r"[a-z]{3,9}\.?\s+\d{1,2},?\s+\d{4}|\d{1,2}/\d{1,2}/\d{2,4})?$"
+    r"|^commission\s+(?:no\.?|number)\s*:?\s*(?:_{2,}|[a-z0-9-]{1,20})?$", re.IGNORECASE)
+
+
+def _norm_line(line: str) -> str:
+    return re.sub(r"\s+", " ", line.replace("\u00a0", " ")).strip()
+
+
+def _words_ok(words: list, lo: int, hi: int, initials: bool) -> bool:
+    names = [w for w in words if not (initials and _INITIAL_RE.fullmatch(w))]
+    if not lo <= len(names) <= hi or len(words) - len(names) > 1:
+        return False
+    return all((_NAME_WORD_RE.fullmatch(w) or (initials and _INITIAL_RE.fullmatch(w)))
+               and w[0].isupper() for w in words)
+
+
+def _is_person(rest: str) -> bool:
+    if len(rest) > 80 or _ENTITY_WORD_RE.search(rest) or _PLACEHOLDER_WORD_RE.search(rest):
+        return False
+    name, comma, title = rest.partition(",")
+    if not _words_ok(name.split(), 2, 3, True):
+        return False
+    title = re.sub(r"^\s*its\s+", "", title, flags=re.IGNORECASE).split()
+    return not comma or _words_ok(title, 1, 3, False)
+
+
+def _blank_or_person(rest: str) -> bool:
+    rest = _SEAL_ANY_RE.sub(" ", rest).strip()
+    rest = re.sub(r"^_{2,}\s*", "", rest).strip()
+    if not rest:
+        return True
+    return _is_person(rest)
+
+
+def _is_whole_line_cue(t: str) -> bool:
+    """A strong cue judged on the line alone (By: handled by the caller)."""
+    if "$" in t:
+        return False
+    if _SEAL_ANY_RE.search(t) and not re.sub(r"[_\s]", "", _SEAL_ANY_RE.sub("", t)):
+        return True                                        # seal-only line
+    if _NOTARY_LINE_RE.match(t) or _VENUE_RE.match(t):
+        return True
+    m = _CAPTION_RE.match(t)
+    return bool(m) and _blank_or_person(m.group("rest"))
+
+
+def _is_strong_cue(lst: list, j: int, stream: list) -> bool:
+    t = _norm_line(stream[lst[j]][3])
+    m = _BY_RE.match(t)
+    if m:
+        if "$" in t or _VALUE_WORD_RE.search(t):
+            return False
+        if _blank_or_person(m.group("rest")):
+            return True
+        return any(0 <= q < len(lst) and
+                   _NAME_TITLE_ITS_RE.match(_norm_line(stream[lst[q]][3]))
+                   for q in (j - 1, j + 1))
+    return _is_whole_line_cue(t)
+
+
+def _is_weak_link(t: str) -> bool:
+    if "$" in t or _VALUE_WORD_RE.search(t):
+        return False
+    return bool(_WEAK_LABEL_RE.match(t))
+
+
+def _needs_stack(line: str) -> bool:
+    """An exempt-classified line that, in strict context, needs a signature stack:
+    a bare rule or an unfilled Name: / Title: / Date: label (never a seal line)."""
+    t = _norm_line(line)
+    if _SEAL_RE.search(t):
+        return False
+    return bool(_BARE_RULE_RE.fullmatch(t) or _GATED_LABEL_RE.match(t))
+
+
+def _in_signature_stack(stream: list, k: int, pos: dict, lists: dict) -> bool:
+    """Is line k linked to a strong cue through at most _STACK_REACH adjacent weak-
+    label lines (same table cell for a cell line), with no second rule in reach
+    before the cue? O(_STACK_REACH)."""
+    lst = lists[stream[k][1]]
+    i = pos[k]
+    found = False
+    for step in (-1, 1):
+        j = i
+        for _ in range(_STACK_REACH):
+            j += step
+            if j < 0 or j >= len(lst):
+                break
+            t = _norm_line(stream[lst[j]][3])
+            if _BARE_RULE_RE.fullmatch(t):
+                return False                     # at most one rule per stack
+            if _is_strong_cue(lst, j, stream):
+                found = True
+                break
+            if not _is_weak_link(t):
+                break
+    return found
+
+
 def _norm_label(x: str) -> str:
     return re.sub(r"\s+", " ", x).strip().lower()
 
@@ -295,6 +452,33 @@ _CONTINUATION_RE = re.compile(
 # LEASES"). Ending early fails closed: what follows is judged as data.
 _HEADING_LIKE_RE = re.compile(
     r"^\s*(?:exhibit|schedule|annex|appendix|attachment|rider)\s+\S{1,8}", re.IGNORECASE)
+# An inline cross-reference ("Legal Description: See Exhibit A attached hereto.")
+# inside a form is a field of the form, not a new data heading: it does not end the
+# Form-of region (merge-gate REFUTE C2, 2026-11-08). Shape: a short label, a colon or
+# dash, then "see / described in / set forth on Exhibit|Schedule <id> attached" or
+# "attached as Exhibit|Schedule <id>" -- the target is attached separately, outside
+# this exhibit. "see Schedule 1 below / following / herein" points INTO the exhibit
+# and still ends the region (round-2 R2: the schedule that follows is data), and so
+# does a reference whose target is not an Exhibit with exactly one heading OUTSIDE
+# the current exhibit (round-3 X1 / X9 and final refute: "see Schedule 1 attached"
+# + a headingless schedule, an unrelated SCHEDULE 1 elsewhere, a duplicate heading).
+_XREF_ID = r"[\"'\u201c\u201d]?(?P<{0}>[A-Z0-9]{{1,3}}(?:-\d+)?)[\"'\u201c\u201d]?"
+_XREF_NOT_HERE = r"(?!.*\b(?:below|following|herein(?:after)?)\b)"
+_INLINE_XREF_RE = re.compile(
+    r"^[^:\u2013\u2014]{1,60}?\s*[:\u2013\u2014-]\s*(?:(?:see|as\s+(?:more\s+particularly\s+)?"
+    r"(?:described|set\s+forth)\s+(?:in|on)|described\s+(?:in|on))\s+(?:the\s+)?"
+    r"(?P<k1>exhibit|schedule)\s+" + _XREF_ID.format("i1") + r"\b" + _XREF_NOT_HERE +
+    r"\s*,?\s*attached\b|attached\s+(?:hereto\s+)?as\s+(?P<k2>exhibit|schedule)\s+" +
+    _XREF_ID.format("i2") + r"\b" + _XREF_NOT_HERE + r")", re.IGNORECASE)
+
+
+def _xref_target(t: str):
+    """(kind, id) named by an inline cross-reference line, else None."""
+    m = _INLINE_XREF_RE.match(t)
+    if not m:
+        return None
+    kind = (m.group("k1") or m.group("k2")).lower()
+    return kind, (m.group("i1") or m.group("i2")).upper()
 
 
 def _is_form_caption(c: str) -> bool:
@@ -537,11 +721,14 @@ def _is_data_caption(c: str) -> bool:
         _WEAK_DATA_RE.search(c) and not _FORM_NOUN_RE.search(c))
 
 
-def _form_info(blocks: list, start: int, end: int):
+def _form_info(blocks: list, start: int, end: int, targets=None):
     """(is_form, form_end, is_data) for the exhibit at heading block `start`:
     is it a real "Form of ..." exhibit, where its form region ends (the first
     block after the caption that opens like another exhibit / schedule or carries
-    a short data caption, else `end`), and is it captioned as a data exhibit."""
+    a short data caption, else `end`), and is it captioned as a data exhibit.
+    `targets` maps ("exhibit", id) -> heading block indices; an inline cross-
+    reference keeps the region open only if it names an Exhibit with exactly one
+    heading, outside [start, end)."""
     caption, cap_j = _caption_of(blocks, start, end)
     if caption is None:
         return False, start, False
@@ -550,8 +737,18 @@ def _form_info(blocks: list, start: int, end: int):
         return False, start, is_data
     for j in range(cap_j + 1, end):
         t = _block_lead_text(*blocks[j])
-        if _HEADING_LIKE_RE.match(t) or (len(t) <= 120 and _is_data_caption(t)):
+        if _HEADING_LIKE_RE.match(t):
             return True, j, False
+        if len(t) <= 120 and _is_data_caption(t):
+            # Keep the region open only for an Exhibit reference whose id has
+            # EXACTLY ONE heading, outside this exhibit. A Schedule id has no
+            # structural heading (an unrelated "SCHEDULE 1" can sit inside any
+            # exhibit) and zero or several headings are ambiguous: both end the
+            # region, fail closed (final refute, 2026-11-08).
+            tgt = _xref_target(t)
+            hits = (targets or {}).get(tgt, ()) if tgt and tgt[0] == "exhibit" else ()
+            if not (len(hits) == 1 and not start <= hits[0] < end):
+                return True, j, False
     return True, end, False
 
 
@@ -622,7 +819,11 @@ def _scan_exhibit(stream: list, form_end: int, is_form: bool, is_data: bool):
             continue
         strict = is_data or (is_form and i >= form_end)
         verdict = _classify_line(ln, multi)
-        if verdict == "party":
+        if verdict == "exempt" and strict and _needs_stack(ln):
+            # A bare rule or weak label in a data exhibit is the missing data unless
+            # it sits in a signature stack anchored by a strong cue (REFUTE C3).
+            verdict = "exempt" if _in_signature_stack(stream, k, pos, lists) else "body"
+        elif verdict == "party":
             verdict = "exempt" if (not strict and
                                    _has_cue(stream, k, pos, lists, _SIG_CUE_RE, 1)) else "body"
         elif verdict == "context":
@@ -663,6 +864,11 @@ def audit(path: Path) -> dict:
         letter = _exhibit_heading(blocks[i][0], blocks[i][1], texts[i])
         if letter:
             heads.append((i, letter))
+    # Cross-reference targets: ("exhibit", id) -> heading block indices, from the
+    # detected EXHIBIT headings only (round-3 X1 / X9, final refute).
+    targets = {}
+    for i, letter in heads:
+        targets.setdefault(("exhibit", letter), []).append(i)
 
     exhibits = []
     for n, (start, letter) in enumerate(heads):
@@ -679,8 +885,9 @@ def audit(path: Path) -> dict:
                 # Population counts visible text only: a DMS stamp or an empty
                 # content-control prompt is not content (2026-11-06 ruling, LOW).
                 tt = _content_text(el).strip()
+                # Underscore runs are blanks, not content: a grid of rules is EMPTY.
                 if not DMS_STAMP_RE.match(tt):
-                    chars += len(tt)
+                    chars += len(_BARE_RULE_RE.sub("", tt).strip())
                 # A header row with no non-blank row after it (a skeleton rent roll
                 # or schedule) is populated but says nothing: advisory THIN only.
                 if _table_has_data(el):
@@ -692,8 +899,11 @@ def audit(path: Path) -> dict:
                     and j <= start + 2:
                 caption = t
                 continue
-            chars += len(t)
-            prose_chars += len(t)
+            # Underscore runs are blanks, not content: an exhibit that is only a
+            # rule is EMPTY, a parcel number plus a rule is THIN.
+            n_chars = len(_BARE_RULE_RE.sub("", t).strip())
+            chars += n_chars
+            prose_chars += n_chars
         # An empty table grid (zero rows, every cell blank) is EMPTY, not populated:
         # Gabriel's ruling, 2026-11-06. A table counts only through its text/images.
         populated = bool(chars or media)
@@ -701,7 +911,7 @@ def audit(path: Path) -> dict:
             "letter": letter, "caption": caption, "block": start,
             "text_chars": chars, "images": media, "tables": tables,
             "data_tables": data_tables,
-            "form": _form_info(blocks, start, end)[0],
+            "form": _form_info(blocks, start, end, targets)[0],
             "populated": populated,
             "thin": populated and ((chars < 60 and not tables)
                                    or (tables and not data_tables
@@ -760,7 +970,7 @@ def audit(path: Path) -> dict:
         if start < sig_at:
             continue
         end = heads[n + 1][0] if n + 1 < len(heads) else limit
-        is_form, form_end, is_data = _form_info(blocks, start, end)
+        is_form, form_end, is_data = _form_info(blocks, start, end, targets)
         f, b, g = _scan_exhibit(_exhibit_stream(blocks, start, end), form_end, is_form,
                                 is_data)
         for j in range(start, end):
