@@ -1,0 +1,20 @@
+{
+  "staged_at": "2026-10-06T19:51:36Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-06_lease-v27-skills",
+  "packages": [
+    {
+      "skill": "lease-form-qc",
+      "file": "lease-form-qc.skill",
+      "bytes": 57806
+    },
+    {
+      "skill": "masterlease-jurisdiction-rebase",
+      "file": "masterlease-jurisdiction-rebase.skill",
+      "bytes": 112740
+    }
+  ],
+  "last_batch": [
+    "lease-form-qc",
+    "masterlease-jurisdiction-rebase"
+  ]
+}

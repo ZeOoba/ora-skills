@@ -1,0 +1,41 @@
+{
+  "created_utc": "2026-10-17T23:09:10Z",
+  "folder": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-17_reinstall-5-stale",
+  "files": [
+    {
+      "name": "artifact-to-docx-report.skill",
+      "sha256": "7aa11c013b72f3edda4f237d8cc57e44d6686069ae84c724318c7f757bc5a10e",
+      "prefix16": "7aa11c013b72f3ed",
+      "bytes": 27083,
+      "zip_ok": true
+    },
+    {
+      "name": "deal-comparison.skill",
+      "sha256": "191c17638ef45699eb5f2b4533bb87fd68b1f40d295917a96aea5ed65320b663",
+      "prefix16": "191c17638ef45699",
+      "bytes": 24099,
+      "zip_ok": true
+    },
+    {
+      "name": "graph-app-registration.skill",
+      "sha256": "f53323fb37646f995229b3db0835d6fb0a4b7332d122f6ac12d065d75a5e5ab2",
+      "prefix16": "f53323fb37646f99",
+      "bytes": 3387,
+      "zip_ok": true
+    },
+    {
+      "name": "orphaned-task-forensics.skill",
+      "sha256": "6a3a98469002d8f541d93d82c99c6a7650baf34bf9420f62db5c2920104faea5",
+      "prefix16": "6a3a98469002d8f5",
+      "bytes": 4591,
+      "zip_ok": true
+    },
+    {
+      "name": "psa-reconciliation.skill",
+      "sha256": "26a280101098816d96af0a95624a5fc87d42aa92680855f1031916de9e8eca7f",
+      "prefix16": "26a280101098816d",
+      "bytes": 29169,
+      "zip_ok": true
+    }
+  ]
+}
