@@ -1,0 +1,14 @@
+{
+  "staged_at": "2026-11-03T18:46:46Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-11-03_submarket-divergent",
+  "packages": [
+    {
+      "skill": "submarket-spatial-analysis",
+      "file": "submarket-spatial-analysis.skill",
+      "bytes": 15809
+    }
+  ],
+  "last_batch": [
+    "submarket-spatial-analysis"
+  ]
+}

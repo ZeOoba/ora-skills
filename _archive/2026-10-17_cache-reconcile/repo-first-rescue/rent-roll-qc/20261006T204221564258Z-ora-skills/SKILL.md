@@ -1,0 +1,179 @@
+---
+name: "rent-roll-qc"
+description: "Final quality audit and institutional polish for rent roll spreadsheets before external delivery, plus an inbound column-integrity check for rent rolls received during underwriting."
+---
+
+# Rent Roll QC — Pre-Delivery Audit and Inbound Integrity Check
+
+Two uses. **Outbound:** a final quality audit before a rent roll goes to an external counterparty (Steps 0–2). **Inbound:** a column-integrity check on any rent roll received from a seller or broker, run before NOI is built (Step 0A). **Do not change, fabricate, or infer any data values in either use.**
+
+## Step 0A — Inbound column-integrity check (underwriting intake; added after East Pointe Plaza, 2026-10-01)
+
+Origin: on East Pointe Plaza the rent roll printed a Rent/SF column that did not equal annual rent ÷ SF for 6 of 16 suites. The model treated the monthly-rent column as pure base rent and added separate recoveries on top, which likely double counted about $36K of income and overstated the walk price by about $330K. Two outside LLMs quoted the printed column; the first-pass underwrite labelled those figures errors. Run these tests before building NOI:
+
+1. **Printed vs computed.** For every column pair that should reconcile (Rent/SF vs Annual ÷ SF; Monthly × 12 vs Annual; Total vs sum of parts), compute the difference per row and in aggregate. Report suites that differ by more than $0.05/SF or 1% and the aggregate dollar gap. A gap in a minority of suites, in uneven amounts, is the signature of pass-throughs or other charges billed inside the monthly-rent column.
+2. **Never call a printed column an error until the alternative is tested.** Treat both columns as candidate base rent. Compute implied base rent from each and compare to the seller's collected base rent in the P&L.
+3. **Like-for-like total test.** Compare the roll's all-in annual total to the P&L's TOTAL rent income (base plus recoveries), and the roll's base to the P&L's base. Whichever pair moves by a normal year-over-year amount (about 0–5%) is the likelier reading. A +9–10% move without new leases is a red flag.
+4. **Double-count guard.** If the roll's monthly rent may include pass-throughs, never add a separate recoveries line on top without proof. Build three cases and show NOI, cap, yield on cost, walk price and IRR for each: face-value (roll base plus recoveries), all-in (roll total, no separate recoveries), and collected (P&L base plus recoveries). Default the price-watch ceiling to the evidence-weighted case until the rent ledger and leases are read.
+5. **Expense-code legend and footnotes.** Capture every footnote (ROFR, ROFO, options, concessions) and the expense-code columns (e.g. T/L = tenant/landlord for utilities, CAM, RE tax). Vacant suites coded landlord-pays carry utilities, CAM and tax during lease-up.
+6. **Name the mechanism as [SPECULATIVE] until the rent ledger confirms it**, and put the resolving documents on the broker request list: monthly rent ledger by suite, breakdown of each suite's monthly rent into base, CAM, tax and insurance, and the leases for every suite that fails the test.
+
+## Step 0 — Read the XLSX Skill
+
+Before touching the file, read the `xlsx` skill (auto-loads on trigger; located at `/mnt/.claude/skills/xlsx/SKILL.md` in current Cowork sessions) and follow its formatting standards (font, number formats, formula error handling) as baseline requirements. This skill layers ORA-specific QC on top of those standards.
+
+## Step 1 — Determine Recipient Type
+
+Identify the recipient from context. If not obvious, ask once:
+
+> Who is receiving this rent roll? (Lender, PM Company, Investor/Buyer, Broker, Appraiser, Attorney, or Other)
+
+The recipient type drives Pass 4 (Recipient Perspective). If the user has already stated the recipient in the conversation, do not ask again — just proceed.
+
+## Step 2 — Run the Four-Pass Audit
+
+Execute all four passes sequentially. Do not ask for feedback between passes. Fix everything you can. Flag everything you cannot.
+
+---
+
+### Pass 1 — Data Integrity
+
+These checks catch errors that would undermine credibility or cause the recipient to question the data.
+
+1. **Type coercion**: Identify any text-stored-as-numbers or text-stored-as-dates. Convert to proper Excel types (numeric, date serial) without changing the underlying value.
+2. **Critical blanks**: Identify blank cells in essential columns (Tenant Name, Suite/Unit, SF, Rent, Lease Start, Lease Expiration). **Flag these — do not fill them in.**
+3. **Duplicate rows**: Identify exact or near-duplicate rows (same tenant + same suite). Flag them.
+4. **Formula integrity**: If totals/summary rows exist, verify formulas are dynamic (referencing the full data range, not hardcoded values) and mathematically correct. Fix broken formulas.
+5. **Internal consistency**: Where multiple related columns exist (e.g., Monthly Rent, Annual Rent, $/SF, SF), cross-check that the math is consistent (Step 0A tests 1–2). Flag discrepancies with the per-suite and aggregate dollar gap — do not overwrite.
+
+---
+
+### Pass 2 — Consistency & Standardization
+
+These checks eliminate the small inconsistencies that make a rent roll look manually assembled rather than system-generated.
+
+1. **Tenant names**: Fix inconsistent casing, trailing/leading whitespace, and abbreviation mismatches ("LLC" vs "L.L.C." vs "Llc"). Standardize to the most professional and prevalent format in the file.
+2. **Suite/unit identifiers**: Standardize format ("Suite 100" vs "Ste 100" vs "#100" vs "100"). Pick the most prevalent professional convention and apply throughout.
+3. **Date consistency**: Every date column must use the same format throughout. Apply MM/DD/YYYY unless a different format is dominant.
+4. **Number precision**: All currency columns use the same decimal treatment. All SF columns use the same decimal treatment (typically 0 decimals).
+5. **Status/occupancy labels**: Standardize ("Vacant" vs "VACANT" vs "vacant" vs blank). Use title case "Vacant" as the standard label.
+6. **Lease type labels**: Standardize if present ("NNN" vs "Triple Net" vs "Net Net Net"; "Gross" vs "Full Service"; "MG" vs "Modified Gross"). Use the industry-standard abbreviation.
+
+---
+
+### Pass 3 — Presentation & Structure
+
+These checks ensure the file opens cleanly and looks institutional.
+
+1. **Column width**: Auto-fit all columns. No truncated content.
+2. **Merged cells**: Unmerge any merged cells in the data range. Preserve the value in the top-left cell.
+3. **Blank rows/columns**: Remove any empty rows or columns within the data range (not below totals).
+4. **Freeze panes**: Active on the header row.
+5. **Auto-filter**: Enabled on the header row.
+6. **Sheet tab name**: Rename to "Rent Roll" if it says "Sheet1", "Data", "Copy of...", or similar.
+7. **Print layout**:
+   - Landscape orientation
+   - Fit to 1 page wide, unlimited pages tall
+   - Header row repeats on every printed page
+   - 0.5" margins
+   - Left footer: "Confidential — Oxford Realty Advisors"
+   - Right footer: "Page &P of &N"
+   - Print gridlines OFF (cell borders handle it)
+8. **No orphaned columns**: Verify print preview does not split columns across pages.
+
+---
+
+### Pass 4 — Recipient Perspective
+
+Think like the recipient. Each recipient type needs different fields to do their job. Flag missing columns they would expect — **do not fabricate data or add columns with empty values.** Only flag.
+
+#### If Recipient = PM Company
+A PM company is evaluating management workload, tenant administration complexity, and revenue potential.
+
+**Expected columns:** Tenant Name, Suite/Unit, Building/Address, SF, Monthly Rent, Annual Rent, $/SF (Annual Rent PSF), Lease Start, Lease Expiration, Lease Type (Gross/NNN/MG), Security Deposit, Escalation Terms/Schedule, Tenant Contact Name, Tenant Contact Phone/Email, Insurance Expiration, Move-In Date, Options (Renewal/Expansion/Termination)
+
+**Additional flags:**
+- Any tenant missing a lease expiration date (PM cannot plan lease admin)
+- Any occupied suite with $0 or blank rent
+- Any suite with SF = 0 or blank
+- Any lease with expiration before today not marked "Expired" or "Month-to-Month" (holdover risk unclear)
+- Missing tenant contact information (PM needs this for onboarding)
+
+#### If Recipient = Lender
+A lender is underwriting loan risk — lease rollover concentration, credit quality, and DSCR stability.
+
+**Expected columns:** Tenant Name, Suite/Unit, Building/Address, SF, Monthly Rent, Annual Rent, $/SF, Lease Start, Lease Expiration, Lease Type, Security Deposit, Guarantor (Personal Guaranty Y/N), Escalation Terms, Options (Renewal/Termination/ROFO/ROFR)
+
+**Additional flags:**
+- Lease rollover concentration: flag if >25% of total rent expires within any 12-month window
+- Any tenant representing >15% of total portfolio rent (single-tenant concentration risk)
+- Any lease with <12 months remaining term
+- Any expired lease still showing as occupied
+- Missing lease type (lender needs to know expense structure)
+
+#### If Recipient = Investor / Buyer
+An investor is underwriting value — mark-to-market opportunity, WALT, occupancy, and downside risk.
+
+**Expected columns:** Tenant Name, Suite/Unit, Building/Address, SF, Monthly Rent, Annual Rent, $/SF (Contract), Market Rent $/SF (if available), Lease Start, Lease Expiration, Lease Type, Security Deposit, Escalation Terms, Options, Tenant Credit/Industry
+
+**Additional flags:**
+- Weighted Average Lease Term (WALT) cannot be calculated if expiration dates are missing
+- Any unit where contract rent appears significantly above or below market (if market rent column exists)
+- Any lease with termination option that could reduce occupancy
+- Vacancy count and total vacant SF as a percentage of total SF
+
+#### If Recipient = Broker
+A broker is marketing the asset or sourcing tenants — they need clean, presentable data with leasing context.
+
+**Expected columns:** Tenant Name, Suite/Unit, Building/Address, SF, Annual Rent, $/SF, Lease Expiration, Available Date (for vacant suites), Suite Condition (warm shell, white box, etc.), Clear Height, Dock Doors, Drive-In Doors, Parking Ratio, Zoning
+
+**Additional flags:**
+- Vacant suites without available date or suite condition
+- Missing building physical attributes (clear height, doors, loading)
+
+#### If Recipient = Appraiser
+An appraiser needs a complete rent roll with lease-level detail for income approach valuation.
+
+**Expected columns:** Tenant Name, Suite/Unit, Building/Address, SF, Monthly Rent, Annual Rent, $/SF, Lease Start, Lease Expiration, Lease Type, Escalation Terms (specific schedule), Expense Reimbursement Structure, TI/LC at Signing, Free Rent Periods, Options (all types with terms), Security Deposit
+
+**Additional flags:**
+- Any lease missing escalation detail (appraiser cannot model income growth)
+- Any lease missing expense reimbursement structure
+- Missing options detail (appraiser must model renewal probability)
+
+#### If Recipient = Attorney
+An attorney needs data relevant to lease compliance, defaults, and transactional review.
+
+**Expected columns:** Tenant Name, Suite/Unit, Building/Address, SF, Monthly Rent, Lease Start, Lease Expiration, Lease Type, Security Deposit, Guarantor, Assignment/Subletting Rights, Default Status, Estoppel Status
+
+**Additional flags:**
+- Any tenant in default or arrears without notation
+- Missing guaranty information
+- Any lease with assignment/subletting language not summarized
+
+---
+
+## Output Format
+
+Present the corrected file, then provide a summary in exactly three sections:
+
+### 1. FIXED
+Bulleted list of every correction made, grouped by pass. Keep it concise — one line per fix.
+
+### 2. FLAGGED
+Data gaps or issues that require manual resolution before sending. These are things the user must address — blank cells, inconsistencies you could not resolve without guessing, discrepancies in the math. Each item should state what is wrong and where (row/column reference).
+
+### 3. MISSING FOR [RECIPIENT TYPE]
+Columns the recipient would typically expect that are absent from this file. For each missing column, include a one-sentence explanation of why the recipient needs it, so the user can make an informed decision about whether to add it or send without it.
+
+(Inbound use, Step 0A: output the per-suite gap table, the aggregate gap, the like-for-like test result, and the three-case NOI/walk table instead of the three sections above.)
+
+---
+
+## Important Constraints
+
+- **Never fabricate data.** If a cell is blank, flag it. Do not fill it with a guess, a default, or "N/A."
+- **Never reorder rows or columns.** The user's data structure is intentional.
+- **Never delete data rows.** Only delete truly empty rows within the data range.
+- **Preserve any existing formatting that is already institutional quality.** Only override formatting that is broken or inconsistent.
+- **If the file has multiple sheets**, audit only the primary rent roll sheet unless the user specifies otherwise. Note the existence of other sheets in your output.

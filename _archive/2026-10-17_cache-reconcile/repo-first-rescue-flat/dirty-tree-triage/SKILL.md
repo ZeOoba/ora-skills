@@ -1,0 +1,72 @@
+---
+name: dirty-tree-triage
+description: Safely triage uncommitted "dirty" git working trees across ORA's shared checkouts (~/.claude, ora-skills, website-canonical, oxford-command-center) — enumerate what's uncommitted, attribute it to a session with real evidence (never a guess), settle it with a two-pass mtime check, then isolate-and-commit only what's genuinely safe via commit_isolated_replacement(). Also discovers stray clones by grouping every C:\Users\Owner checkout by its git remote, not just the fixed four-repo roster. Contested or live WIP is reported, never force-resolved. Use when the user says dirty tree(s), clean up the dirty repos, investigate and fix dirty trees, uncommitted files backlog, who owns this WIP, reconcile the shared checkout, or git status is a mess across my repos. v1.3 (2026-09-17: linked worktrees get their own `worktree` class; primary comes from the roster/main worktree, not first-found)
+license: ORA Internal
+---
+
+# Dirty-Tree Triage
+
+Turns "there's a pile of uncommitted files somewhere" into a per-repo report and, only where the evidence genuinely supports it, a safe isolated commit — never a blind sweep. ORA's checkouts (above all `~/.claude`, driven by a dozen-plus concurrent sessions) accumulate uncommitted WIP by design; the failure mode this skill exists to prevent is treating that pile as a problem to be flattened in one action, which is exactly how another session's in-flight work gets clobbered.
+
+## Scope
+
+Mechanical enumeration + evidence-gated isolation-commit of settled, attributable WIP. Does **not** decide whether the content of someone's WIP is correct, does **not** resolve branch-level divergence (e.g. a checkout that's behind/ahead of `origin/main` in a way that needs a real merge decision), and never force-switches, resets, or rebases a shared checkout. Those are separate, larger decisions that stay with the user — see [[project_primary_checkout_main_move_blocked_2026-08-12]] for a case where exactly that line was already drawn.
+
+## Triggers
+
+"dirty tree(s)", "clean up the dirty repos", "investigate and fix dirty trees", "uncommitted files backlog", "who owns this WIP", "reconcile the shared checkout", "git status is a mess across my repos".
+
+## Inputs
+
+- **Repo set:** the default four (`~/.claude`, `ora-skills`, `website-canonical`, `oxford-command-center` — see `scripts/scan_dirty_trees.py`'s `DEFAULT_REPOS`) for the dirty-tree scan proper. If the user names a different or additional repo, pass it via `--repo`; don't silently expand or shrink the set on your own guess. **Separately**, `scan_dirty_trees.py` also runs stray-clone discovery by default (disable with `--no-clone-discovery`): it enumerates every direct child of `C:\Users\Owner` holding a `.git`, resolves each one's `git remote get-url origin`, and groups by normalized remote — two or more clones sharing one remote is the signal a fixed roster can't catch (`oxford-command-center-1`, OI-200, 2026-08-21: an unowned re-clone that sat for a full day because the roster only knew about the primary). Each clone in a group is classified `managed-build-root` (path matches `-deploy-build`, e.g. `Sync-DeployBuildRoot`-owned, detached HEAD — expected, leave alone) / `worktree` (a registered `git worktree add` checkout — `.git` is a FILE and its git dir differs from the common dir; reported with `branch`, `main_worktree`, `dirty` (uncommitted changes present), `merged` = HEAD has no commits beyond origin's default branch, and `upstream_gone` = tracking branch deleted on the remote as of the last `fetch --prune`. `merged: true` alone is NOT "finished" — a freshly created worktree is merged too; it only suggests a removal candidate together with `dirty: false`. A squash-merged PR branch reads `merged: false` + `upstream_gone: true`, but so does a branch deleted unmerged — confirm the PR actually merged (e.g. `gh pr list --state merged --head <branch>`) before calling it a removal candidate; the unmerged commits are what's lost otherwise. Still report-only) / `primary` (first match of: a full clone on `DEFAULT_REPOS`, the main worktree owning a linked worktree in the group, else the first full clone found) / `stray` (any other full clone — an independent re-clone; report, never auto-resolve). The scan never removes, prunes, or moves a worktree.
+- **Live session roster:** `list_sessions` (isRunning + lastActivityAt).
+- **Commit provenance:** `hooks/lib/commit_provenance.py`'s touched-set data — only exists for the primary `~/.claude` checkout; the other repos have no equivalent recorder, so attribution there leans more on `git log -1`/session self-report.
+
+## Standard Workflow
+
+1. **Scan.** Run `python scripts/scan_dirty_trees.py` — wraps `git status --porcelain=v1 --branch` per repo and classifies every entry as `untracked-trivial` / `untracked-dir` / `untracked-file` / `modified-tracked` / `staged`. Most of what it finds is normal for an always-on shared checkout, not a problem — the scan is the start of triage, not a to-do list to clear.
+
+2. **Split off the trivial bucket.** `untracked-trivial` entries (scratch/preview-deploy/archive-scratch dirs — see the script's `TRIVIAL_HINTS`) are near-zero risk: nothing else references paths inside a directory nobody tracks. List them and propose moving to `/archive/` — **never delete** (Hard Invariant 6) — and apply only after the user confirms.
+
+3. **Attribute the tracked/modified bucket with evidence, not a guess.** For each `modified-tracked`/`staged` entry, before treating it as anyone's:
+   - Cross-check provenance (which session's recorded edits actually intersect this path), where that data exists.
+   - Cross-check `list_sessions` for real, corroborating activity — not just a name. A heuristic naming "the likely session" without an intersecting touched-set is not attribution; see [[feedback_shared_checkout_guard_session_attribution_unreliable]], where the same class of guess (`others[0]`) named idle or unrelated sessions four separate times before the underlying tool was fixed to require intersecting evidence.
+   - No corroborating session? Report the file `UNATTRIBUTED` — that's a valid, honest finding on its own, not something to work around by guessing.
+
+4. **Settle before touching anything — two real, time-separated checks.** Uncommitted does not mean still-being-edited. Record each candidate file's mtime, wait a genuine interval (15–30 minutes — running the scan twice back-to-back proves nothing), and re-check. Identical mtime across both checks means settled, regardless of any session's `isRunning` flag; a moved mtime means still live. See [[feedback_verify_wip_settled_via_mtime]] — this step was deliberately left as a manual technique rather than an automated one-shot detector, because a single snapshot can't distinguish "mid-edit" from "finished twenty minutes ago and moved on." Don't shortcut it by skipping straight to step 5 on one scan.
+
+5. **Isolate and commit — never a batch operation.** Only for files that are both (a) attributed to one owner, or honestly `UNATTRIBUTED` and stable, and (b) mtime-settled: use `commit_isolated_replacement()` in `hooks/lib/isolated_commit.py` (landed on the primary checkout 2026-08-13, commit `522075e8` — see [[reference_isolated_commit_repair_wrapper_2026-08-13]]) to stage and commit *that file's content only*. Never `git add -A` / `git commit -a` / a pathspec-less commit without first checking `git diff --cached` — on a shared checkout the index itself can hold another session's staged work; see [[feedback_git_index_is_shared_state]] and [[reference_event_log_uncommitted_backlog]] for the two independent ways a naive commit sweeps in foreign content. On the primary `~/.claude` checkout, `config-write-guard.py` blocks any git write without an `allow-config-write` override token — mint it with the user's in-turn approval quoted as the reason, use it, and delete it immediately after the commit lands rather than leaving a 60-minute window open.
+
+6. **Contested or live WIP: report, don't act.** Anything that fails settlement (mtime moved) or is attributed to a currently-running session stays untouched — surface it in the report. A large multi-session backlog (the primary checkout has run into a 100+-file version of exactly this) resolves session-by-session, never as one batch housekeeping action — do not try to shortcut that by force-switching, resetting, or rebasing the checkout on the theory that it would "clear the noise."
+
+7. **`ora-skills` gets an independent single-writer check first**, before touching anything there regardless of the steps above: `git log --oneline -1` + `git status`. If HEAD is newer than session start, or there's uncommitted work that isn't yours, stop and surface the conflict. **Pair it with a claim (added 2026-08-21, `open-items-tracker.md#OI-203`):** run `python hooks/lib/claim_work.py claim ora-skills-housekeeping "<what/why>" --paths <target files/dirs>` before starting any actual triage work on `ora-skills`. Git state alone is structurally blind to a concurrent session — commits on this shared checkout carry the same handful of human author identities regardless of which session made them, so a clean `git status` and a normal-looking HEAD can both be true while another session is mid-triage on the exact same folder. Confirmed live 2026-08-21: two sessions independently ran this skill's full workflow against the same `_staging` folders with neither claiming first — the collision was caught only by accident, when one session's archive `mv` found its source already moved by the other. `claim_work.py`'s own docstring documents the identical failure from 2026-08-12 as the reason the module exists; running the git check without the claim only re-derives half the protection.
+
+8. **Report.** One table per repo — file, category, attribution, settlement status, action (isolated+committed / proposed-archive / left-untouched-contested). Log a single consolidated `event_log.md` entry for whatever was actually committed or archived, not one line per file.
+
+## Outputs
+
+- A per-repo dirty-tree report.
+- Isolated commits for settled, evidence-attributed (or honestly-unattributed-and-settled) WIP only, via `commit_isolated_replacement()`.
+- A proposed (not executed) archive list for trivial untracked scratch directories, pending confirmation.
+- A list of contested/live files left untouched, with owning session where attributable.
+- One consolidated `event_log.md` entry.
+
+## Boundaries
+
+- Never `git add -A`, `git commit -a`, or any pathspec-less commit without checking `git diff --cached` first on a checkout other sessions may be using.
+- Never force-switch, `reset --hard`, or rebase a shared checkout to "resolve" its dirty backlog — branch-level divergence is a separate decision that stays with the user.
+- Never delete anything — archive only, and only after confirmation.
+- Never treat one `git status` snapshot as proof a file is settled.
+- Never trust a named "owning session" without corroborating provenance/session evidence.
+
+## Dependencies
+
+- `hooks/lib/isolated_commit.py`'s `commit_isolated_replacement()` (primary checkout only).
+- `hooks/lib/claim_work.py` — required for step 7's `ora-skills` single-writer check (see step 7), and for any hands-on session in `hooks/`, override/auth logic, or repo housekeeping broader than this skill's mechanical scope.
+
+## Changelog
+
+- v1.3 (2026-09-17): stray-clone discovery misclassified two shapes on the 2026-09-16 run. (1) Every registered linked worktree (`.claude-wt-bridges`, `.claude-wt-broker`, `claude-wt-evalpoll`, `ora-wt-run-guard-fp`, `ora-pm-wt-billing`, `ora-pm-wt-oi278`, `ora-skills-wp`, `ora-skills-wt-oi283` — all listed by `git worktree list`) came out `stray`; root cause: the classifier grouped by `origin` remote only and had no notion of a linked worktree, so anything past the first child was `stray`. New `worktree` role (detected by git dir ≠ common dir) with `branch`/`main_worktree`/`dirty`/`merged`/`merged_against`/`upstream_gone` (`merged` is ancestor-only and a fresh worktree reads merged, hence `dirty`; `upstream_gone` does not by itself prove a PR merged). (2) `primary` was first-in-sort-order, so the linked worktree `wc-seo-fixes` was labeled primary and `website-canonical` stray; `primary` now resolves roster (`DEFAULT_REPOS`, case/separator-insensitive) → main worktree of a grouped linked worktree → first full clone. Independent re-clones (the OI-200 `oxford-command-center-1` shape) still flag `stray`. `discover_clones_by_remote()` gains a `roster=` parameter (defaults to `DEFAULT_REPOS`). New `tests/test_scan_dirty_trees.py` (14 real-git fixture tests, including a two-full-clone case that only the main-worktree rule can resolve). Still report-only.
+
+- v1.2 (2026-08-21, `open-items-tracker.md#OI-200`): `scripts/scan_dirty_trees.py` now also runs stray-clone-by-remote discovery by default (`--no-clone-discovery` to skip) — enumerates every direct child of `C:\Users\Owner` with a `.git`, groups by normalized `origin` remote, flags 2+ clones sharing one remote, classifies each `primary`/`managed-build-root`/`stray`. Root cause: the fixed four-repo roster found nothing about `oxford-command-center-1` (an unowned re-clone) because that path was never on the list — it sat unreferenced for a full day until a separate cross-repo audit found it by accident. Report-only, same as the rest of this skill; a flagged `stray` still gets the normal evidence/settle/isolate-commit treatment, never an automatic move.
+- v1.1 (2026-08-21, `open-items-tracker.md#OI-203`): step 7's `ora-skills` single-writer check now requires a `claim_work.py claim ora-skills-housekeeping` call alongside the existing `git log -1`/`git status` check. Root cause: two sessions independently ran this skill's full workflow against the same `ora-skills/_staging` folders on 2026-08-21 with neither claiming first — git state alone can't see a concurrent session (shared author identity across sessions), so both saw a clean tree and proceeded. Caught only by accident when one session's archive `mv` found its source already moved by the other. No procedure logic changed beyond the new claim step.

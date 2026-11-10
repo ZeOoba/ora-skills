@@ -1,0 +1,32 @@
+{
+  "staged_at": "2026-10-01T18:34:20Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-01_cook-parity",
+  "packages": [
+    {
+      "skill": "acquisition-underwriting",
+      "file": "acquisition-underwriting.skill",
+      "bytes": 117186
+    },
+    {
+      "skill": "deal-comparison",
+      "file": "deal-comparison.skill",
+      "bytes": 23939
+    },
+    {
+      "skill": "market-monitor",
+      "file": "market-monitor.skill",
+      "bytes": 28102
+    },
+    {
+      "skill": "daily-brief",
+      "file": "daily-brief.skill",
+      "bytes": 41847
+    }
+  ],
+  "last_batch": [
+    "acquisition-underwriting",
+    "deal-comparison",
+    "market-monitor",
+    "daily-brief"
+  ]
+}
