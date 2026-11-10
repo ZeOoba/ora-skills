@@ -1,0 +1,14 @@
+{
+  "staged_at": "2026-10-18T00:27:01Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-17_loi-generation-v1.10",
+  "packages": [
+    {
+      "skill": "loi-generation",
+      "file": "loi-generation.skill",
+      "bytes": 2794889
+    }
+  ],
+  "last_batch": [
+    "loi-generation"
+  ]
+}
