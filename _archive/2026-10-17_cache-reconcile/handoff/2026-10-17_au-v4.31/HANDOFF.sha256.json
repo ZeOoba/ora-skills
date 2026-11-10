@@ -1,0 +1,13 @@
+{
+  "created_utc": "2026-10-17T21:09:44Z",
+  "folder": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-17_au-v4.31",
+  "files": [
+    {
+      "name": "acquisition-underwriting.skill",
+      "sha256": "1217177be45cc0f575ef1f1fa3f5f3c6ed694192d2fa2c8250d2b68061c3770b",
+      "prefix16": "1217177be45cc0f5",
+      "bytes": 121727,
+      "zip_ok": true
+    }
+  ]
+}

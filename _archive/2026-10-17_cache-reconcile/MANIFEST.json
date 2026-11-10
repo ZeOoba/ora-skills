@@ -1,0 +1,693 @@
+{
+ "created": "2026-10-17T21:15:14",
+ "moves": [
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\acquisition-underwriting\\20260929T214858678472Z-cook-parity",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\acquisition-underwriting\\20260929T214858678472Z-cook-parity",
+   "files": 1,
+   "bytes": 64617,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "950927a0a3d24f26428762f19ee5cfb7e51b684ed83d339bb822de121e800102"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\acquisition-underwriting\\20261001T183942105717Z-agent-dispatch-wiring",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\acquisition-underwriting\\20261001T183942105717Z-agent-dispatch-wiring",
+   "files": 1,
+   "bytes": 71023,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "b3a5638c24a9370f2623a718a8c357555b4d43c14c982ac3f946c921d9b06e11"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\acquisition-underwriting\\20261017T195851553864Z-ora-skills-diffs-review-441806",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\acquisition-underwriting\\20261017T195851553864Z-ora-skills-diffs-review-441806",
+   "files": 1,
+   "bytes": 74199,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "8e9f68b53e77f8822b9fd91699b4b7739c063466956711e80cf9fb0293ecbfa2"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\acquisition-underwriting\\references",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\acquisition-underwriting\\references",
+   "files": 1,
+   "bytes": 7691,
+   "verified": true,
+   "sha256": {
+    "ic-memo-structure.md": "817b1814d6b3ee4c4f748fe2d43bc0a9cc59295100100961c3e030553321df5f"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\annual-cycle\\20261016T000457555961Z-ora-skills",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\annual-cycle\\20261016T000457555961Z-ora-skills",
+   "files": 1,
+   "bytes": 8596,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "b0e47e6171963c0972d5c1fae1174b8453842c0e145cd7f74d662d0d9ad5d794"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\artifact-to-docx-report\\20261014T015152201748Z-skills108",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\artifact-to-docx-report\\20261014T015152201748Z-skills108",
+   "files": 1,
+   "bytes": 4851,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "45bdeb86eb14b3259a34d2201bcc91d14388bd55a7f71f6990f5984059658d3e"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\county-parcel-screen\\references",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\county-parcel-screen\\references",
+   "files": 2,
+   "bytes": 83578,
+   "verified": true,
+   "sha256": {
+    "county-endpoints.md": "842a12731901629e8e0fb996629bba44b91f9c1484d1c3744d7c490548b2e099",
+    "county-endpoints.v1.json": "3e60a8a2ac27a5c1701d5c5f4ecd0b8c8be640ffb960c260a04d3d1aec83d431"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\county-parcel-screen\\scripts",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\county-parcel-screen\\scripts",
+   "files": 1,
+   "bytes": 14756,
+   "verified": true,
+   "sha256": {
+    "institutional_owners.py": "3f9e2fb418a7ccdc939d6e9f9852a53f4e6b5f89495f60c0a436f9a73742d24a"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\county-parcel-screen\\workflows",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\county-parcel-screen\\workflows",
+   "files": 2,
+   "bytes": 21081,
+   "verified": true,
+   "sha256": {
+    "parcel-screen-fanout.js": "4f4d9a65ddce55334d489eee705b3c3743816eb09d60a716bdf11c660dd569e5",
+    "test-pipeline-match.mjs": "83db6a5f569ba73c337123df5f55d2fd147990468a4ec0e80a2c2ea50bb87109"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\deal-comparison\\20260929T214858683914Z-cook-parity",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\deal-comparison\\20260929T214858683914Z-cook-parity",
+   "files": 1,
+   "bytes": 12885,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "bb05849caad7bb9ea634eccfa383a339a941942a661e347345a35409e55611ab"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\dirty-tree-triage\\scripts",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\dirty-tree-triage\\scripts",
+   "files": 1,
+   "bytes": 12853,
+   "verified": true,
+   "sha256": {
+    "scan_dirty_trees.py": "a045f26b43141669ba8f7bf9e84144c716cac9a27a6e82e54c6239cd00e5dc84"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\estoppel-request-generation\\20260929T022536068581Z-ora-skills",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\estoppel-request-generation\\20260929T022536068581Z-ora-skills",
+   "files": 1,
+   "bytes": 11908,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "791b19aa21cbc76ed265ab70029379b65a4563590382ea42c544868b88dd6b3d"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\lease-abstraction-pipeline\\20260929T022536076234Z-ora-skills",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\lease-abstraction-pipeline\\20260929T022536076234Z-ora-skills",
+   "files": 1,
+   "bytes": 26048,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "a9e76669c223ef9295011833452d83090009b3a2423610254f88881a5e8dfc4a"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\lease-form-qc\\20260909T234836203744Z-skill-hygiene",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\lease-form-qc\\20260909T234836203744Z-skill-hygiene",
+   "files": 4,
+   "bytes": 6968,
+   "verified": true,
+   "sha256": {
+    ".pytest_cache/.gitignore": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd",
+    ".pytest_cache/CACHEDIR.TAG": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4",
+    ".pytest_cache/README.md": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad",
+    ".pytest_cache/v/cache/nodeids": "e36f30a720e6fa49ee835d47e60a3fbdc165b2f9d5ea5e8018b217c323b12684"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\lease-form-qc\\20261016T153136605839Z-ora-skills-cache-reconcile-9acfbe",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\lease-form-qc\\20261016T153136605839Z-ora-skills-cache-reconcile-9acfbe",
+   "files": 2,
+   "bytes": 186871,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "d88bc04e7b567d224c7b4cc7629679f8e49caec7e9eda4e05fdb4456e14ff767",
+    "scripts/lease_qc.py": "acf60e2a38c440494b893034c7b403301b59f3e765b3550d6be0dc6bfb61d7c7"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\lease-renewal-pipeline\\20260929T022536080150Z-ora-skills",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\lease-renewal-pipeline\\20260929T022536080150Z-ora-skills",
+   "files": 1,
+   "bytes": 6515,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "8c2c3129635ee71bb51e9aa31487aea3f34f97ceae90e2771a903a761cb77328"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\loi-generation\\20260924T181943762595Z-ora-skills",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\loi-generation\\20260924T181943762595Z-ora-skills",
+   "files": 1,
+   "bytes": 2873271,
+   "verified": true,
+   "sha256": {
+    "templates/LOI_Master_Template_Condensed.docx": "789e6d86f19999d266430f6329b579d635d8e2bf4e4d07b69c58a1833b659ece"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\loi-generation\\references",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\loi-generation\\references",
+   "files": 1,
+   "bytes": 4645,
+   "verified": true,
+   "sha256": {
+    "qc-gate.md": "8912d2a0703b92ca87e68ddd090eb9548a11a5a4272c79115ab1fe626ebf26a3"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\loi-generation\\templates",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\loi-generation\\templates",
+   "files": 1,
+   "bytes": 2873271,
+   "verified": true,
+   "sha256": {
+    "LOI_Master_Template_Condensed.docx": "789e6d86f19999d266430f6329b579d635d8e2bf4e4d07b69c58a1833b659ece"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\market-monitor\\20260929T022536106000Z-ora-skills",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\market-monitor\\20260929T022536106000Z-ora-skills",
+   "files": 1,
+   "bytes": 26792,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "3e81e2dd36fb345115c5af99f555439e6c601e30be9fe78b140cc7c4c966cffd"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\masterlease-jurisdiction-rebase\\20261016T153137071354Z-ora-skills-cache-reconcile-9acfbe",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\masterlease-jurisdiction-rebase\\20261016T153137071354Z-ora-skills-cache-reconcile-9acfbe",
+   "files": 9,
+   "bytes": 194109,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "d040f668d639252acfe1573ad17486618f116235c3fec19ed53e55af044db2fb",
+    "config/properties.json": "638f1382a7e930223c2750f97edf4aa682b239701053dbddae58e4ae2c824384",
+    "config/state_overlays.json": "da16db4400d2432e3d64666a531cb891ee09b54dd61c556a024b9309f020ac71",
+    "scripts/ora_docx_redline.py": "6c76a5b396b0122d96b6f099b5f483f92bcafb8a71fc4131ba5ea1adcd493956",
+    "scripts/rebase.py": "bc29a11d5ac838f227a3c5f3b5e24dde07ed1d6f998ef28cf740608a69de3fe2",
+    "scripts/test_ora_docx_redline.py": "90e97ced62132bf33111078ce2256158fb6569ab7056981f0d9f8703616ce268",
+    "scripts/test_rebase.py": "a58863e2166034a0bf0028548802e79faa2d9d3c13fccb42864726db301d15fc",
+    "specs/power-rights_v2.7-to-v2.8.json": "caeeeb36294c62a0f7323427f8c3f336d5a0f53903ad810b2a2b8486ae22d552",
+    "specs/power-rights_v3.0-to-v3.1.json": "a88f348a64959f90488a78c9ee658b1ba56ddecfa7bbc5ef8f5c03e65b8037a9"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\masterlease-revision-cycle\\20261016T153137299569Z-ora-skills-cache-reconcile-9acfbe",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\masterlease-revision-cycle\\20261016T153137299569Z-ora-skills-cache-reconcile-9acfbe",
+   "files": 1,
+   "bytes": 7396,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "57749c3e583af56906893cc21d1cafe0897b9245356b97c1fa21738b39a08ca4"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\ora-flood-zoning-dd\\references",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\ora-flood-zoning-dd\\references",
+   "files": 1,
+   "bytes": 5531,
+   "verified": true,
+   "sha256": {
+    "endpoints.md": "5fb4a4e0d48bf4ad649ca452ccc8a71eab7aae85f0f118ad5c31a9de0ee72c9b"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\ora-millage-lookup\\20261006T204221559122Z-ora-skills",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\ora-millage-lookup\\20261006T204221559122Z-ora-skills",
+   "files": 1,
+   "bytes": 13140,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "6d7f075a79a1ee44cf3eb3fc0bab614305f68faa15d5e63459acd362468c89a0"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\ora-setup-audit\\20260922T202607003549Z-land-setup-audit",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\ora-setup-audit\\20260922T202607003549Z-land-setup-audit",
+   "files": 1,
+   "bytes": 36157,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "dc0b3283e1e5d177c037677340475ae73304a6496717197450355ebf26033fc4"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\owner-outreach\\20260922T211739345985Z-skill-hygiene",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\owner-outreach\\20260922T211739345985Z-skill-hygiene",
+   "files": 1,
+   "bytes": 20568,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "ebe2c4140182d96dc7f12a49042ada2b4e2d9b2acb20ef4b032985d8c45cc5d5"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\register-scheduled-task\\references",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\register-scheduled-task\\references",
+   "files": 1,
+   "bytes": 11727,
+   "verified": true,
+   "sha256": {
+    "incident-history.md": "e53d635fc006e6301992c5ea7340f87979fc77c11a13d84d3d1fe3d6625db05c"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\rent-roll-qc\\20261006T204221564258Z-ora-skills",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\rent-roll-qc\\20261006T204221564258Z-ora-skills",
+   "files": 1,
+   "bytes": 13037,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "d72c33c91ca5ab09460bd89b6ac644385a4fc4ba14c276e9f1ab041810ed8e2b"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\repo-architecture\\20261014T224331176554Z-ora-skills",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\repo-architecture\\20261014T224331176554Z-ora-skills",
+   "files": 1,
+   "bytes": 10992,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "5d571f9ade38ef4925c319d375aceb851241582cbff320346eca1668b58b51aa"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\solar-lease-underwriting\\20261016T000457639828Z-ora-skills",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\solar-lease-underwriting\\20261016T000457639828Z-ora-skills",
+   "files": 1,
+   "bytes": 20407,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "6b158d3d0e633d915c4c18647d3c7da4d15e0e0886cf54c50e3f86cf398c10aa"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\solar-lease-underwriting\\20261016T010634275644Z-ora-skills",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\solar-lease-underwriting\\20261016T010634275644Z-ora-skills",
+   "files": 1,
+   "bytes": 23974,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "cf9bec965f1fa52126fa55991f276b2a1e2f084fa858388f8d284813d78f113a"
+   }
+  },
+  {
+   "kind": "rescue",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\submarket-spatial-analysis\\20261017T205729918311Z-au430",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue\\submarket-spatial-analysis\\20261017T205729918311Z-au430",
+   "files": 1,
+   "bytes": 40867,
+   "verified": true,
+   "sha256": {
+    "SKILL.md": "55cb1fb668462f96eb4e8791434ad7417a77617b6220456e478728984a22c5ad"
+   }
+  },
+  {
+   "kind": "handoff",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-16_cache-reconcile",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\handoff\\2026-10-16_cache-reconcile",
+   "files": 9,
+   "bytes": 82416,
+   "verified": true,
+   "sha256": {
+    "annual-cycle.skill": "dfe68d374693ec47cfcbfb1d87bf9f7d27f6f7930727ef72c0d1a8fe154d6bc9",
+    "HANDOFF.sha256.json": "24a1d3eac26874fa8dc6a450cf8f05fe8dfa2adaff4daac8a3c503af6237c29b",
+    "lease-abstraction-pipeline.skill": "0e14bf5f4f238077072d4a57d3e77d27987b804935edf760fea539c66203e148",
+    "lease-renewal-pipeline.skill": "cfc8d2a4abb568db43fdc64d47f8f9c22de55c0b9fc9c7a727c48c90a309ed3f",
+    "market-monitor.skill": "1d5f86891bfab13c52820c923453a50b2045044eab37760c7ee32871de4d8db1",
+    "ora-millage-lookup.skill": "e5a795e3218e3537dc010764a7c45297ab058c1cca5dbc4e696fb76b9cb69b80",
+    "rent-roll-qc.skill": "d47254bcb899885a215d1da5bb611992eb3277133f7466799308ef28b0e29c94",
+    "solar-lease-underwriting.skill": "806e8b0285bc7eae88e5a3866b1bf1329fdc6cc04cd1650588f6ecf8ed0facd2",
+    "_STAGED.ok": "30a4f0ae13e437ce911950b4089348779c3be377a1f2d56b547457ced1015522"
+   }
+  },
+  {
+   "kind": "handoff",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-17_au-v4.31",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\handoff\\2026-10-17_au-v4.31",
+   "files": 3,
+   "bytes": 122452,
+   "verified": true,
+   "sha256": {
+    "acquisition-underwriting.skill": "1217177be45cc0f575ef1f1fa3f5f3c6ed694192d2fa2c8250d2b68061c3770b",
+    "HANDOFF.sha256.json": "91181c2c0d73b9ccdcda1b2c2c667f46bf45ddeb48435d172ee70584875d2a81",
+    "_STAGED.ok": "ee938d21c60995e1181341849eb492e9ffd4b518d9a341f51cf0092be13833e3"
+   }
+  },
+  {
+   "kind": "handoff",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-17_reinstall-5-stale",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\handoff\\2026-10-17_reinstall-5-stale",
+   "files": 7,
+   "bytes": 90574,
+   "verified": true,
+   "sha256": {
+    "artifact-to-docx-report.skill": "7aa11c013b72f3edda4f237d8cc57e44d6686069ae84c724318c7f757bc5a10e",
+    "deal-comparison.skill": "191c17638ef45699eb5f2b4533bb87fd68b1f40d295917a96aea5ed65320b663",
+    "graph-app-registration.skill": "f53323fb37646f995229b3db0835d6fb0a4b7332d122f6ac12d065d75a5e5ab2",
+    "HANDOFF.sha256.json": "38bf79dcc978b2120cfad5789ae8dffd6edb0013ac5eb65e41beff0f3623d7fd",
+    "orphaned-task-forensics.skill": "6a3a98469002d8f541d93d82c99c6a7650baf34bf9420f62db5c2920104faea5",
+    "psa-reconciliation.skill": "26a280101098816d96af0a95624a5fc87d42aa92680855f1031916de9e8eca7f",
+    "_STAGED.ok": "2f517b7410d2946584aae787e201b0ca93b342c78c49e1c65a703cb62196861f"
+   }
+  },
+  {
+   "kind": "handoff",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-17_loi-generation-v1.10",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\handoff\\2026-10-17_loi-generation-v1.10",
+   "files": 3,
+   "bytes": 2795600,
+   "verified": true,
+   "sha256": {
+    "HANDOFF.sha256.json": "f35b93ff8fab28f349d108ff8500d5c748285c5b294708295cfb9b74a651b4e2",
+    "loi-generation.skill": "5c8660fa3eca5809f5e928272f7e2b706cfab00dff38d4b0be0bbfcf629bce5f",
+    "_STAGED.ok": "645efb5e0e796e1edaeb3ea911a43a56206498307b43116912bd893c092a5f5e"
+   }
+  },
+  {
+   "kind": "handoff",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-17_ora-open-decisions",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\handoff\\2026-10-17_ora-open-decisions",
+   "files": 3,
+   "bytes": 2508,
+   "verified": true,
+   "sha256": {
+    "HANDOFF.sha256.json": "308511cc05e31b44b639f003c483c1a39db7190bb71efc8ba1efc18e37f6a8ee",
+    "ora-open-decisions.skill": "3a58fe3b166a12cd78fd549cd044f345b587c0d292e67fcb713d3e1042b104e3",
+    "_STAGED.ok": "cc1c7a25d435fe94073f7b9990bfe0075d5801b58040b17e9035cc217cc20477"
+   }
+  },
+  {
+   "kind": "handoff",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-09-29_package-and-stage-skill-v135",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\handoff\\2026-09-29_package-and-stage-skill-v135",
+   "files": 2,
+   "bytes": 36610,
+   "verified": true,
+   "sha256": {
+    "HANDOFF.sha256.json": "8ff3a6830db85fe5af353874fb20aaf6e4705d4ead5c60300a8938678210d750",
+    "package-and-stage-skill.skill": "39dcb57f04fddfd1a2d3d2f5202633e43ea87a78819d3ce9c7cb4a2ffc526580"
+   }
+  },
+  {
+   "kind": "handoff",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-01_cook-parity",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\handoff\\2026-10-01_cook-parity",
+   "files": 6,
+   "bytes": 212865,
+   "verified": true,
+   "sha256": {
+    "acquisition-underwriting.skill": "a22c05ebcd6400638bdd37e3bd211a48cb1c23e40063014e20c9369bb3031f68",
+    "daily-brief.skill": "839ee3ab3c52410bf6ce8e4168415109df7641e85661999e2d9d7c01f9f2da2c",
+    "deal-comparison.skill": "0ba4e8a0489a0f06a5a4192bd247d0485296078a45e38c9af6f9fa95ddffebe0",
+    "HANDOFF.sha256.json": "3fb31fbe377c6cc7816fd524011e9ca721243bc2735d6d7db988e97eaf12ede6",
+    "market-monitor.skill": "675ce976f07f95ed2d6c5243ecbea44142417a5756cb81e3d6d3aad38c728fdb",
+    "_STAGED.ok": "2fa18f877d70026d2c66c3976c7a7a7d570a6f258f8f6b2604780c515d2f2094"
+   }
+  },
+  {
+   "kind": "handoff",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-06_lease-v27-skills",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\handoff\\2026-10-06_lease-v27-skills",
+   "files": 24,
+   "bytes": 592646,
+   "verified": true,
+   "sha256": {
+    "commit.ps1": "c4fee79d6335935a3c70b32d58ac0d7e73d37809e41e86651eebf9d3c15d4b58",
+    "commitmsg.txt": "dfb54d20250f251eafe4c13eb3cf52d464526210290120f23d6327821ef9ec8f",
+    "dep_check.py": "bf24b1821d1c312190d6d1753da7bda429289874fff5743c7149a61c17fee636",
+    "HANDOFF.sha256.json": "806d48a34d6318efb22cebd04640504a7b7c6fb973a4a7a30723f42be105f8f4",
+    "hash_check.py": "77dd951ea218eb8235c15f8075e8b2b3a9ae475d8534ee46c2a1295dc78e7c84",
+    "lease-form-qc.skill": "9a3769e2384544c8ce0d9034fcde10c7970d969851565dedfc5fd9051886e107",
+    "masterlease-jurisdiction-rebase.skill": "6e5734182aad483405351e50185b57b0d841f5fcc0bd513145c031b7883722de",
+    "package.ps1": "5b3097c709f19c37d45951643695868c92ace4fce294e8bf7b4dc0833329a130",
+    "postclick.ps1": "dfc6a5de5b05532f925aa0467fead256dc152825519f94af42925f4194342113",
+    "postclick_final.ps1": "fe41cd10cbbdf4bbd692fedc444900db1ac5318b64491609ab23622000dd9681",
+    "repackage.ps1": "2ab1d343a70c182a7257ae3aa1c9455ea91b58de055dc6b80bb030d30ba6efc8",
+    "run_tests.ps1": "42b05800c43734e9f575b636ddc41b8980e3a09607b26a685c897615fba9296d",
+    "_STAGED.ok": "d8dd821790b718d5c2e7477089100bb9b62dec7136a9eb1b1f1acb57aea13b43",
+    "src/lfq_SKILL.md": "8f174ed60fb18512a5593e08358eb51063a227274a10ad9487c9c6d18940a6f7",
+    "src/mjr_SKILL.md": "fce5bbe5ed8ae73cebdd5da80e239d027ad8e6c63a8bbb2105a80b1527c4b824",
+    "src/ora_doc_qc.py": "8298f870c477341945dc1a1462b3cb0b675725ff39413f1c75bfe3b331c1b90c",
+    "src/package_skills.py": "7ad2249037fdec8cf175b0712f2ded455f37c5c98ba4e0badb67ddd0ca26a7bf",
+    "src/test_lease_qc.py": "635466e15925f841ef03660d3ef1183d2eaf6a6148bb7aff5deee7ea870cefd8",
+    "superseded_pkg/lease-form-qc.skill": "54872c744cfd6293a804db3abd6fb99e7f0884ebd8219d945803666e01921a26",
+    "superseded_pkg/masterlease-jurisdiction-rebase.skill": "6e5734182aad483405351e50185b57b0d841f5fcc0bd513145c031b7883722de",
+    "moved_pytest_cache/lease-form-qc/.gitignore": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd",
+    "moved_pytest_cache/lease-form-qc/CACHEDIR.TAG": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4",
+    "moved_pytest_cache/lease-form-qc/README.md": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad",
+    "moved_pytest_cache/lease-form-qc/v/cache/nodeids": "e36f30a720e6fa49ee835d47e60a3fbdc165b2f9d5ea5e8018b217c323b12684"
+   }
+  },
+  {
+   "kind": "handoff",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-16_au-v4.28",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\handoff\\2026-10-16_au-v4.28",
+   "files": 3,
+   "bytes": 120229,
+   "verified": true,
+   "sha256": {
+    "acquisition-underwriting.skill": "ad34360cd7b2ee7c79459d55439ee8d0bb16e65b79a1336fbe40dff65d472cb7",
+    "HANDOFF.sha256.json": "013ec200e421d8dfd1b1658621c890944bec7cec827eb77793dbe6836b93dcf9",
+    "_STAGED.ok": "5c6e8b8e983923b033e5eb4f3ca5314ea95c77eafcef4920bd846a6a084a20c2"
+   }
+  },
+  {
+   "kind": "temp",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\_eventlog_entry_acquisition-underwriting.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\staging-temp\\_eventlog_entry_acquisition-underwriting.md",
+   "files": 1,
+   "bytes": 166,
+   "verified": true,
+   "sha256": {
+    "_eventlog_entry_acquisition-underwriting.md": "4887f686b91fa539961a25a2e64a67d6789bcd83e4f4b2df89c1fe816fb3c705"
+   }
+  },
+  {
+   "kind": "temp",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\_eventlog_entry_annual-cycle.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\staging-temp\\_eventlog_entry_annual-cycle.md",
+   "files": 1,
+   "bytes": 140,
+   "verified": true,
+   "sha256": {
+    "_eventlog_entry_annual-cycle.md": "fbe58c73cb8fb7864e0be89a1fa66935523aa98ac27288bb4c1a39d68cfc2c0b"
+   }
+  },
+  {
+   "kind": "temp",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\_eventlog_entry_deal-execution.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\staging-temp\\_eventlog_entry_deal-execution.md",
+   "files": 1,
+   "bytes": 146,
+   "verified": true,
+   "sha256": {
+    "_eventlog_entry_deal-execution.md": "4a67146cb22ab7122263089b160a50ac73bf932baf53cf45eb02327207b42387"
+   }
+  },
+  {
+   "kind": "temp",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\_eventlog_entry_estoppel-request-generation.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\staging-temp\\_eventlog_entry_estoppel-request-generation.md",
+   "files": 1,
+   "bytes": 170,
+   "verified": true,
+   "sha256": {
+    "_eventlog_entry_estoppel-request-generation.md": "7eee7c581af591007b0a12599713142722bedd0f7045a1a58ce79a758160443e"
+   }
+  },
+  {
+   "kind": "temp",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\_eventlog_entry_exhibit-package-builder.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\staging-temp\\_eventlog_entry_exhibit-package-builder.md",
+   "files": 1,
+   "bytes": 152,
+   "verified": true,
+   "sha256": {
+    "_eventlog_entry_exhibit-package-builder.md": "1ddb707bb6d5a457c6d543c12fbbc8c57d4c523fab7ae8828805217ac597a3b6"
+   }
+  },
+  {
+   "kind": "temp",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\_eventlog_entry_lease-abstraction-pipeline.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\staging-temp\\_eventlog_entry_lease-abstraction-pipeline.md",
+   "files": 1,
+   "bytes": 168,
+   "verified": true,
+   "sha256": {
+    "_eventlog_entry_lease-abstraction-pipeline.md": "2e6a2390c35a17c2821745516c0dac6485162b9098c2039a2e2acecfbc3d568d"
+   }
+  },
+  {
+   "kind": "temp",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\_eventlog_entry_lease-form-qc.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\staging-temp\\_eventlog_entry_lease-form-qc.md",
+   "files": 1,
+   "bytes": 142,
+   "verified": true,
+   "sha256": {
+    "_eventlog_entry_lease-form-qc.md": "3bb47ab3f02ab742efc5ace635cc4750b6972d4502cd69a5956f02f25970365e"
+   }
+  },
+  {
+   "kind": "temp",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\_eventlog_entry_lease-renewal-pipeline.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\staging-temp\\_eventlog_entry_lease-renewal-pipeline.md",
+   "files": 1,
+   "bytes": 160,
+   "verified": true,
+   "sha256": {
+    "_eventlog_entry_lease-renewal-pipeline.md": "ac285f8e6b6e9fccb7a31e89c6cf3cdec33ddf822d26bca3e66682970ea51cdb"
+   }
+  },
+  {
+   "kind": "temp",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\_eventlog_entry_market-monitor.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\staging-temp\\_eventlog_entry_market-monitor.md",
+   "files": 1,
+   "bytes": 144,
+   "verified": true,
+   "sha256": {
+    "_eventlog_entry_market-monitor.md": "bfd71e11392122998f2440587701555559e6b65ae8a79d12f2977c2c2ef2e8a3"
+   }
+  },
+  {
+   "kind": "temp",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\_eventlog_entry_masterlease-jurisdiction-rebase.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\staging-temp\\_eventlog_entry_masterlease-jurisdiction-rebase.md",
+   "files": 1,
+   "bytes": 178,
+   "verified": true,
+   "sha256": {
+    "_eventlog_entry_masterlease-jurisdiction-rebase.md": "1b914b3a650ab6c43c62b1d00ced5fd7309b912d9cfb06f1a879a8da52f9360b"
+   }
+  },
+  {
+   "kind": "temp",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\_eventlog_entry_ora-millage-lookup.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\staging-temp\\_eventlog_entry_ora-millage-lookup.md",
+   "files": 1,
+   "bytes": 152,
+   "verified": true,
+   "sha256": {
+    "_eventlog_entry_ora-millage-lookup.md": "9f50dbfe2602724d663c4782de19572f9a733a72dd1d874e113272e1bc4f3373"
+   }
+  },
+  {
+   "kind": "temp",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\_eventlog_entry_package-and-stage-skill.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\staging-temp\\_eventlog_entry_package-and-stage-skill.md",
+   "files": 1,
+   "bytes": 164,
+   "verified": true,
+   "sha256": {
+    "_eventlog_entry_package-and-stage-skill.md": "faf83215553a1be589aec5480e1c34e244ee558692bfaa0e41c29a36b8d4ff15"
+   }
+  },
+  {
+   "kind": "temp",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\_eventlog_entry_rent-roll-qc.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\staging-temp\\_eventlog_entry_rent-roll-qc.md",
+   "files": 1,
+   "bytes": 140,
+   "verified": true,
+   "sha256": {
+    "_eventlog_entry_rent-roll-qc.md": "1d6f58073a9798768e00f3a57e3e4a4857adfa090630fdb45a6afeb398f63408"
+   }
+  },
+  {
+   "kind": "temp",
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\_eventlog_entry_solar-lease-underwriting.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\staging-temp\\_eventlog_entry_solar-lease-underwriting.md",
+   "files": 1,
+   "bytes": 164,
+   "verified": true,
+   "sha256": {
+    "_eventlog_entry_solar-lease-underwriting.md": "5a28bfe3941d0e89d110d26f7cda3b09e2d5ef769f2abb6fa422d4509af5d925"
+   }
+  }
+ ],
+ "emptied_dirs_removed": [
+  "annual-cycle",
+  "artifact-to-docx-report",
+  "deal-comparison",
+  "estoppel-request-generation",
+  "lease-abstraction-pipeline",
+  "lease-renewal-pipeline",
+  "loi-generation",
+  "market-monitor",
+  "masterlease-jurisdiction-rebase",
+  "masterlease-revision-cycle",
+  "ora-millage-lookup",
+  "ora-setup-audit",
+  "rent-roll-qc",
+  "repo-architecture",
+  "solar-lease-underwriting"
+ ],
+ "held_back_recent_temp": []
+}

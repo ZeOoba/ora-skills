@@ -1,0 +1,13 @@
+{
+  "created_utc": "2026-10-18T00:27:19Z",
+  "folder": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-17_loi-generation-v1.10",
+  "files": [
+    {
+      "name": "loi-generation.skill",
+      "sha256": "5c8660fa3eca5809f5e928272f7e2b706cfab00dff38d4b0be0bbfcf629bce5f",
+      "prefix16": "5c8660fa3eca5809",
+      "bytes": 2794889,
+      "zip_ok": true
+    }
+  ]
+}

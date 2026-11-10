@@ -1,0 +1,13 @@
+{
+  "created_utc": "2026-11-03T18:52:28Z",
+  "folder": ".",
+  "files": [
+    {
+      "name": "submarket-spatial-analysis.skill",
+      "sha256": "861dea4dcc995806d14a4c385e2e00de59d85a759dc8b3e618ca99a0189b421b",
+      "prefix16": "861dea4dcc995806",
+      "bytes": 15809,
+      "zip_ok": true
+    }
+  ]
+}

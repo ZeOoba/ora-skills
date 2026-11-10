@@ -1,0 +1,49 @@
+{
+  "staged_at": "2026-10-16T20:12:48Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-16_cache-reconcile",
+  "packages": [
+    {
+      "skill": "lease-abstraction-pipeline",
+      "file": "lease-abstraction-pipeline.skill",
+      "bytes": 16716
+    },
+    {
+      "skill": "lease-renewal-pipeline",
+      "file": "lease-renewal-pipeline.skill",
+      "bytes": 3391
+    },
+    {
+      "skill": "ora-millage-lookup",
+      "file": "ora-millage-lookup.skill",
+      "bytes": 9266
+    },
+    {
+      "skill": "rent-roll-qc",
+      "file": "rent-roll-qc.skill",
+      "bytes": 6057
+    },
+    {
+      "skill": "market-monitor",
+      "file": "market-monitor.skill",
+      "bytes": 29773
+    },
+    {
+      "skill": "annual-cycle",
+      "file": "annual-cycle.skill",
+      "bytes": 4082
+    },
+    {
+      "skill": "solar-lease-underwriting",
+      "file": "solar-lease-underwriting.skill",
+      "bytes": 10213
+    },
+    {
+      "skill": "acquisition-underwriting",
+      "file": "acquisition-underwriting.skill",
+      "bytes": 119589
+    }
+  ],
+  "last_batch": [
+    "acquisition-underwriting"
+  ]
+}

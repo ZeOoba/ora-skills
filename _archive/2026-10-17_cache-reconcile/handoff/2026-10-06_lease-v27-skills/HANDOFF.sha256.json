@@ -1,0 +1,20 @@
+{
+  "created_utc": "2026-10-06T19:51:36Z",
+  "folder": "_staging\\handoff\\2026-10-06_lease-v27-skills",
+  "files": [
+    {
+      "name": "lease-form-qc.skill",
+      "sha256": "9a3769e2384544c8ce0d9034fcde10c7970d969851565dedfc5fd9051886e107",
+      "prefix16": "9a3769e2384544c8",
+      "bytes": 57806,
+      "zip_ok": true
+    },
+    {
+      "name": "masterlease-jurisdiction-rebase.skill",
+      "sha256": "6e5734182aad483405351e50185b57b0d841f5fcc0bd513145c031b7883722de",
+      "prefix16": "6e5734182aad4834",
+      "bytes": 112740,
+      "zip_ok": true
+    }
+  ]
+}

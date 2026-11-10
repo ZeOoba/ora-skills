@@ -1,0 +1,101 @@
+{
+ "created": "2026-10-17T21:24:41",
+ "moves": [
+  {
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\acquisition-underwriting\\SKILL.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue-flat\\acquisition-underwriting\\SKILL.md",
+   "bytes": 97030,
+   "sha256": "7d8772cc535cb133a99d04bbf5a7861708942ac4c6b8e6ffefd8041a17541ee9",
+   "verified": true
+  },
+  {
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\county-parcel-screen\\SKILL.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue-flat\\county-parcel-screen\\SKILL.md",
+   "bytes": 45982,
+   "sha256": "f058a5f4bcec2764bfecb819f1a940c1471df64068a914caf2cb56c17f6881a7",
+   "verified": true
+  },
+  {
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\dirty-tree-triage\\SKILL.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue-flat\\dirty-tree-triage\\SKILL.md",
+   "bytes": 14342,
+   "sha256": "17296b1eacafbf02e0a4a05ecfef5f97ed0387bd8296ef49515fa16ceaaabcf9",
+   "verified": true
+  },
+  {
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\exception-detection\\SKILL.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue-flat\\exception-detection\\SKILL.md",
+   "bytes": 19118,
+   "sha256": "262c2eaa746f48833da990229b0a1398bc51dacde33d1e8bff6c613ae58f65d1",
+   "verified": true
+  },
+  {
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\ora-flood-zoning-dd\\SKILL.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue-flat\\ora-flood-zoning-dd\\SKILL.md",
+   "bytes": 22170,
+   "sha256": "d6d03008e7fe14fc3b8314bc14c0e404f10ed71dd174d095234005bd6ee86110",
+   "verified": true
+  },
+  {
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\owner-outreach\\ORA_OwnerOutreach-T1Letter_FormatSpec_v1.1.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue-flat\\owner-outreach\\ORA_OwnerOutreach-T1Letter_FormatSpec_v1.1.md",
+   "bytes": 7029,
+   "sha256": "eda5dd5e2925dca93492e8f12069d6ade7daacc7f95342c54369498eeb949b99",
+   "verified": true
+  },
+  {
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\owner-outreach\\SKILL.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue-flat\\owner-outreach\\SKILL.md",
+   "bytes": 17123,
+   "sha256": "f4b1e420da17cc45156f3c6ec0d62bcc3ebc49576cd89fc38a72fd1cb308ad54",
+   "verified": true
+  },
+  {
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\owner-outreach\\t1_letter_format.py",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue-flat\\owner-outreach\\t1_letter_format.py",
+   "bytes": 9033,
+   "sha256": "6ae5ee91fa60433c1c2e15c631d8c3e8b0d64bcecd4093f480c3a9196efd0364",
+   "verified": true
+  },
+  {
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\pma-qc\\SKILL.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue-flat\\pma-qc\\SKILL.md",
+   "bytes": 20935,
+   "sha256": "6e27da24aa4f338436b28623b6246ac0c10d8740a1d10412bf99a14c6e96e76e",
+   "verified": true
+  },
+  {
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\register-scheduled-task\\SKILL.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue-flat\\register-scheduled-task\\SKILL.md",
+   "bytes": 54158,
+   "sha256": "39738f21c711c941fe2cd9a027600a3d66cef5c47d13eb90a938f0988c26f757",
+   "verified": true
+  },
+  {
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\vendor-management\\SKILL.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue-flat\\vendor-management\\SKILL.md",
+   "bytes": 23767,
+   "sha256": "7930fd4442ba39725067c1263c5c64a273bf92cd59e0e0fd4065ee1b3ed0f66f",
+   "verified": true
+  },
+  {
+   "from": "C:\\Users\\Owner\\ora-skills\\_staging\\repo-first-rescue\\website-perfection\\SKILL.md",
+   "to": "C:\\Users\\Owner\\ora-skills\\_archive\\2026-10-17_cache-reconcile\\repo-first-rescue-flat\\website-perfection\\SKILL.md",
+   "bytes": 11369,
+   "sha256": "01590c5023ea6a8c1314e6427db4aa3fefcc25b0deacda0543fead5ea83952f7",
+   "verified": true
+  }
+ ],
+ "emptied_dirs_removed": [
+  "acquisition-underwriting",
+  "county-parcel-screen",
+  "dirty-tree-triage",
+  "exception-detection",
+  "ora-flood-zoning-dd",
+  "owner-outreach",
+  "pma-qc",
+  "register-scheduled-task",
+  "vendor-management",
+  "website-perfection"
+ ]
+}
