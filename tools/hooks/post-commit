@@ -1,5 +1,5 @@
 #!/bin/sh
-# ora-skills post-commit (canonical, versioned; core.hooksPath=tools/hooks — set locally per clone).
+# ora-skills post-commit (canonical, versioned; run by the per-clone shim that tools/install_hooks.py writes).
 # Rule (2026-07-16): after any commit that changes a skill's PACKAGED content (its SKILL.md
 # or bundled files) or the shared repo-root target-markets.json, record a PENDING-REIMPORT
 # entry. The Cowork runtime cache only re-syncs on Gabriel's manual Save-skill click, so a

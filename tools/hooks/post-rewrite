@@ -1,5 +1,5 @@
 #!/bin/sh
-# ora-skills post-rewrite (canonical, versioned; core.hooksPath=tools/hooks).
+# ora-skills post-rewrite (canonical, versioned; run by the per-clone shim that tools/install_hooks.py writes).
 # Rule (2026-09-22): git runs post-commit ONLY for `git commit`. main advances mostly by
 # merge / pull / rebase, which run post-merge / post-rewrite instead -- so 16 local mirrors
 # under ~/.claude/skills sat stale behind merged branches (acquisition-underwriting v4.20 vs
