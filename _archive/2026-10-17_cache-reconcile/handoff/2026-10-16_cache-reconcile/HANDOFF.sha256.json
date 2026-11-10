@@ -1,0 +1,55 @@
+{
+  "created_utc": "2026-10-16T15:02:51Z",
+  "folder": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-16_cache-reconcile",
+  "files": [
+    {
+      "name": "annual-cycle.skill",
+      "sha256": "dfe68d374693ec47cfcbfb1d87bf9f7d27f6f7930727ef72c0d1a8fe154d6bc9",
+      "prefix16": "dfe68d374693ec47",
+      "bytes": 4082,
+      "zip_ok": true
+    },
+    {
+      "name": "lease-abstraction-pipeline.skill",
+      "sha256": "0e14bf5f4f238077072d4a57d3e77d27987b804935edf760fea539c66203e148",
+      "prefix16": "0e14bf5f4f238077",
+      "bytes": 16716,
+      "zip_ok": true
+    },
+    {
+      "name": "lease-renewal-pipeline.skill",
+      "sha256": "cfc8d2a4abb568db43fdc64d47f8f9c22de55c0b9fc9c7a727c48c90a309ed3f",
+      "prefix16": "cfc8d2a4abb568db",
+      "bytes": 3391,
+      "zip_ok": true
+    },
+    {
+      "name": "market-monitor.skill",
+      "sha256": "1d5f86891bfab13c52820c923453a50b2045044eab37760c7ee32871de4d8db1",
+      "prefix16": "1d5f86891bfab13c",
+      "bytes": 29773,
+      "zip_ok": true
+    },
+    {
+      "name": "ora-millage-lookup.skill",
+      "sha256": "e5a795e3218e3537dc010764a7c45297ab058c1cca5dbc4e696fb76b9cb69b80",
+      "prefix16": "e5a795e3218e3537",
+      "bytes": 9266,
+      "zip_ok": true
+    },
+    {
+      "name": "rent-roll-qc.skill",
+      "sha256": "d47254bcb899885a215d1da5bb611992eb3277133f7466799308ef28b0e29c94",
+      "prefix16": "d47254bcb899885a",
+      "bytes": 6057,
+      "zip_ok": true
+    },
+    {
+      "name": "solar-lease-underwriting.skill",
+      "sha256": "806e8b0285bc7eae88e5a3866b1bf1329fdc6cc04cd1650588f6ecf8ed0facd2",
+      "prefix16": "806e8b0285bc7eae",
+      "bytes": 10213,
+      "zip_ok": true
+    }
+  ]
+}
