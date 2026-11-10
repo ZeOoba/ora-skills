@@ -119,6 +119,9 @@ acquisition-underwriting-eval-harness/runs/
 /_archive/2026-09-23_lease-addendum-v1.1-reimport/la_eventlog.md
 /event_log.md
 **/memory/event_log.md
+# Staged event_log entries inside archive records are memory content (skill-gates memory-files
+# check; PR #236, 2026-11-10). Kept on disk only.
+_archive/**/_eventlog_entry_*.md
 
 # Former lease-generation example register (contained real tenant data). Untracked 2026-11-08
 # without a history rewrite (Gabriel's no-rewrite precedent); kept on disk only, never re-add.
