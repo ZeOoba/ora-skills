@@ -300,7 +300,19 @@ path is not documented here.
   local mirrors (`sync_local_skills_mirror.py`).
 - `post-merge` / `post-rewrite`: sweep all local mirrors and sync the runtime cache for the
   changed range (main only; skipped on amend).
-- Emergency bypass is `git commit --no-verify`.
+- `pre-push` (2026-11-09; this repo is public, so Invariant 3 applies): runs
+  `tools/prepush_confidential_scan.py`, which blocks the push if any active `always` term from
+  the machine-local roster `~/.claude/hooks/confidential-terms.json` appears in what the push
+  makes new on the remote: commit messages, diffs, the full content of every added or modified
+  file (binary, UTF-16, gzip/zip/tar such as docx/xlsx), paths, ref names and tag messages.
+  Fail-closed: an unreadable roster, a git error or an unreadable archive also blocks. Terms are
+  never printed, only roster indices. While a deal is active, a push adding a PDF or an
+  unsupported archive (7z/rar/zstd) also blocks: verify it by hand, then `--no-verify`.
+  Tests: `tools/test_prepush_confidential_scan.py`. The same scanner is committed to
+  website-canonical and ora-pm; keep the copies identical. Because `core.hooksPath` points at
+  the MAIN checkout's working tree, the gate is live only while that checkout is on `main` (or
+  any branch cut after this hook landed); keep the main checkout on `main`.
+- Emergency bypass is `git commit --no-verify` (`git push --no-verify` for pre-push).
 
 **`tools/` scripts (non-test).** CI gates: `skill_ci_gates.py`, `run_skill_suites.sh`. Packaging: `package_skills.py`, `build_plugin.py`,
 `release_plugin.py` (plugin tooling is dormant, no bundles exist). Drift and reimport:
