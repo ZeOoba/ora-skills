@@ -1,0 +1,27 @@
+{
+  "created_utc": "2026-11-03T18:42:14Z",
+  "folder": "_staging\\handoff\\2026-11-03_buybox-portfolio-path",
+  "files": [
+    {
+      "name": "communication-intelligence.skill",
+      "sha256": "2168a5483b91b8695896d35fd9a0c8ae9dcb34b31dba47c45acfd5ab810a602a",
+      "prefix16": "2168a5483b91b869",
+      "bytes": 6529,
+      "zip_ok": true
+    },
+    {
+      "name": "market-monitor.skill",
+      "sha256": "592bb2c32beb44836a4ff1d95fd477f0ca2bd6a4b9c298af73e2105e284c1545",
+      "prefix16": "592bb2c32beb4483",
+      "bytes": 30448,
+      "zip_ok": true
+    },
+    {
+      "name": "portfolio-growth.skill",
+      "sha256": "b90976a8a4fc681766133f9c32187d4bc5f4adda574a0b07ebc6879f2cbf326c",
+      "prefix16": "b90976a8a4fc6817",
+      "bytes": 3165,
+      "zip_ok": true
+    }
+  ]
+}

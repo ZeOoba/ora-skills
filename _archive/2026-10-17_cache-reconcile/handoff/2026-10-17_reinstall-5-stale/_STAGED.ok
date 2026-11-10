@@ -1,0 +1,38 @@
+{
+  "staged_at": "2026-10-17T23:08:48Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-17_reinstall-5-stale",
+  "packages": [
+    {
+      "skill": "deal-comparison",
+      "file": "deal-comparison.skill",
+      "bytes": 24099
+    },
+    {
+      "skill": "orphaned-task-forensics",
+      "file": "orphaned-task-forensics.skill",
+      "bytes": 4591
+    },
+    {
+      "skill": "artifact-to-docx-report",
+      "file": "artifact-to-docx-report.skill",
+      "bytes": 27083
+    },
+    {
+      "skill": "graph-app-registration",
+      "file": "graph-app-registration.skill",
+      "bytes": 3387
+    },
+    {
+      "skill": "psa-reconciliation",
+      "file": "psa-reconciliation.skill",
+      "bytes": 29169
+    }
+  ],
+  "last_batch": [
+    "deal-comparison",
+    "orphaned-task-forensics",
+    "artifact-to-docx-report",
+    "graph-app-registration",
+    "psa-reconciliation"
+  ]
+}

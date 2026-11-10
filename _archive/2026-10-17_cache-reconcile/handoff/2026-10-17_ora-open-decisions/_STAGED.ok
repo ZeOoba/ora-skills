@@ -1,0 +1,14 @@
+{
+  "staged_at": "2026-10-18T00:38:43Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-17_ora-open-decisions",
+  "packages": [
+    {
+      "skill": "ora-open-decisions",
+      "file": "ora-open-decisions.skill",
+      "bytes": 1791
+    }
+  ],
+  "last_batch": [
+    "ora-open-decisions"
+  ]
+}

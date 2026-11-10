@@ -1,0 +1,26 @@
+{
+  "staged_at": "2026-11-03T18:42:07Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-11-03_buybox-portfolio-path",
+  "packages": [
+    {
+      "skill": "communication-intelligence",
+      "file": "communication-intelligence.skill",
+      "bytes": 6529
+    },
+    {
+      "skill": "market-monitor",
+      "file": "market-monitor.skill",
+      "bytes": 30448
+    },
+    {
+      "skill": "portfolio-growth",
+      "file": "portfolio-growth.skill",
+      "bytes": 3165
+    }
+  ],
+  "last_batch": [
+    "communication-intelligence",
+    "market-monitor",
+    "portfolio-growth"
+  ]
+}
