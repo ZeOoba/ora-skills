@@ -527,6 +527,55 @@ class Installer(Base):
             lambda: self.sb.git(self.sb.work, "config", "--local", "includeIf.onbranch:side.path",
                                 self._evil_include()))
 
+    # Follow-up to #234: a poisoned checker environment must not redirect what is read.
+    def _install_env(self, extra_env, *args, repo=None):
+        env = dict(self.sb.env)
+        env.update(extra_env)
+        p = subprocess.run([sys.executable, INSTALLER, "--repo", repo or self.sb.work] + list(args),
+                           capture_output=True, text=True, env=env)
+        return p.returncode, p.stdout + p.stderr
+
+    def test_legacy_git_config_env_does_not_mask_override(self):
+        wt = self._side_worktree()
+        self.installed()
+        self.sb.git(wt, "config", "--worktree", "core.hooksPath", os.path.join(self.sb.root, "evil"))
+        fake = os.path.join(self.sb.root, "fake.cfg")
+        with open(fake, "w") as f:
+            f.write("[core]\n\thooksPath = %s\n" % self.sb.hooks_dir().replace("\\", "/"))
+        rc, out = self._install_env({"GIT_CONFIG": fake}, "--check")
+        self.assertEqual(rc, 1, out)
+
+    def test_env_config_equal_to_hooks_dir_does_not_mask_override(self):   # REFUTE C7
+        wt = self._side_worktree()
+        self.installed()
+        self.sb.git(wt, "config", "--worktree", "core.hooksPath", os.path.join(self.sb.root, "evil"))
+        hd = self.sb.hooks_dir()
+        for env in ({"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.hooksPath",
+                     "GIT_CONFIG_VALUE_0": hd},
+                    {"GIT_CONFIG_PARAMETERS": "'core.hookspath'='%s'" % hd.replace("\\", "/")}):
+            rc, out = self._install_env(env, "--check")
+            self.assertEqual(rc, 1, (env, out))
+            rc, out = self._install_env(env)          # re-install must not report success
+            self.assertEqual(rc, 2, (env, out))
+
+    def test_env_config_equal_to_hooks_dir_alone_is_fine(self):   # H5a still installs
+        self._side_worktree()
+        hd = self.sb.hooks_dir()
+        env = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.hooksPath",
+               "GIT_CONFIG_VALUE_0": hd}
+        rc, out = self._install_env(env)
+        self.assertEqual(rc, 0, out)
+        rc, out = self._install_env(env, "--check")
+        self.assertEqual(rc, 0, out)
+
+    def test_git_dir_env_does_not_redirect_target(self):
+        other = os.path.join(self.sb.root, "other")
+        self.sb.git(self.sb.root, "init", "-q", other)
+        rc, out = self._install_env({"GIT_DIR": os.path.join(other, ".git")})
+        self.assertEqual(rc, 0, out)
+        self.assertTrue(os.path.isdir(self.sb.hooks_dir()), out)       # --repo's clone
+        self.assertFalse(os.path.exists(os.path.join(other, ".git", "ora-hooks")), out)
+
     def test_c_unquote(self):
         import importlib.util
         spec = importlib.util.spec_from_file_location(
