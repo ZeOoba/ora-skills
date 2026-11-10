@@ -1,0 +1,14 @@
+{
+  "staged_at": "2026-10-17T21:09:41Z",
+  "outdir": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-17_au-v4.31",
+  "packages": [
+    {
+      "skill": "acquisition-underwriting",
+      "file": "acquisition-underwriting.skill",
+      "bytes": 121727
+    }
+  ],
+  "last_batch": [
+    "acquisition-underwriting"
+  ]
+}

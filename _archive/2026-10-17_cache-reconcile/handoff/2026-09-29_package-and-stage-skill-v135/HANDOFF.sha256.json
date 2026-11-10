@@ -1,0 +1,13 @@
+{
+  "created_utc": "2026-09-29T15:28:21Z",
+  "folder": "_staging\\handoff\\2026-09-29_package-and-stage-skill-v135",
+  "files": [
+    {
+      "name": "package-and-stage-skill.skill",
+      "sha256": "39dcb57f04fddfd1a2d3d2f5202633e43ea87a78819d3ce9c7cb4a2ffc526580",
+      "prefix16": "39dcb57f04fddfd1",
+      "bytes": 36237,
+      "zip_ok": true
+    }
+  ]
+}

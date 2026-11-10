@@ -1,0 +1,34 @@
+{
+  "created_utc": "2026-10-01T18:36:02Z",
+  "folder": "C:\\Users\\Owner\\ora-skills\\_staging\\handoff\\2026-10-01_cook-parity",
+  "files": [
+    {
+      "name": "acquisition-underwriting.skill",
+      "sha256": "a22c05ebcd6400638bdd37e3bd211a48cb1c23e40063014e20c9369bb3031f68",
+      "prefix16": "a22c05ebcd640063",
+      "bytes": 117186,
+      "zip_ok": true
+    },
+    {
+      "name": "daily-brief.skill",
+      "sha256": "839ee3ab3c52410bf6ce8e4168415109df7641e85661999e2d9d7c01f9f2da2c",
+      "prefix16": "839ee3ab3c52410b",
+      "bytes": 41847,
+      "zip_ok": true
+    },
+    {
+      "name": "deal-comparison.skill",
+      "sha256": "0ba4e8a0489a0f06a5a4192bd247d0485296078a45e38c9af6f9fa95ddffebe0",
+      "prefix16": "0ba4e8a0489a0f06",
+      "bytes": 23939,
+      "zip_ok": true
+    },
+    {
+      "name": "market-monitor.skill",
+      "sha256": "675ce976f07f95ed2d6c5243ecbea44142417a5756cb81e3d6d3aad38c728fdb",
+      "prefix16": "675ce976f07f95ed",
+      "bytes": 28102,
+      "zip_ok": true
+    }
+  ]
+}
