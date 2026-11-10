@@ -110,11 +110,37 @@ class InstallError(Exception):
     pass
 
 
-def git(repo, *args, check=True):
+# Variables that would make git read a different repository or config file than the one
+# --repo names. Hooks run inside the real repo at push time, where these do not apply (legacy
+# GIT_CONFIG only ever affects `git config`), so honouring them here could only make the
+# installer/--check disagree with hook time.
+#
+# Env-supplied config (GIT_CONFIG_COUNT/KEY_*/VALUE_*, GIT_CONFIG_PARAMETERS i.e. `git -c`) is
+# NOT always stripped: it outranks every file, so it may or may not be present at push time.
+# worktree_overrides therefore evaluates BOTH views -- with it (a bad value is refused) and
+# without it (an env value equal to the install dir must not mask a worktree override that a
+# push made from a normal shell would use). See git(..., env_config=False).
+_REDIRECT_ENV = ("GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_CONFIG", "GIT_INDEX_FILE",
+                 "GIT_NAMESPACE", "GIT_CEILING_DIRECTORIES", "GIT_DISCOVERY_ACROSS_FILESYSTEM")
+
+
+def _git_env(env_config=True):
+    env = dict(os.environ)
+    for name in _REDIRECT_ENV:
+        env.pop(name, None)
+    if not env_config:
+        for name in list(env):
+            if name in ("GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS") or \
+                    name.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")):
+                env.pop(name)
+    return env
+
+
+def git(repo, *args, check=True, env_config=True):
     # git writes paths as UTF-8 whatever the console code page; decoding them as cp1252 turned
     # a non-ASCII worktree path into one that "did not exist" and was silently skipped.
     p = subprocess.run(["git", "-C", repo] + list(args), capture_output=True,
-                       encoding="utf-8", errors="replace")
+                       encoding="utf-8", errors="replace", env=_git_env(env_config))
     if check and p.returncode != 0:
         raise InstallError("git %s failed: %s" % (" ".join(args), p.stderr.strip()))
     return p
@@ -227,14 +253,14 @@ def _admin_dirs(repo):
     return out
 
 
-def _effective_entry(repo, git_dir):
+def _effective_entry(repo, git_dir, env_config=True):
     """(state, scope, origin, value) of the core.hooksPath entry git actually uses for the
     worktree whose admin dir is `git_dir` (includes and includeIf followed; the last entry
     wins). state: "absent", "set" (value may be "" -- git treats an empty hooksPath as a real
     path) or "error" (fail closed)."""
     p = git(repo, "--git-dir=" + git_dir.replace("\\", "/"), "config", "--show-scope",
             "--show-origin",
-            "--get-all", "core.hooksPath", check=False)
+            "--get-all", "core.hooksPath", check=False, env_config=env_config)
     if p.returncode == 1:
         return "absent", None, None, None
     lines = p.stdout.splitlines()
@@ -264,26 +290,34 @@ def worktree_overrides(repo, hooks_dir, strict=False):
     local_file = os.path.join(common_dir(repo), "config")
     bad = []
     for wt, admin in _admin_dirs(repo):
-        state, scope, origin, val = _effective_entry(repo, admin)
-        if state == "absent":
-            if strict:
-                bad.append((wt, None))
-            continue
-        if state == "error":
-            bad.append((wt, val))
-            continue
-        if val and same_path(val, hooks_dir):
-            continue
-        if not strict:
-            if scope in ("global", "system"):
-                continue
-            if scope == "local" and origin.startswith("file:"):
-                # a relative origin is relative to git's cwd, which git() sets to `repo`
-                src = os.path.join(repo, _c_unquote(origin[len("file:"):]))
-                if same_path(os.path.abspath(src), local_file):
-                    continue
-        bad.append((wt, "%s (%s %s)" % (val, scope, origin)))
+        # Both views must pass (see _REDIRECT_ENV): env config present, and env config absent.
+        for env_config in (True, False):
+            problem = _entry_problem(repo, admin, hooks_dir, local_file, strict, env_config)
+            if problem is not False:
+                bad.append((wt, problem))
+                break
     return bad
+
+
+def _entry_problem(repo, admin, hooks_dir, local_file, strict, env_config):
+    """False if this worktree's entry is acceptable in this view, else a description."""
+    state, scope, origin, val = _effective_entry(repo, admin, env_config)
+    view = "" if env_config else " [without GIT_CONFIG_COUNT/-c env config]"
+    if state == "absent":
+        return (None if not view else "unset" + view) if strict else False
+    if state == "error":
+        return val + view
+    if val and same_path(val, hooks_dir):
+        return False
+    if not strict:
+        if scope in ("global", "system"):
+            return False
+        if scope == "local" and origin.startswith("file:"):
+            # a relative origin is relative to git's cwd, which git() sets to `repo`
+            src = os.path.join(repo, _c_unquote(origin[len("file:"):]))
+            if same_path(os.path.abspath(src), local_file):
+                return False
+    return "%s (%s %s)%s" % (val, scope, origin, view)
 
 
 def check(repo):
@@ -351,7 +385,10 @@ def install(repo, log):
             make_executable(path)
             changed += 1
     want = hooks_dir.replace("\\", "/")
-    cur = git(repo, "config", "--get", "core.hooksPath", check=False).stdout.strip()
+    # Compare the shared --local FILE value, not the effective one: an env/-c value equal to
+    # hooks_dir must not make install skip writing the setting a normal shell will read.
+    cur = git(repo, "config", "--local", "--get", "core.hooksPath", check=False,
+              env_config=False).stdout.strip()
     if not cur or not same_path(cur, hooks_dir):
         git(repo, "config", "--local", "core.hooksPath", want)
         log("core.hooksPath: %s -> %s" % (cur or "(unset)", want))
