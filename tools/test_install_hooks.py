@@ -387,6 +387,216 @@ class Installer(Base):
         self.assertEqual(self.sb.git(self.sb.work, "config", "--local", "--get", "core.hooksPath",
                                      check=False).stdout, b"")
 
+    def test_inherited_old_shared_hookspath_is_not_an_override(self):
+        # Regression 2026-11-10: with extensions.worktreeConfig on and NO config.worktree
+        # value, a linked worktree merely INHERITS the old shared core.hooksPath. That is not
+        # an override (the install replaces the shared value), so it must not block install.
+        wt = os.path.join(self.sb.root, "wt")
+        self.sb.git(self.sb.work, "worktree", "add", "-q", "-b", "side", wt, "main")
+        self.sb.git(self.sb.work, "config", "extensions.worktreeConfig", "true")
+        self.sb.git(self.sb.work, "config", "core.hooksPath",
+                    os.path.join(self.sb.work, "tools", "hooks"))
+        self.installed()
+        for d in (self.sb.work, wt):
+            val = self.sb.git(d, "config", "--get", "core.hooksPath").stdout.decode().strip()
+            self.assertEqual(os.path.normcase(os.path.normpath(val)), self.sb.hooks_dir(), d)
+        rc, out = self.sb.install(None, "--check")
+        self.assertEqual(rc, 0, out)
+
+    def test_worktree_override_equal_to_hooks_dir_is_allowed(self):
+        # A config.worktree value that already names the install dir does not win against it.
+        wt = os.path.join(self.sb.root, "wt")
+        self.sb.git(self.sb.work, "worktree", "add", "-q", "-b", "side", wt, "main")
+        self.sb.git(self.sb.work, "config", "extensions.worktreeConfig", "true")
+        self.sb.git(wt, "config", "--worktree", "core.hooksPath", self.sb.hooks_dir())
+        self.installed()
+
+    def test_main_worktree_scoped_override_is_refused(self):
+        # config.worktree of the MAIN worktree would also beat the shared --local value.
+        self.sb.git(self.sb.work, "config", "extensions.worktreeConfig", "true")
+        self.sb.git(self.sb.work, "config", "--worktree", "core.hooksPath",
+                    os.path.join(self.sb.work, "tools", "hooks"))
+        rc, out = self.sb.install()
+        self.assertNotEqual(rc, 0, out)
+        self.assertFalse(os.path.exists(self.sb.hooks_dir()), "refusal must write nothing")
+
+    # REFUTE 2026-11-10 (cases A/B/C/F): overrides a worktree-scope-only read would miss.
+    def _side_worktree(self, wt_config=True):
+        wt = os.path.join(self.sb.root, "wt")
+        self.sb.git(self.sb.work, "worktree", "add", "-q", "-b", "side", wt, "main")
+        if wt_config:
+            self.sb.git(self.sb.work, "config", "extensions.worktreeConfig", "true")
+        return wt
+
+    def _evil_include(self):
+        path = os.path.join(self.sb.root, "evil.cfg")
+        with open(path, "w") as f:
+            f.write("[core]\n\thooksPath = %s\n" % os.path.join(self.sb.root, "evil").replace("\\", "/"))
+        return path
+
+    def _assert_refused_then_caught_after_install(self, add_override):
+        add_override()
+        rc, out = self.sb.install()
+        self.assertEqual(rc, 2, out)
+        self.assertFalse(os.path.exists(self.sb.hooks_dir()), "refusal must write nothing")
+        rc, out = self.sb.install(None, "--check")
+        self.assertEqual(rc, 1, out)
+
+    def test_include_in_config_worktree_is_refused(self):           # case A
+        wt = self._side_worktree()
+        self._assert_refused_then_caught_after_install(
+            lambda: self.sb.git(wt, "config", "--worktree", "include.path", self._evil_include()))
+
+    def test_empty_config_worktree_value_is_refused(self):          # case B
+        wt = self._side_worktree()
+        self._assert_refused_then_caught_after_install(
+            lambda: self.sb.git(wt, "config", "--worktree", "core.hooksPath", ""))
+
+    def test_shared_includeif_onbranch_is_refused(self):            # case F
+        self._side_worktree()
+        self._assert_refused_then_caught_after_install(
+            lambda: self.sb.git(self.sb.work, "config", "--local", "includeIf.onbranch:side.path",
+                                self._evil_include()))
+
+    def test_shared_includeif_onbranch_refused_without_worktree_config(self):
+        self._side_worktree(wt_config=False)
+        self._assert_refused_then_caught_after_install(
+            lambda: self.sb.git(self.sb.work, "config", "--local", "includeIf.onbranch:side.path",
+                                self._evil_include()))
+
+    def test_override_added_after_install_fails_check(self):
+        wt = self._side_worktree()
+        self.installed()
+        self.sb.git(self.sb.work, "config", "--local", "includeIf.onbranch:side.path",
+                    self._evil_include())
+        rc, out = self.sb.install(None, "--check")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("wt", out)
+
+    # REFUTE round 2 (H1/H2/H4): judge the override by its SOURCE, not its value.
+    def _includeif_for_side(self, value):
+        path = os.path.join(self.sb.root, "same.cfg")
+        with open(path, "w") as f:
+            f.write("[core]\n\thooksPath = %s\n" % value.replace("\\", "/"))
+        self.sb.git(self.sb.work, "config", "--local", "includeIf.onbranch:side.path", path)
+
+    def test_includeif_repeating_global_value_is_refused(self):     # H1
+        self._side_worktree(wt_config=False)
+        g = os.path.join(self.sb.root, "globalhooks")
+        self.sb.git(self.sb.work, "config", "--global", "core.hooksPath", g)
+        self._assert_refused_then_caught_after_install(lambda: self._includeif_for_side(g))
+
+    def test_includeif_added_after_install_repeating_global_fails_check(self):   # H1p
+        wt = self._side_worktree(wt_config=False)
+        g = os.path.join(self.sb.root, "globalhooks")
+        self.sb.git(self.sb.work, "config", "--global", "core.hooksPath", g)
+        self.installed()
+        self._includeif_for_side(g)
+        rc, out = self.sb.install(None, "--check")
+        self.assertEqual(rc, 1, out)
+
+    def test_includeif_repeating_shared_local_value_is_refused(self):   # H2
+        self._side_worktree()
+        x = os.path.join(self.sb.root, "oldhooks")
+        self.sb.git(self.sb.work, "config", "--local", "core.hooksPath", x)
+        self._assert_refused_then_caught_after_install(lambda: self._includeif_for_side(x))
+
+    def test_global_includeif_hookspath_does_not_block_install(self):   # H4 (legitimate)
+        wt = self._side_worktree(wt_config=False)
+        path = os.path.join(self.sb.root, "mgr.cfg")
+        with open(path, "w") as f:
+            f.write("[core]\n\thooksPath = %s\n" % os.path.join(self.sb.root, "mgr").replace("\\", "/"))
+        self.sb.git(self.sb.work, "config", "--global",
+                    "includeIf.gitdir:%s/**.path" % self.sb.root.replace("\\", "/"), path)
+        self.installed()
+        val = self.sb.git(wt, "config", "--get", "core.hooksPath").stdout.decode().strip()
+        self.assertEqual(os.path.normcase(os.path.normpath(val)), self.sb.hooks_dir())
+
+    def test_plain_global_hookspath_does_not_block_install(self):       # H6 (legitimate)
+        self._side_worktree()
+        self.sb.git(self.sb.work, "config", "--global", "core.hooksPath",
+                    os.path.join(self.sb.root, "g"))
+        self.installed()
+
+    def test_non_ascii_worktree_override_is_refused(self):           # REFUTE round 3
+        # worktreeConfig OFF so the refusal can only come from actually reading this worktree
+        # (an includeIf scoped to its branch), not from a blanket refusal.
+        wt = os.path.join(self.sb.root, "wté")
+        self.sb.git(self.sb.work, "worktree", "add", "-q", "-b", "side", wt, "main")
+        self._assert_refused_then_caught_after_install(
+            lambda: self.sb.git(self.sb.work, "config", "--local", "includeIf.onbranch:side.path",
+                                self._evil_include()))
+
+    def test_c_unquote(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "ih", os.path.join(os.path.dirname(os.path.abspath(__file__)), "install_hooks.py"))
+        ih = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ih)
+        self.assertEqual(ih._c_unquote('"C:\\\\a b\\\\.git/config"'), "C:\\a b\\.git/config")
+        self.assertEqual(ih._c_unquote('"C:/n\\303\\266n/config"'), "C:/n\u00f6n/config")
+        self.assertEqual(ih._c_unquote("C:/plain/config"), "C:/plain/config")
+
+    def test_non_ascii_clone_installs_and_checks(self):
+        # Whole clone under a non-ASCII dir: quoted origin must still match the local file.
+        nroot = os.path.join(self.sb.root, "n\u00f6n")
+        os.makedirs(nroot)
+        clone = os.path.join(nroot, "c")
+        self.sb.git(self.sb.root, "clone", "-q", self.sb.work, clone)
+        self.sb.git(clone, "config", "core.hooksPath", os.path.join(clone, "tools", "hooks"))
+        rc, out = self.sb.install(clone)
+        self.assertEqual(rc, 0, out)
+        rc, out = self.sb.install(clone, "--check")
+        self.assertEqual(rc, 0, out)
+
+    def _moved_override(self, lock):
+        wt = self._side_worktree()
+        if lock:
+            self.sb.git(self.sb.work, "worktree", "lock", wt)
+        self.sb.git(wt, "config", "--worktree", "core.hooksPath",
+                    os.path.join(self.sb.root, "evil"))
+        moved = os.path.join(self.sb.root, "moved")
+        shutil.move(wt, moved)                 # by hand: git still records the old path
+        hooks = self.sb.git(moved, "rev-parse", "--git-path", "hooks").stdout.decode().strip()
+        self.assertIn("evil", hooks)           # the moved worktree really bypasses the gate
+        return moved
+
+    def test_moved_locked_worktree_override_is_refused(self):       # REFUTE round 4
+        self._moved_override(lock=True)
+        rc, out = self.sb.install()
+        self.assertEqual(rc, 2, out)
+        self.assertFalse(os.path.exists(self.sb.hooks_dir()), "refusal must write nothing")
+
+    def test_moved_unlocked_worktree_override_is_refused(self):     # REFUTE round 4
+        self._moved_override(lock=False)
+        rc, out = self.sb.install()
+        self.assertEqual(rc, 2, out)
+
+    def test_locked_missing_worktree_is_checked_not_skipped(self):
+        # Its admin dir is still here, so it is verified (clean -> installs and passes).
+        wt = os.path.join(self.sb.root, "away")
+        self.sb.git(self.sb.work, "worktree", "add", "-q", "-b", "away", wt, "main")
+        self.sb.git(self.sb.work, "worktree", "lock", wt)
+        shutil.rmtree(wt)
+        self.installed()
+        rc, out = self.sb.install(None, "--check")
+        self.assertEqual(rc, 0, out)
+
+    def test_non_ascii_worktree_clean_installs(self):
+        wt = os.path.join(self.sb.root, "wté")
+        self.sb.git(self.sb.work, "worktree", "add", "-q", "-b", "side", wt, "main")
+        self.installed()
+        rc, out = self.sb.install(None, "--check")
+        self.assertEqual(rc, 0, out)
+
+    def test_pruned_worktree_is_skipped(self):
+        wt = os.path.join(self.sb.root, "gone")
+        self.sb.git(self.sb.work, "worktree", "add", "-q", "-b", "side", wt, "main")
+        shutil.rmtree(wt)
+        self.installed()
+        rc, out = self.sb.install(None, "--check")
+        self.assertEqual(rc, 0, out)
+
     def test_failed_reinstall_never_leaves_shim_missing(self):
         # REFUTE E2: a failure while swapping files must not leave git with no pre-push.
         import importlib.util

@@ -111,7 +111,10 @@ class InstallError(Exception):
 
 
 def git(repo, *args, check=True):
-    p = subprocess.run(["git", "-C", repo] + list(args), capture_output=True, text=True)
+    # git writes paths as UTF-8 whatever the console code page; decoding them as cp1252 turned
+    # a non-ASCII worktree path into one that "did not exist" and was silently skipped.
+    p = subprocess.run(["git", "-C", repo] + list(args), capture_output=True,
+                       encoding="utf-8", errors="replace")
     if check and p.returncode != 0:
         raise InstallError("git %s failed: %s" % (" ".join(args), p.stderr.strip()))
     return p
@@ -176,22 +179,110 @@ def backup_name(path):
     return cand
 
 
-def worktree_overrides(repo, hooks_dir):
-    """Linked worktrees whose effective core.hooksPath is not hooks_dir (only possible when
-    extensions.worktreeConfig lets a config.worktree override the shared value)."""
-    flag = git(repo, "config", "--type=bool", "--get", "extensions.worktreeConfig", check=False)
-    if flag.stdout.strip() != "true":
-        return []
+def _c_unquote(s):
+    """Undo git's C-style path quoting ("C:\\\\x", octal UTF-8 bytes); unquoted input as is."""
+    if len(s) < 2 or s[0] != '"' or s[-1] != '"':
+        return s
+    body, out, i = s[1:-1], bytearray(), 0
+    simple = {"\\": b"\\", '"': b'"', "t": b"\t", "n": b"\n", "a": b"\a", "b": b"\b",
+              "f": b"\f", "r": b"\r", "v": b"\v"}
+    while i < len(body):
+        c = body[i]
+        if c == "\\" and i + 1 < len(body):
+            nxt = body[i + 1]
+            if nxt in simple:
+                out += simple[nxt]
+                i += 2
+                continue
+            if body[i + 1:i + 4].isdigit() and len(body[i + 1:i + 4]) == 3:
+                out.append(int(body[i + 1:i + 4], 8) & 0xFF)
+                i += 4
+                continue
+        out += c.encode("utf-8")
+        i += 1
+    return out.decode("utf-8", errors="replace")
+
+
+def _admin_dirs(repo):
+    """[(label, git_dir)] for EVERY worktree of the clone: the main one (the common dir) and
+    each <common>/worktrees/<id>. Enumerated from the admin dirs, never from the recorded
+    worktree paths: a worktree moved by hand still runs git (and hooks) through its admin
+    dir while `worktree list` shows the stale path as prunable/missing."""
+    common = common_dir(repo)
+    main = os.path.dirname(common) if os.path.basename(common).lower() == ".git" else common
+    out = [(main, common)]
+    wroot = os.path.join(common, "worktrees")
+    if os.path.isdir(wroot):
+        for name in sorted(os.listdir(wroot)):
+            admin = os.path.join(wroot, name)
+            if not os.path.isfile(os.path.join(admin, "HEAD")):
+                continue  # not a worktree admin dir
+            label = admin
+            try:
+                with open(os.path.join(admin, "gitdir"), encoding="utf-8") as f:
+                    label = "%s [%s]" % (os.path.dirname(f.read().strip()), name)
+            except OSError:
+                pass
+            out.append((label, admin))
+    return out
+
+
+def _effective_entry(repo, git_dir):
+    """(state, scope, origin, value) of the core.hooksPath entry git actually uses for the
+    worktree whose admin dir is `git_dir` (includes and includeIf followed; the last entry
+    wins). state: "absent", "set" (value may be "" -- git treats an empty hooksPath as a real
+    path) or "error" (fail closed)."""
+    p = git(repo, "--git-dir=" + git_dir.replace("\\", "/"), "config", "--show-scope",
+            "--show-origin",
+            "--get-all", "core.hooksPath", check=False)
+    if p.returncode == 1:
+        return "absent", None, None, None
+    lines = p.stdout.splitlines()
+    parts = lines[-1].split("\t", 2) if (p.returncode == 0 and lines) else []
+    if len(parts) != 3:
+        return "error", None, None, "<unreadable: %s>" % (p.stderr.strip() or p.returncode)
+    scope, origin, value = parts
+    return "set", scope, origin, value.strip()
+
+
+def worktree_overrides(repo, hooks_dir, strict=False):
+    """Worktrees whose hooks do not (or, after install, would not) resolve to hooks_dir.
+
+    Judged by the SOURCE of each worktree's effective core.hooksPath, never by its value:
+      * strict (after install, --check): every worktree must resolve to hooks_dir.
+      * before install: an entry install supersedes is fine -- one read from the shared
+        --local config file itself, or from global/system scope (both lose to --local).
+        Anything else wins over --local and is an override: config.worktree (scope
+        "worktree", incl. "" and its includes), an include/includeIf pulled in by the local
+        config (scope "local" but another origin file), or command/env config.
+    A git error is an override (fail closed).
+
+    History: comparing effective VALUES (pre-2026-11-10) flagged a worktree that merely
+    inherited the old shared value, so first install was impossible with worktreeConfig on;
+    a value-equality exemption then let an includeIf repeating the global value slip by;
+    skipping worktrees missing from their recorded path hid hand-moved worktrees."""
+    local_file = os.path.join(common_dir(repo), "config")
     bad = []
-    for line in git(repo, "worktree", "list", "--porcelain").stdout.splitlines():
-        if not line.startswith("worktree "):
+    for wt, admin in _admin_dirs(repo):
+        state, scope, origin, val = _effective_entry(repo, admin)
+        if state == "absent":
+            if strict:
+                bad.append((wt, None))
             continue
-        wt = line[len("worktree "):]
-        if not os.path.isdir(wt):
-            continue  # prunable / on another machine: git cannot run hooks there anyway
-        val = git(wt, "config", "--get", "core.hooksPath", check=False).stdout.strip()
-        if not val or not same_path(val, hooks_dir):
+        if state == "error":
             bad.append((wt, val))
+            continue
+        if val and same_path(val, hooks_dir):
+            continue
+        if not strict:
+            if scope in ("global", "system"):
+                continue
+            if scope == "local" and origin.startswith("file:"):
+                # a relative origin is relative to git's cwd, which git() sets to `repo`
+                src = os.path.join(repo, _c_unquote(origin[len("file:"):]))
+                if same_path(os.path.abspath(src), local_file):
+                    continue
+        bad.append((wt, "%s (%s %s)" % (val, scope, origin)))
     return bad
 
 
@@ -207,8 +298,8 @@ def check(repo):
     cur = git(repo, "config", "--get", "core.hooksPath", check=False).stdout.strip()
     if not cur or not same_path(cur, hooks_dir):
         problems.append("core.hooksPath is %r, expected %s" % (cur or None, hooks_dir))
-    problems += ["worktree %s overrides core.hooksPath (%r)" % b
-                 for b in worktree_overrides(repo, hooks_dir)]
+    problems += ["worktree %s does not resolve core.hooksPath to the install dir (%r)" % b
+                 for b in worktree_overrides(repo, hooks_dir, strict=True)]
     return hooks_dir, problems
 
 
@@ -223,11 +314,13 @@ def install(repo, log):
     # Refuse BEFORE writing anything: a per-worktree core.hooksPath would silently win.
     bad = worktree_overrides(repo, hooks_dir)
     if bad:
-        raise InstallError("linked worktree(s) override core.hooksPath via "
-                           "extensions.worktreeConfig, so the shims would not run there:\n  "
+        raise InstallError("worktree(s) take core.hooksPath from a source that beats the shared "
+                           "--local value (config.worktree, an include/includeIf, or "
+                           "GIT_CONFIG_*/-c), so the shims would not run there:\n  "
                            + "\n  ".join("%s -> %r" % b for b in bad)
                            + "\nRemove those per-worktree values (git config --worktree "
-                             "--unset core.hooksPath) and re-run. Nothing was written.")
+                             "--unset core.hooksPath, or the include/includeIf that sets it) "
+                             "and re-run. Nothing was written.")
     for name in files:
         path = os.path.join(hooks_dir, name)
         if os.path.lexists(path) and not os.path.isfile(path):
@@ -267,6 +360,13 @@ def install(repo, log):
     if not same_path(eff, hooks_dir):
         raise InstallError("core.hooksPath still resolves to %r after install (set in a higher-"
                            "precedence config such as GIT_CONFIG_* or -c?)" % eff)
+    # Post-write: every worktree must now resolve to hooks_dir (catches anything the source-
+    # based pre-check could not foresee). Files are written; say so rather than claim success.
+    late = worktree_overrides(repo, hooks_dir, strict=True)
+    if late:
+        raise InstallError("installed, but these worktrees still do not use %s, so the gate "
+                           "does not run there:\n  %s\nRemove the override and re-run."
+                           % (hooks_dir, "\n  ".join("%s -> %r" % b for b in late)))
     if not changed:
         log("up to date: %s" % hooks_dir)
     return hooks_dir
