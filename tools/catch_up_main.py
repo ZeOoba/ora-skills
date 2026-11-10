@@ -28,9 +28,27 @@ Fast-forwards when local main has no unpushed commits; otherwise writes a merge
 commit in the established `merge origin/main into local main (forward-merge #N, #M)`
 form. Never pushes, never resets, never aborts someone else's merge.
 
+Squash realign (REALIGNED)
+--------------------------
+Seen live 2026-11-10 on #236: a PR squash-merged to keep its commits out of public
+main, while those same commits sat on this checkout's local main. A forward-merge
+there leaves local main ahead with the pre-squash commits still reachable, and a later
+push of main would publish exactly what the squash dropped. So when, after every
+check above, local main is AHEAD of origin/main yet its tree is IDENTICAL to
+origin/main's (the squash shape), no merge is written. Instead, if the working tree
+is clean (untracked files included), the index is empty and no merge/cherry-pick/
+revert is in progress, main is moved by ref:
+  git update-ref refs/backup/catch-up/<UTC stamp>-<old sha> <old> ''   (must not exist)
+  git update-ref refs/heads/main <origin/main sha> <old>             (old-value guard)
+The old tip stays reachable on that backup ref; the working tree is untouched
+(identical tree). If the tree or index is not clean the run is SKIPPED with nothing
+moved -- merging would re-create the problem. Any local commit that changes content
+relative to origin/main makes the trees differ, so that case merges as before.
+
 Usage
 -----
-  python tools/catch_up_main.py [--repo PATH]     exit 0 MERGED/NOOP, 3 SKIPPED, 1 ERROR
+  python tools/catch_up_main.py [--repo PATH]
+      exit 0 MERGED/REALIGNED/NOOP, 3 SKIPPED, 1 ERROR
   python tools/catch_up_main.py --hook [--repo PATH]
       PostToolUse mode: reads the hook payload on stdin, acts only on a Bash
       `gh pr merge` aimed at ZeOoba/ora-skills, reports via additionalContext,
@@ -146,7 +164,7 @@ def _pr_numbers(log: str) -> list[str]:
 
 def catch_up(repo: Path = REPO, preflight=run_preflight, budget_s: float = TOTAL_BUDGET_S,
              clock=time.monotonic):
-    """-> (status, detail); status is MERGED, NOOP, SKIPPED or ERROR. Bounded by
+    """-> (status, detail); status is MERGED, REALIGNED, NOOP, SKIPPED or ERROR. Bounded by
     `budget_s` (see "Time budget" in the module docstring)."""
     end = clock() + budget_s
 
@@ -219,6 +237,10 @@ def _catch_up(repo: Path, preflight, git, remaining):
     # Never start a merge that the deadline could kill half-way through.
     if remaining() < MERGE_TIMEOUT_S:
         return 'SKIPPED', 'time budget too low to start the merge'
+
+    squash = _squash_signature(git, head)
+    if squash is not None:
+        return _realign(repo, git, head, squash, nums, behind)
     rc, _, err = _git(repo, 'merge', '--no-edit', '-m', message, 'origin/main',
                       timeout=MERGE_TIMEOUT_S)
     if rc != 0:
@@ -231,6 +253,76 @@ def _catch_up(repo: Path, preflight, git, remaining):
     if left_behind != '0':
         return 'ERROR', 'merge reported success but origin/main is still not contained'
     return 'MERGED', f'forward-merged {label} into local main'
+
+
+def _squash_signature(git, head: str):
+    """-> (origin_sha, ahead) when local main is a tree-identical sibling of
+    origin/main -- it carries unpushed commits (ahead > 0) yet its tree already equals
+    origin/main's, the shape a squash-merge of those same commits leaves. None when
+    the trees differ, local main is not ahead (a plain fast-forward), or a read fails
+    (falls through to the merge path, today's behavior)."""
+    rc, origin_sha, _ = git('rev-parse', '--verify', 'origin/main^{commit}')
+    if rc != 0:
+        return None
+    rc, ahead, _ = git('rev-list', '--count', f'{origin_sha}..{head}')
+    if rc != 0 or ahead in ('', '0'):
+        return None
+    rc_h, head_tree, _ = git('rev-parse', '--verify', f'{head}^{{tree}}')
+    rc_o, origin_tree, _ = git('rev-parse', '--verify', f'{origin_sha}^{{tree}}')
+    if rc_h != 0 or rc_o != 0 or not head_tree or head_tree != origin_tree:
+        return None
+    return origin_sha, ahead
+
+
+def _realign(repo: Path, git, head: str, squash, nums: list[str], behind: str):
+    """Move refs/heads/main from `head` to origin/main by ref, keeping `head` on a
+    backup ref. Only on a clean tree, empty index and no in-progress operation;
+    otherwise SKIPPED -- a merge here would re-introduce exactly the pre-squash
+    commits the squash dropped, so 'no move' is the safe outcome."""
+    origin_sha, ahead = squash
+    label = ', '.join(f'#{n}' for n in nums) or f'{behind} commit(s)'
+
+    rc_s, status, _ = git('status', '--porcelain', '--untracked-files=all')
+    rc_c, staged, _ = git('diff', '--cached', '--name-only')
+    if rc_s != 0 or rc_c != 0:
+        return 'SKIPPED', (f'squash of local main detected ({label}) but the working tree '
+                           'could not be read -- nothing moved')
+    in_progress = [p for p in ('MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD',
+                               'REBASE_HEAD')
+                   if git('rev-parse', '-q', '--verify', p)[0] == 0]
+    if status or staged or in_progress:
+        why = (f'{", ".join(in_progress)} in progress' if in_progress
+               else 'working tree or index not clean')
+        return 'SKIPPED', (f'squash of local main detected ({label}; {ahead} pre-squash '
+                           f'commit(s), identical tree) but {why} -- nothing moved; '
+                           'realign by hand, do not merge')
+    rc, now_head, _ = git('rev-parse', 'HEAD')
+    if rc != 0 or now_head != head:
+        return 'SKIPPED', 'HEAD moved during the check -- another writer is active'
+
+    stamp = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())
+    backup = f'refs/backup/catch-up/{stamp}-{head[:12]}'
+    # Writes bypass the clamped closure (as the merge does): the caller already
+    # reserved MERGE_TIMEOUT_S, and a write must never be cut off by the budget.
+    rc, _, err = _git(repo, 'update-ref', '-m', 'catch_up_main: pre-realign main tip',
+                      backup, head, '', timeout=POST_MERGE_READ_TIMEOUT_S)
+    if rc != 0:
+        return 'SKIPPED', f'could not write backup ref {backup} ({err or rc}) -- nothing moved'
+    rc, _, err = _git(repo, 'update-ref', '-m',
+                      f'catch_up_main: realign main to origin/main after squash ({label})',
+                      'refs/heads/main', origin_sha, head, timeout=POST_MERGE_READ_TIMEOUT_S)
+    if rc != 0:
+        return 'SKIPPED', (f'main moved before the realign could land ({err or rc}) -- '
+                           f'main left as is; backup ref {backup} kept')
+    rc, after, _ = _git(repo, 'rev-parse', 'HEAD', timeout=POST_MERGE_READ_TIMEOUT_S)
+    if rc != 0:
+        return 'REALIGNED', (f'main moved to origin/main after squash of {label}; old tip '
+                             f'{head[:12]} kept at {backup} (post-move check unread -- verify)')
+    if after != origin_sha:
+        return 'ERROR', f'realign reported success but HEAD is {after[:12]}; backup at {backup}'
+    return 'REALIGNED', (f'main moved to origin/main ({origin_sha[:12]}) after squash of '
+                         f'{label}; {ahead} pre-squash commit(s) dropped from main, old tip '
+                         f'{head[:12]} kept at {backup}')
 
 
 _REPO_SPEC = re.compile(
@@ -464,7 +556,7 @@ def main(argv: list[str]) -> int:
         return _hook(repo)
     status, detail = catch_up(repo)
     print(f'catch_up_main: {status} -- {detail}')
-    return {'MERGED': 0, 'NOOP': 0, 'SKIPPED': 3}.get(status, 1)
+    return {'MERGED': 0, 'REALIGNED': 0, 'NOOP': 0, 'SKIPPED': 3}.get(status, 1)
 
 
 if __name__ == '__main__':

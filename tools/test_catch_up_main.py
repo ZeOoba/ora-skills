@@ -185,6 +185,131 @@ class CatchUp(Fixture):
                          'merge origin/main into local main (forward-merge)')
 
 
+class SquashRealign(Fixture):
+    """Seen live 2026-11-10 on #236: the PR was squash-merged to keep its commits out
+    of public main, but those same commits sat on the shared checkout's local main.
+    The forward-merge then wrote a merge commit, leaving local main ahead with the
+    pre-squash commits still reachable -- a later push of main would publish them.
+    When local main's tree already equals origin/main's, catch_up must move main to
+    origin/main by ref (old tip kept on a backup ref), never merge."""
+
+    def _squash_scenario(self):
+        """Local main carries two unpushed commits; origin lands their squash."""
+        _commit(self.local, 'notes/entry.md', 'draft\n', 'wip entry')
+        _commit(self.local, 'notes/entry.md', 'final\n', 'finish entry')
+        _commit(self.seed, 'notes/entry.md', 'final\n', 'land entry (#236)')
+        _git(self.seed, 'push', '-q', 'origin', 'main')
+        return _git(self.local, 'rev-parse', 'HEAD')
+
+    def _backup_refs(self):
+        out = _git(self.local, 'for-each-ref', '--format=%(refname) %(objectname)',
+                   'refs/backup/catch-up/')
+        return [ln.split() for ln in out.splitlines() if ln]
+
+    def test_squash_with_identical_tree_realigns_by_ref(self):
+        old_tip = self._squash_scenario()
+
+        status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'REALIGNED', detail)
+        self.assertEqual(_git(self.local, 'rev-parse', 'HEAD'),
+                         _git(self.local, 'rev-parse', 'origin/main'))
+        self.assertEqual(_git(self.local, 'symbolic-ref', '--short', 'HEAD'), 'main')
+        # the pre-squash commits are no longer reachable from main...
+        r = subprocess.run(['git', '-C', str(self.local), 'merge-base', '--is-ancestor',
+                            old_tip, 'main'], capture_output=True)
+        self.assertNotEqual(r.returncode, 0)
+        # ...but are kept on exactly one named backup ref
+        backups = self._backup_refs()
+        self.assertEqual(len(backups), 1, backups)
+        self.assertEqual(backups[0][1], old_tip)
+        self.assertIn(backups[0][0], detail)
+        self.assertEqual(_git(self.local, 'status', '--porcelain'), '')
+        self.assertEqual((self.local / 'notes' / 'entry.md').read_text(), 'final\n')
+        self.assertFalse(_git(self.local, 'log', '-1', '--format=%s').startswith('merge '))
+
+    def test_hook_reports_realigned_in_additional_context(self):
+        import io
+        import json
+        from unittest import mock
+        self._squash_scenario()
+        real = cum.catch_up
+        payload = json.dumps({'tool_name': 'Bash', 'tool_input': {
+            'command': 'gh pr merge 236 --squash -R ZeOoba/ora-skills'}}).encode()
+        out = io.StringIO()
+        with mock.patch.object(cum, 'catch_up',
+                               lambda repo: real(repo, preflight=_clear)), \
+                mock.patch.object(cum.sys, 'stdin', mock.Mock(buffer=io.BytesIO(payload))), \
+                mock.patch.object(cum.sys, 'stdout', out):
+            self.assertEqual(cum._hook(self.local), 0)
+        ctx = json.loads(out.getvalue())['hookSpecificOutput']['additionalContext']
+        self.assertTrue(ctx.startswith('ora-skills local main catch-up: REALIGNED -- '), ctx)
+
+    def test_cli_exit_code_for_realigned_is_success(self):
+        from unittest import mock
+        import io
+        with mock.patch.object(cum, 'catch_up', lambda repo: ('REALIGNED', 'x')),                 mock.patch.object(cum.sys, 'stdout', io.StringIO()):
+            self.assertEqual(cum.main(['--repo', str(self.local)]), 0)
+
+    def test_extra_unrelated_local_commit_merges_as_today(self):
+        self._squash_scenario()
+        _commit(self.local, 'local-only.md', 'mine\n', 'unrelated unpushed commit')
+        old_tip = _git(self.local, 'rev-parse', 'HEAD')
+
+        status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'MERGED', detail)
+        _git(self.local, 'merge-base', '--is-ancestor', old_tip, 'HEAD')
+        self.assertEqual(_git(self.local, 'rev-list', '--count', 'HEAD..origin/main'), '0')
+        self.assertEqual(_git(self.local, 'log', '-1', '--format=%s'),
+                         'merge origin/main into local main (forward-merge #236)')
+        self.assertEqual(self._backup_refs(), [])
+
+    def test_dirty_tree_never_moves_main(self):
+        for label, dirty in (
+                ('untracked file', lambda: (self.local / 'scratch.txt').write_text('x\n')),
+                ('modified file', lambda: (self.local / 'demo-skill' / 'SKILL.md')
+                 .write_text('wip\n')),
+                ('staged-only change', lambda: (
+                    (self.local / 'demo-skill' / 'SKILL.md').write_text('staged\n'),
+                    _git(self.local, 'add', 'demo-skill/SKILL.md'),
+                    (self.local / 'demo-skill' / 'SKILL.md').write_text('v1\n')))):
+            with self.subTest(dirty=label):
+                self.tearDown()
+                self.setUp()
+                old_tip = self._squash_scenario()
+                dirty()
+
+                status, detail = cum.catch_up(self.local, preflight=_clear)
+
+                self.assertEqual(status, 'SKIPPED', detail)
+                self.assertIn('squash', detail)
+                self.assertEqual(_git(self.local, 'rev-parse', 'HEAD'), old_tip)
+                self.assertEqual(self._backup_refs(), [])
+                self.assertFalse((self.local / '.git' / 'MERGE_HEAD').exists())
+
+    def test_main_moved_by_another_writer_is_not_clobbered(self):
+        # The guarded update-ref must refuse when main no longer holds the tip that
+        # was checked -- simulate a writer landing between the checks and the move.
+        from unittest import mock
+        self._squash_scenario()
+        real = cum._git
+        racer = {}
+
+        def spy(repo, *args, timeout=60):
+            if args[0] == 'update-ref' and 'refs/heads/main' in args and not racer:
+                _commit(self.local, 'race.md', 'r\n', 'concurrent commit')
+                racer['tip'] = _git(self.local, 'rev-parse', 'HEAD')
+            return real(repo, *args, timeout=timeout)
+
+        with mock.patch.object(cum, '_git', spy):
+            status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'SKIPPED', detail)
+        self.assertEqual(_git(self.local, 'rev-parse', 'HEAD'), racer['tip'])
+        self.assertIn('backup', detail)
+
+
 class NonInteractiveGit(unittest.TestCase):
     def test_git_never_prompts_for_credentials(self):
         # Review finding 2026-09-17: an unattended fetch (hook / daily sweep) must fail
