@@ -288,57 +288,86 @@ class SquashRealign(Fixture):
                 self.assertEqual(self._backup_refs(), [])
                 self.assertFalse((self.local / '.git' / 'MERGE_HEAD').exists())
 
-    def test_main_moved_by_another_writer_is_not_clobbered(self):
-        # The guarded update-ref must refuse when main no longer holds the tip that
-        # was checked -- simulate a writer landing between the checks and the move.
+    def _spy(self, before=None, after=None):
+        """Patch cum._git; before(args)/after(args, result) run around each real call."""
         from unittest import mock
-        self._squash_scenario()
         real = cum._git
+
+        def spy(repo, *args, timeout=60, **kw):
+            if before:
+                before(args)
+            result = real(repo, *args, timeout=timeout, **kw)
+            if after:
+                after(args, result)
+            return result
+        return mock.patch.object(cum, '_git', spy)
+
+    @staticmethod
+    def _is_transaction(args):
+        return args[0] == 'update-ref' and '--stdin' in args
+
+    def _refs_at(self, sha):
+        out = _git(self.local, 'for-each-ref', '--points-at', sha, '--format=%(refname)')
+        return [ln for ln in out.splitlines() if ln]
+
+    def test_main_moved_by_another_writer_is_not_clobbered(self):
+        # The transaction's old-value guard must refuse when main no longer holds the
+        # tip that was checked -- and, being atomic, must write no backup ref either.
+        old_tip = self._squash_scenario()
         racer = {}
 
-        def spy(repo, *args, timeout=60):
-            if args[0] == 'update-ref' and 'refs/heads/main' in args and not racer:
+        def before(args):
+            if self._is_transaction(args) and not racer:
                 _commit(self.local, 'race.md', 'r\n', 'concurrent commit')
                 racer['tip'] = _git(self.local, 'rev-parse', 'HEAD')
-            return real(repo, *args, timeout=timeout)
 
-        with mock.patch.object(cum, '_git', spy):
+        with self._spy(before=before):
             status, detail = cum.catch_up(self.local, preflight=_clear)
 
         self.assertEqual(status, 'SKIPPED', detail)
+        self.assertIn('could not move main', detail)
         self.assertEqual(_git(self.local, 'rev-parse', 'HEAD'), racer['tip'])
-        backups = self._backup_refs()                  # the ref exists, not just the words
-        self.assertEqual(len(backups), 1, backups)
-        self.assertEqual(backups[0][1], old_tip_of(racer, self))
-        self.assertIn(backups[0][0], detail)
+        self.assertEqual(_git(self.local, 'rev-parse', 'HEAD^'), old_tip)
+        self.assertEqual(self._backup_refs(), [])        # all-or-nothing
 
-    # --- gate round 1 (2026-11-10) -----------------------------------------------
+    # --- gate rounds 1-2 (2026-11-10) --------------------------------------------
     def test_unwritable_backup_ref_moves_nothing(self):
         # `refs/backup/catch-up` as a REF blocks every ref beneath it (D/F conflict),
-        # so the backup write fails -- main must not move without its backup.
+        # so the backup cannot be created -- main must not move without its backup.
         old_tip = self._squash_scenario()
         _git(self.local, 'update-ref', 'refs/backup/catch-up', old_tip)
 
         status, detail = cum.catch_up(self.local, preflight=_clear)
 
         self.assertEqual(status, 'SKIPPED', detail)
-        self.assertIn('could not write backup ref', detail)
+        self.assertIn('nothing moved', detail)
         self.assertEqual(_git(self.local, 'rev-parse', 'HEAD'), old_tip)
+        self.assertEqual(_git(self.local, 'rev-parse', 'refs/backup/catch-up'), old_tip)
 
     def test_operation_in_progress_never_moves_main(self):
+        git_dir = lambda: self.local / '.git'                      # noqa: E731
+
         def cherry_pick_now_empty():
             # picking origin/main's squash onto a main that already has its content
             # stops "now empty" with CHERRY_PICK_HEAD set and a perfectly clean tree
             subprocess.run(['git', '-C', str(self.local), 'cherry-pick', 'origin/main'],
                            capture_output=True)
-            self.assertTrue((self.local / '.git' / 'CHERRY_PICK_HEAD').exists())
+            self.assertTrue((git_dir() / 'CHERRY_PICK_HEAD').exists())
 
-        for label, start, marker in (
-                ('cherry-pick', cherry_pick_now_empty, 'CHERRY_PICK_HEAD'),
-                ('git am', lambda: (self.local / '.git' / 'rebase-apply').mkdir(),
-                 'rebase-apply'),
-                ('sequencer', lambda: (self.local / '.git' / 'sequencer').mkdir(),
-                 'sequencer')):
+        def marker_file(name):
+            return lambda: (git_dir() / name).write_text(
+                _git(self.local, 'rev-parse', 'HEAD') + '\n')
+
+        def marker_dir(name):
+            return lambda: (git_dir() / name).mkdir()
+
+        cases = [('cherry-pick', cherry_pick_now_empty, 'CHERRY_PICK_HEAD')]
+        cases += [(name, marker_file(name), name)
+                  for name in ('MERGE_HEAD', 'REVERT_HEAD', 'REBASE_HEAD')]
+        cases += [(name, marker_dir(name), name)
+                  for name in ('rebase-apply', 'rebase-merge', 'sequencer')]
+        self.assertEqual({c[2] for c in cases}, set(cum._IN_PROGRESS))  # every marker
+        for label, start, marker in cases:
             with self.subTest(op=label):
                 self.tearDown()
                 self.setUp()
@@ -356,23 +385,25 @@ class SquashRealign(Fixture):
     def test_operation_started_after_the_checks_still_stops_the_move(self):
         from unittest import mock
         old_tip = self._squash_scenario()
-        real = cum._git
+        real = cum._in_progress
+        calls = []
 
-        def spy(repo, *args, timeout=60):
-            result = real(repo, *args, timeout=timeout)
-            if args[0] == 'update-ref' and args[3].startswith('refs/backup/'):
+        def in_progress(git_dir):
+            calls.append(1)
+            if len(calls) == 2:                  # the act-time re-check
                 (self.local / '.git' / 'MERGE_HEAD').write_text(old_tip + '\n')
-            return result
+            return real(git_dir)
 
-        with mock.patch.object(cum, '_git', spy):
+        with mock.patch.object(cum, '_in_progress', in_progress):
             status, detail = cum.catch_up(self.local, preflight=_clear)
 
+        self.assertEqual(len(calls), 2)
         self.assertEqual(status, 'SKIPPED', detail)
         self.assertIn('MERGE_HEAD', detail)
         self.assertEqual(_git(self.local, 'rev-parse', 'HEAD'), old_tip)
-        self.assertEqual(len(self._backup_refs()), 1)
+        self.assertEqual(self._backup_refs(), [])
 
-    def test_stale_main_lock_is_reported_as_such_and_retries_reuse_the_backup(self):
+    def test_stale_main_lock_writes_nothing_and_retries_succeed(self):
         old_tip = self._squash_scenario()
         lock = self.local / '.git' / 'refs' / 'heads' / 'main.lock'
         lock.write_text('')
@@ -380,97 +411,206 @@ class SquashRealign(Fixture):
             status, detail = cum.catch_up(self.local, preflight=_clear)
             self.assertEqual(status, 'SKIPPED', detail)
             self.assertIn('could not move main', detail)
-            self.assertNotIn('moved before', detail)
+            self.assertIn('no backup ref written', detail)
         self.assertEqual(_git(self.local, 'rev-parse', 'HEAD'), old_tip)
-        self.assertEqual(len(self._backup_refs()), 1)   # reused, not piled up
+        self.assertEqual(self._backup_refs(), [])       # no orphans pile up
         lock.unlink()
         status, detail = cum.catch_up(self.local, preflight=_clear)
         self.assertEqual(status, 'REALIGNED', detail)
         self.assertEqual(len(self._backup_refs()), 1)
 
-    def test_commit_on_top_of_the_realigned_main_is_still_success(self):
-        from unittest import mock
+    def test_each_realign_keeps_its_own_old_tip_on_a_backup_ref(self):
+        # Two squash cycles: each old tip must stay on a ref of its own -- an existing
+        # backup at another commit must never stand in for this one.
+        tips = [self._squash_scenario()]
+        status, detail = cum.catch_up(self.local, preflight=_clear)
+        self.assertEqual(status, 'REALIGNED', detail)
+        _commit(self.local, 'notes/two.md', 'a\n', 'wip two')
+        _commit(self.local, 'notes/two.md', 'b\n', 'finish two')
+        tips.append(_git(self.local, 'rev-parse', 'HEAD'))
+        _git(self.seed, 'pull', '-q', 'origin', 'main')
+        _commit(self.seed, 'notes/two.md', 'b\n', 'land two (#237)')
+        _git(self.seed, 'push', '-q', 'origin', 'main')
+
+        status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'REALIGNED', detail)
+        for tip in tips:
+            refs = [r for r in self._refs_at(tip) if r.startswith('refs/backup/catch-up/')]
+            self.assertEqual(len(refs), 1, (tip, refs))
+        self.assertIn(tips[1][:12], detail)
+        self.assertEqual(len(self._backup_refs()), 2)
+
+    def test_symbolic_ref_in_the_backup_namespace_is_never_the_backup(self):
+        old_tip = self._squash_scenario()
+        _git(self.local, 'symbolic-ref', 'refs/backup/catch-up/keep', 'refs/heads/main')
+
+        status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'REALIGNED', detail)
+        holders = [r for r in self._refs_at(old_tip) if r != 'refs/backup/catch-up/keep']
+        self.assertEqual(len(holders), 1, holders)
+        self.assertIn(holders[0], detail)
+
+    def test_concurrent_second_run_changes_nothing(self):
+        # Both hooks fire: run B lands entirely inside run A, just before A's write.
+        old_tip = self._squash_scenario()
+        inner = {}
+
+        def before(args):
+            if self._is_transaction(args) and not inner:
+                inner['result'] = 'running'
+                inner['result'] = cum.catch_up(self.local, preflight=_clear)
+
+        with self._spy(before=before):
+            status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(inner['result'][0], 'REALIGNED', inner['result'])
+        self.assertEqual(status, 'SKIPPED', detail)
+        self.assertIn('nothing moved', detail)
+        backups = self._backup_refs()
+        self.assertEqual(len(backups), 1, backups)       # B's only, A wrote none
+        self.assertEqual(backups[0][1], old_tip)
+
+    def test_main_lands_on_the_pinned_sha_even_if_origin_moves(self):
         self._squash_scenario()
-        real = cum._git
+        pinned = {}
+
+        def before(args):
+            if self._is_transaction(args) and not pinned:
+                pinned['sha'] = _git(self.local, 'rev-parse', 'origin/main')
+                self._land_pr('later.md', 'x\n', 'later PR (#238)')
+                _git(self.local, 'fetch', '-q', 'origin')
+
+        with self._spy(before=before):
+            status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'REALIGNED', detail)
+        self.assertEqual(_git(self.local, 'rev-parse', 'main'), pinned['sha'])
+        self.assertNotEqual(_git(self.local, 'rev-parse', 'origin/main'), pinned['sha'])
+        self.assertEqual(_git(self.local, 'status', '--porcelain'), '')
+
+    def test_commit_on_top_of_the_realigned_main_is_still_success(self):
+        self._squash_scenario()
         moved = []
 
-        def spy(repo, *args, timeout=60):
-            result = real(repo, *args, timeout=timeout)
-            if args[0] == 'update-ref' and 'refs/heads/main' in args and not moved:
+        def after(args, result):
+            if self._is_transaction(args) and not moved:
                 moved.append(1)
                 _commit(self.local, 'after.md', 'a\n', 'commit on realigned main')
-            return result
 
-        with mock.patch.object(cum, '_git', spy):
+        with self._spy(after=after):
             status, detail = cum.catch_up(self.local, preflight=_clear)
 
         self.assertEqual(status, 'REALIGNED', detail)
         _git(self.local, 'merge-base', '--is-ancestor', 'origin/main', 'main')
 
-    def test_clean_check_takes_no_optional_index_lock(self):
+    def test_main_rewound_below_origin_after_the_move_is_an_error(self):
+        self._squash_scenario()
+        done = []
+
+        def after(args, result):
+            if self._is_transaction(args) and not done:
+                done.append(1)
+                _git(self.local, 'update-ref', 'refs/heads/main', 'origin/main^')
+
+        with self._spy(after=after):
+            status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'ERROR', detail)
+        self.assertIn('does not contain origin/main', detail)
+
+    def test_unreadable_containment_check_still_reports_the_landed_realign(self):
         from unittest import mock
         self._squash_scenario()
         real = cum._git
-        calls = []
 
-        def spy(repo, *args, timeout=60):
-            calls.append(args)
-            return real(repo, *args, timeout=timeout)
+        def spy(repo, *args, timeout=60, **kw):
+            if args[0] == 'merge-base':
+                return 128, '', 'timed out'
+            return real(repo, *args, timeout=timeout, **kw)
 
         with mock.patch.object(cum, '_git', spy):
+            status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'REALIGNED', detail)
+        self.assertIn('verify', detail)
+        self.assertEqual(_git(self.local, 'rev-parse', 'main'),
+                         _git(self.local, 'rev-parse', 'origin/main'))
+
+    def test_clean_check_takes_no_optional_index_lock(self):
+        self._squash_scenario()
+        calls = []
+        with self._spy(before=calls.append):
             cum.catch_up(self.local, preflight=_clear)
         status_calls = [a for a in calls if 'status' in a]
         self.assertTrue(status_calls)
         self.assertTrue(all(a[0] == '--no-optional-locks' for a in status_calls), status_calls)
 
-    def test_no_clamped_read_runs_between_the_reservation_and_a_write(self):
-        # Every read after the preflight costs 25s of fake clock. Whichever path runs,
-        # the first write (merge or update-ref) must start with >= MERGE_TIMEOUT_S
-        # left, or the run must be SKIPPED having written nothing.
+    def _budget_run(self, left_after_preflight, cost=1.0):
+        """catch_up with a fake clock: every git READ after the preflight costs `cost`
+        seconds; writes (merge, update-ref) are free and record the time left when
+        they START. -> (status, detail, [seconds left at each write])"""
         from unittest import mock
+        now = [0.0]
+        started = []
+        writes = []
+        real = cum._git
+
+        def spy(repo, *args, timeout=60, **kw):
+            if args[0] in ('merge', 'update-ref'):
+                writes.append(cum.TOTAL_BUDGET_S - now[0])
+            result = real(repo, *args, timeout=timeout, **kw)
+            if started and args[0] not in ('merge', 'update-ref'):
+                now[0] += cost
+            return result
+
+        def preflight(repo, paths, since):
+            started.append(1)
+            now[0] = cum.TOTAL_BUDGET_S - left_after_preflight
+            return True, 'CLEAR'
+
+        with mock.patch.object(cum, '_git', spy):
+            status, detail = cum.catch_up(self.local, preflight=preflight,
+                                          clock=lambda: now[0])
+        return status, detail, writes
+
+    def test_no_clamped_read_runs_between_the_reservation_and_a_write(self):
+        # 1s per read. With MERGE_TIMEOUT_S + 3 left after the preflight, the two reads
+        # that precede the reservation in every version (HEAD re-read, log) leave
+        # MERGE_TIMEOUT_S + 1 -- enough to pass a reservation placed there -- and the
+        # squash reads that follow would then start the write below MERGE_TIMEOUT_S.
+        # Correct order: those reads come first, so the reservation itself refuses.
         for shape in ('squash', 'diverged'):
-            with self.subTest(shape=shape):
+            with self.subTest(shape=shape, case='tight'):
                 self.tearDown()
                 self.setUp()
                 old_tip = self._squash_scenario()
                 if shape == 'diverged':
                     _commit(self.local, 'local-only.md', 'mine\n', 'unrelated')
                     old_tip = _git(self.local, 'rev-parse', 'HEAD')
-                now = [0.0]
-                after_preflight = []
-                writes = []
-                real = cum._git
 
-                def spy(repo, *args, timeout=60):
-                    if args[0] in ('merge', 'update-ref'):
-                        writes.append(cum.TOTAL_BUDGET_S - now[0])
-                    result = real(repo, *args, timeout=timeout)
-                    if after_preflight and args[0] not in ('merge', 'update-ref'):
-                        now[0] += 25
-                    return result
+                status, detail, writes = self._budget_run(cum.MERGE_TIMEOUT_S + 3)
 
-                def preflight(repo, paths, since):
-                    after_preflight.append(1)
-                    # after the HEAD re-read and the log read (2 x 25s) exactly
-                    # MERGE_TIMEOUT_S + 1 is left: the old order passed the reservation
-                    # here and then spent it on the squash reads before writing
-                    now[0] = cum.TOTAL_BUDGET_S - (cum.MERGE_TIMEOUT_S + 1) - 50
-                    return True, 'CLEAR'
+                self.assertEqual(writes, [], (shape, writes, detail))
+                self.assertEqual(status, 'SKIPPED', detail)
+                self.assertIn('start the merge', detail)
+                self.assertEqual(_git(self.local, 'rev-parse', 'HEAD'), old_tip)
+                self.assertEqual(self._backup_refs(), [])
+            with self.subTest(shape=shape, case='roomy'):
+                self.tearDown()
+                self.setUp()
+                self._squash_scenario()
+                if shape == 'diverged':
+                    _commit(self.local, 'local-only.md', 'mine\n', 'unrelated')
 
-                with mock.patch.object(cum, '_git', spy):
-                    status, detail = cum.catch_up(self.local, preflight=preflight,
-                                                  clock=lambda: now[0])
-                for left in writes:
-                    self.assertGreaterEqual(left, cum.MERGE_TIMEOUT_S, (shape, writes))
-                if not writes:
-                    self.assertEqual(status, 'SKIPPED', detail)
-                    self.assertEqual(_git(self.local, 'rev-parse', 'HEAD'), old_tip)
-                    self.assertEqual(self._backup_refs(), [])
+                status, detail, writes = self._budget_run(cum.MERGE_TIMEOUT_S + 20)
 
-
-def old_tip_of(racer, case):
-    """The tip main held when catch_up checked it: the racer's parent."""
-    return _git(case.local, 'rev-parse', racer['tip'] + '^')
+                self.assertEqual(status, 'REALIGNED' if shape == 'squash' else 'MERGED',
+                                 detail)
+                self.assertTrue(writes)
+                self.assertTrue(all(left >= cum.MERGE_TIMEOUT_S for left in writes),
+                                (shape, writes))
 
 
 class NonInteractiveGit(unittest.TestCase):
