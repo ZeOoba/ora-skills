@@ -48,9 +48,16 @@ plain, --all or --tags push; only --mirror would publish it); the working tree i
 untouched (identical tree). If the tree or index is not clean, or an operation is in
 progress, the run is SKIPPED with nothing moved -- merging would re-create the
 problem. Any local commit that changes content relative to origin/main makes the
-trees differ, so that case merges as before -- as does a squash that origin/main has
-already moved past (another PR landed first): detecting that needs patch-level
-comparison and is out of scope. A local main ALREADY in the post-merge state
+trees differ, so that case merges as before.
+
+A squash that origin/main has already moved past (another PR landed first) has a
+different tree, so the realign does not apply. When local main has unpushed commits
+but merging origin/main into it would add no content (`git merge-tree --write-tree
+HEAD origin/main` yields origin/main's own tree), the run is SKIPPED with nothing
+moved and the detail gives the manual realign (backup ref, then `git reset --keep
+origin/main`): a forward-merge would only put the pre-squash commits back into
+history, and a ref-only move would leave the working tree behind. Any local content
+not already in origin/main's tree, or a failed read, merges as before. A local main ALREADY in the post-merge state
 (contains origin/main, identical tree) is a NOOP, not repaired here. Side effect:
 after a realign, tools/repo_first_check.py can report a cache holding an
 INTERMEDIATE pre-squash version as DIVERGENT (off main's history, on the backup ref)
@@ -268,6 +275,10 @@ def _catch_up(repo: Path, preflight, git, remaining):
         squash = _realign_precheck(git, head, squash, label)
         if not isinstance(squash, _Squash):
             return squash                          # SKIPPED, nothing moved
+    else:
+        overtaken = _overtaken_squash(git, head)
+        if overtaken is not None:
+            return 'SKIPPED', overtaken            # a merge would republish them
 
     # Never start a merge (or a realign) that the deadline could kill half-way through.
     if remaining() < MERGE_TIMEOUT_S:
@@ -323,6 +334,36 @@ def _squash_signature(git, head: str):
     if rc_h != 0 or rc_o != 0 or not head_tree or head_tree != origin_tree:
         return None
     return _Squash(origin_sha, ahead)
+
+
+def _overtaken_squash(git, head: str):
+    """-> SKIPPED detail when local main has unpushed commits but merging origin/main
+    into it would add NO content: the merge result's tree equals origin/main's own
+    tree (`git merge-tree --write-tree`). That is the shape a squash (or rebase-merge)
+    of those commits leaves once newer commits land on top before this hook runs: the
+    trees differ, so the realign does not apply, yet a forward-merge would only put
+    the pre-squash commits back into history. A ref-only move is wrong here (the
+    working tree would have to change too), so nothing moves and the detail gives the
+    manual realign. The test is on content, not patches: any local change that is not
+    already in origin/main's tree -- whitespace included -- makes the merge tree
+    differ, and the run merges as before. None (merge as today) when local main has
+    no unpushed commits or any read fails."""
+    rc, origin_sha, _ = git('rev-parse', '--verify', 'origin/main^{commit}')
+    if rc != 0 or not origin_sha:
+        return None
+    rc, ahead, _ = git('rev-list', '--count', f'{origin_sha}..{head}')
+    if rc != 0 or ahead in ('', '0'):
+        return None
+    rc_m, merged, _ = git('merge-tree', '--write-tree', head, origin_sha)
+    rc_o, origin_tree, _ = git('rev-parse', '--verify', f'{origin_sha}^{{tree}}')
+    merged_tree = merged.splitlines()[0].strip() if merged else ''
+    if rc_m != 0 or rc_o != 0 or not merged_tree or merged_tree != origin_tree:
+        return None
+    return (f'local main carries {ahead} unpushed commit(s) whose content origin/main '
+            f'already has (e.g. a squash that newer commits overtook) -- a forward-merge '
+            f'would only put them back into history; nothing moved. Realign by hand: '
+            f'`git update-ref refs/backup/catch-up/manual-{head[:12]} {head}` then '
+            f'`git reset --keep origin/main`')
 
 
 def _realign_precheck(git, head: str, squash: _Squash, label: str):
