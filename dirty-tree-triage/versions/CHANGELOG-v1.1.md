@@ -1,0 +1,3 @@
+# dirty-tree-triage changelog archive: v1.1
+
+- v1.1 (2026-08-21, `open-items-tracker.md#OI-203`): step 7's `ora-skills` single-writer check now requires a `claim_work.py claim ora-skills-housekeeping` call alongside the existing `git log -1`/`git status` check. Root cause: two sessions independently ran this skill's full workflow against the same `ora-skills/_staging` folders on 2026-08-21 with neither claiming first — git state alone can't see a concurrent session (shared author identity across sessions), so both saw a clean tree and proceeded. Caught only by accident when one session's archive `mv` found its source already moved by the other. No procedure logic changed beyond the new claim step.
