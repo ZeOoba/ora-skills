@@ -639,7 +639,7 @@ class OvertakenSquash(Fixture):
         status, detail = cum.catch_up(self.local, preflight=_clear)
 
         self.assertEqual(status, 'SKIPPED', detail)
-        self.assertIn('squashed upstream as', detail)
+        self.assertIn('already has', detail)
         self.assertIn('git reset --keep origin/main', detail)
         self._assert_untouched(head)
 
@@ -655,7 +655,7 @@ class OvertakenSquash(Fixture):
         status, detail = cum.catch_up(self.local, preflight=_clear)
 
         self.assertEqual(status, 'SKIPPED', detail)
-        self.assertIn('each already upstream', detail)
+        self.assertIn('already has', detail)
         self._assert_untouched(head)
 
     def test_extra_unrelated_local_commit_still_merges(self):
@@ -692,7 +692,8 @@ class OvertakenSquash(Fixture):
         real = cum._git
 
         def broken(repo, *args, **kw):
-            if args and args[0] in ('patch-id', 'cherry'):
+            # only the overtaken check's merge-tree (pinned sha), not the conflict dry run
+            if args and args[0] == 'merge-tree' and args[-1] != 'origin/main':
                 return 1, '', 'boom'
             return real(repo, *args, **kw)
 
@@ -700,6 +701,48 @@ class OvertakenSquash(Fixture):
             status, detail = cum.catch_up(self.local, preflight=_clear)
 
         self.assertEqual(status, 'MERGED', detail)
+
+    def test_non_ascii_local_work_still_merges(self):
+        # adversarial pass C3: patch reads decoded as cp1252 crashed on bytes like 0x9D
+        _commit(self.local, 'notes/quote.md', 'he said \u201chi\u201d\n', 'local, non-ASCII')
+        _commit(self.seed, 'notes/other.md', 'it\u2019s \u201cfine\u201d\n', 'upstream (#237)')
+        _git(self.seed, 'push', '-q', 'origin', 'main')
+        old_tip = _git(self.local, 'rev-parse', 'HEAD')
+
+        status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'MERGED', detail)
+        _git(self.local, 'merge-base', '--is-ancestor', old_tip, 'HEAD')
+
+    def test_whitespace_only_local_edit_is_not_mistaken_for_upstream(self):
+        # adversarial pass C2: patch-id ignores whitespace, the merge tree does not
+        _commit(self.seed, 'ws.txt', 'a b\n', 'base ws')
+        _git(self.seed, 'push', '-q', 'origin', 'main')
+        _git(self.local, 'pull', '-q', '--ff-only')
+        _commit(self.local, 'ws.txt', 'a  b\n', 'local double space')
+        _commit(self.seed, 'ws.txt', 'a\tb\n', 'upstream tab (#1)')
+        _commit(self.seed, 'ws.txt', 'a b\n', 'upstream back (#2)')
+        _git(self.seed, 'push', '-q', 'origin', 'main')
+
+        status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertNotEqual(status, 'SKIPPED', detail)
+
+    _budget_run = SquashRealign._budget_run
+    _backup_refs = SquashRealign._backup_refs
+
+    def test_overtaken_reads_run_before_the_reservation(self):
+        # 1s per read; with MERGE_TIMEOUT_S + 3 left after the preflight, HEAD re-read
+        # and log leave +1, then the overtaken check's 4 reads must push the
+        # reservation into refusing. Placed after it, the merge would start at -3.
+        from unittest import mock
+        self._overtaken()
+        _commit(self.local, 'local-only.md', 'mine\n', 'unrelated unpushed commit')
+        with mock.patch.object(cum, '_squash_signature', lambda git, head: None):
+            status, detail, writes = self._budget_run(cum.MERGE_TIMEOUT_S + 3)
+        self.assertEqual(writes, [], (writes, detail))
+        self.assertEqual(status, 'SKIPPED', detail)
+        self.assertIn('start the merge', detail)
 
     def test_overtaken_squash_cli_exit_code_is_skipped(self):
         import io
