@@ -48,9 +48,17 @@ plain, --all or --tags push; only --mirror would publish it); the working tree i
 untouched (identical tree). If the tree or index is not clean, or an operation is in
 progress, the run is SKIPPED with nothing moved -- merging would re-create the
 problem. Any local commit that changes content relative to origin/main makes the
-trees differ, so that case merges as before -- as does a squash that origin/main has
-already moved past (another PR landed first): detecting that needs patch-level
-comparison and is out of scope. A local main ALREADY in the post-merge state
+trees differ, so that case merges as before.
+
+A squash that origin/main has already moved past (another PR landed first) has a
+different tree, so the realign does not apply. When every unpushed local commit is
+already upstream by content (`git patch-id --stable`: the combined local diff equals
+one of the newest 200 origin-only commits, or `git cherry` marks each local commit
+as upstream), the run is SKIPPED with nothing moved and the detail gives the manual
+realign (backup ref, then `git reset --keep origin/main`): a forward-merge would put
+the pre-squash commits back into history, and a ref-only move would leave the working
+tree behind. Local work that is only partly upstream, or a failed read, merges as
+before. A local main ALREADY in the post-merge state
 (contains origin/main, identical tree) is a NOOP, not repaired here. Side effect:
 after a realign, tools/repo_first_check.py can report a cache holding an
 INTERMEDIATE pre-squash version as DIVERGENT (off main's history, on the backup ref)
@@ -195,11 +203,12 @@ def catch_up(repo: Path = REPO, preflight=run_preflight, budget_s: float = TOTAL
     def remaining() -> float:
         return end - clock()
 
-    def git(*args: str, timeout: int = 60):
+    def git(*args: str, timeout: int = 60, input: str | None = None):
         left = remaining()
         if left < 1:
             raise _BudgetExhausted
-        return _git(repo, *args, timeout=min(timeout, int(left)))
+        kw = {} if input is None else {'input': input}
+        return _git(repo, *args, timeout=min(timeout, int(left)), **kw)
 
     try:
         return _catch_up(repo, preflight, git, remaining)
@@ -268,6 +277,10 @@ def _catch_up(repo: Path, preflight, git, remaining):
         squash = _realign_precheck(git, head, squash, label)
         if not isinstance(squash, _Squash):
             return squash                          # SKIPPED, nothing moved
+    else:
+        overtaken = _overtaken_squash(git, head)
+        if overtaken is not None:
+            return 'SKIPPED', overtaken            # a merge would republish them
 
     # Never start a merge (or a realign) that the deadline could kill half-way through.
     if remaining() < MERGE_TIMEOUT_S:
@@ -323,6 +336,59 @@ def _squash_signature(git, head: str):
     if rc_h != 0 or rc_o != 0 or not head_tree or head_tree != origin_tree:
         return None
     return _Squash(origin_sha, ahead)
+
+
+OVERTAKEN_SCAN_LIMIT = 200     # newest origin-only commits searched for the squash
+
+
+def _overtaken_squash(git, head: str):
+    """-> SKIPPED detail when every unpushed commit on local main is already on
+    origin/main by content, though the trees differ because newer commits landed
+    after it (the squash was overtaken before this hook ran). A forward-merge here
+    would bring the pre-squash commits back into main's history, the problem the
+    realign exists to prevent, and a ref-only move is wrong because the working tree
+    would have to change too. So nothing moves; the detail says how to realign by
+    hand. Two content checks, both through `git patch-id --stable`:
+      * squash: the combined diff merge-base..HEAD equals one origin-only commit;
+      * rebase/cherry-pick: `git cherry` marks every local-only commit as upstream.
+    None (merge as today) when local main has no unpushed commits, the local
+    commits are not all upstream, or any read fails."""
+    rc, origin_sha, _ = git('rev-parse', '--verify', 'origin/main^{commit}')
+    if rc != 0:
+        return None
+    rc, base, _ = git('merge-base', head, origin_sha)
+    if rc != 0 or not base:
+        return None
+    rc, ahead, _ = git('rev-list', '--count', f'{base}..{head}')
+    if rc != 0 or ahead in ('', '0'):
+        return None
+
+    how = None
+    rc, combined, _ = git('diff', '--binary', base, head)
+    if rc == 0 and combined:
+        rc_l, local_id, _ = git('patch-id', '--stable', input=combined + '\n')
+        rc_u, upstream, _ = git('log', '-p', '--binary', '--no-merges', '--format=commit %H',
+                                f'-n{OVERTAKEN_SCAN_LIMIT}', f'{head}..{origin_sha}')
+        if rc_l == 0 and local_id and rc_u == 0 and upstream:
+            rc_ids, ids, _ = git('patch-id', '--stable', input=upstream + '\n')
+            wanted = local_id.split()[0]
+            if rc_ids == 0:
+                for line in ids.splitlines():
+                    parts = line.split()
+                    if len(parts) == 2 and parts[0] == wanted:
+                        how = f'squashed upstream as {parts[1][:12]}'
+                        break
+    if how is None:
+        rc, cherry, _ = git('cherry', origin_sha, head)
+        marks = [ln[:1] for ln in cherry.splitlines() if ln.strip()]
+        if rc != 0 or not marks or any(m != '-' for m in marks):
+            return None
+        how = 'each already upstream'
+    return (f'local main carries {ahead} unpushed commit(s) whose changes origin/main '
+            f'already has ({how}), but newer commits landed after it -- a forward-merge '
+            f'would put them back into history; nothing moved. Realign by hand: '
+            f'`git update-ref refs/backup/catch-up/manual-{head[:12]} {head}` then '
+            f'`git reset --keep origin/main`')
 
 
 def _realign_precheck(git, head: str, squash: _Squash, label: str):
