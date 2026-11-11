@@ -613,6 +613,149 @@ class SquashRealign(Fixture):
                                 (shape, writes))
 
 
+class OvertakenSquash(Fixture):
+    """The squash of local main's unpushed commits landed, then another PR landed on
+    top before the hook ran, so the trees differ and the realign does not apply. A
+    forward-merge would put the pre-squash commits back into history: catch_up must
+    move nothing and say so."""
+
+    def _overtaken(self):
+        _commit(self.local, 'notes/entry.md', 'draft\n', 'wip entry')
+        _commit(self.local, 'notes/entry.md', 'final\n', 'finish entry')
+        _commit(self.seed, 'notes/entry.md', 'final\n', 'land entry (#236)')
+        _commit(self.seed, 'other/SKILL.md', 'x\n', 'other skill (#237)')
+        _git(self.seed, 'push', '-q', 'origin', 'main')
+        return _git(self.local, 'rev-parse', 'HEAD')
+
+    def _assert_untouched(self, head):
+        self.assertEqual(_git(self.local, 'rev-parse', 'HEAD'), head)
+        self.assertEqual(_git(self.local, 'for-each-ref', 'refs/backup/'), '')
+        self.assertEqual(_git(self.local, 'status', '--porcelain'), '')
+        self.assertFalse((self.local / '.git' / 'MERGE_HEAD').exists())
+
+    def test_overtaken_squash_moves_nothing(self):
+        head = self._overtaken()
+
+        status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'SKIPPED', detail)
+        self.assertIn('already has', detail)
+        self.assertIn('git reset --keep origin/main', detail)
+        self._assert_untouched(head)
+
+    def test_overtaken_rebase_merge_moves_nothing(self):
+        _commit(self.local, 'notes/a.md', 'a\n', 'local a')
+        _commit(self.local, 'notes/b.md', 'b\n', 'local b')
+        head = _git(self.local, 'rev-parse', 'HEAD')
+        _commit(self.seed, 'notes/a.md', 'a\n', 'local a (#236)')
+        _commit(self.seed, 'notes/b.md', 'b\n', 'local b (#236)')
+        _commit(self.seed, 'other/SKILL.md', 'x\n', 'other skill (#237)')
+        _git(self.seed, 'push', '-q', 'origin', 'main')
+
+        status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'SKIPPED', detail)
+        self.assertIn('already has', detail)
+        self._assert_untouched(head)
+
+    def test_extra_unrelated_local_commit_still_merges(self):
+        self._overtaken()
+        _commit(self.local, 'local-only.md', 'mine\n', 'unrelated unpushed commit')
+        old_tip = _git(self.local, 'rev-parse', 'HEAD')
+
+        status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'MERGED', detail)
+        _git(self.local, 'merge-base', '--is-ancestor', old_tip, 'HEAD')
+
+    def test_partially_squashed_local_work_still_merges(self):
+        _commit(self.local, 'notes/entry.md', 'final\n', 'entry')
+        _commit(self.local, 'notes/second.md', 'two\n', 'second, never pushed')
+        _commit(self.seed, 'notes/entry.md', 'final\n', 'land entry (#236)')
+        _commit(self.seed, 'other/SKILL.md', 'x\n', 'other skill (#237)')
+        _git(self.seed, 'push', '-q', 'origin', 'main')
+
+        status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'MERGED', detail)
+
+    def test_unrelated_upstream_with_no_local_commits_fast_forwards(self):
+        self._land_pr('other/SKILL.md', 'x\n', 'other skill (#237)')
+
+        status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'MERGED', detail)
+
+    def test_unreadable_detection_falls_back_to_the_merge(self):
+        from unittest import mock
+        self._overtaken()
+        real = cum._git
+
+        def broken(repo, *args, **kw):
+            # only the overtaken check's merge-tree (pinned sha), not the conflict dry run
+            if args and args[0] == 'merge-tree' and args[-1] != 'origin/main':
+                return 1, '', 'boom'
+            return real(repo, *args, **kw)
+
+        with mock.patch.object(cum, '_git', broken):
+            status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'MERGED', detail)
+
+    def test_non_ascii_local_work_still_merges(self):
+        # adversarial pass C3: patch reads decoded as cp1252 crashed on bytes like 0x9D
+        _commit(self.local, 'notes/quote.md', 'he said \u201chi\u201d\n', 'local, non-ASCII')
+        _commit(self.seed, 'notes/other.md', 'it\u2019s \u201cfine\u201d\n', 'upstream (#237)')
+        _git(self.seed, 'push', '-q', 'origin', 'main')
+        old_tip = _git(self.local, 'rev-parse', 'HEAD')
+
+        status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertEqual(status, 'MERGED', detail)
+        _git(self.local, 'merge-base', '--is-ancestor', old_tip, 'HEAD')
+
+    def test_whitespace_only_local_edit_is_not_mistaken_for_upstream(self):
+        # adversarial pass C2: patch-id ignores whitespace, the merge tree does not
+        _commit(self.seed, 'ws.txt', 'a b\n', 'base ws')
+        _git(self.seed, 'push', '-q', 'origin', 'main')
+        _git(self.local, 'pull', '-q', '--ff-only')
+        _commit(self.local, 'ws.txt', 'a  b\n', 'local double space')
+        _commit(self.seed, 'ws.txt', 'a\tb\n', 'upstream tab (#1)')
+        _commit(self.seed, 'ws.txt', 'a b\n', 'upstream back (#2)')
+        _git(self.seed, 'push', '-q', 'origin', 'main')
+
+        status, detail = cum.catch_up(self.local, preflight=_clear)
+
+        self.assertNotEqual(status, 'SKIPPED', detail)
+
+    _budget_run = SquashRealign._budget_run
+    _backup_refs = SquashRealign._backup_refs
+
+    def test_overtaken_reads_run_before_the_reservation(self):
+        # 1s per read; with MERGE_TIMEOUT_S + 3 left after the preflight, HEAD re-read
+        # and log leave +1, then the overtaken check's 4 reads must push the
+        # reservation into refusing. Placed after it, the merge would start at -3.
+        from unittest import mock
+        self._overtaken()
+        _commit(self.local, 'local-only.md', 'mine\n', 'unrelated unpushed commit')
+        with mock.patch.object(cum, '_squash_signature', lambda git, head: None):
+            status, detail, writes = self._budget_run(cum.MERGE_TIMEOUT_S + 3)
+        self.assertEqual(writes, [], (writes, detail))
+        self.assertEqual(status, 'SKIPPED', detail)
+        self.assertIn('start the merge', detail)
+
+    def test_overtaken_squash_cli_exit_code_is_skipped(self):
+        import io
+        from unittest import mock
+        self._overtaken()
+        out = io.StringIO()
+        real = cum.catch_up
+        with mock.patch.object(cum, 'catch_up', lambda repo: real(repo, preflight=_clear)), \
+                mock.patch.object(cum.sys, 'stdout', out):
+            self.assertEqual(cum.main(['--repo', str(self.local)]), 3)
+        self.assertIn('SKIPPED', out.getvalue())
+
+
 class NonInteractiveGit(unittest.TestCase):
     def test_git_never_prompts_for_credentials(self):
         # Review finding 2026-09-17: an unattended fetch (hook / daily sweep) must fail
