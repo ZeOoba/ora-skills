@@ -131,3 +131,6 @@ _archive/**/_eventlog_entry_*.md
 # Machine-local denylist of real deal tokens for tools/test_example_registers_synthetic.py
 # (2026-11-12). Never commit it, not even hashed; format in the .example beside it.
 tools/real-identifiers.local.json
+
+# Personal (non-firm) financial data: local-only, never tracked in this public repo
+personal-portfolio/
