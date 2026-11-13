@@ -14,7 +14,7 @@ A PSA is the contractual anchor of a transaction. Every document downstream of i
 Before starting, confirm you have:
 
 1. **The PSA itself** — preferably the fully-executed version (signed PDF), otherwise the most recent clean draft. If you see only redlined drafts, ask for the clean version. Note the execution date from the signature block, not the document metadata.
-2. **Deal context** — the property short name (e.g., "REDACTED-156" or "REDACTED-108"), the deal stage (under LOI / PSA signed / under DD / clear to close / closed), and which downstream targets are already built (DD workbook, IC memo, rent roll, model, Notion).
+2. **Deal context** — the property short name (e.g., "Example Portfolio"), the deal stage (under LOI / PSA signed / under DD / clear to close / closed), and which downstream targets are already built (DD workbook, IC memo, rent roll, model, Notion).
 3. **Access paths** — confirm the SharePoint deal folder path or the Cowork workspace folder so outputs land in the correct location.
 4. **Amendment status** — ask whether any amendments, letter agreements, side letters, or email modifications post-date the PSA execution. If so, the Fact Table must incorporate them.
 
@@ -75,7 +75,7 @@ Each row in the Fact Table carries these columns:
 - **Closing-date blank**: §9.1 language like "but in no case beyond _____" — treat as "no hard outer date; Stearns/lender flex codified"
 - **Party-name drift**: preamble may say one buyer entity, §17 Notice may say another (e.g., Oxford Capital Partners, LLC vs. Oxford Realty Advisors, LLC). Record both and flag as Typo/Conflicting.
 - **Exhibit typos**: lease expiration in body ≠ expiration in Exhibit D Rent Roll. Record body text and flag the exhibit typo.
-- **Address typos**: Purchaser's own address misstated (e.g., 9510 vs. 9501 Persimmon Tree Rd). Apply corrected value, flag typo, cite known-correct source.
+- **Address typos**: Purchaser's own address misstated (e.g., 100 vs. 1000 Example Way). Apply corrected value, flag typo, cite known-correct source.
 - **Parcel ID typos**: Exhibit A may contain typos in body ("010-99201") but correct the ID in the parcel-number list. Record corrected, flag.
 - **§26 Expiration blank**: offer-expiration date left blank — note but typically moot post-execution.
 - **§9.1 outer-date blank**: closing cap left blank — note explicitly, as it changes the downstream calendar treatment.
@@ -182,8 +182,8 @@ End every session with a short summary containing:
 ## Authoritative Behaviors
 
 - **Never fabricate a fact.** If the PSA is silent or ambiguous, flag and defer — do not infer.
-- **Never overwrite user corrections.** If the user says the REDACTED-163 expiration is 12/31/2031 despite the lease body stating 12/31/2030, record the user's choice as the authoritative value and mark Note = "User override of Exhibit D typo."
-- **Never collapse dual-jurisdiction data.** When parcels straddle municipalities (e.g., Columbus + Whitehall), every Fact Table row affected by jurisdiction must record both.
+- **Never overwrite user corrections.** If the user says a tenant's expiration is the Exhibit D date despite the lease body stating a different date, record the user's choice as the authoritative value and mark Note = "User override of Exhibit D typo."
+- **Never collapse dual-jurisdiction data.** When parcels straddle municipalities (e.g., a city and an adjacent village), every Fact Table row affected by jurisdiction must record both.
 - **Never remove litigation from the Fact Table.** Exhibit F disclosures are cumulative; even if resolved, they remain in the record.
 - **Always mark PSA blanks explicitly.** A blank in §9.1 or §26 is itself a fact — "no hard outer close date" is different from "60 days."
 - **Always link to the contract.** Every Fact has a PSA Source column. Anything without a source is a defect.
@@ -205,7 +205,7 @@ Start this skill without asking for confirmation when the user says any of:
 ## References (bundled with this skill)
 
 - `references/psa-fact-schema.md` — the full 12-section, ~80-field canonical schema with types, examples, and typical PSA sources
-- `references/exhibit-extraction-patterns.md` — per-exhibit parsing patterns, including the REDACTED-120 body-vs-exhibit conflict and the Lis Pendens instrument-number capture
+- `references/exhibit-extraction-patterns.md` — per-exhibit parsing patterns, including the body-vs-exhibit expiration conflict and the Lis Pendens instrument-number capture
 - `references/downstream-cascade-targets.md` — per-target field maps for DD Checklist, IC Memo, Rent Roll, Title Instructions, Underwriting Model, and Notion (with MCP calls)
 
 Read references only when the corresponding step is reached; do not preload them.

@@ -1,0 +1,4 @@
+{
+  "_comment": "Copy to tools/real-identifiers.local.json (gitignored) and list real deal tokens that must never reappear in psa-reconciliation/, deal-retirement/SKILL.md or any references/*schema*.md. Matching is casefolded and whitespace-normalised, and bounded so a term never matches inside a longer alphanumeric run. Never commit the real file, not even as hashes. These two entries are fake.",
+  "terms": ["Zephyrton Widget Holdings", "000-999999"]
+}

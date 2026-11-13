@@ -10,7 +10,7 @@ attributes every replay to its golden deal by the FROZEN FACTS block in its own
 prompt -- never by description or arrival order.
 
 What a transcript CANNOT show (REFUTE I1, 2026-09-13): a differing earlier
-completion notification can leave no trace on disk (09-12 Hamilton r3). The
+completion notification can leave no trace on disk (09-12 GS-D r3). The
 orchestrator must still watch notifications per SKILL.md Step 1.5 and pass any
 such task-id via --failed-agent-ids.
 
