@@ -19,7 +19,7 @@ from record_run import record_run
 
 GOLDEN_DIR = Path(__file__).parent / "golden_set"
 RUN_DIR = Path(__file__).parent / "runs"
-SKILL_SHA = "83547a76651c53c8f3311c2f30db53cbf16fd219"
+SKILL_SHA = "7a4aaa47cdda0ada582272e4e9f0906eebdfc63b"  # was 83547a76 before the 2026-11-12 history rewrite
 
 
 def main():
