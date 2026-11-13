@@ -22,7 +22,7 @@ def base(**kw):
 
 
 class DoctrinePins(unittest.TestCase):
-    """Literal values from SKILL.md v4.45 — any drift fails (Hard Invariant 4 for governors)."""
+    """Literal values from SKILL.md v4.47 (constants unchanged since v4.45) — any drift fails (Hard Invariant 4 for governors)."""
     def test_governors(self):
         self.assertEqual((D.DSCR_FLOOR, D.PER_PROPERTY_LTV_CEILING, D.AGGREGATE_LTV_CEILING), (1.25, 0.65, 0.40))
         self.assertEqual((D.YOC_FLOOR, D.IRR_FLOOR_MIN, D.IRR_FLOOR_UST_SPREAD, D.MAJORITY_VACANT_PREMIUM),
