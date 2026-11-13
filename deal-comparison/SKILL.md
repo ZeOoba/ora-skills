@@ -36,7 +36,7 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 > "25% discount" framing was an artifact of a wrong denominator, never the strategy.
 >
 > **DENOMINATOR — one, and only one: `RCT v03`** (per-metro LOW/POINT/HIGH table in
-> the `acquisition-underwriting` skill; **basis divides by LOW**). Ratified by Gabriel
+> the `acquisition-underwriting` skill; **basis divides by LOW**; the figures ship privately as `rct-table.local.json` in this skill's folder (public repo); missing or not `RCT v03` → report `RCT TABLE UNAVAILABLE` and skip the basis test, never substitute a figure)). Ratified by Gabriel
 > 2026-07-14, rebuilt from the Cushman & Wakefield 2025 Industrial Construction Cost
 > Guide. **Floor = linear vintage ramp: 65% discount at ≤1995 → 60% at ≥2005.**
 > Basis = **all-in** (price + 2% closing + CapEx + lease-up carry), not price alone.

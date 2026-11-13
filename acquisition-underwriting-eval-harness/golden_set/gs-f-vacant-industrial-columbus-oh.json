@@ -70,7 +70,7 @@
     "expected_score": 3.3,
     "p_exec_pct": 20.0,
     "verdict_tier": "PASS-band / FLOOR-FLAGGED (T2 WATCH ceilings from bear-mode UNKNOWN + DD-Critical unknowns are non-binding on a sub-60 score)",
-    "floor_result": "FLOOR-FLAGGED in all 3 clean runs (also FLOOR-FLAGGED in the excluded run 1) -- Basis floor breached: ~64.1% discount to RCT v03 Columbus LOW ($229.65/SF) at the $700K scoring price vs 65% vintage-ramp floor (YB 1975); DENOMINATOR-SENSITIVE (within +/-5 pts of floor) in every run",
+    "floor_result": "FLOOR-FLAGGED in all 3 clean runs (also FLOOR-FLAGGED in the excluded run 1) -- Basis floor breached: ~64.1% discount to RCT v03 Columbus LOW at the $700K scoring price vs 65% vintage-ramp floor (YB 1975); DENOMINATOR-SENSITIVE (within +/-5 pts of floor) in every run",
     "replay_notes": "Bear-mode: both sources unavailable -> UNKNOWN, scored OFF, T2 WATCH cap (ceiling only, non-binding) in every run. Yield 0.0 is the skill's documented no-NOI scoring convention (null in run 2, scored 0.0 in the other 3), not a derived yield. Lease-Up Assumption Block TI included in basis in every run; downtime carry and LC omitted as incomputable (biases discount conservative, i.e. floor breach is robust). P(exec) 20% in all 4 runs -- the one figure with zero cross-run disagreement, despite everything else varying widely."
   },
   "archived_pre_v03_reference": {

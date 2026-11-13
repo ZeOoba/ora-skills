@@ -18,7 +18,7 @@ SF building (sweet spot 15-50K). Deal $1-10M; equity sleeve $0.75-5M at 65% LTV.
 Hard floors: >=25% discount to replacement (~$150/SF benchmark) AND >8% stabilized
 YoC. (Legacy off-market screen frame; the $150 benchmark was retired 2026-07-14. Any deal
 that advances to SCREEN is tested on the acquisition-underwriting Stage 1 vintage-ramp
-floor against the construction-type-adjusted RCT LOW.) Instant disqualifiers: retail/office/multifamily, auto-use tenancy,
+floor against the construction-type-adjusted RCT LOW; the figures ship privately as `rct-table.local.json` in this skill's folder (public repo); missing or not `RCT v03` → report `RCT TABLE UNAVAILABLE` and skip the basis test, never substitute a figure.) Instant disqualifiers: retail/office/multifamily, auto-use tenancy,
 institutional Class A pricing, outside ORA's eleven clusters.
 
 ## Workflow

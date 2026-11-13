@@ -1,4 +1,5 @@
 """Hand-checkable tests for the walk-price solver. Run: python acquisition-underwriting/scripts/test_walk_solver.py"""
+import json
 import os
 import sys
 import unittest
@@ -6,12 +7,29 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from ora_walk import doctrine as D  # noqa: E402
+from ora_walk import rct_table  # noqa: E402
 from ora_walk.solver import (  # noqa: E402
     Deal, annual_debt_constant, irr, irr_floor, loan_balance, noi_path, npv, solve,
     solve_portfolio, vintage_floor,
 )
 
 UST = 0.045
+
+# The real RCT table is private (rct_table.py). These tests run on INVENTED figures only; every expected
+# value below is derived from the fixture, never from a real figure.
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "rct-table.synthetic.json"),
+          encoding="utf-8") as _fh:
+    SYN = json.load(_fh)
+P = rct_table.points(rct_table.validate(SYN, allow_synthetic=True))
+P_COL, P_CHI, P_IND = P["Columbus OH"], P["Chicago-Cook IL"], P["Indianapolis IN"]
+
+
+def setUpModule():
+    rct_table.use(SYN)
+
+
+def tearDownModule():
+    rct_table.use(None)
 
 
 def base(**kw):
@@ -22,7 +40,7 @@ def base(**kw):
 
 
 class DoctrinePins(unittest.TestCase):
-    """Literal values from SKILL.md v4.48 (constants unchanged since v4.45) — any drift fails (Hard Invariant 4 for governors)."""
+    """Literal values from SKILL.md v4.49 (constants unchanged since v4.45) — any drift fails (Hard Invariant 4 for governors)."""
     def test_governors(self):
         self.assertEqual((D.DSCR_FLOOR, D.PER_PROPERTY_LTV_CEILING, D.AGGREGATE_LTV_CEILING), (1.25, 0.65, 0.40))
         self.assertEqual((D.YOC_FLOOR, D.IRR_FLOOR_MIN, D.IRR_FLOOR_UST_SPREAD, D.MAJORITY_VACANT_PREMIUM),
@@ -41,13 +59,12 @@ class DoctrinePins(unittest.TestCase):
             "Louisville KY": 0.0775, "Chicago-Cook IL": 0.08})
         self.assertEqual(D.DEFAULT_EXIT_CAP, 0.0775)
 
-    def test_rct_points(self):  # SKILL.md RCT v03 / replacement-cost.v3.json
-        self.assertEqual(D.RCT_POINT, {
-            "Columbus OH": 255.16, "Cincinnati OH": 279.40, "Kansas City MO": 253.22,
-            "Indianapolis IN": 282.03, "Mid-Atlantic": 258.85, "Madison WI": 254.53,
-            "Grand Rapids MI": 281.23, "Richmond VA": 258.85, "Des Moines IA": 257.40,
-            "Louisville KY": 263.41, "Chicago-Cook IL": 250.66})
-        self.assertEqual(D.RCT_FALLBACK_POINT, 250.66)
+    def test_rct_markets(self):  # SKILL.md RCT v03 market rows (names only; the figures are private)
+        self.assertEqual(D.RCT_MARKETS, (
+            "Columbus OH", "Cincinnati OH", "Kansas City MO", "Indianapolis IN", "Madison WI", "Mid-Atlantic",
+            "Grand Rapids MI", "Richmond VA", "Des Moines IA", "Louisville KY", "Chicago-Cook IL"))
+        self.assertEqual(D.RCT_VERSION, "RCT v03")
+        self.assertFalse(hasattr(D, "RCT_POINT"), "RCT figures must not be back in source")
 
     def test_construction(self):  # SKILL.md Construction-Type Multiplier Schedule
         self.assertEqual(D.CONSTRUCTION_MULT, {"tilt-up": 1.00, "precast": 1.00, "cmu": 0.97, "brick": 1.10, "hybrid": 0.93})
@@ -84,8 +101,9 @@ class Legs(unittest.TestCase):
         self.assertAlmostEqual(solve(base(), UST).legs["yield"], 3_676_470.588, places=2)  # 300000/.08/1.02
 
     def test_basis_leg_hand_number(self):
-        # 0.35 x 0.9 x 255.16 x 30000 / 1.02 = 2,363,982.35
-        self.assertAlmostEqual(solve(base(), UST).legs["basis"], 2_363_982.35, places=1)
+        # synthetic Columbus POINT 240: 0.35 x 0.9 x 240 x 30000 / 1.02 = 2,223,529.41
+        self.assertEqual(P_COL, 240.0)
+        self.assertAlmostEqual(solve(base(), UST).legs["basis"], 2_223_529.41, places=1)
 
     def test_default_reserves_applied(self):
         d = Deal(name="T", sf=30_000, stabilized_noi=300_000, market="Columbus OH", year_built=1985,
@@ -144,7 +162,7 @@ class Construction(unittest.TestCase):
         self.assertEqual(D.ADDERS, {"office_buildout": 15.0, "climate_control": 12.0, "cranes": 18.0,
                                     "esfr": 4.0, "site_work": 8.0, "paving_lighting": 8.0})
         r = solve(base(adders=["cranes", "esfr"]), UST)
-        self.assertAlmostEqual(r.floors["rct_low_psf_adjusted"], 0.9 * (255.16 + 22))
+        self.assertAlmostEqual(r.floors["rct_low_psf_adjusted"], 0.9 * (P_COL + 22))
         for bad in (["site_work", "paving_lighting"], ["cranes", "cranes"], ["gold_plating"]):
             with self.assertRaises(ValueError, msg=bad):
                 solve(base(adders=bad), UST)
@@ -152,7 +170,7 @@ class Construction(unittest.TestCase):
 
 class Vintage(unittest.TestCase):
     def test_renovation_rule(self):
-        point = 255.16  # tilt-up
+        point = P_COL  # tilt-up
         # R% = 15% -> halfway between 1970 and 2010 = 1990
         r = solve(base(year_built=1970, renovation_year=2010, renovation_spend=0.15 * point * 30_000), UST)
         self.assertEqual(r.floors["vintage_used"], 1990)
@@ -163,7 +181,7 @@ class Vintage(unittest.TestCase):
 
     def test_unknown_type_r_pct_at_1_00(self):
         # unknown type: R% denominator uses x1.00, so the shift is smaller than at 0.90
-        spend = 0.15 * 255.16 * 30_000
+        spend = 0.15 * P_COL * 30_000
         r = solve(base(construction_type=None, year_built=1970, renovation_year=2010, renovation_spend=spend), UST)
         self.assertEqual(r.floors["vintage_used"], 1990)
 
@@ -178,7 +196,7 @@ class Vintage(unittest.TestCase):
         self.assertTrue(any("not supported" in f for f in r.flags))
         self.assertAlmostEqual(r.walk_price, solve(base(year_built=1970), UST).walk_price)
         # a tighter (earlier) asserted vintage is honoured
-        r = solve(base(year_built=1990, renovation_year=2010, renovation_spend=0.30 * 255.16 * 30_000,
+        r = solve(base(year_built=1990, renovation_year=2010, renovation_spend=0.30 * P_COL * 30_000,
                        effective_vintage=2000), UST)
         self.assertEqual(r.floors["vintage_used"], 2000)
         with self.assertRaises(ValueError):
@@ -186,12 +204,12 @@ class Vintage(unittest.TestCase):
 
     def test_vintage_continuous_no_rounding(self):
         # R% = 16% on 1990 -> 2000: 1995.5 exactly; floor 0.6475, never rounded up to 1996 (0.645)
-        r = solve(base(year_built=1990, renovation_year=2000, renovation_spend=0.16 * 255.16 * 30_000), UST)
+        r = solve(base(year_built=1990, renovation_year=2000, renovation_spend=0.16 * P_COL * 30_000), UST)
         self.assertAlmostEqual(r.floors["vintage_used"], 1995.5)
         self.assertAlmostEqual(r.floors["basis_floor_pct"], 0.6475)
 
     def test_unknown_market_r_pct_uses_largest_point(self):
-        spend = 0.15 * 282.03 * 30_000  # 15% of the largest POINT (Indianapolis)
+        spend = 0.15 * P_IND * 30_000  # 15% of the largest POINT (Indianapolis)
         r = solve(base(market="Nowhere", year_built=1970, renovation_year=2010, renovation_spend=spend), UST)
         self.assertAlmostEqual(r.floors["vintage_used"], 1990)
 
@@ -223,7 +241,7 @@ class LooserThanDoctrineGuards(unittest.TestCase):
     def test_denominator_sensitive_flip_between_low_and_point(self):
         # an ask priced so it clears the floor at POINT but not at LOW
         self.assertEqual(D.DENOM_SENSITIVE_BAND, 0.05)
-        low_repl, point_repl = 0.9 * 255.16 * 30_000, 255.16 * 30_000
+        low_repl, point_repl = 0.9 * P_COL * 30_000, P_COL * 30_000
         price = (0.35 * (low_repl + point_repl) / 2) / 1.02   # between the two floors
         r = solve(base(stabilized_noi=150_000, ask_price=price), UST)
         self.assertTrue(any(f.startswith("DENOMINATOR-SENSITIVE at ask") for f in r.flags))
@@ -393,14 +411,14 @@ class LooserThanDoctrineGuards(unittest.TestCase):
     def test_chicago_alias_rct_and_flag(self):
         r = solve(base(market="Chicago–Greater Cook County IL"), UST)
         self.assertEqual(r.floors["market"], "Chicago-Cook IL")
-        self.assertAlmostEqual(r.floors["rct_low_psf_adjusted"], 0.9 * 250.66)
+        self.assertAlmostEqual(r.floors["rct_low_psf_adjusted"], 0.9 * P_CHI)
         self.assertEqual(r.floors["exit_cap"], 0.08)
         self.assertTrue(any("DENOMINATOR-SENSITIVE" in f for f in r.flags))
         self.assertEqual(solve(base(market="grand rapids"), UST).floors["exit_cap"], 0.08)
 
     def test_unknown_market_uses_cheapest_rct(self):
         r = solve(base(market="Nowhere"), UST)
-        self.assertAlmostEqual(r.floors["rct_low_psf_adjusted"], 0.9 * 250.66)
+        self.assertAlmostEqual(r.floors["rct_low_psf_adjusted"], 0.9 * P_CHI)
         self.assertEqual(r.floors["exit_cap"], 0.0775)
 
     def test_invalid_stabilization_year(self):
@@ -456,7 +474,7 @@ class AskAndPortfolio(unittest.TestCase):
         a = base(name="A", adders=["cranes", "climate_control", "office_buildout"])  # +$45/SF
         v = base(name="V", vacant_sf_at_close=30_000, in_place_noi=0, stabilization_year=2)
         p = solve_portfolio([a, v], UST)
-        wa, wv = 255.16 + 45, 255.16
+        wa, wv = P_COL + 45, P_COL
         self.assertAlmostEqual(p["allocation"][0]["premium_share"], p["max_premium_over_sum"] * wa / (wa + wv))
 
     def test_explicit_false_does_not_silence_vacancy_gap(self):

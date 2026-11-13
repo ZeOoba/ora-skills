@@ -134,3 +134,9 @@ tools/real-identifiers.local.json
 
 # Personal (non-firm) financial data: local-only, never tracked in this public repo
 personal-portfolio/
+
+# RCT replacement-cost table (governor-level, ratified by Gabriel): private runtime file, never tracked in
+# this public repo, not even hashed (2026-11-13). package_skills.py bundles it into each installed skill
+# that reads RCT values (PRIVATE_LOCAL_DEPS). Format and steps: tools/RCT_TABLE.md.
+rct-table.local.json
+rct-table.local.json.*
