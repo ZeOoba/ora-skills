@@ -36,7 +36,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pending_reimport import changed_files, affected_skills  # noqa: E402
-from package_skills import REPO, skill_source_files  # noqa: E402
+from package_skills import REPO, retire_stale_private, skill_source_files  # noqa: E402
 
 LOCAL_SKILLS_DIR = Path(r'C:\Users\Owner\.claude\skills')
 
@@ -55,6 +55,7 @@ def sync_skill(skill: str, repo_root: Path = REPO, mirror_root: Path = LOCAL_SKI
         src_files = skill_source_files(skill, repo_root=repo_root)
     except Exception as exc:  # noqa: BLE001 - never block the commit
         return f'{skill}: could not resolve source files ({exc})'
+    retired = retire_stale_private(skill, mirror_dir, src_files)
     copied = 0
     for rel_posix, src_path in src_files.items():
         dest_path = mirror_dir / rel_posix
@@ -66,6 +67,8 @@ def sync_skill(skill: str, repo_root: Path = REPO, mirror_root: Path = LOCAL_SKI
             copied += 1
         except Exception as exc:  # noqa: BLE001
             return f'{skill}: FAILED copying {rel_posix} ({exc})'
+    if retired:
+        return '; '.join(retired) + (f'; synced {copied} file(s)' if copied else '')
     if copied == 0:
         return f'{skill}: mirror already in sync'
     return f'{skill}: synced {copied} file(s) to local mirror'
@@ -103,6 +106,10 @@ def sweep_all(repo_root: Path = REPO, mirror_root: Path = LOCAL_SKILLS_DIR,
         skill = mirror_dir.name
         if not (repo_root / skill / 'SKILL.md').is_file():
             continue
+        if not check:
+            # The private RCT table is never in git, so uncommitted WIP is no reason to keep a stale copy.
+            for line in retire_stale_private(skill, mirror_dir, skill_source_files(skill, repo_root=repo_root)):
+                print(f'local-mirror: {line}')
         if skill in dirty:
             # The sweep copies the working tree; never publish uncommitted WIP.
             print(f'local-mirror: {skill}: skipped (uncommitted changes in repo)')

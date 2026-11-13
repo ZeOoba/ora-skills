@@ -13,6 +13,7 @@ import urllib.request
 from dataclasses import fields
 from datetime import date, timedelta
 
+from . import rct_table
 from .solver import Deal, solve, solve_portfolio
 
 FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10"
@@ -92,6 +93,13 @@ def main(argv=None) -> int:
 
     with open(a.deal_json, encoding="utf-8") as fh:
         spec = json.load(fh)
+
+    try:
+        rct_table.current()  # fail closed before any output: no RCT table, no walk
+    except rct_table.RctTableUnavailable as e:
+        print(f"RCT TABLE UNAVAILABLE: {e} No walk price produced. Do not substitute a figure.",
+              file=sys.stderr)
+        return 3
 
     if "portfolio" in spec:
         res = solve_portfolio([_deal(d) for d in spec["portfolio"]], ust, spec.get("portfolio_ask"))

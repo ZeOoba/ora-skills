@@ -543,6 +543,156 @@ SHARED_ROOT_DEPS = {
 }
 
 
+# PRIVATE runtime files (2026-11-13): gitignored, never tracked in this public repo, but shipped inside
+# each installed skill that reads them, so Code (the ~/.claude/skills mirror), Cowork and claude.ai all
+# resolve them beside SKILL.md. Today: the ratified RCT replacement-cost table (governor-level data,
+# Hard Invariant 4), read by every skill that computes or cites a basis test. Format and the change
+# procedure: tools/RCT_TABLE.md. Unlike SHARED_ROOT_DEPS these are never compared to HEAD (they have
+# none); package() validates them instead and REFUSES on a missing, invalid or stale copy.
+RCT_TABLE_FILE = 'rct-table.local.json'
+RCT_TABLE_ENV = 'ORA_RCT_TABLE'            # explicit path to a skill-format copy (optional)
+# The ONE private source shared by every ORA repo (outside all repos and OneDrive; agreed with the
+# oxford-command-center and ora-claude-config sessions, 2026-11-13). replacement-cost.json is the
+# authoritative table in the engine's schema; rct-table.local.json beside it is the same figures in this
+# skill's format (verbatim table text). $ORA_RCT_TABLE_PATH overrides the authoritative file's path.
+ORA_PRIVATE_RCT_DIR = Path.home() / '.ora-private' / 'rct'
+RCT_MASTER_DEFAULT = ORA_PRIVATE_RCT_DIR / 'replacement-cost.json'
+RCT_MASTER_ENV = 'ORA_RCT_TABLE_PATH'
+# engine market key -> this skill's market key, where they differ
+RCT_MASTER_ALIASES = {'Chicago Cook County IL': 'Chicago-Cook IL'}
+# Public C&W 2025 tiers the derivation parameters must reproduce the table from (always this tool's repo copy).
+RCT_CW_FILE = Path(__file__).resolve().parent.parent / 'acquisition-underwriting' / 'references' / 'cw-2025-construction-costs.json'
+PRIVATE_LOCAL_DEPS = {
+    skill: [RCT_TABLE_FILE] for skill in (
+        'acquisition-underwriting', 'parcel-data-recovery', 'deal-comparison', 'loi-generation',
+        'listing-enrichment-gate', 'county-parcel-screen', 'market-monitor')
+}
+
+
+def rct_master_path() -> Path:
+    import os
+    env = os.environ.get(RCT_MASTER_ENV, '').strip()
+    return Path(env) if env else RCT_MASTER_DEFAULT
+
+
+def private_dep_path(name: str, repo_root: Path = REPO) -> Path | None:
+    """Where a private file comes from: $ORA_RCT_TABLE, else the repo-root copy, else the copy in the
+    private RCT folder (beside the authoritative replacement-cost.json). None when none exists. A clean
+    worktree at origin/main has no repo-root copy, so it uses the private folder's."""
+    import os
+    if name != RCT_TABLE_FILE:
+        p = repo_root / name
+        return p if p.is_file() else None
+    env = os.environ.get(RCT_TABLE_ENV, '').strip()
+    for cand in ([Path(env)] if env else []) + [repo_root / name, rct_master_path().parent / name]:
+        if cand.is_file():
+            return cand
+    return None
+
+
+def rct_master_mismatches(table: dict, master: dict) -> list[str]:
+    """Market/field names (never figures) where the skill copy and the authoritative table disagree."""
+    out = []
+    mm = master.get('markets') if isinstance(master, dict) else None
+    if not isinstance(mm, dict):
+        return ['authoritative table has no markets object']
+    aliased = {}
+    for k, v in mm.items():
+        key = RCT_MASTER_ALIASES.get(k, k)
+        if key in aliased:
+            out.append(f'{key} appears twice in the authoritative table (alias collision)')
+        aliased[key] = v
+    mm = aliased
+    if set(mm) != set(table['markets']):
+        out.append('market list differs')
+    for k, row in table['markets'].items():
+        m = mm.get(k)
+        if not isinstance(m, dict):
+            out.append(f'{k} (no row object in the authoritative table)')
+            continue
+        for mine, theirs in (('low', 'low'), ('point', 'point'), ('high', 'high'), ('cwHard', 'cwHardPsf')):
+            v = m.get(theirs)
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or abs(float(v) - float(row[mine])) > 1e-9:
+                out.append(f'{k}.{mine}')
+    return out
+
+
+RCT_STALE_ARCHIVE = ORA_PRIVATE_RCT_DIR / '_archive' / 'stale-mirror-copies'
+
+
+def retire_stale_private(skill: str, dest_dir: Path, files: dict, archive_root: Path | None = None) -> list[str]:
+    """For a mirror sync: when skill_source_files() left a private file out (missing, invalid or untied),
+    MOVE the mirror's existing copy into the private archive (Invariant 6: moved, never deleted), so the
+    installed skill fails closed instead of running on a stale governor table. Returns log lines."""
+    import shutil
+    from datetime import datetime
+    root = archive_root or RCT_STALE_ARCHIVE
+    lines = []
+    for name in PRIVATE_LOCAL_DEPS.get(skill, []):
+        dest = Path(dest_dir) / name
+        if name in files or not dest.is_file():
+            continue
+        target = root / datetime.now().strftime('%Y%m%dT%H%M%S') / skill / name
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(dest), str(target))
+            lines.append(f'{skill}: {name} failed validation, so its mirror copy was moved to {target.parent} '
+                         f'(the skill now fails closed until a valid copy syncs)')
+        except OSError as e:
+            lines.append(f'{skill}: WARNING could not move stale {name} out of {dest_dir} ({type(e).__name__})')
+    return lines
+
+
+def _rct_module():
+    """The validator ships with the walk solver; always load the copy beside this tool."""
+    import importlib.util
+    path = Path(__file__).resolve().parent.parent / 'acquisition-underwriting' / 'scripts' / 'ora_walk' / 'rct_table.py'
+    spec = importlib.util.spec_from_file_location('_ora_rct_table', path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def private_dep_bytes(skill: str, name: str, repo_root: Path = REPO) -> bytes:
+    """The exact bytes to ship for a private dep, or SystemExit: missing, invalid, synthetic, wrong
+    version, or (when the master copy exists) different from the master copy. Never prints a figure."""
+    src = private_dep_path(name, repo_root)
+    if src is None:
+        raise SystemExit(
+            f'{skill}: REFUSING to package -- private {name} not found (looked at ${RCT_TABLE_ENV}, '
+            f'{repo_root / name}, {rct_master_path()}). The skill would install without its RCT table '
+            f'and fail closed on every basis test. See tools/RCT_TABLE.md.')
+    data = src.read_bytes()
+    if name == RCT_TABLE_FILE:
+        rct = _rct_module()
+        try:
+            table = rct.validate(json.loads(data.decode('utf-8-sig')))
+        except (ValueError, UnicodeDecodeError, rct.RctTableUnavailable) as e:
+            raise SystemExit(f'{skill}: REFUSING to package -- {src} is not a valid ratified RCT table '
+                             f'({type(e).__name__}: {e}). See tools/RCT_TABLE.md.')
+        master = rct_master_path()
+        try:
+            authoritative = json.loads(master.read_bytes().decode('utf-8-sig'))
+        except (OSError, ValueError, UnicodeDecodeError) as e:
+            raise SystemExit(f'{skill}: REFUSING to package -- cannot read the authoritative RCT table '
+                             f'{master} ({type(e).__name__}); a copy that cannot be tied to it is not '
+                             f'shipped. Set ${RCT_MASTER_ENV} if it lives elsewhere (tools/RCT_TABLE.md).')
+        try:
+            cw = json.loads(RCT_CW_FILE.read_bytes().decode('utf-8-sig'))
+        except (OSError, ValueError, UnicodeDecodeError) as e:
+            raise SystemExit(f'{skill}: REFUSING to package -- cannot read the C&W tiers {RCT_CW_FILE} '
+                             f'({type(e).__name__}) to tie the derivation parameters.')
+        underived = rct.derivation_mismatches(table, cw)
+        if underived:
+            raise SystemExit(f'{skill}: REFUSING to package -- the derivation parameters in {src.name} do not '
+                             f'reproduce {len(underived)} row(s) from the C&W tiers: {", ".join(underived[:6])}.')
+        bad = rct_master_mismatches(table, authoritative)
+        if bad:
+            raise SystemExit(f'{skill}: REFUSING to package -- {src.name} does not tie to the authoritative '
+                             f'table {master} ({len(bad)} field(s): {", ".join(bad[:6])}). Re-copy it.')
+    return data
+
+
 def _dep_pair(dep) -> tuple[str, str]:
     """Normalize one SHARED_ROOT_DEPS list entry to (repo_root_relpath,
     skill_relpath). A plain string means source and destination share the same
@@ -585,6 +735,10 @@ def is_bundled(rel_posix: str) -> bool:
         after test-running its new scripts (audit_completeness.cpython-310.pyc shipped).
     """
     parts = rel_posix.split('/')
+    # A private file (PRIVATE_LOCAL_DEPS) is never taken from the skill dir walk: it is added from its
+    # validated source instead, so a stray or stale copy inside a skill dir can never ship.
+    if parts[-1].lower().startswith(RCT_TABLE_FILE):  # any depth, any case, any suffix (.bak, .old)
+        return False
     if parts[-1] == 'PACKAGING-NOTE.md':
         return False
     if parts[0] == 'versions':
@@ -674,6 +828,21 @@ def skill_source_files(skill: str, repo_root: Path = REPO) -> dict[str, Path]:
         dep_path = repo_root / dep_src
         if dep_path.is_file():
             files[dep_dest] = dep_path
+    # Private files, only when they pass the same validation and authoritative tie as package(): this
+    # listing also feeds the ~/.claude/skills and AppData mirror syncs, which must never copy an
+    # unvalidated or untied table (adversarial review 2026-11-13). Stays non-raising: a failing file is
+    # left out with a warning (never a figure); the mirror syncs then move any existing copy away
+    # (retire_stale_private), so the installed skill fails closed instead of running on a stale table.
+    for name in PRIVATE_LOCAL_DEPS.get(skill, []):
+        dep_path = private_dep_path(name, repo_root)
+        if dep_path is None:
+            continue
+        try:
+            private_dep_bytes(skill, name, repo_root)
+        except SystemExit as e:
+            print(f'WARNING: {name} left out of {skill}: {e}', file=sys.stderr)
+            continue
+        files[name] = dep_path
     return files
 
 
@@ -751,6 +920,8 @@ def package(skill: str, outdir: Path, allow_dirty_shared: bool = False) -> Path:
                 f'commit you mean to ship (a worktree at origin/main), or pass '
                 f'--allow-dirty-shared if this is deliberate.')
         shared[dep_dest] = data
+    for name in PRIVATE_LOCAL_DEPS.get(skill, []):
+        shared[name] = private_dep_bytes(skill, name, REPO)
     dest = outdir / f'{skill}.skill'
     with zipfile.ZipFile(dest, 'w', zipfile.ZIP_DEFLATED) as z:
         for p in sorted(src.rglob('*')):
