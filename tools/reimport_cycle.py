@@ -49,6 +49,7 @@ BAD_DEP_LABELS = ("CACHE-AHEAD", "DIVERGENT", "UNKNOWN")
 
 sys.path.insert(0, str(TOOLS))
 import reimport_correlate as _rcor  # noqa: E402
+import reimport_claims as _claims  # noqa: E402
 
 
 def _run(args: list[str], echo: bool = True) -> subprocess.CompletedProcess:
@@ -102,6 +103,15 @@ def cmd_prep(skills: list[str], out: Path) -> int:
     if stop:
         print("prep: gate failed -- nothing packaged.")
         return 1
+    # Claim each reimport for this session through close (tools/reimport_claims.py,
+    # 2026-11-13 double-log): another session's live claim stops prep before packaging.
+    held = [b for b in (_claims.claim(s, "Entry point A: reimport_cycle prep -> close")
+                        for s in skills) if b]
+    if held:
+        for b in held:
+            print(f"   STOP: {b}")
+        print("prep: reimport claimed by another session -- nothing packaged.")
+        return 1
     _run([str(TOOLS / "description_budget.py"), *skills])
     out.mkdir(parents=True, exist_ok=True)
     print(f"== package -> {out}")
@@ -146,6 +156,13 @@ def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool,
     if failed:
         print(f"close: STOP -- not CONFIRMED: {', '.join(failed)}. Nothing appended.")
         return 1
+    held = [(s, h) for s, h in ((s, _claims.foreign_holder(s)) for s in skills) if h]
+    if held:
+        for s, h in held:
+            print(f"   STOP: {_claims.describe(s, h)}")
+        print("close: STOP -- another session holds the reimport claim; it logs these "
+              "installs. Nothing appended.")
+        return 1
     today = _dt.date.today().isoformat()
     body = note or (f"{', '.join(skills)} reimported via Cowork Save-skill; "
                     "reimport_correlate CONFIRMED.")
@@ -160,6 +177,7 @@ def cmd_close(skills: list[str], note: str | None, clear: bool, sweep: bool,
         return 1
     for s in skills:                      # logged: mark exactly the verified install
         _rcor.mark_logged(s, snapshots[s], header, appended.stdout + appended.stderr)
+        _claims.release(s)                # this session's reimport is done
     # postclick ran with --no-append, so it left the baselines in place; the install is
     # recorded now, so use them up (a kept baseline would CONFIRM this install again).
     consume_rc = _run([str(TOOLS / "reimport_correlate.py"), "consume", *skills]).returncode

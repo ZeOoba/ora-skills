@@ -43,6 +43,18 @@ if ! python tools/package_skills.py --check-tree-hygiene; then
   exit 1
 fi
 
+# Check 6 (2026-11-13): no packaged .skill/.plugin and no rct-table* file may be committed
+# ANYWHERE, _staging/ included (ora-skills is public; the packages carry the private RCT
+# table). .gitignore already ignores both, but only against a plain `git add` -- an
+# install session left 13 such packages untracked in _archive/ on 2026-11-13, one
+# `git add -f` from publication. Deletions pass. The synthetic RCT fixture is allowlisted
+# (package_skills.STAGED_ARTIFACT_ALLOW).
+if ! python tools/package_skills.py --check-staged-artifacts; then
+  echo 'BLOCKED: packaged skill/plugin or private RCT table staged (see above).' >&2
+  echo 'Unstage it; --no-verify only if you are certain it holds nothing private.' >&2
+  exit 1
+fi
+
 # Check 5 (2026-08-03): detect a runtime cache that is AHEAD of the repo BEFORE Check 4
 # overwrites it. Check 4 copies repo -> cache unconditionally, so a skill edited
 # platform-side and never committed (a REPO-FIRST violation) is silently clobbered by the

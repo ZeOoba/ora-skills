@@ -487,6 +487,57 @@ def check_hygiene_cli() -> int:
     return 0
 
 
+# Tracked files that look like a private or packaged artifact but are not: the RCT test
+# fixture holds synthetic figures by design (rct_table.py's tests load it).
+STAGED_ARTIFACT_ALLOW = {'acquisition-underwriting/scripts/fixtures/rct-table.synthetic.json'}
+_PACKAGE_EXT_RE = re.compile(r'\.(skill|plugin)(\.|$)', re.I)
+
+
+def staged_artifact_violations(files: list[str]) -> list[str]:
+    """Staged repo paths that must never be committed: a packaged .skill/.plugin (it carries
+    every bundled file, including the private RCT table, PRIVATE_LOCAL_DEPS) or any
+    rct-table* file (the private table itself, or a copy/backup of it), at ANY depth.
+    `_staging/` is not exempt: it is gitignored, so a file there can only be staged with
+    `git add -f`, and committing it publishes it all the same (ora-skills is public).
+    Suffixed copies (`x.skill.bak`, `rct-table.local.json.old`) count too.
+
+    Motivation (2026-11-13): an install session left 13 RCT-carrying packages, its
+    scripts and an event-log draft untracked in `_archive/` of this public repo. .gitignore
+    already ignored `*.skill` and `rct-table.local.json*`, but ignore rules stop only a
+    plain `git add`; `git add -f`, or a later .gitignore edit, would have published them.
+    This check enforces it at commit time."""
+    out = []
+    for f in files:
+        f = f.replace('\\', '/')
+        if f in STAGED_ARTIFACT_ALLOW:
+            continue
+        base = f.rsplit('/', 1)[-1]
+        if _PACKAGE_EXT_RE.search(base) or base.lower().startswith('rct-table'):
+            out.append(f)
+    return out
+
+
+def check_staged_artifacts(files: list[str] | None = None) -> int:
+    """tools/hooks/pre-commit entry point (Check 6): exit 1 if any staged addition or
+    modification is a packaged .skill/.plugin or an rct-table* file (see
+    staged_artifact_violations). Deletions are allowed, so removing a committed artifact
+    is never blocked. Fails CLOSED when git cannot list the index."""
+    if files is None:
+        p = subprocess.run(['git', '-C', str(REPO), 'diff', '--cached', '--name-only',
+                            '--diff-filter=ACMR', '-z'], capture_output=True)
+        if p.returncode:
+            print('BLOCKED: could not list staged files (git diff --cached failed): '
+                  + p.stderr.decode('utf-8', 'replace').strip(), file=sys.stderr)
+            return 1
+        files = [f for f in p.stdout.decode('utf-8', 'replace').split('\0') if f]
+    bad = staged_artifact_violations(files)
+    for f in bad:
+        print(f'{f}: packaged skill/plugin or private RCT table staged for commit -- '
+              f'ora-skills is PUBLIC. Unstage it (git reset -- "{f}") and keep it outside '
+              f'the repo or in gitignored _staging/ without -f.', file=sys.stderr)
+    return 1 if bad else 0
+
+
 def resolve_outdir_collision(outdir: Path, repo: Path = REPO) -> str | None:
     """If `outdir` resolves to `repo` itself or to one of its skill directories, return a
     human-readable description of the collision; else None. `repo` is parameterized for
@@ -1025,6 +1076,10 @@ def main() -> None:
         # tools/hooks/pre-commit entry point (Check 3): flag stray .skill build
         # artifacts sitting inside skill source directories; exit 1 blocks the commit.
         sys.exit(check_hygiene_cli())
+    if sys.argv[1] == '--check-staged-artifacts':
+        # tools/hooks/pre-commit entry point (Check 6): no packaged .skill/.plugin or
+        # rct-table* file may be committed anywhere; exit 1 blocks the commit.
+        sys.exit(check_staged_artifacts())
     outdir = Path(sys.argv[1])
     collision = resolve_outdir_collision(outdir)
     if collision:
