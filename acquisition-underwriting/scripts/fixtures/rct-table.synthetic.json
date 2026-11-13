@@ -1,0 +1,105 @@
+{
+ "_synthetic": true,
+ "_comment": "INVENTED figures for tests only. The loader refuses this file unless test code allows it. Never paste real RCT figures here.",
+ "rctVersion": "synthetic-test-fixture",
+ "markets": {
+  "Columbus OH": {
+   "label": "Columbus OH",
+   "low": 216.0,
+   "point": 240.0,
+   "high": 264.0,
+   "cwHard": 100.0,
+   "cwNote": "[SYNTHETIC]"
+  },
+  "Cincinnati OH": {
+   "label": "Cincinnati OH",
+   "low": 235.8,
+   "point": 262.0,
+   "high": 288.2,
+   "cwHard": 101.0,
+   "cwNote": "[SYNTHETIC]"
+  },
+  "Kansas City MO": {
+   "label": "Kansas City MO/KS",
+   "low": 214.2,
+   "point": 238.0,
+   "high": 261.8,
+   "cwHard": 102.0,
+   "cwNote": "[SYNTHETIC]"
+  },
+  "Indianapolis IN": {
+   "label": "Indianapolis IN",
+   "low": 243.0,
+   "point": 270.0,
+   "high": 297.0,
+   "cwHard": 103.0,
+   "cwNote": "[SYNTHETIC]"
+  },
+  "Madison WI": {
+   "label": "Madison WI",
+   "low": 215.1,
+   "point": 239.0,
+   "high": 262.9,
+   "cwHard": 104.0,
+   "cwNote": "[SYNTHETIC]"
+  },
+  "Mid-Atlantic": {
+   "label": "Maryland / Baltimore–DC",
+   "low": 219.6,
+   "point": 244.0,
+   "high": 268.4,
+   "cwHard": 105.0,
+   "cwNote": "[SYNTHETIC]"
+  },
+  "Grand Rapids MI": {
+   "label": "Grand Rapids MI",
+   "low": 241.2,
+   "point": 268.0,
+   "high": 294.8,
+   "cwHard": 106.0,
+   "cwNote": "[SYNTHETIC]"
+  },
+  "Richmond VA": {
+   "label": "Richmond VA",
+   "low": 219.6,
+   "point": 244.0,
+   "high": 268.4,
+   "cwHard": 107.0,
+   "cwNote": "[SYNTHETIC]"
+  },
+  "Des Moines IA": {
+   "label": "Des Moines IA",
+   "low": 217.8,
+   "point": 242.0,
+   "high": 266.2,
+   "cwHard": 108.0,
+   "cwNote": "[SYNTHETIC]"
+  },
+  "Louisville KY": {
+   "label": "Louisville KY",
+   "low": 223.2,
+   "point": 248.0,
+   "high": 272.8,
+   "cwHard": 109.0,
+   "cwNote": "[SYNTHETIC]"
+  },
+  "Chicago-Cook IL": {
+   "label": "Chicago–Greater Cook County IL",
+   "low": 207.0,
+   "point": 230.0,
+   "high": 253.0,
+   "cwHard": 110.0,
+   "cwNote": "[SYNTHETIC]"
+  }
+ },
+ "markdownTable": "| Market | LOW $/SF | POINT $/SF | HIGH $/SF | C&W hard (source) |\n|---|---|---|---|---|\n| Columbus OH | 216.00 | 240.00 | 264.00 | 100.00 [SYNTHETIC] |\n| Cincinnati OH | 235.80 | 262.00 | 288.20 | 101.00 [SYNTHETIC] |\n| Kansas City MO/KS | 214.20 | 238.00 | 261.80 | 102.00 [SYNTHETIC] |\n| Indianapolis IN | 243.00 | 270.00 | 297.00 | 103.00 [SYNTHETIC] |\n| Madison WI | 215.10 | 239.00 | 262.90 | 104.00 [SYNTHETIC] |\n| Maryland / Baltimore–DC | 219.60 | 244.00 | 268.40 | 105.00 [SYNTHETIC] |\n| Grand Rapids MI | 241.20 | 268.00 | 294.80 | 106.00 [SYNTHETIC] |\n| Richmond VA | 219.60 | 244.00 | 268.40 | 107.00 [SYNTHETIC] |\n| Des Moines IA | 217.80 | 242.00 | 266.20 | 108.00 [SYNTHETIC] |\n| Louisville KY | 223.20 | 248.00 | 272.80 | 109.00 [SYNTHETIC] |\n| Chicago–Greater Cook County IL | 207.00 | 230.00 | 253.00 | 110.00 [SYNTHETIC] |\n",
+ "derivation": {
+  "referenceSf": 25000,
+  "softCostMultiplier": 1.5,
+  "escalation": 1.1,
+  "softCostNote": "[SYNTHETIC]",
+  "escalationNote": "[SYNTHETIC]",
+  "sizePremiumNote": "[SYNTHETIC]",
+  "formula": "[SYNTHETIC]"
+ }
+}

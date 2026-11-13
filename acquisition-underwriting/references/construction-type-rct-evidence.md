@@ -33,4 +33,4 @@ Buy one current **Marshall Valuation Service Section 14** page set or an **RSMea
 
 ## First application
 
-211 Piper Circle: PEMB, 26,800 SF, multiplier 0.90. Penn Corridor POINT $258.85 (same value as Maryland/Baltimore-DC) x 0.90 + $12 conditioned adder = $244.97; LOW $220.47. Basis walk moved from $2,399,818 to about $2,154,977.
+211 Piper Circle: PEMB, 26,800 SF, multiplier 0.90. Penn Corridor POINT (the Maryland/Baltimore-DC row of `rct-table.local.json`) x 0.90 + $12 conditioned adder, LOW = 0.9 x that. The Basis walk fell by about 10%. (Figures omitted: this repo is public and the RCT table is private, v4.48.)

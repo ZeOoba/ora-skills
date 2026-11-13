@@ -1,14 +1,14 @@
 """ORA acquisition doctrine constants — READ-ONLY mirror of acquisition-underwriting SKILL.md.
 
-Source of record: ora-skills/acquisition-underwriting/SKILL.md (v4.48, 2026-11-13; constants
+Source of record: ora-skills/acquisition-underwriting/SKILL.md (v4.49, 2026-11-13; constants
 unchanged since v4.45, 2026-11-08) and
-oxford-command-center/config/replacement-cost.v3.json (RCT v03, ratified 2026-07-14).
+the private RCT v03 table (ratified 2026-07-14), loaded by rct_table.py from rct-table.local.json.
 If these values and SKILL.md disagree, SKILL.md wins and this file is the bug.
 Governor constants (DSCR 1.25 / LTV 65 per-property / LTV 40 aggregate) change only by
 Gabriel's in-turn ratification (Hard Invariant 4) — never edit them to make a deal work.
 """
 
-DOCTRINE_VERSION = "acquisition-underwriting v4.48 / RCT v03 (replacement-cost.v3.1)"
+DOCTRINE_VERSION = "acquisition-underwriting v4.49 / RCT v03 (replacement-cost.v3.1)"
 
 # --- Governors (Hard Invariant 4) ---
 DSCR_FLOOR = 1.25                 # the 1.25x floor DSCR is tested at a 65%-LTV loan on stabilized NOI (v4.44/v4.45)
@@ -65,17 +65,14 @@ EXIT_CAPS = {
 }
 DEFAULT_EXIT_CAP = 0.0775  # flag when used
 
-# RCT v03 POINT $/SF (LOW is re-derived after the construction multiplier). SKILL.md Replacement Cost Table (RCT v03).
-RCT_POINT = {
-    "Columbus OH": 255.16, "Cincinnati OH": 279.40, "Kansas City MO": 253.22,
-    "Indianapolis IN": 282.03, "Mid-Atlantic": 258.85, "Madison WI": 254.53,
-    "Grand Rapids MI": 281.23, "Richmond VA": 258.85, "Des Moines IA": 257.40,
-    "Louisville KY": 263.41, "Chicago-Cook IL": 250.66,
-}
+# RCT v03 POINT $/SF is NOT in source: this repo is public and the table is governor-level data. It is
+# loaded at solve time from the private rct-table.local.json (rct_table.py, tools/RCT_TABLE.md), which
+# fails closed. RCT_MARKETS is the ratified market list (names only).
+from .rct_table import RCT_MARKETS, RCT_VERSION  # noqa: E402,F401
 # Always DENOMINATOR-SENSITIVE (SKILL.md RCT v03 standing-flag markets): proxies + Chicago; Indianapolis keeps its standing flag.
 DENOMINATOR_SENSITIVE = {"Madison WI", "Grand Rapids MI", "Richmond VA", "Des Moines IA",
                          "Chicago-Cook IL", "Indianapolis IN"}
-RCT_FALLBACK_POINT = min(RCT_POINT.values())  # cheapest market => strictest floor (Chicago, 250.66)
+# Unknown market: cheapest POINT in the loaded table (strictest floor); R% uses the largest. See solver.
 
 MARKET_ALIASES = {
     "columbus": "Columbus OH", "cincinnati": "Cincinnati OH", "indianapolis": "Indianapolis IN",

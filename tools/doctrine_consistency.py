@@ -97,7 +97,7 @@ ALLOWED = {
             'not collide with the rulings recorded as "staged as v4.42" '
             '(docs/plans/2026-11-05_skill-dataflow-calibration-review.md L5, S7).'),
     ('acquisition-underwriting/references/market-and-cost-calibration-data.md', 'cluster-count',
-     'other nine clusters', 'f92a6a7e48'):
+     'other nine clusters', '2ef91152bb'):
         (1, 'A dated 2026-08-11 correction note; nine was right when ten clusters existed. '
             'Rewording rides the next acquisition-underwriting version, as above.'),
     ('owner-outreach/SKILL.md', 'cluster-count', "ora's 9 target clusters", 'b3c4356aa1'):

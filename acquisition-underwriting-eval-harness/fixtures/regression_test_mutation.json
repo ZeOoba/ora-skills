@@ -53,7 +53,7 @@
     "expected_score": 8.0,
     "p_exec_pct": 25.0,
     "verdict_tier": "PASS-band (FLOOR-FLAGGED; price-watch re-engage, not a cold pass)",
-    "floor_result": "FLOOR-FLAGGED -- Basis breached (54.4% discount to RCT v03 GR LOW $253.11 vs 65% floor at 1987 vintage) + Yield breached (6.0% YoC vs 8.0% floor); DSCR clears (1.45x, LTV-bound refi); DENOMINATOR-SENSITIVE + INVERTED-SPREAD (6.87% in vs 8.00% exit)",
+    "floor_result": "FLOOR-FLAGGED -- Basis breached (54.4% discount to RCT v03 GR LOW vs 65% floor at 1987 vintage) + Yield breached (6.0% YoC vs 8.0% floor); DSCR clears (1.45x, LTV-bound refi); DENOMINATOR-SENSITIVE + INVERTED-SPREAD (6.87% in vs 8.00% exit)",
     "replay_notes": "Bear-mode UNKNOWN (market-monitor unavailable) -> scored OFF, T2 ceiling, non-binding (moot -- Tenancy already 0). Walk price to floors ~$1.44-1.48M independently reproduces the skill's own documented $1.45-1.50M re-engage band -- a strong internal-consistency signal. Price-watch trigger applies per the skill's named validation example for this exact deal."
   },
   "archived_pre_v03_reference": {

@@ -30,6 +30,7 @@ from datetime import date
 from typing import Optional
 
 from . import doctrine as D
+from . import rct_table
 
 
 @dataclass
@@ -127,7 +128,7 @@ def irr(flows: list, lo: float = -0.99, hi: float = 1.0) -> Optional[float]:
 def normalize_market(market: Optional[str]) -> Optional[str]:
     if market is None:
         return None
-    if market in D.RCT_POINT or market in D.EXIT_CAPS:
+    if market in D.RCT_MARKETS or market in D.EXIT_CAPS:
         return market
     return D.MARKET_ALIASES.get(market.strip().lower(), market)
 
@@ -369,11 +370,13 @@ def solve(deal: Deal, ust: float, portfolio_mode: bool = False) -> Result:
     market = normalize_market(deal.market)
     cap = _exit_cap(deal, market, flags)
 
-    point = D.RCT_POINT.get(market or "")
+    # Private RCT table (rct_table.py): raises RctTableUnavailable, so no walk is produced without it.
+    rct_point = rct_table.points(rct_table.current())
+    point = rct_point.get(market or "")
     point_r = point  # R% denominator: largest POINT when the market is unknown (smallest vintage shift)
     if point is None:
         flags.append(f"RCT: no row for market '{deal.market}' — cheapest-market fallback (strictest floor)")
-        point, point_r = D.RCT_FALLBACK_POINT, max(D.RCT_POINT.values())
+        point, point_r = min(rct_point.values()), max(rct_point.values())
     if market in D.DENOMINATOR_SENSITIVE:
         flags.append("DENOMINATOR-SENSITIVE market — local insurance comp or GC quote REQUIRED pre-LOI")
     mult, mult_r = _construction_mult(deal, flags)

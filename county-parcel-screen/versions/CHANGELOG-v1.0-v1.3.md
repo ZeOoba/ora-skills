@@ -127,7 +127,7 @@ Moved out of `SKILL.md` on 2026-09-22 (body split). Provenance only — every op
   mirrored into `county-endpoints.v1.json`; the Franklin `IsValid` correction is not,
   because that derived index carries no deed/transfer fields. Still open, unchanged:
   the replacement-cost benchmark conflict (SKILL.md ~$150/SF vs ora-am-brief
-  ~$85-120/SF vs RCT v03 KC LOW $227.90) and the F8 institutional aliases.
+  ~$85-120/SF vs RCT v03 KC LOW) and the F8 institutional aliases.
 - **v1.1 (2026-07-19):** Added references/county-endpoints.v1.json (schema_version
   1.0) - live-verified (real `?f=json` requests, not re-cited from memory) against
   all 22 counties already documented in county-endpoints.md. 19 VERIFIED, 2

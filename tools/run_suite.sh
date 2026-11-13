@@ -37,11 +37,13 @@
 
 cd "$(dirname "$0")/.." || exit 2
 
-ALLOWED_SKIPS=''
+# The RCT leak test's value scan needs the private table (tools/RCT_TABLE.md), which CI never has; it
+# skips exactly one test there and says why. With the table present it runs and the count is zero.
+ALLOWED_SKIPS='tools/test_rct_public_leak.py=1'
 if [ "${OS:-}" != "Windows_NT" ]; then
   # test_path_over_260_characters is skipUnless(os.name == "nt"); it cannot run
   # off Windows. On Windows the baseline stays zero.
-  ALLOWED_SKIPS='tools/test_package_census.py=1'
+  ALLOWED_SKIPS="$ALLOWED_SKIPS tools/test_package_census.py=1"
 fi
 
 # Plain-assert check scripts with no unittest runner; each prints `all checks passed`

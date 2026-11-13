@@ -293,7 +293,7 @@ Write ORA's own offer into structured Notion fields the moment the LOI exists �
    | `LOI Sent Date` | the date the LOI is actually delivered (leave NULL at draft if unshipped) |
    | `ORA Offer Price` | the purchase price in the LOI |
    | `ORA Offer $/SF` | offer ÷ Total SF |
-   | `ORA Basis @ Offer (% RCT LOW)` | all-in basis ÷ the construction-type-adjusted RCT v03 LOW for the market (POINT × multiplier + adders, × 0.9, per `acquisition-underwriting` v4.37; equals the bare LOW for tilt-up/precast with no adder) |
+   | `ORA Basis @ Offer (% RCT LOW)` | all-in basis ÷ the construction-type-adjusted RCT v03 LOW for the market (POINT × multiplier + adders, × 0.9, per `acquisition-underwriting` v4.37; equals the bare LOW for tilt-up/precast with no adder; POINT from `rct-table.local.json` in this skill's folder, shipped privately: missing or not `RCT v03` → leave the field blank and flag `RCT TABLE UNAVAILABLE`, never substitute a figure) |
    | **`ORA Max Defensible Price`** | **see §3 — the load-bearing number** |
    | `Offer: DD Days` / `Offer: Close Days` / `Offer: Deposit $` | from the LOI terms |
    | `Offer: All-Cash` / `Offer: Financing Contingency` | from the LOI terms |
