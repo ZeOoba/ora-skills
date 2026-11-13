@@ -9,18 +9,22 @@ Each memo figure ($, %, x, SF) is classified:
   TIED      - a model cell matches within the memo's own display rounding
   NEAR      - a model cell is within --near-pct (default 0.5%) but outside rounding
   CONFLICT  - the figure carries a metric (DSCR, NOI, cap rate ...) and the model's
-              cells with that metric in their label hold a different value
+              cells with that metric in their label hold a different value, or a DSCR/LTV
+              figure sits on the other side of an ORA governor from its model cell
+  AMBIGUOUS - it matches one of several same-metric cells that disagree, and the memo
+              does not say which (Year 1 vs Year 5 DSCR)
   UNTIED    - no model cell supports the figure
 
 No false pass: when the memo names a metric and the model has cells labelled with it,
 ONLY those cells can tie the figure; a coincidental equal value elsewhere is a note,
-never a TIED. Threshold cells (Min DSCR, Max LTV, floor, covenant, target ...) tie only
-a memo figure that is itself stated as a threshold. Count and year cells (tenant count,
+never a TIED. Threshold cells (Min DSCR, Max LTV, covenant, target ...) tie only a memo
+figure that is itself stated as a threshold. "Floor DSCR" and "DSCR at Max Loan" are
+achieved metrics (v4.44 floor test), not thresholds. Count and year cells (tenant count,
 analysis year, hold years) never tie a $, % or x figure by value alone.
 
-Exit codes: 0 = no CONFLICT/UNTIED (NEAR is reported, never fails) · 1 = CONFLICT/UNTIED
-present · 2 = input error: missing or unreadable file, a memo with no figures, an output
-path that would overwrite an input, or ANY formula cell without a cached value (a model
+Exit codes: 0 = no CONFLICT/AMBIGUOUS/UNTIED (NEAR is reported and does not fail, except
+on DSCR/LTV, where a near miss is a CONFLICT) · 1 = exceptions present · 2 = input error: missing or unreadable file, a memo with no figures, an output
+path that would overwrite an input or a PDF, or ANY formula (incl. array/data-table) cell without a cached value (a model
 saved by a script; open and save it in Excel first). --allow-uncached downgrades the
 last to a warning. A verified null beats an inferred null.
 
@@ -36,6 +40,7 @@ import math
 import re
 import sys
 import zipfile
+import zlib
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -70,6 +75,12 @@ METRIC_KINDS = {
     "noi": {"money"}, "price": {"money"}, "loan": {"money"}, "equity": {"money"},
     "rent_psf": {"money"}, "replacement_cost": {"money"}, "sf": {"sf"},
 }
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ora_walk.doctrine import (AGGREGATE_LTV_CEILING, DSCR_FLOOR,  # noqa: E402  read-only governors
+                               PER_PROPERTY_LTV_CEILING)
+
+# A memo DSCR/LTV must sit on the same side of each governor as its model cell; a near miss fails.
+GOVERNORS = {"dscr": (DSCR_FLOOR,), "ltv": (AGGREGATE_LTV_CEILING, PER_PROPERTY_LTV_CEILING)}
 # A threshold, limit or target rather than a computed result (model label or memo context).
 THRESH_RE = re.compile(r"\b(?:min(?:imum)?|max(?:imum)?|floor|ceiling|covenant|hurdle|target|"
                        r"required|requirement|threshold|limit)\b", re.I)
@@ -87,6 +98,7 @@ QUALIFIERS = {
     "levered": r"(?<!un)\blevered\b", "unlevered": r"\bunlevered\b", "stabilized": r"stabili[sz]ed",
     "base": r"\bbase\b", "bear": r"\bbear\b|downside", "bull": r"\bbull\b|upside",
     "pre_tax": r"pre[- ]tax", "after_tax": r"after[- ]tax|post[- ]tax",
+    "floor": r"\bfloor\b", "max_loan": r"max(?:imum)?\.?\s+loan",
 }
 QUALIFIER_RE = {k: re.compile(v, re.I) for k, v in QUALIFIERS.items()}
 YEAR_TOKEN_RE = re.compile(r"\b(?:year|yr)[\s-]?(\d{1,2})\b", re.I)
@@ -104,7 +116,7 @@ CLAIM_RE = re.compile(
     r"(?P<money>\$\s?(?P<mparen>\()?(?P<mnum>\d[\d,]*(?:\.\d+)?)\s*(?P<mscale>billion|million|thousand|mm|[kmb])?"
     r"(?![a-z]))"
     r"|(?P<pct>(?<![\w.])(?P<pnum>-?\d+(?:\.\d+)?)\s?%)"
-    r"|(?P<mult>(?<![\w.$])(?P<xnum>\d+(?:\.\d+)?)\s?x(?![a-z])(?!\s*\d))"
+    r"|(?P<mult>(?<![\w.$])(?P<xnum>\d+(?:\.\d+)?)\s?[x×](?![a-z])(?!\s*\d))"
     r"|(?P<sf>(?<![\w.$])(?P<snum>\d[\d,]*(?:\.\d+)?)\s?(?P<sk>k)?\s?-?\s?"
     r"(?:rsf|sf|s\.f\.|sq\.?\s?ft\.?|square feet)(?![a-z]))",
     re.I,
@@ -182,6 +194,8 @@ def read_docx_paragraphs(path: Path) -> list[str]:
         raise ValueError(f"{path.name} is not a readable .docx: {e}") from e
     except ET.ParseError as e:
         raise ValueError(f"{path.name} has malformed XML: {e}") from e
+    except (zlib.error, OSError, EOFError, KeyError, NotImplementedError, RuntimeError) as e:
+        raise ValueError(f"{path.name} is not a readable .docx: {type(e).__name__}: {e}") from e
     return paras
 
 
@@ -193,9 +207,19 @@ def _kind_of(m: re.Match) -> str:
     return next(k for k in ("money", "pct", "mult", "sf") if m.group(k))
 
 
+ADJACENT_GAP_RE = re.compile(r"^\s*(?:of|is|was|:|=|,)?\s*\$?\s*$", re.I)
+
+
 def _metric_for(before: str, after: str, kind: str) -> tuple[str | None, int]:
-    """(metric, chars between keyword and figure). A metric word right after the figure
-    ("65% LTV") wins at distance 0; else the nearest one before it."""
+    """(metric, chars between keyword and figure). A free metric keyword within BIND_DISTANCE
+    before the figure ("Cap rate 7.5%, IRR ...") wins; else a metric word right after the
+    figure ("65% LTV") at distance 0; else the nearest free keyword before it."""
+    before_metric, before_dist = _metric_before(before, kind)
+    # Only a keyword hugging the figure ("Cap rate 7.5%", "DSCR of 1.25x") beats a trailing metric
+    # word; in "Exit cap rate assumes 7.5% vacancy" or "IRR at 60% LTV" the trailing word owns it.
+    gap = before[len(before) - before_dist:] if before_metric and before_dist < len(before) else ""
+    if before_metric and ADJACENT_GAP_RE.match(gap):
+        return before_metric, before_dist
     trailing = None
     for key, rx in METRIC_RE.items():
         if kind not in METRIC_KINDS[key]:
@@ -205,6 +229,10 @@ def _metric_for(before: str, after: str, kind: str) -> tuple[str | None, int]:
             trailing = (key, m.start())
     if trailing:
         return trailing[0], 0
+    return before_metric, before_dist
+
+
+def _metric_before(before: str, kind: str) -> tuple[str | None, int]:
     best, best_pos, best_start = None, -1, -1
     for key, rx in METRIC_RE.items():
         if kind not in METRIC_KINDS[key]:
@@ -248,7 +276,7 @@ def extract_claims(paragraphs: list[str], ignore: list[re.Pattern]) -> list[Clai
             approx = bool(APPROX_PRE.search(para[max(0, s - 16): s]))
             # Only a threshold word hugging the figure ("floor of 1.25x", "1.25x minimum") makes it a
             # threshold statement; "against the lender's minimum, DSCR is 1.25x" reports a result.
-            threshold = bool(re.search(THRESH_RE.pattern + r"\s*(?:of|at|is|:)?\s*\$?$", para[max(0, s - 24): s], re.I)
+            threshold = bool(re.search(THRESH_RE.pattern + r"\s*(?:of|is)?\s*\$?$", para[max(0, s - 24): s], re.I)
                              or NEXT_THRESH_RE.match(para[e: e + 16]))
             # Qualifiers and area types come only from text after the previous figure, so
             # "Exit cap 8.0%; going-in cap 8.0%" does not leak "exit" into the second figure.
@@ -257,20 +285,29 @@ def extract_claims(paragraphs: list[str], ignore: list[re.Pattern]) -> list[Clai
             own = own[prior[-1].end():] if prior else own
             quals = {k for k, rx in QUALIFIER_RE.items() if rx.search(own)}
             sf_type = SF_TYPE_RE.findall(own)
-            ym = YEAR_TOKEN_RE.findall(before[-30:])
+            ym = YEAR_TOKEN_RE.findall(own)  # "Year 5 NOI $300K; DSCR 1.10x": the DSCR has no year
             if m.group("money"):
                 num = m.group("mnum").replace(",", "")
                 scale = SCALE.get((m.group("mscale") or "").lower(), 1.0)
                 lead_ch = para[s - 1] if s else ""
                 closes = para[e: e + 1] == ")"
+                # A dash is a range dash only right after another amount on the same run of text
+                # ("$9.00-$9.60", "9.00-$9.60"), never after a bare count ("Year 1 -$50,000") or
+                # across a table tab ("1.05x<tab>-$12,500" is a negative amount in its own cell).
+                raw_prev = para[: max(0, s - 1)]
+                prev_txt = raw_prev.rstrip()
+                range_dash = "\t" not in raw_prev[len(prev_txt):] and (
+                    any(p.end() == len(prev_txt) for p in CLAIM_RE.finditer(prev_txt))
+                    or bool(re.search(r"\d[\d,]*\.\d+$|\d{1,3}(?:,\d{3})+$", prev_txt)))
                 negative = ((lead_ch == "(" or m.group("mparen")) and closes) or (
-                    lead_ch in ("-", "−") and not re.search(r"\d(?:%|x|mm|[kmb])?\s*$", para[: s - 1], re.I))
+                    lead_ch in ("-", "−", "–") and not range_dash)
+                in_range = in_range and not negative
                 val = float(num) * scale * (-1 if negative else 1)
                 half = 0.5 * 10 ** (-_decimals(num)) * scale
                 kind = "money"
             elif m.group("pct"):
                 num = m.group("pnum")
-                val = float(num) / 100
+                val = float(num) / 100  # "(5%)" in prose is a parenthetical, not a negative
                 half = 0.5 * 10 ** (-_decimals(num)) / 100
                 kind = "pct"
             elif m.group("mult"):
@@ -325,7 +362,8 @@ def read_model_cells(path: Path) -> tuple[list[Cell], int]:
             for c in row:
                 v = c.value
                 f = wf.cell(row=c.row, column=c.column).value
-                if v is None and isinstance(f, str) and f.startswith("="):
+                # Any formula without a cached value: "=..." strings and ArrayFormula/DataTableFormula objects.
+                if v is None and f is not None and not (isinstance(f, str) and not f.startswith("=")):
                     uncached += 1
                     continue
                 if isinstance(v, bool) or not isinstance(v, (int, float)):
@@ -343,8 +381,19 @@ def _labelled(cell: Cell, metric: str | None) -> bool:
     return bool(metric) and bool(METRIC_RE[metric].search(cell.label))
 
 
+# Only the two achieved forms are results despite a limit word: "Floor DSCR (65% LTV loan)" (the v4.44
+# floor test) and "DSCR at Max Loan". Anything also naming a limit ("Max Loan DSCR Constraint",
+# "Min DSCR (loan sizing)", "DSCR Floor", "Maximum Loan-to-Value") stays a threshold.
+ACHIEVED_RE = re.compile(r"^\s*floor\s+(?:dscr|ltv)\b|\b(?:dscr|ltv)\s+(?:at|@)\s+max(?:imum)?\.?\s+loan\b",
+                         re.I)
+LIMIT_WORD_RE = re.compile(r"\b(?:min(?:imum)?|covenant|constraint|limit|required|requirement|target|"
+                           r"threshold|hurdle|ceiling)\b", re.I)
+
+
 def _is_threshold(cell: Cell) -> bool:
-    return bool(THRESH_RE.search(cell.label))
+    if not THRESH_RE.search(cell.label):
+        return False
+    return not (ACHIEVED_RE.search(cell.label) and not LIMIT_WORD_RE.search(cell.label))
 
 
 def _is_count(cell: Cell) -> bool:
@@ -407,6 +456,12 @@ def _match(claim: Claim, pool: list[Cell], near_pct: float):
     return exact, near
 
 
+def _passes(metric: str, value: float, governor: float) -> bool:
+    """DSCR passes at or above its floor; LTV at or below its ceiling (float noise ignored)."""
+    eps = 1e-9
+    return value >= governor - eps if metric == "dscr" else value <= governor + eps
+
+
 def _soft(cl: Claim) -> str:
     return ("range endpoint — " if cl.in_range else "") + ("approximate figure — " if cl.approx else "")
 
@@ -426,6 +481,14 @@ def tie(claims: list[Claim], cells: list[Cell], near_pct: float) -> list[Result]
         if strict and cl.kind != "sf":
             labelled = [c for c in cells if _labelled(c, cl.metric)]  # threshold split happens below
         pool = labelled if strict else eligible
+        # Threshold statements compete only with threshold cells (Min DSCR, Max LTV), results only
+        # with result cells. Threshold labels are the narrow limit vocabulary, so "Lender DSCR" or
+        # "DSCR (lender test)" is a result and competes for AMBIGUOUS. The split runs before the
+        # qualifier narrowing, so "Floor DSCR of 1.25x" can never narrow onto a "DSCR Floor" input.
+        if strict and cl.threshold:
+            pool = [c for c in pool if _is_threshold(c)] or pool
+        elif strict:
+            pool = [c for c in pool if not _is_threshold(c)]
         if strict and cl.year:  # "Year 1 DSCR 1.10x" must tie the Year 1 cell, not Year 5
             pool = [c for c in pool if any(y == cl.year for y in YEAR_TOKEN_RE.findall(c.label))]
         if strict:
@@ -433,21 +496,17 @@ def tie(claims: list[Claim], cells: list[Cell], near_pct: float) -> list[Result]
                 narrowed = [c for c in pool if QUALIFIER_RE[q].search(c.label)]
                 if narrowed:
                     pool = narrowed
-        # Threshold statements compete only with threshold cells (Min DSCR, Max LTV), results only
-        # with result cells. Threshold labels are the narrow limit vocabulary, so "Lender DSCR" or
-        # "DSCR (lender test)" is a result and competes for AMBIGUOUS.
-        if strict and cl.threshold:
-            pool = [c for c in pool if _is_threshold(c)] or pool
-        elif strict:
-            pool = [c for c in pool if not _is_threshold(c)]
         amb_pool = pool
         exact, near = _match(cl, pool, near_pct)
-        if exact:
-            cell, cv = exact[0]
-            # Same quantity = same sign and within 3x of the memo figure; "Vacancy loss -$50,800"
+        if exact or near:
+            cell, cv = exact[0] if exact else near[0][:2]
+            status = "TIED" if exact else "NEAR"
+
+            # Same quantity = same sign and within 5x of the memo figure; "Vacancy loss -$50,800"
             # next to a vacancy % is a different quantity, not a competing reading.
             # Each competitor is read in the claim's units (a whole-percent cell 72 is 0.72), and a
-            # zero counts: "Year 1 CoC 0.0%" competes with a 2.0% pro forma cell.
+            # zero counts: "Year 1 CoC 0.0%" competes with a 2.0% pro forma cell. A NEAR match is
+            # checked too, so a near miss never hides a competing cell.
             def _closest(c: Cell) -> float | None:
                 vals = _candidate_values(cl, c)
                 return min(vals, key=lambda v: abs(v - cl.value)) if vals else None
@@ -459,16 +518,35 @@ def tie(claims: list[Claim], cells: list[Cell], near_pct: float) -> list[Result]
             if strict and differing:
                 # Several cells carry this metric and the memo does not say which one it means.
                 results.append(Result(cl, "AMBIGUOUS", f"{cell.sheet}!{cell.ref}", cv, cell.label,
-                                      f"ambiguous: ties {cell.sheet}!{cell.ref} but other '{cl.metric}' cells "
-                                      f"hold {', '.join(differing[:3])}; name the year or case in the memo"))
+                                      f"ambiguous: {'ties' if exact else 'is near'} {cell.sheet}!{cell.ref} but other "
+                                      f"'{cl.metric}' cells hold {', '.join(differing[:3])}; name the year or case "
+                                      f"in the memo"))
                 continue
-            results.append(Result(cl, "TIED", f"{cell.sheet}!{cell.ref}", cv, cell.label, "",
-                                  [f"{c.sheet}!{c.ref}" for c, _ in exact[:5]]))
-            continue
-        if near:
-            cell, cv, _ = near[0]
-            results.append(Result(cl, "NEAR", f"{cell.sheet}!{cell.ref}", cv, cell.label,
-                                  "within tolerance but outside the memo's display rounding"))
+            # Governed metrics: the memo may not show a DSCR/LTV on the other side of an ORA governor
+            # from ANY matching model cell (1.25x printed for 1.2445, or beside a 1.2451 floor DSCR),
+            # and a near miss on them is never a pass. A threshold statement tied to a threshold
+            # cell is a limit, not a result, so it is exempt.
+            governed = strict and cl.metric in GOVERNORS and not (cl.threshold and _is_threshold(cell))
+            matched = [(c, v) for c, v in exact] + [(c, v) for c, v, _ in near]
+            straddle = [(c, v, g) for c, v in matched for g in GOVERNORS.get(cl.metric or "", ())
+                        if _passes(cl.metric, cl.value, g) != _passes(cl.metric, v, g)] if governed else []
+            if straddle or (status == "NEAR" and governed):
+                if straddle:
+                    sc, sv, g = straddle[0]
+                    cell, cv = sc, sv
+                    why = (f"memo {cl.text} and model {fmt_val(cl, sv)} at {sc.sheet}!{sc.ref} sit on "
+                           f"opposite sides of the {fmt_val(cl, g)} governor")
+                else:
+                    why = f"near miss on a governed metric: model holds {fmt_val(cl, cv)}"
+                results.append(Result(cl, "CONFLICT", f"{cell.sheet}!{cell.ref}", cv, cell.label,
+                                      f"{why}; print the model figure to enough decimals"))
+                continue
+            if exact:
+                results.append(Result(cl, "TIED", f"{cell.sheet}!{cell.ref}", cv, cell.label, "",
+                                      [f"{c.sheet}!{c.ref}" for c, _ in exact[:5]]))
+            else:
+                results.append(Result(cl, "NEAR", f"{cell.sheet}!{cell.ref}", cv, cell.label,
+                                      "within tolerance but outside the memo's display rounding"))
             continue
         elsewhere = ""
         if strict:
@@ -583,13 +661,18 @@ def _guard_outputs(memo: Path, model: Path, outs: list[Path | None]) -> None:
     import os
 
     inputs = {memo.resolve(), model.resolve()}
+    given = [o.resolve() for o in outs if o is not None]
+    if len(given) != len(set(given)):
+        raise ValueError("--out and --json name the same file")
     for out in outs:
         if out is None:
             continue
         if ":" in out.name:  # NTFS alternate data stream ("model.xlsx:ads") writes into the input file
             raise ValueError(f"refusing to write a report to {out.name}: ':' in a file name")
-        if out.resolve() in inputs or out.suffix.lower() in (".docx", ".xlsx", ".xlsm", ".xls", ".doc"):
-            raise ValueError(f"refusing to write a report to {out.name}: it is an input or an Office file")
+        if out.name != out.name.rstrip(". "):  # Windows drops a trailing dot/space: "x.pdf." is x.pdf
+            raise ValueError(f"refusing to write a report to {out.name!r}: trailing dot or space")
+        if out.resolve() in inputs or out.resolve().suffix.lower() in (".docx", ".xlsx", ".xlsm", ".xls", ".doc", ".pdf"):
+            raise ValueError(f"refusing to write a report to {out.name}: it is an input, an Office file or a PDF")
         if out.exists() and any(p.exists() and os.path.samefile(out, p) for p in (memo, model)):
             raise ValueError(f"refusing to write a report to {out.name}: it is a link to an input")
         if not out.resolve().parent.is_dir():
