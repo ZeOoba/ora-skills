@@ -9,24 +9,31 @@ Each memo figure ($, %, x, SF) is classified:
   TIED      - a model cell matches within the memo's own display rounding
   NEAR      - a model cell is within --near-pct (default 0.5%) but outside rounding
   CONFLICT  - the figure carries a metric (DSCR, NOI, cap rate ...) and the model's
-              cells with that metric in their label hold a different value, or a DSCR/LTV
-              figure sits on the other side of an ORA governor from its model cell
+              cells with that metric in their label hold a different value, or the
+              fail-closed governor check below fires
   AMBIGUOUS - it matches one of several same-metric cells that disagree, and the memo
               does not say which (Year 1 vs Year 5 DSCR)
   UNTIED    - no model cell supports the figure
 
-No false pass: when the memo names a metric and the model has cells labelled with it,
-ONLY those cells can tie the figure; a coincidental equal value elsewhere is a note,
-never a TIED. Threshold cells (Min DSCR, Max LTV, covenant, target ...) tie only a memo
-figure that is itself stated as a threshold. "Floor DSCR" and "DSCR at Max Loan" are
-achieved metrics (v4.44 floor test), not thresholds. Count and year cells (tenant count,
-analysis year, hold years) never tie a $, % or x figure by value alone.
+Metric binding: a figure bound to a metric ties ONLY cells labelled with it; a
+coincidental equal value elsewhere is a note, never a TIED. Threshold cells (Min DSCR,
+Max LTV, covenant, target ...) tie only threshold statements. "Floor DSCR/LTV" and
+"DSCR/LTV at Max Loan" are achieved results only when computed (not a bare echo of
+another cell) or labelled with their loan. Count and year cells never tie by value.
+
+Fail-closed governor check (independent of binding): every x figure in a sentence naming
+DSCR and every % figure in a sentence naming LTV - threshold statements, "~" and range
+ends included - is compared with every DSCR/LTV-labelled cell within 5% of it; if any
+sits on the other side of a governor (DSCR floor; BOTH LTV ceilings, imported from
+ora_walk/doctrine.py) or the figure only NEARs, it is a CONFLICT. Only a figure bound to
+another metric ("equity multiple 2.08x") is exempt.
 
 Exit codes: 0 = no CONFLICT/AMBIGUOUS/UNTIED (NEAR is reported and does not fail, except
-on DSCR/LTV, where a near miss is a CONFLICT) · 1 = exceptions present · 2 = input error: missing or unreadable file, a memo with no figures, an output
-path that would overwrite an input or a PDF, or ANY formula (incl. array/data-table) cell without a cached value (a model
-saved by a script; open and save it in Excel first). --allow-uncached downgrades the
-last to a warning. A verified null beats an inferred null.
+on DSCR/LTV) · 1 = exceptions present · 2 = input error: missing or unreadable file, a
+memo with no figures, an output path that is an input, an Office/PDF file or a directory,
+a write error, or ANY formula (incl. array/data-table) cell without a cached value (a
+model saved by a script; open and save it in Excel first). --allow-uncached downgrades
+the last to a warning. A verified null beats an inferred null.
 
 Usage:
   python memo_tieout.py MEMO.docx MODEL.xlsx [--out report.md] [--json report.json]
@@ -147,6 +154,7 @@ class Claim:
     year: str | None = None  # "Year 1 DSCR": prefer cells labelled for the same year
     quals: list[str] = field(default_factory=list)  # going-in / exit / levered / stabilized ...
     sf_type: str | None = None  # rentable / land / building ... for SF figures
+    sentence: str = ""  # the figure's sentence (plus a borrowed table label), for the fail-closed governor check
 
 
 @dataclass
@@ -212,13 +220,21 @@ def _kind_of(m: re.Match) -> str:
 ADJACENT_GAP_RE = re.compile(r"^\s*(?:of|is|was|:|=)?\s*\$?\s*$", re.I)
 # A same-kind list continues one metric: "DSCR of 1.18x in Year 1 and 1.25x in Year 5", "DSCR<tab>1.18x<tab>1.25x".
 _YEAR_PHRASE_RE = re.compile(r"\(\s*(?:year|yr)[\s-]?\d{1,2}\s*\)|\b(?:in|for)\s+(?:year|yr)[\s-]?\d{1,2}\b", re.I)
-_LIST_JOIN_RE = re.compile(r"^[\s,;]*(?:and|or|vs\.?|versus)\s*(?:an?\s+)?$", re.I)
+_LIST_JOIN_RE = re.compile(r"^[\s,;]*(?:(?:and|or|vs\.?|versus|then)\s*)?(?:(?:rising|falling|improving|declining|"
+                           r"increasing|decreasing|growing|stepping)\s+)?(?:(?:to|up to|down to)\s*)?(?:an?\s+)?$",
+                           re.I)
+_QUAL_WORDS_RE = re.compile("|".join(f"(?:{p})" for p in QUALIFIERS.values()), re.I)
+# Words that may follow a list figure without making it a different quantity ("1.40x in Year 3", "7.5% exit").
+_LIST_TAIL_RE = re.compile(r"^\s*(?:[.,;:)]|$|\(?\s*(?:in|for|at|by)?\s*(?:year|yr)\b|(?:" + _QUAL_WORDS_RE.pattern +
+                           r")|in\s|at\s|by\s|on\s|and\s|or\s|through\s|thereafter\b)", re.I)
 
 
 def _continues_list(gap: str) -> bool:
-    if gap.strip(" ") == "\t" or re.fullmatch(r"[ ]*\t[ \t]*", gap):
+    """A same-kind list continues one metric across "and", ",", ";", "rising to", a tab or a year phrase."""
+    if re.fullmatch(r"[ ]*\t[ \t]*", gap):
         return True
-    return bool(_LIST_JOIN_RE.match(_YEAR_PHRASE_RE.sub(" ", gap))) and len(gap) <= 32
+    core = _QUAL_WORDS_RE.sub(" ", _YEAR_PHRASE_RE.sub(" ", gap))
+    return bool(_LIST_JOIN_RE.match(core)) and len(gap) <= 40
 
 
 def _metric_for(before: str, after: str, kind: str) -> tuple[str | None, int]:
@@ -240,7 +256,8 @@ def _metric_for(before: str, after: str, kind: str) -> tuple[str | None, int]:
             trailing = (key, m.start())
     if trailing:
         return trailing[0], 0
-    if before_metric is None and inherited:
+    # A list figure followed by its own noun ("LTV 65%, 6.0% coupon") is a different quantity.
+    if before_metric is None and inherited and _LIST_TAIL_RE.match(after):
         return inherited, 0
     return before_metric, before_dist
 
@@ -284,6 +301,7 @@ THRESH_METRIC_RE = re.compile(r"\b(?:min(?:imum)?|max(?:imum)?|ceiling|covenant|
                               r"requirement|threshold|limit)\b" + r"\s+(?:dscr|dcr|ltv|ltc|loan[- ]to[- ]value|debt yield|"
                               r"debt service coverage|coverage|cap rate|irr)(?:\s+ratio)?\s*(?:of|is|:|=)?\s*\$?$",
                               re.I)
+SENTENCE_END_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"'“])")
 CLAUSE_BREAK_RE = re.compile(r"[;,]|\band\b|\bvs\.?(?=\s)|\bversus\b|\.\s", re.I)
 POST_YEAR_RE = re.compile(r"^\s*\(?\s*(?:in\s+)?(?:year|yr)[\s-]?(\d{1,2})\b", re.I)
 
@@ -360,10 +378,14 @@ def extract_claims(paragraphs: list[str], ignore: list[re.Pattern]) -> list[Clai
                 half = 0.5 * 10 ** (-_decimals(num)) * scale
                 kind = "sf"
             metric, dist = ("sf", 999) if kind == "sf" else _metric_for(before, after, kind)
+            starts = [x.end() for x in SENTENCE_END_RE.finditer(para[:s])]
+            end_m = SENTENCE_END_RE.search(para, e)
+            sentence = lead + para[starts[-1] if starts else 0: end_m.start() if end_m else len(para)]
             claims.append(Claim(raw, kind, val, half, ctx, metric, pi + 1, in_range, num, approx, threshold,
                                 bound=bool(metric) and kind != "sf" and dist <= BIND_DISTANCE,
                                 year=ym[-1] if ym else None, quals=sorted(quals),
-                                sf_type=sf_type[-1].lower() if kind == "sf" and sf_type else None))
+                                sf_type=sf_type[-1].lower() if kind == "sf" and sf_type else None,
+                                sentence=sentence))
     return claims
 
 
@@ -381,6 +403,9 @@ def _row_label(ws, row: int, col: int) -> str:
             parts.append(v.strip())
             break
     return " | ".join(parts)
+
+
+BARE_REF_RE = re.compile(r"^=\s*(?:'[^']+'!|[A-Za-z0-9_.]+!)?\$?[A-Z]{1,3}\$?\d+\s*$", re.I)
 
 
 def read_model_cells(path: Path) -> tuple[list[Cell], int]:
@@ -411,8 +436,10 @@ def read_model_cells(path: Path) -> tuple[list[Cell], int]:
                 if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
                     continue
                 fmt = c.number_format or ""
+                # "=Inputs!B5" only echoes an input; it is not a computed result.
+                computed = is_formula and not (isinstance(f, str) and BARE_REF_RE.match(f))
                 cells.append(Cell(ws.title, c.coordinate, float(v), "%" in fmt,
-                                  _row_label(ws, c.row, c.column), is_formula))
+                                  _row_label(ws, c.row, c.column), computed))
     return cells, uncached
 
 
@@ -500,13 +527,38 @@ def _match(claim: Claim, pool: list[Cell], near_pct: float):
     return exact, near
 
 
-def _governors(cl: Claim) -> tuple[float, ...]:
-    """The governors a figure is held to: the 40% aggregate LTV only where the memo speaks of the
-    portfolio, else the 65% per-property ceiling; DSCR always its floor."""
-    if cl.metric == "ltv":
-        agg = re.search(r"\baggregate\b|\bportfolio\b", cl.context, re.I)
-        return (AGGREGATE_LTV_CEILING,) if agg else (PER_PROPERTY_LTV_CEILING,)
-    return GOVERNORS.get(cl.metric or "", ())
+# Fail-closed governor check: which figure kind each governed metric is printed as.
+GOVERNED_KIND = {"dscr": "mult", "ltv": "pct"}
+GOVERNED_WINDOW = 0.05  # a model cell within 5% of the memo figure could be the one it reports
+
+
+def _fail_closed(res: Result, cells: list[Cell]) -> Result:
+    """Any DSCR (x) or LTV (%) figure in a sentence naming DSCR or LTV, whatever it bound to and whether or
+    not it is a threshold statement, is held to every cell of that metric near it: if one sits on the
+    other side of a governor (both LTV ceilings, the DSCR floor), or the figure only NEARs, it fails."""
+    cl = res.claim
+    if res.status in ("CONFLICT", "AMBIGUOUS"):  # already failing; "~1.25x" and range ends are checked too
+        return res
+    for g, kind in GOVERNED_KIND.items():
+        if cl.kind != kind or not METRIC_RE[g].search(cl.sentence):
+            continue
+        if cl.bound and cl.metric and cl.metric != g:  # "equity multiple 2.08x" in a DSCR sentence
+            continue
+        window = max(abs(cl.value) * GOVERNED_WINDOW, cl.half_unit * 1.0001)
+        for cell in (c for c in cells if _labelled(c, g)):
+            for v in _candidate_values(cl, cell):
+                if abs(v - cl.value) > window:
+                    continue
+                for gov in GOVERNORS[g]:
+                    if _passes(g, cl.value, gov) != _passes(g, v, gov):
+                        return Result(cl, "CONFLICT", f"{cell.sheet}!{cell.ref}", v, cell.label,
+                                      f"memo {cl.text} and model {fmt_val(cl, v)} at {cell.sheet}!{cell.ref} "
+                                      f"('{cell.label[:40]}') sit on opposite sides of the {fmt_val(cl, gov)} "
+                                      f"governor; state the model figure and which case it is")
+        if res.status == "NEAR" and (cl.metric in (None, g)):
+            return Result(cl, "CONFLICT", res.cell, res.cell_value, res.cell_label,
+                          f"near miss on a governed metric ({g}): model holds {fmt_val(cl, res.cell_value)}")
+    return res
 
 
 def _passes(metric: str, value: float, governor: float) -> bool:
@@ -577,25 +629,7 @@ def tie(claims: list[Claim], cells: list[Cell], near_pct: float) -> list[Result]
                                       f"'{cl.metric}' cells hold {', '.join(differing[:3])}; name the year or case "
                                       f"in the memo"))
                 continue
-            # Governed metrics: the memo may not show a DSCR/LTV on the other side of an ORA governor
-            # from ANY matching model cell (1.25x printed for 1.2445, or beside a 1.2451 floor DSCR),
-            # and a near miss on them is never a pass. A threshold statement tied to a threshold
-            # cell is a limit, not a result, so it is exempt.
-            governed = strict and cl.metric in GOVERNORS and not (cl.threshold and _is_threshold(cell))
-            matched = [(c, v) for c, v in exact] + [(c, v) for c, v, _ in near]
-            straddle = [(c, v, g) for c, v in matched for g in _governors(cl)
-                        if _passes(cl.metric, cl.value, g) != _passes(cl.metric, v, g)] if governed else []
-            if straddle or (status == "NEAR" and governed):
-                if straddle:
-                    sc, sv, g = straddle[0]
-                    cell, cv = sc, sv
-                    why = (f"memo {cl.text} and model {fmt_val(cl, sv)} at {sc.sheet}!{sc.ref} sit on "
-                           f"opposite sides of the {fmt_val(cl, g)} governor")
-                else:
-                    why = f"near miss on a governed metric: model holds {fmt_val(cl, cv)}"
-                results.append(Result(cl, "CONFLICT", f"{cell.sheet}!{cell.ref}", cv, cell.label,
-                                      f"{why}; print the model figure to enough decimals"))
-                continue
+            # Governed metrics (DSCR/LTV) are checked fail-closed after the loop (_fail_closed).
             if exact:
                 results.append(Result(cl, "TIED", f"{cell.sheet}!{cell.ref}", cv, cell.label, "",
                                       [f"{c.sheet}!{c.ref}" for c, _ in exact[:5]]))
@@ -622,6 +656,7 @@ def tie(claims: list[Claim], cells: list[Cell], near_pct: float) -> list[Result]
                else f"the model has no usable '{cl.metric}'-labelled cell" if strict
                else "no model cell supports this figure")
         results.append(Result(cl, "UNTIED", note=_soft(cl) + why + elsewhere))
+    results = [_fail_closed(r, cells) for r in results]
     for r in results:
         if r.status != "TIED":
             hint = transposition_hint(r.claim, cells)
