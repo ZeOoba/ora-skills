@@ -1,0 +1,14 @@
+{
+  "name": "ILLUSTRATIVE - 28K SF flex, Columbus (synthetic inputs)",
+  "sf": 28000,
+  "market": "Columbus OH",
+  "year_built": 1988,
+  "in_place_noi": 165000,
+  "stabilized_noi": 235000,
+  "stabilization_year": 3,
+  "capex": 150000,
+  "lease_up_carry": 40000,
+  "ask_price": 2950000,
+  "construction_type": null,
+  "vacant_sf_at_close": 9000
+}
