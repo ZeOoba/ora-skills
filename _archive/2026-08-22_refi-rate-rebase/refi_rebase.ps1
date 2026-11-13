@@ -1,10 +1,10 @@
 $ErrorActionPreference = "Continue"
 $ROOT = "C:\Users\Owner\OneDrive - Oxford Capital Partners\Business\Investment Candidates -- 2026"
 $jobs = @(
- @{f="20260610_470-REDACTED-148_Model_v03.xlsx";                                   s="Inputs"; c="B49"},
+ @{f="20260610_GS-F_Model_v03.xlsx";                                   s="Inputs"; c="B49"},
  @{f="2262-112th-Ave-Holland-MI IRR Model.xlsx";                                s="Inputs"; c="B59"},
  @{f="8025-8009 IRR Model.xlsx";                                                s="Inputs"; c="B30"},
- @{f="808 REDACTED-165 Columbus IRR Model.xlsx";                                      s="Inputs"; c="B34"},
+ @{f="[deal] Columbus IRR Model.xlsx";                                      s="Inputs"; c="B34"},
  @{f="IRR Model Pike Plaza Indy Car Dealerships 7.27.2026.xlsx";                s="Inputs"; c="B24"},
  @{f="ORA_UnderwritingModel_125DouglasPike_v2.0.xlsx";                          s="Inputs"; c="B38"},
  @{f="ORA_Underwriting_2900-Northridge-Dr-NW_v1.0.xlsx";                        s="Inputs"; c="B36"},

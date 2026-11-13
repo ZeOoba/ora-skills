@@ -55,7 +55,7 @@ When ambiguous, default to **DRAFT** and ask one clarifying question only if a m
 
 ## DECISION LOGIC — populate before token replacement
 
-### 0. Seller entity interest type (REQUIRED — 470 REDACTED-148 lesson)
+### 0. Seller entity interest type (REQUIRED — GS-F lesson)
 
 The Acquisition Structure section's entity-purchase election must match the seller's entity form. Resolve from the seller legal name suffix:
 
@@ -71,7 +71,7 @@ Never ship "membership interests" against a corporate seller.
 
 | Seller profile | Format |
 |---|---|
-| Institutional / corporate / repeat-player (e.g., REDACTED-171-grade developer, REIT, bank REO, family office with in-house or standing counsel, major-brokerage-represented portfolio seller) | **CONDENSED** — 11-section, ~3-page letter + Execution Page + Buyer Information page (5 pages total) |
+| Institutional / corporate / repeat-player (e.g., the listing broker-grade developer, REIT, bank REO, family office with in-house or standing counsel, major-brokerage-represented portfolio seller) | **CONDENSED** — 11-section, ~3-page letter + Execution Page + Buyer Information page (5 pages total) |
 | Private / individual / estate / unsophisticated seller | **STANDARD** — full condensed-master format (12–16 sections by conditionals) |
 
 Rationale (Gabriel ruling 2026-06-10): a sophisticated counterparty expects the PSA to carry the legal weight; an over-lawyered LOI invites pre-PSA redlining and delay. With unsophisticated sellers the longer form anchors more terms while leverage is highest.
@@ -109,7 +109,7 @@ Determines opening paragraph phrasing and which conditional blocks fire.
 | 2+ tenants | **multi-tenant** | `multi-tenant` | (custom — list largest tenants in opening if material) |
 
 **Affiliation test (decisional):** Set affiliated = TRUE if ANY of:
-- Tenant LLC name contains Seller LLC root (e.g., "REDACTED-047, LLC" + "REDACTED-064 CO LLC")
+- Tenant LLC name contains Seller LLC root (e.g., "Example Tenant Contracting, LLC" + "EXAMPLE SELLER HOLDINGS CO LLC")
 - OM discloses sale-leaseback structure
 - Tenant manager / principal is same as Seller manager / principal
 - Tenant pays below-market rent identified during underwriting
@@ -182,7 +182,7 @@ Always enumerate, so the PSA anchor is set without LOI negotiation: bill-of-sale
 
 ### 5c. Ohio BOR risk — statutory thresholds (HB 126, eff. 2022)
 
-School districts may file ORIGINAL Board of Revision complaints only when the recorded sale exceeds auditor value by BOTH 10% AND $500,000 [verify thresholds with counsel]. Below either, the school-board route is barred; only scheduled reappraisal applies. Run the dual test at offer price vs auditor value before asserting BOR risk. (470 REDACTED-148: +$117.8K = over 10%, under $500K → original complaint barred.)
+School districts may file ORIGINAL Board of Revision complaints only when the recorded sale exceeds auditor value by BOTH 10% AND $500,000 [verify thresholds with counsel]. Below either, the school-board route is barred; only scheduled reappraisal applies. Run the dual test at offer price vs auditor value before asserting BOR risk. (GS-F: +$117.8K = over 10%, under $500K → original complaint barred.)
 
 ### 6. Economic term defaults
 
@@ -224,7 +224,7 @@ These are the tokens that appear in the master template. The skill is responsibl
 | `{{PURCHASE_PRICE_NUMERIC}}` | `1,400,000.00` | Same |
 | `{{EMD_WORDS}}` | `One Hundred Thousand and 00/100` | User or ORA standard |
 | `{{EMD_NUMERIC}}` | `100,000.00` | Same |
-| `{{EMD_DUE_DAYS_WORDS}}` | `two (2)` | Deposit due window after PSA execution — DEFAULT two (2) for all-cash certainty signaling; SINGLE SOURCE: feeds §1 AND any PSA-deferral mention. Root cause of the 470 REDACTED-148 §1-vs-§10 conflict |
+| `{{EMD_DUE_DAYS_WORDS}}` | `two (2)` | Deposit due window after PSA execution — DEFAULT two (2) for all-cash certainty signaling; SINGLE SOURCE: feeds §1 AND any PSA-deferral mention. Root cause of the GS-F §1-vs-§10 conflict |
 
 ### Time periods (all phrased as `[word] (digit)`)
 | Token | Example |
@@ -238,36 +238,36 @@ These are the tokens that appear in the master template. The skill is responsibl
 ### Property
 | Token | Example |
 |---|---|
-| `{{PROPERTY_STREET_ADDRESS}}` | `1333 REDACTED-112` |
-| `{{PROPERTY_CITY}}` | `Gahanna` |
+| `{{PROPERTY_STREET_ADDRESS}}` | `100 Example Way` |
+| `{{PROPERTY_CITY}}` | `Anytown` |
 | `{{PROPERTY_STATE_FULL}}` | `Ohio` |
 | `{{PROPERTY_STATE_ABBR}}` | `OH` |
-| `{{PROPERTY_ZIP}}` | `43230` |
-| `{{PROPERTY_COUNTY}}` | `Franklin County` |
-| `{{PROPERTY_SF}}` | `19,018` |
-| `{{PROPERTY_ACRES}}` | `2.46` |
+| `{{PROPERTY_ZIP}}` | `43000` |
+| `{{PROPERTY_COUNTY}}` | `Example County` |
+| `{{PROPERTY_SF}}` | `20,000` |
+| `{{PROPERTY_ACRES}}` | `2.00` |
 | `{{PROPERTY_USE_TYPE}}` | `industrial` or `industrial / warehouse` or `flex` |
 | `{{PROPERTY_TENANCY_PHRASE}}` | `vacant` / `single-tenant` / `multi-tenant` |
 | `{{PROPERTY_ZONING_PHRASE}}` | `zoned M2 Manufacturing` — VERBATIM from the OM/listing (replaces the generic "commercially zoned industrial land"; never invent a designation not in the marketing materials or a verified GIS pull) |
 | `{{ENTITY_INTEREST_TYPE}}` | `membership interests` / `equity interests` / `partnership interests` per Decision Rule 0 |
-| `{{PROPERTY_JURISDICTION_PHRASE}}` | `the City of Gahanna and Franklin County` |
+| `{{PROPERTY_JURISDICTION_PHRASE}}` | `the City of Anytown and Example County` |
 | `{{KNOWN_CONDITION_CARVEOUT}}` | `(except for the roof, which the parties acknowledge is approximately twenty-one (21) years old and approaching the end of its useful life)` or empty |
 
 ### Seller / broker
 | Token | Example |
 |---|---|
-| `{{SELLER_ENTITY_NAME}}` | `REDACTED-064 CO LLC` (preserve original capitalization) |
-| `{{SELLER_BROKER_FULL_NAME}}` | `David REDACTED-164` |
-| `{{SELLER_BROKER_FIRM}}` | `REDACTED-046 Real Estate Group` |
-| `{{SELLER_BROKER_ADDRESS_1}}` | `8800 REDACTED-130, Suite 600` |
-| `{{SELLER_BROKER_ADDRESS_2}}` | `Columbus, Ohio 43240` |
-| `{{SELLER_BROKER_SALUTATION}}` | `David` |
+| `{{SELLER_ENTITY_NAME}}` | `EXAMPLE SELLER HOLDINGS CO LLC` (preserve original capitalization) |
+| `{{SELLER_BROKER_FULL_NAME}}` | `[Broker Name]` |
+| `{{SELLER_BROKER_FIRM}}` | `Example Brokerage Group` |
+| `{{SELLER_BROKER_ADDRESS_1}}` | `200 Example Ave, Suite 100` |
+| `{{SELLER_BROKER_ADDRESS_2}}` | `Anytown, Ohio 43000` |
+| `{{SELLER_BROKER_SALUTATION}}` | `[First Name]` |
 
 ### Tenant (only if conditional §8 / §10 fires)
 | Token | Example |
 |---|---|
-| `{{TENANT_NAME}}` | `REDACTED-047, LLC` |
-| `{{TENANT_DISCLOSURE_PHRASE}}` | `, leased to REDACTED-047, LLC, an affiliate of Seller,` |
+| `{{TENANT_NAME}}` | `Example Tenant Contracting, LLC` |
+| `{{TENANT_DISCLOSURE_PHRASE}}` | `, leased to Example Tenant Contracting, LLC, an affiliate of Seller,` |
 
 ### Buyer signatory
 | Token | Example |
@@ -340,7 +340,7 @@ Use `python-docx` to:
 If any check fails, fix and re-run. Do not present a failing file.
 
 ### Phase 6 — Save and present
-1. Filename: `LOI [Property Street] [City] [State] [M.D.YYYY].docx` — match Gabriel's convention (e.g., `LOI REDACTED-113 Rd Gahanna OH 5.14.2026.docx`).
+1. Filename: `LOI [Property Street] [City] [State] [M.D.YYYY].docx` — match Gabriel's convention (e.g., `LOI 100 Example Way Anytown OH 5.14.2026.docx`).
 2. Save to outputs folder.
 3. Generate PDF preview via `soffice --headless --convert-to pdf`.
 4. Present both files to user via `present_files`.
@@ -453,9 +453,9 @@ Full overlay text in `references/state-overlays.md`. Summary of §6 distinguishi
 
 ## VERSIONING
 
-- v1.0 — Initial release, May 2026. Based on 511 REDACTED-091 Columbus and REDACTED-113 Rd Gahanna condensed deliverables.
-- v1.2 — 2026-06-10 PM, hardened vs adversarial review (Gemini/Grok, 470 REDACTED-148). Template: {{EMD_DUE_DAYS_WORDS}} single-source; Phase II trigger = RECs/CRECs/recommendation/Buyer-reasonable-determination; testing restoration carveout (no pre-existing-condition liability); cease-all-marketing in Exclusivity; property file + violations/litigation/loss runs. Skill: vacant preservation covenant; PSA-deferral standard list (specific performance, broom-clean, title-commitment 10 days, OH BOR cooperation); HB 126 dual-threshold rule; QC 21–22. REJECTED on review: IOS/zoning use clauses that telegraph land thesis; unilateral Study extensions; 30-day close default; Phase II at Seller cost; arbitration; additional-insured pre-closing; perjury certifications.
-- v1.1 — 2026-06-10, calibrated on 470 REDACTED-148 (REDACTED-171). Added: Rule 0 entity-interest type; Rule 0b STANDARD/CONDENSED format selection + merge map; Rule 0c exchange-posture default (mutual 1031 cooperation RETAINED) + concealment overlay w/ leak-check; zoning-phrase token; QC 17–20 (pagination/template-defect strip, entity language, zoning verbatim, leak-check); SHIP re-date rule.
+- v1.0 — Initial release, May 2026. Based on a Columbus pipeline deal and GS-E condensed deliverables.
+- v1.2 — 2026-06-10 PM, hardened vs adversarial review (Gemini/Grok, GS-F). Template: {{EMD_DUE_DAYS_WORDS}} single-source; Phase II trigger = RECs/CRECs/recommendation/Buyer-reasonable-determination; testing restoration carveout (no pre-existing-condition liability); cease-all-marketing in Exclusivity; property file + violations/litigation/loss runs. Skill: vacant preservation covenant; PSA-deferral standard list (specific performance, broom-clean, title-commitment 10 days, OH BOR cooperation); HB 126 dual-threshold rule; QC 21–22. REJECTED on review: IOS/zoning use clauses that telegraph land thesis; unilateral Study extensions; 30-day close default; Phase II at Seller cost; arbitration; additional-insured pre-closing; perjury certifications.
+- v1.1 — 2026-06-10, calibrated on GS-F (listing broker withheld). Added: Rule 0 entity-interest type; Rule 0b STANDARD/CONDENSED format selection + merge map; Rule 0c exchange-posture default (mutual 1031 cooperation RETAINED) + concealment overlay w/ leak-check; zoning-phrase token; QC 17–20 (pagination/template-defect strip, entity language, zoning verbatim, leak-check); SHIP re-date rule.
 - Master template asset: `templates/LOI_Master_Template_Condensed.docx`
 - State overlays asset: `references/state-overlays.md`
 - ORA Standards asset: `references/ora-standards.md`

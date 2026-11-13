@@ -27,9 +27,9 @@ The response should include `psa-reconciliation` in the skills list. If it does 
 
 Trigger the skill with a sentence that includes one of the trigger phrases (see SKILL.md description). A low-stakes first run:
 
-> "Extract the PSA facts from the REDACTED-116 and build a fact table — don't cascade yet."
+> "Extract the PSA facts from the Example Portfolio PSA and build a fact table — don't cascade yet."
 
-Expected output: A single XLSX (`REDACTED-017`) in the Cowork workspace folder, with the 12-section Fact Table populated from the fully-executed PSA dated 4/21/2026. No downstream documents produced.
+Expected output: A single XLSX (`YYYYMMDD_Example-Portfolio_PSA-Facts_v01.xlsx`) in the Cowork workspace folder, with the 12-section Fact Table populated from the fully-executed PSA. No downstream documents produced.
 
 ## Version
 

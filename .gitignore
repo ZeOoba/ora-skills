@@ -127,3 +127,7 @@ _archive/**/_eventlog_entry_*.md
 # without a history rewrite (Gabriel's no-rewrite precedent); kept on disk only, never re-add.
 # Its replacement is lease-generation/references/example-register-synthetic.json.
 /_archive/2026-11-08_example-register-pii/
+
+# Machine-local denylist of real deal tokens for tools/test_example_registers_synthetic.py
+# (2026-11-12). Never commit it, not even hashed; format in the .example beside it.
+tools/real-identifiers.local.json

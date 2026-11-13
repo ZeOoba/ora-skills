@@ -30,7 +30,7 @@ If the user wants both filing and analysis, **file first** (the source files are
 1. List every uploaded file with size and modified date. Do not skip files you cannot parse — a proprietary binary still gets archived.
 2. Establish the deal identity from the package: full street address(es), city, county, state, ZIP. The county matters — it drives the tax-record bucket.
 3. **Check for an existing folder for this deal before creating anything.** Search the outputs folder and the mirror target for the address, an abbreviation, and the property name. If one exists, add to it and version the manifest (`_v02`); never create a second folder for the same asset.
-4. Derive the folder name: `Property_Name_City_ST` in underscores, e.g. `Old_Alexandria_Ferry_Clinton_MD`, `3700_REDACTED-158_Madison_WI`. Stable for the life of the deal — closed and passed deals keep the name they were filed under.
+4. Derive the folder name: `Property_Name_City_ST` in underscores, e.g. `Old_Alexandria_Ferry_Clinton_MD`, `1234_Example_Ave_Anytown_WI`. Stable for the life of the deal — closed and passed deals keep the name they were filed under.
 
 ---
 
