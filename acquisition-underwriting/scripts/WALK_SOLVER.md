@@ -1,6 +1,6 @@
 # ORA Walk-Price Solver
 
-Takes an offering memorandum (OM) to ORA's walk price in under a second, the same way every time. The solver inverts the acquisition-underwriting STAGE 1 floors (v4.47 / RCT v03) in closed form and reports which floor binds.
+Takes an offering memorandum (OM) to ORA's walk price in under a second, the same way every time. The solver inverts the acquisition-underwriting STAGE 1 floors (v4.48 / RCT v03) in closed form and reports which floor binds.
 
 ## Why it exists
 
@@ -34,7 +34,7 @@ python -m ora_walk walk_examples/example_portfolio.json --ust 0.0452 --json
 python test_walk_solver.py                        # 60 tests; every doctrine constant pinned
 ```
 
-`ora_walk/doctrine.py` pins SKILL.md v4.47 (v4.46 and v4.47 changed no constant; the values date from v4.45). Any SKILL.md version that changes a constant mirrored there must update `doctrine.py` and the `DoctrinePins` tests in the same PR.
+`ora_walk/doctrine.py` pins SKILL.md v4.48 (v4.46 through v4.48 changed no constant; the values date from v4.45). Any SKILL.md version that changes a constant mirrored there must update `doctrine.py` and the `DoctrinePins` tests in the same PR.
 
 Deal fields (see `ora_walk/solver.py: Deal`): `name, sf, stabilized_noi` (pre-reserves, stabilization-year $), plus optional:
 - Location and building:

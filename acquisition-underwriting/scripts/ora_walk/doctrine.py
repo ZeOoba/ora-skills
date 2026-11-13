@@ -1,6 +1,6 @@
 """ORA acquisition doctrine constants — READ-ONLY mirror of acquisition-underwriting SKILL.md.
 
-Source of record: ora-skills/acquisition-underwriting/SKILL.md (v4.47, 2026-11-13; constants
+Source of record: ora-skills/acquisition-underwriting/SKILL.md (v4.48, 2026-11-13; constants
 unchanged since v4.45, 2026-11-08) and
 oxford-command-center/config/replacement-cost.v3.json (RCT v03, ratified 2026-07-14).
 If these values and SKILL.md disagree, SKILL.md wins and this file is the bug.
@@ -8,7 +8,7 @@ Governor constants (DSCR 1.25 / LTV 65 per-property / LTV 40 aggregate) change o
 Gabriel's in-turn ratification (Hard Invariant 4) — never edit them to make a deal work.
 """
 
-DOCTRINE_VERSION = "acquisition-underwriting v4.47 / RCT v03 (replacement-cost.v3.1)"
+DOCTRINE_VERSION = "acquisition-underwriting v4.48 / RCT v03 (replacement-cost.v3.1)"
 
 # --- Governors (Hard Invariant 4) ---
 DSCR_FLOOR = 1.25                 # the 1.25x floor DSCR is tested at a 65%-LTV loan on stabilized NOI (v4.44/v4.45)
