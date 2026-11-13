@@ -594,9 +594,61 @@ class TieOutTests(unittest.TestCase):
         for memo in ("Minimum DSCR of 1.25x.", "Max LTV: 65%."):
             self.assertTrue(mt.extract_claims([memo], [])[0].threshold, memo)
 
-    def test_r3_property_ltv_held_to_per_property_ceiling(self):
-        self.assertEqual(self._cli([("LTV", 0.4049)], ["Per-property LTV 40%."]), 0)
+    def test_r4_every_ltv_held_to_both_ceilings(self):
+        # Fail closed: a 40% printed for 40.49% fails whatever the memo says about scope.
+        self.assertEqual(self._cli([("LTV", 0.4049)], ["Per-property LTV 40%."]), 1)
         self.assertEqual(self._cli([("Aggregate LTV", 0.4049)], ["Aggregate portfolio LTV of 40%."]), 1)
+        self.assertEqual(self._cli([("LTV", 0.6530)], ["Portfolio deal. Building A LTV of 65%."]), 1)
+        self.assertEqual(self._cli([("LTV", 0.3949)], ["Portfolio LTV of 39.5%."]), 0)
+
+    # ---- fourth refute round (fail-closed redesign) ----
+    def test_r4_comma_and_semicolon_lists_continue_the_metric(self):
+        rows = [("Year 1 DSCR", 1.18), ("Year 3 DSCR", 1.30), ("Year 5 DSCR", 1.40)]
+        for memo in ("DSCR of 1.18x in Year 1, 1.40x in Year 3 and 1.40x in Year 5.",
+                     "DSCR: 1.18x (Year 1), 1.40x (Year 3), 1.40x (Year 5).",
+                     "DSCR of 1.18x in Year 1; 1.40x in Year 3.",
+                     "DSCR of 1.18x in Year 1, rising to 1.40x in Year 3."):
+            self.assertEqual(self._cli(rows, [memo]), 1, (memo, self._statuses(rows, [memo])))
+        self.assertEqual(self._statuses([("Going-in Cap Rate", 0.075), ("Exit Cap Rate", 0.08)],
+                                        ["Cap rates of 7.5% going-in, 7.5% exit."],
+                                        pct=("Going-in Cap Rate", "Exit Cap Rate"))[1][1], "CONFLICT")
+        self.assertEqual(self._statuses([("Levered IRR", 0.141), ("Unlevered IRR", 0.095)],
+                                        ["IRR of 14.1% levered, 14.1% unlevered."],
+                                        pct=("Levered IRR", "Unlevered IRR"))[1][1], "CONFLICT")
+        rows = [("Year 1 DSCR", 1.18), ("Year 3 DSCR", 1.2451), ("Year 5 DSCR", 1.40)]
+        self.assertEqual(self._cli(rows, ["DSCR of 1.18x in Year 1, 1.25x in Year 3 and 1.40x in Year 5."]), 1)
+
+    def test_r4_threshold_statements_are_not_exempt(self):
+        rows = [("DSCR Floor", 1.25), ("Year 1 DSCR", 1.19), ("Stabilized DSCR", 1.21)]
+        for memo in ("Minimum DSCR of 1.25x over the hold.", "Min DSCR: 1.25x.", "The minimum DSCR is 1.25x."):
+            self.assertEqual(self._cli(rows, [memo]), 1, (memo, self._statuses(rows, [memo])))
+        rows = [("Max LTV", 0.65), ("LTV", 0.662)]
+        for memo in ("Max LTV: 65%.", "Maximum LTV of 65% at refinance."):
+            res, _, _ = mt.run(self._memo([memo]), self._model(rows, ("Max LTV", "LTV")))
+            self.assertIn("CONFLICT", [r.status for r in res], memo)
+        rows = [("Minimum DSCR (hold)", 1.2451), ("Year 1 DSCR", 1.40)]
+        self.assertEqual(self._cli(rows, ["Minimum DSCR of 1.25x."]), 1)
+        self.assertEqual(self._cli([("Min DSCR", 1.25), ("Year 1 DSCR", 1.40)], ["Minimum DSCR of 1.25x."]), 0)
+
+    def test_r4_echo_formula_is_not_a_computed_floor(self):
+        self.assertTrue(mt.BARE_REF_RE.match("=Inputs!B5"))
+        self.assertTrue(mt.BARE_REF_RE.match("='Deal Inputs'!$C$12"))
+        self.assertFalse(mt.BARE_REF_RE.match("=B5/B6"))
+        rows = [("Floor DSCR", 1.25), ("DSCR at 65% LTV", 1.19), ("Year 1 DSCR", 1.30)]
+        self.assertEqual(self._cli(rows, ["Floor DSCR of 1.25x."]), 1)
+        self.assertEqual(self._cli(rows, ["The floor DSCR is 1.25x."]), 1)
+        rows = [("Floor LTV", 0.65), ("LTV at 1.25x DSCR", 0.68)]
+        res, _, _ = mt.run(self._memo(["Floor LTV of 65%."]), self._model(rows, ("Floor LTV", "LTV at 1.25x DSCR")))
+        self.assertNotEqual([r.status for r in res], ["TIED"])
+
+    def test_r4_unbound_dscr_in_a_dscr_sentence_is_governed(self):
+        rows = [("Year 1 DSCR", 1.2451), ("Equity Multiple", 2.08)]
+        for memo in ("Equity multiple 2.08x, DSCR at 1.25x.", "DSCR stands at 1.25x.", "DSCR improves to 1.25x.",
+                     "DSCR (Year 1) 1.25x.", "DSCR - 1.25x.", "DSCR ~1.25x.", "Debt service coverage at 1.25x."):
+            self.assertEqual(self._cli(rows, [memo]), 1, (memo, self._statuses(rows, [memo])))
+        # an unrelated multiple in a DSCR sentence is not held to the DSCR floor
+        self.assertEqual(self._cli([("Year 1 DSCR", 1.40), ("Equity Multiple", 1.21)],
+                                   ["Equity multiple 1.21x and DSCR 1.40x."]), 0)
 
     def test_governor_constants_come_from_doctrine(self):
         from ora_walk import doctrine
