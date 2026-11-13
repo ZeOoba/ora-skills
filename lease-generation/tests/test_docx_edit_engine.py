@@ -273,7 +273,7 @@ class TestFillCLIUnfilledTokenExitCode(unittest.TestCase):
             out_path = os.path.join(tmp, 'out.docx')
             # RENT_AMOUNT is deliberately absent from the fixture document -> 0 occurrences.
             with open(tokens_path, 'w', encoding='utf-8') as f:
-                json.dump({'TENANT_NAME': 'REDACTED-T01',
+                json.dump({'TENANT_NAME': 'Acme Widget Technology LLC',
                            'RENT_AMOUNT': '$1,000.00'}, f)
             result = subprocess.run(
                 [sys.executable, SCRIPT, 'fill', docx_path, tokens_path, out_path],
