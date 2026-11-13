@@ -5,10 +5,10 @@ import openpyxl
 ROOT = r"C:\Users\Owner\OneDrive - Oxford Capital Partners\Business\Investment Candidates -- 2026"
 STAMP = "2026-08-22_refi-rebase-6.50"
 FILES = [
- "20260610_470-McCormick_Model_v03.xlsx",
+ "20260610_GS-F_Model_v03.xlsx",
  "2262-112th-Ave-Holland-MI IRR Model.xlsx",
  "8025-8009 IRR Model.xlsx",
- "808 Rhoads Columbus IRR Model.xlsx",
+ "[deal] Columbus IRR Model.xlsx",
  "IRR Model Pike Plaza Indy Car Dealerships 7.27.2026.xlsx",
  "ORA_UnderwritingModel_125DouglasPike_v2.0.xlsx",
  "ORA_Underwriting_2900-Northridge-Dr-NW_v1.0.xlsx",

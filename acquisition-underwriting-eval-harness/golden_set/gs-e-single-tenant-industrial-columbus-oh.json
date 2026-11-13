@@ -1,6 +1,6 @@
 {
-  "deal_id": "1333-research-rd-gahanna-oh",
-  "deal_name": "1333 Research Rd, Gahanna OH 43230 (Columbus)",
+  "deal_id": "gs-e-single-tenant-industrial-columbus-oh",
+  "deal_name": "GS-E (street address withheld -- synthetic alias), Gahanna submarket, Columbus OH",
   "mode": "SCREEN",
   "date_seen": "2026-06-09",
   "source": "Notion Deal Sourcing Log (collection://9a6ae219-85a3-4621-899c-c757fd062f8b), queried 2026-08-14",
@@ -13,7 +13,7 @@
     "Pre-v03 archived record ALSO carried its own internal inconsistency independent of the v03 boundary: archived Quality(39)+Economics(2.7)=41.7 != archived Combined(48), and the archived Verdict tier 'T1 PURSUE' directly contradicts VERDICT BANDS applied to Combined=48 (<60 = PASS-band). This was the most internally inconsistent row in the original (pre-rebaseline) golden set -- preserved here for context, not used for diffing."
   ],
   "inputs": {
-    "address": "1333 Research Rd, Gahanna, OH 43230",
+    "address": "GS-E (street address withheld -- synthetic alias), Gahanna submarket, Columbus OH",
     "market": "Columbus OH",
     "asking_price": 1550000,
     "price_used_for_scoring": 1550000,
@@ -24,13 +24,13 @@
     "occupancy_pct": 100,
     "asset_type": "Single-tenant industrial, NNN",
     "noi_annual": 102999.96,
-    "noi_basis": "Disclosed NNN tenant rent -- Buckeye Elm Contracting, 3% escalation, term 8/12/2025-8/31/2042 + 2x5yr options.",
+    "noi_basis": "Disclosed NNN tenant rent -- [contracting-company tenant, name withheld], 3% escalation, term 8/12/2025-8/31/2042 + 2x5yr options.",
     "physical": {
       "construction_type": null,
       "mezzanine": "4,800 SF load-restricted mezzanine, 150 psf",
       "site_note": "Built into hillside"
     },
-    "environmental_notes": "1990 MEK release, OEPA DERR-listed; adjacent Columbus Steel Drum and US Metal Processing.",
+    "environmental_notes": "1990 MEK release, OEPA DERR-listed; adjacent [steel-drum business, name withheld] and [metal-processing business, name withheld].",
     "other_facts": null
   },
   "repeatability": {

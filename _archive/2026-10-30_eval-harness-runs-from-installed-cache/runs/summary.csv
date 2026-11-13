@@ -1,6 +1,6 @@
 run_timestamp,run_label,skill_sha,total_deals,scored_deals,informational_deals,scored_pass,scored_flag,snapshot_file
 2026-08-14T205042Z,baseline-rebaselined,83547a76651c53c8f3311c2f30db53cbf16fd219,6,2,4,2,0,2026-08-14T205042Z_baseline-rebaselined.json
-2026-08-14T212717Z,post-e-fulton-enrichment-baseline,83547a76651c53c8f3311c2f30db53cbf16fd219,6,3,3,3,0,2026-08-14T212717Z_post-e-fulton-enrichment-baseline.json
+2026-08-14T212717Z,post-gs-c-enrichment-baseline,83547a76651c53c8f3311c2f30db53cbf16fd219,6,3,3,3,0,2026-08-14T212717Z_post-gs-c-enrichment-baseline.json
 2026-08-14T215119Z,scheduled-poll,83547a76651c53c8f3311c2f30db53cbf16fd219,6,3,3,3,0,2026-08-14T215119Z_scheduled-poll.json
 2026-08-15T185643Z,scheduled-poll-forced-repeatability,83547a76651c53c8f3311c2f30db53cbf16fd219,6,3,3,3,0,2026-08-15T185643Z_scheduled-poll-forced-repeatability.json
 2026-08-16T164007Z,scheduled-poll,f35a77c7cbeb65042d1652358ec50d62d62a823e,6,3,3,3,0,2026-08-16T164007Z_scheduled-poll.json

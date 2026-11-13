@@ -2,6 +2,8 @@
 
 This is the authoritative schema for Oxford Realty Advisors' PSA Fact Table. Every PSA Reconciliation produces a workbook whose rows follow the identifiers, sections, and field names below. Do not rename fields. Add new fields only at the end of a section and assign the next Fact # in sequence.
 
+Every Example value in this file is synthetic: a fictional multi-parcel, dual-jurisdiction industrial deal built to show format and arithmetic (P-037 and P-038 derive from P-031, P-024 and P-026). Never paste a real deal's facts here; `tools/test_example_registers_synthetic.py` enforces it.
+
 Numbering convention: `P-###` for Fact IDs, zero-padded to 3 digits, monotonically increasing. Deleted facts are tombstoned (row retained, Value = "DEPRECATED", Note = reason) — never re-used.
 
 ## Data types
@@ -16,64 +18,64 @@ Numbering convention: `P-###` for Fact IDs, zero-padded to 3 digits, monotonical
 
 ## SECTION 1 — PARTIES (P-001 to P-015)
 
-| Fact # | Field | Type | Typical PSA Source | Example (E Fulton) |
+| Fact # | Field | Type | Typical PSA Source | Example (synthetic) |
 |---|---|---|---|---|
-| P-001 | Purchaser — Contracting Entity | Text | Preamble | Oxford Capital Partners, LLC |
-| P-002 | Purchaser — Trading Name / Notice Name | Text | §17 (Notice) | Oxford Realty Advisors, LLC |
-| P-003 | Purchaser — Address (Notice) | Text | §17 | 9510 Persimmon Tree Road, Suite 200, Potomac, MD 20854 |
-| P-004 | Purchaser — Principal / Attn | Text | §17 | Eric Goldberg, President |
-| P-005 | Purchaser — Principal Email | Text | §17 | egoldberg@oxfordra.net |
-| P-006 | Purchaser — Secondary Contact | Text | §17 (cc line) | Gabriel Goldberg — ggoldberg@oxfordra.net |
-| P-007 | Buyer's Counsel — Firm | Text | §17 (with a copy to) | Protas, Spivok & Collins, LLC |
-| P-008 | Buyer's Counsel — Attorney | Text | §17 | Philip J. Collins, Esq. |
-| P-009 | Buyer's Counsel — Email | Text | §17 | pcollins@psclaw.net |
-| P-010 | Seller — Entity | Text | Preamble | SIJ Partnership, LLC (Ohio LLC) |
-| P-011 | Seller — Address (Notice) | Text | §17 | 3540 E. Fulton Street, Columbus, OH 43227 |
-| P-012 | Seller — Signatory | Text | Signature block | Jodi Karmia |
-| P-013 | Seller — Signatory Title | Text | Signature block | Partner |
-| P-014 | Seller's Counsel — Firm + Attorneys + Emails | Text | §17 (with a copy to) | Strip Hoppers Leithart McGrath & Terlecky — A.C. Strip & Timothy J. McGrath — acs@columbuslawyer.net / tjm@columbuslawyer.net |
-| P-015 | Broker(s) — Firm + Agent + Representing Party | Text | Brokerage article | Julie Cohen — The Robert Weiler Company — representing Seller; Seller pays under separate agreement |
+| P-001 | Purchaser — Contracting Entity | Text | Preamble | Example Buyer Holdings, LLC (fictional) |
+| P-002 | Purchaser — Trading Name / Notice Name | Text | §17 (Notice) | Example Realty Advisors, LLC (fictional) |
+| P-003 | Purchaser — Address (Notice) | Text | §17 | 100 Example Way, Anytown, MD 20000 |
+| P-004 | Purchaser — Principal / Attn | Text | §17 | [Principal Name], President (example) |
+| P-005 | Purchaser — Principal Email | Text | §17 | principal@buyer.example |
+| P-006 | Purchaser — Secondary Contact | Text | §17 (cc line) | [Secondary Contact Name] — acquisitions@buyer.example |
+| P-007 | Buyer's Counsel — Firm | Text | §17 (with a copy to) | Example Law Group, LLC (fictional) |
+| P-008 | Buyer's Counsel — Attorney | Text | §17 | [Attorney Name], Esq. (example) |
+| P-009 | Buyer's Counsel — Email | Text | §17 | counsel@buyerlaw.example |
+| P-010 | Seller — Entity | Text | Preamble | Example Seller Partnership, LLC (fictional Ohio LLC) |
+| P-011 | Seller — Address (Notice) | Text | §17 | 200 Example Street, Anytown, OH 43000 |
+| P-012 | Seller — Signatory | Text | Signature block | [Signatory Name] (example) |
+| P-013 | Seller — Signatory Title | Text | Signature block | [Title, e.g. Managing Member] |
+| P-014 | Seller's Counsel — Firm + Attorneys + Emails | Text | §17 (with a copy to) | Example Seller Counsel LLP (fictional) — [Attorney A] & [Attorney B] — a@sellerlaw.example / b@sellerlaw.example |
+| P-015 | Broker(s) — Firm + Agent + Representing Party | Text | Brokerage article | [Agent Name] — Example Brokerage Co. (fictional) — representing Seller; Seller pays under separate agreement |
 
 ---
 
 ## SECTION 2 — PROPERTY (P-016 to P-030)
 
-| Fact # | Field | Type | Typical PSA Source | Example |
+| Fact # | Field | Type | Typical PSA Source | Example (synthetic) |
 |---|---|---|---|---|
-| P-016 | Property — Street Addresses | Text | Preamble + Exhibit A | 3492, 3530-3540 (north) + 3483, 3487, 3551-3561, 3585 (south) E Fulton St, Columbus, OH 43227 |
-| P-017 | Parcel ID #1 | Text | Exhibit A | 090-005616 |
-| P-018 | Parcel ID #2 | Text | Exhibit A | 010-085755 |
-| P-019 | Parcel ID #3 | Text | Exhibit A | 010-099214 |
-| P-020 | Parcel ID #4 | Text | Exhibit A | 010-004280 |
-| P-021 | Parcel ID #5 | Text | Exhibit A | 010-099201 |
-| P-022 | Parcel count | Number | Preamble | 5 |
-| P-023 | Building count | Number | Preamble | 5 |
-| P-024 | Total SF (governing) | Number | Preamble | 202,164 |
-| P-025 | Total SF (exhibit component sum) | Number | Exhibit A tract component sum | 202,171 (flag variance) |
-| P-026 | Total Acres | Number | Preamble / Exhibit A | 15.67 |
-| P-027 | Jurisdiction #1 | Text | Exhibit A | City of Columbus |
-| P-028 | Jurisdiction #2 (if multi) | Text | Exhibit A | Village of Whitehall |
-| P-029 | Zoning by Jurisdiction | Text | Exhibit A + DD | Columbus M (Manufacturing) / Whitehall CCD (Community Crossroads District) |
-| P-030 | Recorded Deed Reference | Text | Exhibit A header | Inst. #202209130130355 Franklin Co. OH (9/13/2022) |
+| P-016 | Property — Street Addresses | Text | Preamble + Exhibit A | 100-140 Example Street (north) + 101-125 Example Street (south), Anytown, OH 43000 |
+| P-017 | Parcel ID #1 | Text | Exhibit A | EXAMPLE-PARCEL-A |
+| P-018 | Parcel ID #2 | Text | Exhibit A | EXAMPLE-PARCEL-B |
+| P-019 | Parcel ID #3 | Text | Exhibit A | EXAMPLE-PARCEL-C |
+| P-020 | Parcel ID #4 | Text | Exhibit A | — (3-parcel example) |
+| P-021 | Parcel ID #5 | Text | Exhibit A | — (3-parcel example) |
+| P-022 | Parcel count | Number | Preamble | 3 |
+| P-023 | Building count | Number | Preamble | 4 |
+| P-024 | Total SF (governing) | Number | Preamble | 150,000 |
+| P-025 | Total SF (exhibit component sum) | Number | Exhibit A tract component sum | 148,800 (flag variance) |
+| P-026 | Total Acres | Number | Preamble / Exhibit A | 12.00 |
+| P-027 | Jurisdiction #1 | Text | Exhibit A | City of Anytown (example) |
+| P-028 | Jurisdiction #2 (if multi) | Text | Exhibit A | Village of Example Heights (example) |
+| P-029 | Zoning by Jurisdiction | Text | Exhibit A + DD | Anytown M (Manufacturing) / Example Heights LI (Limited Industrial) |
+| P-030 | Recorded Deed Reference | Text | Exhibit A header | Inst. #[instrument no.] Example Co. OH (mm/dd/yyyy) |
 
 ---
 
 ## SECTION 3 — ECONOMICS (P-031 to P-045)
 
-| Fact # | Field | Type | Typical PSA Source | Example |
+| Fact # | Field | Type | Typical PSA Source | Example (synthetic) |
 |---|---|---|---|---|
-| P-031 | Purchase Price | Number (USD) | §3 | $4,000,000.00 |
+| P-031 | Purchase Price | Number (USD) | §3 | $3,000,000.00 |
 | P-032 | All-Cash? | Boolean | §5 / §3 | Yes |
 | P-033 | Financing Contingency | Boolean | §4 or §6 | No |
-| P-034 | Earnest Money Deposit | Number (USD) | §2.1 | $200,000.00 |
+| P-034 | Earnest Money Deposit | Number (USD) | §2.1 | $150,000.00 |
 | P-035 | EMD Refundability | Text | §4.1 / §2 | Refundable during Feasibility Period; non-refundable post |
-| P-036 | Escrow Agent | Text | §2.1 | Newmark Title Services, 150 East Broad St., 5th Floor, Columbus OH 43215, (614) 535-7201 |
-| P-037 | Price per SF | Number | Derived (P-031 ÷ P-024) | $19.79 |
-| P-038 | Price per Acre | Number | Derived (P-031 ÷ P-026) | $255,266 |
-| P-039 | Environmental — Buyer Cap | Number (USD) | Environmental section | $100,000 |
-| P-040 | Environmental — Seller Credit Max | Number (USD) | Environmental section | $25,000 |
-| P-041 | Environmental — Termination Threshold | Number (USD) | Environmental section | $125,000 |
-| P-042 | Closing Cost Allocation | Text (enum) | §8 | Split 50/50 (PSA §8.2) — NOT standard Franklin County custom |
+| P-036 | Escrow Agent | Text | §2.1 | Example Title Services (fictional), 300 Example Ave., Anytown OH 43000, (555) 555-0100 |
+| P-037 | Price per SF | Number | Derived (P-031 ÷ P-024) | $20.00 |
+| P-038 | Price per Acre | Number | Derived (P-031 ÷ P-026) | $250,000 |
+| P-039 | Environmental — Buyer Cap | Number (USD) | Environmental section | $50,000 |
+| P-040 | Environmental — Seller Credit Max | Number (USD) | Environmental section | $10,000 |
+| P-041 | Environmental — Termination Threshold | Number (USD) | Environmental section | $75,000 |
+| P-042 | Closing Cost Allocation | Text (enum) | §8 | Split 50/50 (PSA §8.2) — NOT standard county custom |
 | P-043 | Title Insurance Cost Allocation | Text | §7 | Split 50/50 |
 | P-044 | Counsel Fees | Text (enum) | §8.1 | Each party own |
 | P-045 | Broker Commission — Seller-paid? | Boolean | Brokerage article | Yes — Seller pays under separate agreement |
@@ -117,9 +119,9 @@ Each mechanics row is either "present" or "not present" for the executed PSA. If
 | P-065 | Material Adverse Change (MAC) Triggers | Text | §8 | 10% NOI drop · tenant loss >5K SF · material uninsured casualty · new liens · insurance lapse |
 | P-066 | Vacancy Delivery Scope | Text | §9.2(d) | Specific buildings + SF to be delivered vacant |
 | P-067 | Make-Safe Requirements | Text | §9.2(e) | Anchor bolts removed; ¼"+ steel plates; NEC-compliant electrical; plumbing capped/pressure-tested; drains functional; envelope sealed; floor patched/leveled; PE cert + unconditional lien waivers |
-| P-068 | Seller Default Remedy | Text | §11.3 | Deposit return + out-of-pocket up to $75K (uncapped on Willful Default) OR specific performance |
+| P-068 | Seller Default Remedy | Text | §11.3 | Deposit return + out-of-pocket up to $[cap] (uncapped on Willful Default) OR specific performance |
 | P-069 | Purchaser Default Remedy | Text | §11.2 | Seller retains Deposit; sole remedy |
-| P-070 | Hazardous Materials Disclosure | Text | §15.1.10 | Seller HAS affirmatively disclosed property "may contain Hazardous Materials" |
+| P-070 | Hazardous Materials Disclosure | Text | §15.1.10 | e.g., Seller affirmatively discloses property "may contain Hazardous Materials" |
 | P-071 | §13 Violation Compliance Owner | Text (enum) | §13 | Seller (Seller complies with municipal violation notices at Closing) |
 | P-072 | §15.1.16 Authority Package — FP Pause | Boolean | §15.1.16 | Yes (FP clock paused until Seller delivers authority pkg) |
 | P-073 | Assignment by Purchaser | Text | §23 | Freely assignable to any entity |
@@ -127,13 +129,13 @@ Each mechanics row is either "present" or "not present" for the executed PSA. If
 | P-075 | Seller §1031 Cooperation Provision | Boolean | §29 | Yes — Seller reserves right; Buyer cooperates at no cost |
 | P-076 | Buyer §1031 Provision | Boolean | §29 or silent | Typically silent — confirm Buyer's intent separately |
 | P-077 | Confidentiality — Permitted Disclosures | Text | §27 | Attorneys, accountants, mortgage holders, subpoena |
-| P-078 | Governing Law | Text | §18 | State of Ohio |
+| P-078 | Governing Law | Text | §18 | State of [property state] |
 
 ---
 
 ## SECTION 6 — SURVIVAL & WARRANTIES (P-079 to P-086)
 
-| Fact # | Field | Type | Typical PSA Source | Example |
+| Fact # | Field | Type | Typical PSA Source | Example (synthetic) |
 |---|---|---|---|---|
 | P-079 | General Reps Survival | Text / Months | §22(a) | 18 months |
 | P-080 | Environmental Reps Survival | Text / Months | §22(b) | 36 months |
@@ -150,18 +152,18 @@ Each mechanics row is either "present" or "not present" for the executed PSA. If
 
 Populate one row per disclosed item. Numbering resets per deal — stay sequential in the table.
 
-| Fact # | Field | Type | Typical Source | Example |
+| Fact # | Field | Type | Typical Source | Example (synthetic) |
 |---|---|---|---|---|
 | P-087 | Case / Notice Type | Text (enum) | Exhibit F | Litigation / Lis Pendens / Agency Notice / Code Enforcement / Foreclosure |
-| P-088 | Case Caption or Notice Title | Text | Exhibit F | City of Columbus v. SIJ Partnership LLC + Buckeye Recycling |
-| P-089 | Case / Instrument Number | Text | Exhibit F | 2021 EVH 060406 / Inst. #202109240970710 / 25 CV 006289 |
-| P-090 | Court / Agency | Text | Exhibit F | Franklin Co. Municipal Court, Environmental Division |
-| P-091 | Filed Date | Date | Exhibit F | 8/31/2021 |
-| P-092 | Current Status | Text | Exhibit F | Agreed Judgment 9/2/2022; Motion to Reopen filed 3/12/2026 alleging non-compliance |
+| P-088 | Case Caption or Notice Title | Text | Exhibit F | Example County Board of Health v. Example Seller Partnership LLC (fictional) |
+| P-089 | Case / Instrument Number | Text | Exhibit F | [case no.] / Inst. #[instrument no.] |
+| P-090 | Court / Agency | Text | Exhibit F | Example County Court of Common Pleas (example) |
+| P-091 | Filed Date | Date | Exhibit F | [mm/dd/yyyy] |
+| P-092 | Current Status | Text | Exhibit F | Consent order entered [date]; follow-up compliance inspection pending |
 | P-093 | Property-Specific? | Boolean | Exhibit F | Yes |
 | P-094 | Seller §13 Cure Obligation? | Boolean | PSA §13 x Exhibit F | Yes |
 | P-095 | Title-Impacting? | Boolean | Judgment lookup | Yes (Lis Pendens recorded) |
-| P-096 | Co-Defendant Tenant? | Text | Exhibit F | Buckeye Recycling Center, Inc. |
+| P-096 | Co-Defendant Tenant? | Text | Exhibit F | N/A |
 | P-097 | Known Dollar Exposure | Number or N/A | Exhibit F / counsel memo | TBD |
 | P-098 | Dismissed / Resolved? | Boolean | Exhibit F | No |
 | P-099 | Action Required at Closing | Text | Derived | Attorney review; title commitment must extinguish Lis Pendens; escrow if uncured |
@@ -183,21 +185,21 @@ One row block per tenant. Allocate 4 rows per tenant across the same Fact # span
 
 Per tenant, capture:
 
-| Field | Type | Source | Example (Buckeye) |
+| Field | Type | Source | Example (synthetic tenant) |
 |---|---|---|---|
-| Tenant Name | Text | Exhibit B / D | Buckeye Recycling |
-| Premises Address | Text | Exhibit B | 3483-3485 E Fulton |
-| Premises SF | Number | Exhibit B | 10,000 |
-| Monthly Base Rent (Y1) | Number | Exhibit D | $4,018.85 |
-| Annual Base Rent (Y1) | Number | Exhibit D | $48,226.25 |
+| Tenant Name | Text | Exhibit B / D | Example Tenant A Co. (fictional) |
+| Premises Address | Text | Exhibit B | 201-205 Example Street |
+| Premises SF | Number | Exhibit B | 8,000 |
+| Monthly Base Rent (Y1) | Number | Exhibit D | $4,000.00 |
+| Annual Base Rent (Y1) | Number | Exhibit D | $48,000.00 |
 | Escalation Structure | Text | Exhibit D | 3% every 2 yrs from Y5 |
-| Expiration Date | Date | Exhibit B / D | 11/29/2030 |
+| Expiration Date | Date | Exhibit B / D | 06/30/2029 |
 | Options to Renew | Text | Exhibit D | 2 × 5-yr |
 | Guarantor | Text | Exhibit B / lease | — |
 | Security Deposit | Number | lease | $[amount] |
 | In-Place at Close? | Boolean | §9.2(d) | Yes |
 | Lease Cancellation Executed? | Boolean | separate doc | No |
-| Body-vs-Exhibit Discrepancy Flag | Text | Reconciliation | e.g., "OotBox lease body states 12/31/2030; Exhibit D states 12/31/2031 — reconcile" |
+| Body-vs-Exhibit Discrepancy Flag | Text | Reconciliation | e.g., "Example Tenant B lease body states 06/30/2029; Exhibit D states 06/30/2028 — reconcile" |
 
 ---
 
@@ -228,10 +230,10 @@ Each §9.3 (Seller) and §9.4 (Purchaser) deliverable as a discrete row.
 
 ## SECTION 10 — EXCLUSIONS (P-136 to P-142)
 
-| Fact # | Field | Type | Typical Source | Example |
+| Fact # | Field | Type | Typical Source | Example (synthetic) |
 |---|---|---|---|---|
 | P-136 | Excluded Equipment? | Boolean | §25.1 | Yes |
-| P-137 | Excluded Equipment — Description | Text | §25.1 | Nutis Press / DigiCo printing presses, bindery, specialized manufacturing |
+| P-137 | Excluded Equipment — Description | Text | §25.1 | Example seller-owned packaging line, conveyors and racking |
 | P-138 | Excluded Equipment — Removal Cost to Buyer? | Text (enum) | §25.1 | None |
 | P-139 | Excluded Fixtures vs. Personal Property | Text | §25.1 + schedule | Personal property + trade fixtures |
 | P-140 | Post-Removal Restoration Obligation | Text | §25.1 + §9.2(e) | Yes — Seller repairs damage from removal; make-safe applies |
@@ -242,13 +244,13 @@ Each §9.3 (Seller) and §9.4 (Purchaser) deliverable as a discrete row.
 
 ## SECTION 11 — NOTICES & MISCELLANEOUS (P-143 to P-150)
 
-| Fact # | Field | Type | Typical Source | Example |
+| Fact # | Field | Type | Typical Source | Example (synthetic) |
 |---|---|---|---|---|
 | P-143 | Notice Delivery Methods | Text | §17 | Email OR certified mail return receipt OR Federal Express |
 | P-144 | Notice Deemed-Received Rule | Text | §17 | Email: date of email; FedEx: next business day; certified mail: actual receipt |
 | P-145 | Time is of the Essence | Boolean | §28 | Yes |
 | P-146 | Electronic Signatures / Counterparts | Boolean | §21 | Yes |
-| P-147 | Memorandum of Contract — Recordable? | Boolean | §21.10 | **No** (E Fulton PSA prohibits recording — note deviation from ORA standard) |
+| P-147 | Memorandum of Contract — Recordable? | Boolean | §21.10 | **No** (example: a PSA that prohibits recording — note deviation from ORA standard) |
 | P-148 | Dispute Resolution | Text | §20 | Prevailing party entitled to fees + costs |
 | P-149 | Force Majeure / COVID-19 Tolling | Boolean | §21.11 | Yes |
 | P-150 | Integration / Entire Agreement | Boolean | §21.2 | Yes |
@@ -259,10 +261,10 @@ Each §9.3 (Seller) and §9.4 (Purchaser) deliverable as a discrete row.
 
 One row per exhibit referenced in the PSA. Confirm each is attached.
 
-| Fact # | Field | Type | Example |
+| Fact # | Field | Type | Example (synthetic) |
 |---|---|---|---|
-| P-151 | Exhibit A — Legal Description | Text | Attached — 15.67 AC across 6 Tracts |
-| P-152 | Exhibit B — Existing Leases Schedule | Text | Attached — 3 tenants (Buckeye, OotBox, Rogers) |
+| P-151 | Exhibit A — Legal Description | Text | Attached — 12.00 AC across 3 Tracts |
+| P-152 | Exhibit B — Existing Leases Schedule | Text | Attached — 3 tenants (Example Tenants A, B, C) |
 | P-153 | Exhibit C — Assignment & Assumption of Leases (form) | Text | Attached |
 | P-154 | Exhibit D — Rent Roll | Text | Attached |
 | P-155 | Exhibit E — Tenant Notification Letter (form) | Text | Attached |

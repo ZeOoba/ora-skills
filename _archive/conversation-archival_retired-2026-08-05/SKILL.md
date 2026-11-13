@@ -46,7 +46,7 @@ Do NOT archive: in-progress drafts, exploratory questions, routine tenant commun
 
 ### Step 2 — Extract the archival content
 Structure the entry with:
-- **Title** → `Name` property. Descriptive, searchable (e.g., "E. Fulton Street — Phase 2 ESA Decision — April 2026")
+- **Title** → `Name` property. Descriptive, searchable (e.g., "GS-C — Phase 2 ESA Decision — April 2026")
 - **Date** → `Date` property. Today's date.
 - **Category** → `Category` property. One of the 6 exact select values above.
 - **Key Takeaway** → `Key Takeaway` property. 1 sentence summary of what future-Gabriel needs to know.

@@ -45,10 +45,10 @@ class TestCoreAggregation(unittest.TestCase):
         self.assertEqual(out["aggregate"]["combined_stdev"], 2.5)
         self.assertEqual(out["aggregate"]["combined_sem"], 1.44)  # 2.5 / sqrt(3)
 
-    def test_port_sheldon_n6_2026_08_14_contaminated_snapshot(self):
+    def test_gs_a_n6_2026_08_14_contaminated_snapshot(self):
         """HISTORICAL regression pin, not the current golden. These are the 6 real
         2026-08-14 samples (including the SKILL.md-citation-leaked run 1, 32.0) --
-        golden_set/2196-port-sheldon-st-jenison-mi.json no longer uses 28.08 as its
+        golden_set/gs-a-flex-grand-rapids-mi.json no longer uses 28.08 as its
         baseline (rebaselined 2026-08-15 to 26.81 on 8 leakage-excluded samples, see
         the companion test below). Kept to pin aggregate_replays()'s arithmetic
         against a known historical input set, independent of what golden_set stores
@@ -59,9 +59,9 @@ class TestCoreAggregation(unittest.TestCase):
         self.assertEqual(out["aggregate"]["combined_range"], 7.0)
         self.assertEqual(out["aggregate"]["combined_stdev"], 2.31)
 
-    def test_port_sheldon_n8_2026_08_15_leakage_excluded_fable_era_golden(self):
+    def test_gs_a_n8_2026_08_15_leakage_excluded_fable_era_golden(self):
         """HISTORICAL regression pin: the 8 Fable-era samples that
-        golden_set/2196-port-sheldon-st-jenison-mi.json's golden.combined was computed from
+        golden_set/gs-a-flex-grand-rapids-mi.json's golden.combined was computed from
         between 2026-08-15 and the 2026-11-05 Opus rebaseline (run 1, the 32.0
         SKILL.md-citation leak, excluded) must yield 26.81. The CURRENT golden is pinned by
         the n6 Opus test below."""
@@ -71,8 +71,8 @@ class TestCoreAggregation(unittest.TestCase):
         self.assertEqual(out["aggregate"]["combined_range"], 3.5)
         self.assertEqual(out["aggregate"]["combined_stdev"], 1.39)
 
-    def test_port_sheldon_n6_2026_11_05_opus_reproduces_current_golden(self):
-        """The 6 claude-opus-5-5 samples that golden_set/2196-port-sheldon-st-jenison-mi.json's
+    def test_gs_a_n6_2026_11_05_opus_reproduces_current_golden(self):
+        """The 6 claude-opus-5-5 samples that golden_set/gs-a-flex-grand-rapids-mi.json's
         golden.combined is computed from since the Opus rebaseline (the 2026-10-30 v4.41 run
         on 997fe4b2 + the 2026-11-05 supervised run on d7cab49e) must yield 30.08 -- pins the
         CURRENT golden. Their 5.5-pt range exceeds the 5.0-pt tolerance; that file records
@@ -375,7 +375,7 @@ class TestIntegrationWithDiffVerdict(unittest.TestCase):
         self.assertTrue(any("degraded measurement" in n for n in result["notes"]))
 
     def test_spread_exceeding_tolerance_is_called_out_in_notes(self):
-        """Port Sheldon's real condition: replays disagree by more than the gate width."""
+        """GS-A's real condition: replays disagree by more than the gate width."""
         golden = {
             "deal_id": "test-deal",
             "confidence": "HIGH",

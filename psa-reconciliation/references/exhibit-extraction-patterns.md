@@ -10,7 +10,7 @@ Guidance for parsing each standard PSA exhibit and resolving the recurring ambig
 
 **What to extract.**
 1. **Parcel IDs** — locate every parcel number in the exhibit. Compare character-for-character against the preamble. Watch for leading-zero and hyphen typos (e.g., "010-99201" in the preamble vs. "010-099201" in Exhibit A).
-2. **Tracts** — capture every tract, sub-parcel, and any split-acreage statement (e.g., "of which 1.342 acre lies within the Village of Whitehall and 1.664 acres lies within the City of Columbus").
+2. **Tracts** — capture every tract, sub-parcel, and any split-acreage statement (e.g., "of which X acres lie within the Village of A and Y acres lie within the City of B").
 3. **Recorded instrument** — capture the recording reference (Instrument # and date) for the master deed.
 4. **Aggregate SF and acreage** — capture the exhibit's stated aggregate. If the exhibit sums component tracts, compute the sum independently and compare against the preamble-stated aggregate. Flag any variance > 0.1%.
 
@@ -32,8 +32,8 @@ Guidance for parsing each standard PSA exhibit and resolving the recurring ambig
 3. Any tenant listed with a parenthetical note like "lease says X which is inaccurate." Record both the stated value and the PSA's acknowledgment of inaccuracy.
 
 **Recurring ambiguities to flag.**
-- **License vs. lease characterization.** A document labeled "License Agreement" (e.g., Nutis Press) is not a tenancy. Estoppel, SNDA, and vacate mechanics differ. Record as a tenant row with Field "Occupancy Type" = "License" and add a Note.
-- **Expiration typo between lease body and rent roll** (e.g., OotBox lease states 12/31/2030 but exhibit rent roll shows 12/31/2031, with PSA exhibit itself stating "lease says 12/31/2030 which is inaccurate"). Record the rent-roll value as the governing fact, note the PSA's own acknowledgment, and flag the body of the lease.
+- **License vs. lease characterization.** A document labeled "License Agreement" is not a tenancy. Estoppel, SNDA, and vacate mechanics differ. Record as a tenant row with Field "Occupancy Type" = "License" and add a Note.
+- **Expiration typo between lease body and rent roll** (e.g., a lease states one expiration date but the exhibit rent roll shows a later one, with the PSA exhibit itself acknowledging the lease date is inaccurate). Record the rent-roll value as the governing fact, note the PSA's own acknowledgment, and flag the body of the lease.
 - **Renewal option count mismatches** between Exhibit B and Exhibit D. Use Exhibit D (rent roll) as governing unless the user overrides.
 
 ---

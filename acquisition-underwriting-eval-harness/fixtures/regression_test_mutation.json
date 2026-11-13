@@ -1,6 +1,6 @@
 {
-  "deal_id": "2196-port-sheldon-st-jenison-mi",
-  "deal_name": "2196 Port Sheldon St, Jenison MI 49428/49429",
+  "deal_id": "gs-a-flex-grand-rapids-mi",
+  "deal_name": "GS-A (street address withheld -- synthetic alias), Jenison submarket, Grand Rapids MI",
   "mode": "SCREEN",
   "date_seen": "2026-06-20",
   "source": "Notion Deal Sourcing Log (collection://9a6ae219-85a3-4621-899c-c757fd062f8b), queried 2026-08-14",
@@ -12,7 +12,7 @@
     "NOI is pro-forma/modeled ($137,027 at $7.50/SF NNN, property 100% vacant) -- expected and consistent with the Lease-Up Assumption Block, not an archive gap."
   ],
   "inputs": {
-    "address": "2196 Port Sheldon St, Jenison, MI 49428/49429",
+    "address": "GS-A (street address withheld -- synthetic alias), Jenison submarket, Grand Rapids MI",
     "market": "Grand Rapids MI (Jenison submarket)",
     "asking_price": 995000,
     "price_used_for_scoring": 995000,

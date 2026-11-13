@@ -1,4 +1,4 @@
-"""Self-test: confirm diff_verdict() flags the mutated-Port-Sheldon replay
+"""Self-test: confirm diff_verdict() flags the mutated-GS-A replay
 against the REAL (unmutated) golden file. Never writes to runs/ -- this is a
 fixture-only proof, not a real run. See SKILL.md 'Self-test' section.
 """
@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "lib"))
 
 from diff_verdict import diff_verdict
 
-golden_path = Path(__file__).parent.parent / "golden_set" / "2196-port-sheldon-st-jenison-mi.json"
+golden_path = Path(__file__).parent.parent / "golden_set" / "gs-a-flex-grand-rapids-mi.json"
 golden = json.loads(golden_path.read_text(encoding="utf-8"))
 
 # Observed = the frozen replay's result AGAINST THE MUTATED FIXTURE
@@ -43,5 +43,5 @@ print(f"status = {result['status']}")
 
 assert result["status"] == "FLAG", "SELF-TEST FAILED: mutation was not flagged"
 assert abs(result["combined_delta"]) > result["tolerance_pts"], "delta not actually beyond tolerance"
-assert result["scored"] is True, "Port Sheldon should be a scored (HIGH-confidence) row"
+assert result["scored"] is True, "GS-A should be a scored (HIGH-confidence) row"
 print("\nSELF-TEST PASSED: mutated-input regression was correctly flagged.")

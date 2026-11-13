@@ -186,7 +186,7 @@ Global settings encode *invariants*, meaning defaults that hold in every Cowork 
 
 1. Review this draft and ratify.
 2. Paste the Settings Block into Cowork → Settings → Preferences, replacing v2.1 in full.
-3. **Correct the ORA Global Operating Prompt** in the same sitting, to prevent re-drift. Change the title to "Principal" and the deal-file schema to `[DocType]_[Property]_[MMDDYYYY]`. Then delete the E. Fulton Street tombstone from Hard Invariant 3 (an open action since Aug 2026).
+3. **Correct the ORA Global Operating Prompt** in the same sitting, to prevent re-drift. Change the title to "Principal" and the deal-file schema to `[DocType]_[Property]_[MMDDYYYY]`. Then delete the GS-C tombstone from Hard Invariant 3 (an open action since Aug 2026).
 4. Live test within 24 h: run "Daily Brief" (confirms the egoldberg@ cc); run any other scheduled output (confirms ggoldberg@ only); run "Evaluate [property]" (confirms acquisition-underwriting routing); run "Register scheduled task"; run "Archive this" (confirms it lands in Knowledge Base 3386ecd8).
 5. Scheduled review 17 January 2027.
 

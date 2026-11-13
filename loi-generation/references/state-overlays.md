@@ -84,7 +84,7 @@ Seller and Buyer will allocate state and county transfer taxes, recordation fees
 
 ### 5c. Ohio BOR risk — statutory thresholds (HB 126, eff. 2022)
 
-School districts may file ORIGINAL Board of Revision complaints only when the recorded sale exceeds auditor value by BOTH 10% AND $500,000 [verify thresholds with counsel]. Below either, the school-board route is barred; only scheduled reappraisal applies. Run the dual test at offer price vs auditor value before asserting BOR risk. (470 McCormick: +$117.8K = over 10%, under $500K → original complaint barred.)
+School districts may file ORIGINAL Board of Revision complaints only when the recorded sale exceeds auditor value by BOTH 10% AND $500,000 [verify thresholds with counsel]. Below either, the school-board route is barred; only scheduled reappraisal applies. Run the dual test at offer price vs auditor value before asserting BOR risk. (GS-F: +$117.8K = over 10%, under $500K → original complaint barred.)
 
 ## Quick reference — §6 distinguishing language (from SKILL.md STATE OVERLAYS section)
 

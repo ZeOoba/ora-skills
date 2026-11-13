@@ -55,7 +55,7 @@ When ambiguous, default to **DRAFT** and ask one clarifying question only if a m
 
 ## DECISION LOGIC — populate before token replacement
 
-### 0. Seller entity interest type (REQUIRED — 470 McCormick lesson)
+### 0. Seller entity interest type (REQUIRED — GS-F lesson)
 
 The Acquisition Structure section's entity-purchase election must match the seller's entity form. Resolve from the seller legal name suffix:
 
@@ -67,13 +67,13 @@ The Acquisition Structure section's entity-purchase election must match the sell
 
 Never ship "membership interests" against a corporate seller.
 
-**Template hook (added 2026-08-18):** the master template carries this as an INLINE conditional within §13 (Acquisition Structure and Assignment) — a `▶ CONDITIONAL ◀` block containing one sentence keyed to `{{ENTITY_INTEREST_TYPE}}`, immediately following the existing Buyer-designee-LLC paragraph. It does NOT get its own numbered heading and does NOT affect section renumbering — evaluate it independently of the four numbered conditionals (§8/§9/§10/§11). Default is DELETE: fire it only when Seller itself holds the Property through a single-asset entity (an LLC, corporation, or LP whose sole asset is the Property) AND Buyer wants to preserve the option to buy that entity instead of taking a deed. A trust seller does NOT get this treatment — a trust is not a signing legal person in the entity-interest sense, and ORA deals with trust sellers convey by deed with the trustee identified on the Execution Page (see 3700 Kinsman Blvd, 2026-08-18, where this exact question arose and was resolved to deed conveyance).
+**Template hook (added 2026-08-18):** the master template carries this as an INLINE conditional within §13 (Acquisition Structure and Assignment) — a `▶ CONDITIONAL ◀` block containing one sentence keyed to `{{ENTITY_INTEREST_TYPE}}`, immediately following the existing Buyer-designee-LLC paragraph. It does NOT get its own numbered heading and does NOT affect section renumbering — evaluate it independently of the four numbered conditionals (§8/§9/§10/§11). Default is DELETE: fire it only when Seller itself holds the Property through a single-asset entity (an LLC, corporation, or LP whose sole asset is the Property) AND Buyer wants to preserve the option to buy that entity instead of taking a deed. A trust seller does NOT get this treatment — a trust is not a signing legal person in the entity-interest sense, and ORA deals with trust sellers convey by deed with the trustee identified on the Execution Page (see a Madison pipeline deal, 2026-08-18, where this exact question arose and was resolved to deed conveyance).
 
 ### 0b. Format selection — STANDARD vs CONDENSED (sophisticated seller)
 
 | Seller profile | Format |
 |---|---|
-| Institutional / corporate / repeat-player (e.g., Casto-grade developer, REIT, bank REO, family office with in-house or standing counsel, major-brokerage-represented portfolio seller) | **CONDENSED** — 11-section, ~3-page letter + Execution Page + Buyer Information page (5 pages total) |
+| Institutional / corporate / repeat-player (e.g., the listing broker-grade developer, REIT, bank REO, family office with in-house or standing counsel, major-brokerage-represented portfolio seller) | **CONDENSED** — 11-section, ~3-page letter + Execution Page + Buyer Information page (5 pages total) |
 | Private / individual / estate / unsophisticated seller | **STANDARD** — full condensed-master format (12–16 sections by conditionals) |
 
 Rationale (Gabriel ruling 2026-06-10): a sophisticated counterparty expects the PSA to carry the legal weight; an over-lawyered LOI invites pre-PSA redlining and delay. With unsophisticated sellers the longer form anchors more terms while leverage is highest.
@@ -113,7 +113,7 @@ Determines opening paragraph phrasing and which conditional blocks fire.
 **Punctuation convention (2026-08-18 fix — was producing "...,." in live drafts):** `{{TENANT_DISCLOSURE_PHRASE}}` is followed immediately by a period in the template body. Never let the resolved value end in a trailing comma.
 
 **Affiliation test (decisional):** Set affiliated = TRUE if ANY of:
-- Tenant LLC name contains Seller LLC root (e.g., "Buckeye Elm Contracting, LLC" + "BUCKEYE ELM HOLDINGS CO LLC")
+- Tenant LLC name contains Seller LLC root (e.g., "Example Tenant Contracting, LLC" + "EXAMPLE SELLER HOLDINGS CO LLC")
 - OM discloses sale-leaseback structure
 - Tenant manager / principal is same as Seller manager / principal
 - Tenant pays below-market rent identified during underwriting
@@ -189,7 +189,7 @@ Always enumerate, so the PSA anchor is set without LOI negotiation: bill-of-sale
 
 ### 5c. Ohio BOR risk — statutory thresholds (HB 126, eff. 2022)
 
-School districts may file ORIGINAL Board of Revision complaints only when the recorded sale exceeds auditor value by BOTH 10% AND $500,000 [verify thresholds with counsel]. Below either, the school-board route is barred; only scheduled reappraisal applies. Run the dual test at offer price vs auditor value before asserting BOR risk. (470 McCormick: +$117.8K = over 10%, under $500K → original complaint barred.)
+School districts may file ORIGINAL Board of Revision complaints only when the recorded sale exceeds auditor value by BOTH 10% AND $500,000 [verify thresholds with counsel]. Below either, the school-board route is barred; only scheduled reappraisal applies. Run the dual test at offer price vs auditor value before asserting BOR risk. (GS-F: +$117.8K = over 10%, under $500K → original complaint barred.)
 
 ### 6. Economic term defaults
 
@@ -231,7 +231,7 @@ These are the tokens that appear in the master template. The skill is responsibl
 | `{{PURCHASE_PRICE_NUMERIC}}` | `1,400,000.00` | Same |
 | `{{EMD_WORDS}}` | `One Hundred Thousand and 00/100` | User or ORA standard |
 | `{{EMD_NUMERIC}}` | `100,000.00` | Same |
-| `{{EMD_DUE_DAYS_WORDS}}` | `two (2)` | Deposit due window after PSA execution — DEFAULT two (2) for all-cash certainty signaling; SINGLE SOURCE: feeds §1 AND any PSA-deferral mention. Root cause of the 470 McCormick §1-vs-§10 conflict |
+| `{{EMD_DUE_DAYS_WORDS}}` | `two (2)` | Deposit due window after PSA execution — DEFAULT two (2) for all-cash certainty signaling; SINGLE SOURCE: feeds §1 AND any PSA-deferral mention. Root cause of the GS-F §1-vs-§10 conflict |
 
 ### Time periods (all phrased as `[word] (digit)`)
 | Token | Example |
@@ -245,36 +245,36 @@ These are the tokens that appear in the master template. The skill is responsibl
 ### Property
 | Token | Example |
 |---|---|
-| `{{PROPERTY_STREET_ADDRESS}}` | `1333 Research Road` |
-| `{{PROPERTY_CITY}}` | `Gahanna` |
+| `{{PROPERTY_STREET_ADDRESS}}` | `100 Example Way` |
+| `{{PROPERTY_CITY}}` | `Anytown` |
 | `{{PROPERTY_STATE_FULL}}` | `Ohio` |
 | `{{PROPERTY_STATE_ABBR}}` | `OH` |
-| `{{PROPERTY_ZIP}}` | `43230` |
-| `{{PROPERTY_COUNTY}}` | `Franklin County` |
-| `{{PROPERTY_SF}}` | `19,018` |
-| `{{PROPERTY_ACRES}}` | `2.46` |
+| `{{PROPERTY_ZIP}}` | `43000` |
+| `{{PROPERTY_COUNTY}}` | `Example County` |
+| `{{PROPERTY_SF}}` | `20,000` |
+| `{{PROPERTY_ACRES}}` | `2.00` |
 | `{{PROPERTY_USE_TYPE}}` | `industrial` or `industrial / warehouse` or `flex` |
 | `{{PROPERTY_TENANCY_PHRASE}}` | `vacant` / `single-tenant` / `multi-tenant` |
 | `{{PROPERTY_ZONING_PHRASE}}` | `zoned M2 Manufacturing` — VERBATIM from the OM/listing. Body sentence reads "...acres of land {{PROPERTY_ZONING_PHRASE}}", so the value should read naturally after "land" (e.g. `zoned M2 Manufacturing`, `zoned CC`). Never invent a designation not in the marketing materials or a verified GIS pull — if unknown, ask rather than defaulting to a generic phrase. |
 | `{{ENTITY_INTEREST_TYPE}}` | `membership interests` / `equity interests` / `partnership interests` per Decision Rule 0 |
-| `{{PROPERTY_JURISDICTION_PHRASE}}` | `the City of Gahanna and Franklin County` |
+| `{{PROPERTY_JURISDICTION_PHRASE}}` | `the City of Anytown and Example County` |
 | `{{KNOWN_CONDITION_CARVEOUT}}` | `(except for the roof, which the parties acknowledge is approximately twenty-one (21) years old and approaching the end of its useful life)` or empty |
 
 ### Seller / broker
 | Token | Example |
 |---|---|
-| `{{SELLER_ENTITY_NAME}}` | `BUCKEYE ELM HOLDINGS CO LLC` (preserve original capitalization) |
-| `{{SELLER_BROKER_FULL_NAME}}` | `David Ludwig` |
-| `{{SELLER_BROKER_FIRM}}` | `Coldwell Banker, Ludwig Real Estate Group` |
-| `{{SELLER_BROKER_ADDRESS_1}}` | `8800 Lyra Drive, Suite 600` |
-| `{{SELLER_BROKER_ADDRESS_2}}` | `Columbus, Ohio 43240` |
-| `{{SELLER_BROKER_SALUTATION}}` | `David` |
+| `{{SELLER_ENTITY_NAME}}` | `EXAMPLE SELLER HOLDINGS CO LLC` (preserve original capitalization) |
+| `{{SELLER_BROKER_FULL_NAME}}` | `[Broker Name]` |
+| `{{SELLER_BROKER_FIRM}}` | `Example Brokerage Group` |
+| `{{SELLER_BROKER_ADDRESS_1}}` | `200 Example Ave, Suite 100` |
+| `{{SELLER_BROKER_ADDRESS_2}}` | `Anytown, Ohio 43000` |
+| `{{SELLER_BROKER_SALUTATION}}` | `[First Name]` |
 
 ### Tenant (only if conditional §8 / §10 fires)
 | Token | Example |
 |---|---|
-| `{{TENANT_NAME}}` | `Buckeye Elm Contracting, LLC` |
-| `{{TENANT_DISCLOSURE_PHRASE}}` | Arm's-length: `, leased to Buckeye Elm Contracting, LLC (the "Tenant")`. Affiliated: `, leased to Buckeye Elm Contracting, LLC, an affiliate of Seller`. Never end in a trailing comma — a period follows immediately in the template. |
+| `{{TENANT_NAME}}` | `Example Tenant Contracting, LLC` |
+| `{{TENANT_DISCLOSURE_PHRASE}}` | Arm's-length: `, leased to Example Tenant Contracting, LLC (the "Tenant")`. Affiliated: `, leased to Example Tenant Contracting, LLC, an affiliate of Seller`. Never end in a trailing comma — a period follows immediately in the template. |
 
 ### Buyer signatory
 | Token | Example |
@@ -348,11 +348,11 @@ Use `python-docx` to:
 If any check fails, fix and re-run. Do not present a failing file.
 
 ### Phase 6 — Save and present
-1. Filename: `LOI [Property Street] [City] [State] [M.D.YYYY].docx` — match Gabriel's convention (e.g., `LOI 1333 Research Rd Gahanna OH 5.14.2026.docx`).
+1. Filename: `LOI [Property Street] [City] [State] [M.D.YYYY].docx` — match Gabriel's convention (e.g., `LOI 100 Example Way Anytown OH 5.14.2026.docx`).
 2. Save to outputs folder.
 3. Generate PDF preview via `soffice --headless --convert-to pdf`.
 4. Present both files to user via `present_files`.
-5. Log to Notion Acquisition Pipeline Tracker (`bcfe4a03`): set `LOI Status` = "Submitted", set the **`LOI Expiration Date`** date field (added 2026-08-05) to `{{OFFER_EXPIRATION_DATE}}` from Phase 5 §8, link to file, and a single-line summary of terms in `Next Action`. **Write the expiration into the dedicated date column — never only into `Next Action` prose.** A date sitting only in prose is exactly the "embedded arithmetic" anti-pattern `ora-deal-aging-sla` was hardened against on 2026-08-03 ("an aging anchor belongs in a computed field or nowhere") — it rots the moment anyone edits the field, and nothing can safely alert against it. The dedicated column is what `ora-deal-aging-sla` STEP 3c (added 2026-08-05) reads to flag a drafted-and-unshipped LOI whose own expiration has lapsed — see that skill's changelog; origin was 470 McCormick Blvd's LOI FINAL v2 sitting unshipped 21 days past its stated expiration before being killed. **Also set `Last Activity` = today (date-only).** This field — not Notion's system last-edited timestamp — is what the weekly `ora-deal-command-board` reads to decide staleness; stamping it here keeps the stall flag honest (added 2026-07-17). **And set `Next Action Date` (added 2026-08-12) to the date ORA must next act on** — for a submitted LOI that is normally the seller-response deadline. The single-line `Next Action` summary you write above is precisely where a date would otherwise get buried in prose, which is the failure this column exists to end; the paragraph above already makes this argument for `LOI Expiration Date`, and it applies unchanged to a second field. **Keep the two dates distinct even when they coincide:** `LOI Expiration Date` is the instrument's own expiry (what `ora-deal-aging-sla` STEP 3c reads to catch a drafted-but-unshipped LOI), while `Next Action Date` is when ORA is next on the hook. They are usually the same date on a submitted LOI and diverge the moment a response arrives early or an extension is granted — at which point `Next Action Date` moves and the expiration does not. If the next action has no date, leave the column NULL rather than defaulting it to the expiration.
+5. Log to Notion Acquisition Pipeline Tracker (`bcfe4a03`): set `LOI Status` = "Submitted", set the **`LOI Expiration Date`** date field (added 2026-08-05) to `{{OFFER_EXPIRATION_DATE}}` from Phase 5 §8, link to file, and a single-line summary of terms in `Next Action`. **Write the expiration into the dedicated date column — never only into `Next Action` prose.** A date sitting only in prose is exactly the "embedded arithmetic" anti-pattern `ora-deal-aging-sla` was hardened against on 2026-08-03 ("an aging anchor belongs in a computed field or nowhere") — it rots the moment anyone edits the field, and nothing can safely alert against it. The dedicated column is what `ora-deal-aging-sla` STEP 3c (added 2026-08-05) reads to flag a drafted-and-unshipped LOI whose own expiration has lapsed — see that skill's changelog; origin was GS-F's LOI FINAL v2 sitting unshipped 21 days past its stated expiration before being killed. **Also set `Last Activity` = today (date-only).** This field — not Notion's system last-edited timestamp — is what the weekly `ora-deal-command-board` reads to decide staleness; stamping it here keeps the stall flag honest (added 2026-07-17). **And set `Next Action Date` (added 2026-08-12) to the date ORA must next act on** — for a submitted LOI that is normally the seller-response deadline. The single-line `Next Action` summary you write above is precisely where a date would otherwise get buried in prose, which is the failure this column exists to end; the paragraph above already makes this argument for `LOI Expiration Date`, and it applies unchanged to a second field. **Keep the two dates distinct even when they coincide:** `LOI Expiration Date` is the instrument's own expiry (what `ora-deal-aging-sla` STEP 3c reads to catch a drafted-but-unshipped LOI), while `Next Action Date` is when ORA is next on the hook. They are usually the same date on a submitted LOI and diverge the moment a response arrives early or an extension is granted — at which point `Next Action Date` moves and the expiration does not. If the next action has no date, leave the column NULL rather than defaulting it to the expiration.
 
 ### Phase 6b — Deal Terms Register (MANDATORY — at draft AND at execution)
 The register is the deal's tracking point for every material term — especially terms agreed OUTSIDE the LOI (easements, parcel exclusions, verbal agreements, strategy-driven omissions). Side-channel terms exist in NO binding document until the PSA captures them; the register is how they survive the LOI→PSA handoff. (Origin: 2026-06-11, 754 Old State — the deal's linchpin easement lived only in an IC memo and meeting notes, and was absent from counsel's PSA draft.)
@@ -473,12 +473,12 @@ Full overlay text in `references/state-overlays.md`. Summary of §6 distinguishi
 
 ## VERSIONING
 
-- v1.6 — 2026-08-18, template/skill sync pass (triggered by 3700 Kinsman Blvd / Madison WI deal, where both gaps surfaced live). Master template `LOI_Master_Template_Condensed.docx` bumped to its own v1.1: (1) `{{PROPERTY_ZONING_PHRASE}}` wired into the opening paragraph, replacing the hardcoded "commercially zoned industrial land" — Variable Reference table updated with a matching row; (2) `{{ENTITY_INTEREST_TYPE}}` wired in as a new INLINE conditional within §13 (Acquisition Structure), independent of the four numbered conditionals and section renumbering — Conditional Sections Key table updated with a 5th row; (3) fixed a live defect where the EXECUTION PAGE subtitle rendered as literal "Letter of Intent · , ," (no tokens were ever wired in) — now reads from `{{PROPERTY_STREET_ADDRESS}}`, `{{PROPERTY_CITY}}`, `{{PROPERTY_STATE_ABBR}}`; (4) fixed a punctuation defect where `{{TENANT_DISCLOSURE_PHRASE}}` examples ended in a trailing comma immediately before the template's hardcoded period, producing "...,." — corrected in both the template's Variable Reference table and this file's Decision Logic §1 table and Token Reference table; the arm's-length example now carries its own `(the "Tenant")` parenthetical since no §8 exists to define the term when the tenant is unaffiliated. Regression-tested against the 3700 Kinsman Blvd deal (arm's-length single-tenant, no ROFR, WI overlay) — output unchanged from the hand-patched original delivered that day. Template asset unreviewed by counsel prior to first live use of the new §13 conditional; flag for review before it next fires.
+- v1.6 — 2026-08-18, template/skill sync pass (triggered by the Madison pipeline deal, where both gaps surfaced live). Master template `LOI_Master_Template_Condensed.docx` bumped to its own v1.1: (1) `{{PROPERTY_ZONING_PHRASE}}` wired into the opening paragraph, replacing the hardcoded "commercially zoned industrial land" — Variable Reference table updated with a matching row; (2) `{{ENTITY_INTEREST_TYPE}}` wired in as a new INLINE conditional within §13 (Acquisition Structure), independent of the four numbered conditionals and section renumbering — Conditional Sections Key table updated with a 5th row; (3) fixed a live defect where the EXECUTION PAGE subtitle rendered as literal "Letter of Intent · , ," (no tokens were ever wired in) — now reads from `{{PROPERTY_STREET_ADDRESS}}`, `{{PROPERTY_CITY}}`, `{{PROPERTY_STATE_ABBR}}`; (4) fixed a punctuation defect where `{{TENANT_DISCLOSURE_PHRASE}}` examples ended in a trailing comma immediately before the template's hardcoded period, producing "...,." — corrected in both the template's Variable Reference table and this file's Decision Logic §1 table and Token Reference table; the arm's-length example now carries its own `(the "Tenant")` parenthetical since no §8 exists to define the term when the tenant is unaffiliated. Regression-tested against the Madison pipeline deal (arm's-length single-tenant, no ROFR, WI overlay) — output unchanged from the hand-patched original delivered that day. Template asset unreviewed by counsel prior to first live use of the new §13 conditional; flag for review before it next fires.
 - v1.4 — 2026-06-11, Deal Terms Register: new mandatory Phase 6b writes DEAL-TERMS-REGISTER.md (off-LOI terms / strategy constraints / tracking items) to the deal folder at draft and execution; consumed by deal-execution Workflow 2A and psa-reconciliation. Origin: 754 Old State easement gap.
 - v1.3 — 2026-06-11, Composio-retirement merge (recovered v1.2 base from 2026-06-10 upload package after cache-mirror clobber). SHIP mode re-pointed to Outlook COM sole send path; CC discipline applied (cc per thread context, no blanket cc of both principals, never ze@); connectors table Outlook row → COM.
-- v1.0 — Initial release, May 2026. Based on 511 Industrial Mile Columbus and 1333 Research Rd Gahanna condensed deliverables.
-- v1.2 — 2026-06-10 PM, hardened vs adversarial review (Gemini/Grok, 470 McCormick). Template: {{EMD_DUE_DAYS_WORDS}} single-source; Phase II trigger = RECs/CRECs/recommendation/Buyer-reasonable-determination; testing restoration carveout (no pre-existing-condition liability); cease-all-marketing in Exclusivity; property file + violations/litigation/loss runs. Skill: vacant preservation covenant; PSA-deferral standard list (specific performance, broom-clean, title-commitment 10 days, OH BOR cooperation); HB 126 dual-threshold rule; QC 21–22. REJECTED on review: IOS/zoning use clauses that telegraph land thesis; unilateral Study extensions; 30-day close default; Phase II at Seller cost; arbitration; additional-insured pre-closing; perjury certifications.
-- v1.1 — 2026-06-10, calibrated on 470 McCormick (Casto). Added: Rule 0 entity-interest type; Rule 0b STANDARD/CONDENSED format selection + merge map; Rule 0c exchange-posture default (mutual 1031 cooperation RETAINED) + concealment overlay w/ leak-check; zoning-phrase token; QC 17–20 (pagination/template-defect strip, entity language, zoning verbatim, leak-check); SHIP re-date rule.
+- v1.0 — Initial release, May 2026. Based on a Columbus pipeline deal and GS-E condensed deliverables.
+- v1.2 — 2026-06-10 PM, hardened vs adversarial review (Gemini/Grok, GS-F). Template: {{EMD_DUE_DAYS_WORDS}} single-source; Phase II trigger = RECs/CRECs/recommendation/Buyer-reasonable-determination; testing restoration carveout (no pre-existing-condition liability); cease-all-marketing in Exclusivity; property file + violations/litigation/loss runs. Skill: vacant preservation covenant; PSA-deferral standard list (specific performance, broom-clean, title-commitment 10 days, OH BOR cooperation); HB 126 dual-threshold rule; QC 21–22. REJECTED on review: IOS/zoning use clauses that telegraph land thesis; unilateral Study extensions; 30-day close default; Phase II at Seller cost; arbitration; additional-insured pre-closing; perjury certifications.
+- v1.1 — 2026-06-10, calibrated on GS-F (listing broker withheld). Added: Rule 0 entity-interest type; Rule 0b STANDARD/CONDENSED format selection + merge map; Rule 0c exchange-posture default (mutual 1031 cooperation RETAINED) + concealment overlay w/ leak-check; zoning-phrase token; QC 17–20 (pagination/template-defect strip, entity language, zoning verbatim, leak-check); SHIP re-date rule.
 - Master template asset: `templates/LOI_Master_Template_Condensed.docx`
 - State overlays asset: `references/state-overlays.md`
 - ORA Standards asset: `references/ora-standards.md`

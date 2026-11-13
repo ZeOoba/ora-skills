@@ -8,12 +8,12 @@ One file per frozen deal in `golden_set/*.json`. Fields:
 - `confidence` — `HIGH` | `MEDIUM` | `LOW`, per deal. `diff_verdict.py` scores (gates PASS/FLAG)
   `HIGH` and `MEDIUM` identically; only `LOW` is excluded (informational-only). Driven by how many
   of the 7 scorecard categories the replay can derive from `inputs`, WITH one distinction updated
-  2026-08-14 (E Fulton enrichment): a null category counts differently depending on WHY it's null.
+  2026-08-14 (GS-C enrichment): a null category counts differently depending on WHY it's null.
   - A null from **input-packet incompleteness** (a recoverable research gap — the fact likely
     exists somewhere, just isn't archived here) keeps a deal at `LOW` regardless of how few
     categories are affected, until the packet is actually enriched with real sourced facts.
   - A null from a **structurally irreducible unknown** (the fact was genuinely unknowable even
-    to the ORIGINAL screen at freeze time — e.g. E Fulton's Tenancy & Lease, where ORA's own
+    to the ORIGINAL screen at freeze time — e.g. GS-C's Tenancy & Lease, where ORA's own
     contemporaneous DD status says "rent roll unreconciled") does NOT by itself force `LOW`. A
     deal with only this class of null and every other category resolved from real facts can reach
     `MEDIUM` (not `HIGH` — `HIGH` is reserved for zero nulls of either kind). Backfilling an

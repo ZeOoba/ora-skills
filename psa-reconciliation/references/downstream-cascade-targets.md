@@ -34,7 +34,7 @@ Each target section specifies (a) what fields to push, (b) where they go in the 
 | P-136–P-142 | MASTER CHECKLIST §12 (Closing) | Excluded equipment | Item referencing pre-closing walkthrough |
 | P-151–P-156 | DOCUMENT INDEX + DATA ROOM MAP | Exhibits | One row per exhibit |
 
-**Required post-edit QC checks in the generated prompt.** Include a 12-point verification gate in every DD cascade prompt (see `20260423_E-Fulton_DD-Checklist_Excel-Claude-Prompt_v01.md` as reference template).
+**Required post-edit QC checks in the generated prompt.** Include a 12-point verification gate in every DD cascade prompt (use the most recent `YYYYMMDD_[Property]_DD-Checklist_Excel-Claude-Prompt_vNN.md` in the workspace as the reference template).
 
 ---
 
@@ -137,7 +137,7 @@ The rent roll is substantially Exhibit D. Use Section 8 tenant rows (P-100+) to 
 | Env. Buyer Cap | P-039 |
 | Env. Seller Credit | P-040 |
 | Env. Termination Threshold | P-041 |
-| Closing Cost Allocation | P-042 (50/50 deviates from standard Franklin County 40/60 assumption — flag in model if applicable) |
+| Closing Cost Allocation | P-042 (50/50 deviates from the standard county-custom split assumption — flag in model if applicable) |
 | Title Insurance Cost Allocation | P-043 |
 | In-Place Rent (Y1) | Sum of annual base rents from tenant rows |
 | Tenant SF (in-place) | Sum of SF from tenant rows marked In-Place at Close = Yes |
