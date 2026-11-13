@@ -95,7 +95,13 @@ def plugin_entries(plugin: str, repo_root: Path = REPO, bm: dict | None = None,
         if 'SKILL.md' not in src_files:
             raise SystemExit(f'{plugin}: member skill {skill!r} has no SKILL.md at {repo_root / skill}')
         shared_src = {_dep_pair(d)[1]: _dep_pair(d)[0] for d in _ps.SHARED_ROOT_DEPS.get(skill, [])}
+        private = set(_ps.PRIVATE_LOCAL_DEPS.get(skill, []))
+        for name in private:  # refuse a member that would install without its private file
+            src_files[name] = None
         for rel, path in src_files.items():
+            if rel in private:
+                entries[f'skills/{skill}/{rel}'] = _ps.private_dep_bytes(skill, rel, repo_root)
+                continue
             data = path.read_bytes()  # read once: the bytes verified are the bytes shipped
             if rel in shared_src and not allow_dirty_shared:
                 reason = shared_dep_dirty_reason(repo_root, shared_src[rel], data)

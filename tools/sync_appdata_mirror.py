@@ -66,7 +66,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from package_skills import REPO, is_skill_dir, skill_source_files, staged_skill_dirs
+from package_skills import REPO, is_skill_dir, retire_stale_private, skill_source_files, staged_skill_dirs
 
 
 def appdata_root() -> Path | None:
@@ -161,6 +161,7 @@ def sync_skill(skill_dir: Path, *, appdata: Path | None = None) -> list[str]:
             lines.append(f'{skill}: cache {verdict} -- NOT written ({mirror}). '
                          f'Reconcile with repo_first_check.py before reimporting.')
             continue
+        lines.extend(retire_stale_private(skill, mirror, files))
         copied = 0
         for rel, src in files.items():
             dest = mirror / rel
