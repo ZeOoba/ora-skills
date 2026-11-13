@@ -115,8 +115,8 @@ SCALE = {"k": 1e3, "thousand": 1e3, "m": 1e6, "mm": 1e6, "million": 1e6, "b": 1e
 CLAIM_RE = re.compile(
     r"(?P<money>\$\s?(?P<mparen>\()?(?P<mnum>\d[\d,]*(?:\.\d+)?)\s*(?P<mscale>billion|million|thousand|mm|[kmb])?"
     r"(?![a-z]))"
-    r"|(?P<pct>(?<![\w.])(?P<pnum>-?\d+(?:\.\d+)?)\s?%)"
-    r"|(?P<mult>(?<![\w.$])(?P<xnum>\d+(?:\.\d+)?)\s?[x×](?![a-z])(?!\s*\d))"
+    r"|(?P<pct>(?<![\w.])(?P<pnum>[-−–]?\d+(?:\.\d+)?)\s?%)"
+    r"|(?P<mult>(?<![\w.$])(?P<xnum>\d+(?:\.\d+)?)\s?[x×](?![a-z])(?! ?\d))"
     r"|(?P<sf>(?<![\w.$])(?P<snum>\d[\d,]*(?:\.\d+)?)\s?(?P<sk>k)?\s?-?\s?"
     r"(?:rsf|sf|s\.f\.|sq\.?\s?ft\.?|square feet)(?![a-z]))",
     re.I,
@@ -156,6 +156,7 @@ class Cell:
     value: float
     is_pct_fmt: bool
     label: str
+    is_formula: bool = False  # a computed cell; a hard-coded "Floor DSCR" input is a limit, not a result
 
 
 @dataclass
@@ -207,14 +208,24 @@ def _kind_of(m: re.Match) -> str:
     return next(k for k in ("money", "pct", "mult", "sf") if m.group(k))
 
 
-ADJACENT_GAP_RE = re.compile(r"^\s*(?:of|is|was|:|=|,)?\s*\$?\s*$", re.I)
+# A keyword "hugs" a figure when only a linking word sits between them ("DSCR 1.25x", "DSCR of 1.25x").
+ADJACENT_GAP_RE = re.compile(r"^\s*(?:of|is|was|:|=)?\s*\$?\s*$", re.I)
+# A same-kind list continues one metric: "DSCR of 1.18x in Year 1 and 1.25x in Year 5", "DSCR<tab>1.18x<tab>1.25x".
+_YEAR_PHRASE_RE = re.compile(r"\(\s*(?:year|yr)[\s-]?\d{1,2}\s*\)|\b(?:in|for)\s+(?:year|yr)[\s-]?\d{1,2}\b", re.I)
+_LIST_JOIN_RE = re.compile(r"^[\s,;]*(?:and|or|vs\.?|versus)\s*(?:an?\s+)?$", re.I)
+
+
+def _continues_list(gap: str) -> bool:
+    if gap.strip(" ") == "\t" or re.fullmatch(r"[ ]*\t[ \t]*", gap):
+        return True
+    return bool(_LIST_JOIN_RE.match(_YEAR_PHRASE_RE.sub(" ", gap))) and len(gap) <= 32
 
 
 def _metric_for(before: str, after: str, kind: str) -> tuple[str | None, int]:
-    """(metric, chars between keyword and figure). A free metric keyword within BIND_DISTANCE
-    before the figure ("Cap rate 7.5%, IRR ...") wins; else a metric word right after the
-    figure ("65% LTV") at distance 0; else the nearest free keyword before it."""
-    before_metric, before_dist = _metric_before(before, kind)
+    """(metric, chars between keyword and figure). A keyword hugging the figure ("Cap rate 7.5%")
+    wins; else a metric word right after the figure ("65% LTV") at distance 0; else the nearest
+    free keyword before it; else the metric of a same-kind list it continues ("... and 1.25x")."""
+    before_metric, before_dist, inherited = _metric_before(before, kind)
     # Only a keyword hugging the figure ("Cap rate 7.5%", "DSCR of 1.25x") beats a trailing metric
     # word; in "Exit cap rate assumes 7.5% vacancy" or "IRR at 60% LTV" the trailing word owns it.
     gap = before[len(before) - before_dist:] if before_metric and before_dist < len(before) else ""
@@ -229,10 +240,13 @@ def _metric_for(before: str, after: str, kind: str) -> tuple[str | None, int]:
             trailing = (key, m.start())
     if trailing:
         return trailing[0], 0
+    if before_metric is None and inherited:
+        return inherited, 0
     return before_metric, before_dist
 
 
-def _metric_before(before: str, kind: str) -> tuple[str | None, int]:
+def _metric_before(before: str, kind: str) -> tuple[str | None, int, str | None]:
+    """(free keyword before the figure, its distance, metric inherited from a same-kind list)."""
     best, best_pos, best_start = None, -1, -1
     for key, rx in METRIC_RE.items():
         if kind not in METRIC_KINDS[key]:
@@ -240,21 +254,38 @@ def _metric_before(before: str, kind: str) -> tuple[str | None, int]:
         for m in rx.finditer(before):
             if m.end() > best_pos:
                 best, best_pos, best_start = key, m.end(), m.start()
-    # The keyword already belongs to another figure when one sits between it and this figure
-    # ("LTV 65%, 6.0%") or a figure trails into it ("65% LTV, 6.0%"). A bare number does not
+    if not best:
+        return None, 999, None
+    # A keyword hugging the figure is its own, whatever precedes it ("2.08x, DSCR 1.25x").
+    if ADJACENT_GAP_RE.match(before[best_pos:]):
+        return best, len(before) - best_pos, None
+    # Otherwise the keyword already belongs to another figure when one sits between it and this
+    # figure ("LTV 65%, 6.0%") or a figure trails into it ("65% LTV, 6.0%"). A bare number does not
     # count: in "Year 3 DSCR of 1.40x" the year number does not steal DSCR from the figure.
-    if best:
-        ok = METRIC_KINDS[best]
-        between = [m for m in CLAIM_RE.finditer(before[best_pos:]) if _kind_of(m) in ok]
-        trailing = [m for m in CLAIM_RE.finditer(before[:best_start])
-                    if best_start - 2 <= m.end() <= best_start and _kind_of(m) in ok]
-        if between or trailing:  # only a figure of a kind the metric describes can own it
-            return None, 999
-    return best, (len(before) - best_pos if best else 999)
+    ok = METRIC_KINDS[best]
+    between = [m for m in CLAIM_RE.finditer(before[best_pos:]) if _kind_of(m) in ok]
+    trailing = [m for m in CLAIM_RE.finditer(before[:best_start])
+                if best_start - 2 <= m.end() <= best_start and _kind_of(m) in ok]
+    if between:
+        last = between[-1]
+        gap = before[best_pos + last.end():]
+        return None, 999, (best if _kind_of(last) == kind and _continues_list(gap) else None)
+    if trailing:
+        return None, 999, None
+    return best, len(before) - best_pos, None
 
 
 # A keyword this close binds the figure to its metric ("DSCR of 1.25x", "NOI: $250,000").
 BIND_DISTANCE = 15
+# "Minimum DSCR of 1.25x", "Max LTV: 65%": a limit word naming the metric right before the figure.
+# "Floor DSCR of 1.25x" is excluded: in ORA usage it names the achieved v4.44 floor test, so it must tie
+# an achieved floor cell or fail.
+THRESH_METRIC_RE = re.compile(r"\b(?:min(?:imum)?|max(?:imum)?|ceiling|covenant|hurdle|target|required|"
+                              r"requirement|threshold|limit)\b" + r"\s+(?:dscr|dcr|ltv|ltc|loan[- ]to[- ]value|debt yield|"
+                              r"debt service coverage|coverage|cap rate|irr)(?:\s+ratio)?\s*(?:of|is|:|=)?\s*\$?$",
+                              re.I)
+CLAUSE_BREAK_RE = re.compile(r"[;,]|\band\b|\bvs\.?(?=\s)|\bversus\b|\.\s", re.I)
+POST_YEAR_RE = re.compile(r"^\s*\(?\s*(?:in\s+)?(?:year|yr)[\s-]?(\d{1,2})\b", re.I)
 
 
 def extract_claims(paragraphs: list[str], ignore: list[re.Pattern]) -> list[Claim]:
@@ -276,16 +307,23 @@ def extract_claims(paragraphs: list[str], ignore: list[re.Pattern]) -> list[Clai
             approx = bool(APPROX_PRE.search(para[max(0, s - 16): s]))
             # Only a threshold word hugging the figure ("floor of 1.25x", "1.25x minimum") makes it a
             # threshold statement; "against the lender's minimum, DSCR is 1.25x" reports a result.
-            threshold = bool(re.search(THRESH_RE.pattern + r"\s*(?:of|is)?\s*\$?$", para[max(0, s - 24): s], re.I)
-                             or NEXT_THRESH_RE.match(para[e: e + 16]))
-            # Qualifiers and area types come only from text after the previous figure, so
-            # "Exit cap 8.0%; going-in cap 8.0%" does not leak "exit" into the second figure.
+            win = para[max(0, s - 40): s]
+            threshold = bool(re.search(THRESH_RE.pattern + r"\s*(?:of|is)?\s*\$?$", win, re.I)
+                             or THRESH_METRIC_RE.search(win) or NEXT_THRESH_RE.match(para[e: e + 16]))
+            # Qualifiers, years and area types come only from this figure's own clause: text after
+            # the previous figure's clause break, plus a qualifier or "(Year 5)" right after it. So
+            # "NOI $300,000 in Year 5; DSCR 1.25x" gives the DSCR no year, and "a 7.5% going-in cap
+            # rate and an 8.0% exit cap rate" does not leak "going-in" into the second figure.
             own = before[-40:]
             prior = list(CLAIM_RE.finditer(own))
-            own = own[prior[-1].end():] if prior else own
-            quals = {k for k, rx in QUALIFIER_RE.items() if rx.search(own)}
+            if prior:
+                own = CLAUSE_BREAK_RE.split(own[prior[-1].end():])[-1]
+            post = CLAUSE_BREAK_RE.split(para[e: e + 30])[0]
+            nxt = CLAIM_RE.search(post)
+            post = post[: nxt.start()] if nxt else post
+            quals = {k for k, rx in QUALIFIER_RE.items() if rx.search(own) or rx.search(post)}
             sf_type = SF_TYPE_RE.findall(own)
-            ym = YEAR_TOKEN_RE.findall(own)  # "Year 5 NOI $300K; DSCR 1.10x": the DSCR has no year
+            ym = YEAR_TOKEN_RE.findall(own) or POST_YEAR_RE.findall(post)
             if m.group("money"):
                 num = m.group("mnum").replace(",", "")
                 scale = SCALE.get((m.group("mscale") or "").lower(), 1.0)
@@ -306,7 +344,7 @@ def extract_claims(paragraphs: list[str], ignore: list[re.Pattern]) -> list[Clai
                 half = 0.5 * 10 ** (-_decimals(num)) * scale
                 kind = "money"
             elif m.group("pct"):
-                num = m.group("pnum")
+                num = m.group("pnum").replace("−", "-").replace("–", "-")
                 val = float(num) / 100  # "(5%)" in prose is a parenthetical, not a negative
                 half = 0.5 * 10 ** (-_decimals(num)) / 100
                 kind = "pct"
@@ -363,7 +401,9 @@ def read_model_cells(path: Path) -> tuple[list[Cell], int]:
                 v = c.value
                 f = wf.cell(row=c.row, column=c.column).value
                 # Any formula without a cached value: "=..." strings and ArrayFormula/DataTableFormula objects.
-                if v is None and f is not None and not (isinstance(f, str) and not f.startswith("=")):
+                is_formula = (isinstance(f, str) and f.startswith("=")) or type(f).__name__ in (
+                    "ArrayFormula", "DataTableFormula")
+                if v is None and is_formula:
                     uncached += 1
                     continue
                 if isinstance(v, bool) or not isinstance(v, (int, float)):
@@ -372,7 +412,7 @@ def read_model_cells(path: Path) -> tuple[list[Cell], int]:
                     continue
                 fmt = c.number_format or ""
                 cells.append(Cell(ws.title, c.coordinate, float(v), "%" in fmt,
-                                  _row_label(ws, c.row, c.column)))
+                                  _row_label(ws, c.row, c.column), is_formula))
     return cells, uncached
 
 
@@ -393,7 +433,11 @@ LIMIT_WORD_RE = re.compile(r"\b(?:min(?:imum)?|covenant|constraint|limit|require
 def _is_threshold(cell: Cell) -> bool:
     if not THRESH_RE.search(cell.label):
         return False
-    return not (ACHIEVED_RE.search(cell.label) and not LIMIT_WORD_RE.search(cell.label))
+    # An achieved form is a result only when it is computed or names the loan it is sized to;
+    # a bare hard-coded "Floor DSCR" = 1.25 is the governor input (doctrine calls 1.25 the floor DSCR).
+    achieved = bool(ACHIEVED_RE.search(cell.label)) and not LIMIT_WORD_RE.search(cell.label) and (
+        cell.is_formula or bool(re.search(r"\bloan\b|\d\s*%", cell.label, re.I)))
+    return not achieved
 
 
 def _is_count(cell: Cell) -> bool:
@@ -456,6 +500,15 @@ def _match(claim: Claim, pool: list[Cell], near_pct: float):
     return exact, near
 
 
+def _governors(cl: Claim) -> tuple[float, ...]:
+    """The governors a figure is held to: the 40% aggregate LTV only where the memo speaks of the
+    portfolio, else the 65% per-property ceiling; DSCR always its floor."""
+    if cl.metric == "ltv":
+        agg = re.search(r"\baggregate\b|\bportfolio\b", cl.context, re.I)
+        return (AGGREGATE_LTV_CEILING,) if agg else (PER_PROPERTY_LTV_CEILING,)
+    return GOVERNORS.get(cl.metric or "", ())
+
+
 def _passes(metric: str, value: float, governor: float) -> bool:
     """DSCR passes at or above its floor; LTV at or below its ceiling (float noise ignored)."""
     eps = 1e-9
@@ -494,7 +547,9 @@ def tie(claims: list[Claim], cells: list[Cell], near_pct: float) -> list[Result]
         if strict:
             for q in cl.quals:  # "going-in cap" ties only going-in cells when the model labels them
                 narrowed = [c for c in pool if QUALIFIER_RE[q].search(c.label)]
-                if narrowed:
+                # "Floor DSCR of 1.25x" names the achieved floor test: with no achieved floor cell it
+                # is unsupported, never tied to some other DSCR.
+                if narrowed or (q in ("floor", "max_loan") and not cl.threshold):
                     pool = narrowed
         amb_pool = pool
         exact, near = _match(cl, pool, near_pct)
@@ -528,7 +583,7 @@ def tie(claims: list[Claim], cells: list[Cell], near_pct: float) -> list[Result]
             # cell is a limit, not a result, so it is exempt.
             governed = strict and cl.metric in GOVERNORS and not (cl.threshold and _is_threshold(cell))
             matched = [(c, v) for c, v in exact] + [(c, v) for c, v, _ in near]
-            straddle = [(c, v, g) for c, v in matched for g in GOVERNORS.get(cl.metric or "", ())
+            straddle = [(c, v, g) for c, v in matched for g in _governors(cl)
                         if _passes(cl.metric, cl.value, g) != _passes(cl.metric, v, g)] if governed else []
             if straddle or (status == "NEAR" and governed):
                 if straddle:
@@ -657,6 +712,10 @@ def run(memo: Path, model: Path, near_pct: float = 0.5, ignore: list[str] | None
     return tie(claims, cells, near_pct), uncached, warnings
 
 
+OFFICE_SUFFIXES = (".docx", ".docm", ".doc", ".dotx", ".dotm", ".xlsx", ".xlsm", ".xlsb", ".xls", ".xltx",
+                   ".xltm", ".pptx", ".pptm", ".ppt", ".potx", ".csv", ".pdf", ".odt", ".ods", ".rtf")
+
+
 def _guard_outputs(memo: Path, model: Path, outs: list[Path | None]) -> None:
     import os
 
@@ -671,7 +730,7 @@ def _guard_outputs(memo: Path, model: Path, outs: list[Path | None]) -> None:
             raise ValueError(f"refusing to write a report to {out.name}: ':' in a file name")
         if out.name != out.name.rstrip(". "):  # Windows drops a trailing dot/space: "x.pdf." is x.pdf
             raise ValueError(f"refusing to write a report to {out.name!r}: trailing dot or space")
-        if out.resolve() in inputs or out.resolve().suffix.lower() in (".docx", ".xlsx", ".xlsm", ".xls", ".doc", ".pdf"):
+        if out.resolve() in inputs or out.resolve().suffix.lower() in OFFICE_SUFFIXES:
             raise ValueError(f"refusing to write a report to {out.name}: it is an input, an Office file or a PDF")
         if out.exists() and any(p.exists() and os.path.samefile(out, p) for p in (memo, model)):
             raise ValueError(f"refusing to write a report to {out.name}: it is a link to an input")
@@ -697,14 +756,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
     md = render_md(a.memo, a.model, results, uncached, warnings)
-    if a.out:
-        a.out.write_text(md, encoding="utf-8")
-    else:
-        sys.stdout.reconfigure(encoding="utf-8")
-        print(md)
-    if a.json:
-        a.json.write_text(json.dumps({"warnings": warnings, "uncached": uncached,
-                                      "results": [asdict(r) for r in results]}, indent=2), encoding="utf-8")
+    try:
+        if a.out:
+            a.out.write_text(md, encoding="utf-8")
+        else:
+            sys.stdout.reconfigure(encoding="utf-8")
+            print(md)
+        if a.json:
+            a.json.write_text(json.dumps({"warnings": warnings, "uncached": uncached,
+                                          "results": [asdict(r) for r in results]}, indent=2), encoding="utf-8")
+    except OSError as e:  # --out names a directory, a locked file, a read-only share ...
+        print(f"ERROR: cannot write the report: {e}", file=sys.stderr)
+        return 2
     counts = {s: sum(r.status == s for r in results) for s in FAILING}
     print(f"RESULT_JSON={json.dumps({'figures': len(results), **counts, 'near': sum(r.status == 'NEAR' for r in results)})}",
           file=sys.stderr)
