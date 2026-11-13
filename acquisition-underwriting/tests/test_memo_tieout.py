@@ -540,6 +540,64 @@ class TieOutTests(unittest.TestCase):
         self.assertEqual(mt.main([str(memo), str(self.model), "--out", str(self.tmp / "o.xlsx") + " "]), 2)
         self.assertEqual(pdf.read_bytes(), b"%PDF")
 
+    # ---- third refute round ----
+    def _metrics(self, text):
+        return [(c.text, c.metric) for c in mt.extract_claims([text], [])]
+
+    def test_r3_comma_list_binds_each_figure_to_its_own_keyword(self):
+        self.assertEqual(self._metrics("Levered IRR 14.1%, LTV 65%, equity multiple 2.08x, DSCR 1.25x."),
+                         [("14.1%", "irr"), ("65%", "ltv"), ("2.08x", "equity_multiple"), ("1.25x", "dscr")])
+        rows = [("Levered IRR", 0.141), ("Equity Multiple", 2.08), ("DSCR", 1.2451), ("LTV", 0.6549)]
+        memo = ["Levered IRR 14.1%, LTV 65%, equity multiple 2.08x, DSCR 1.25x."]
+        self.assertEqual(mt.main([str(self._memo(memo)), str(self._model(rows, ("Levered IRR", "LTV")))]), 1)
+        self.assertEqual(self._metrics("Going-in cap rate 8.39%, IRR 8.39%")[1], ("8.39%", "irr"))
+        self.assertEqual(self._metrics("65% LTV, 6.0% coupon")[1][1], None)  # a list keyword is not inherited
+
+    def test_r3_same_kind_list_inherits_its_metric(self):
+        self.assertEqual(self._metrics("DSCR of 1.18x in Year 1 and 1.25x in Year 5."),
+                         [("1.18x", "dscr"), ("1.25x", "dscr")])
+        self.assertEqual(self._metrics("DSCR\t1.18x\t1.25x"), [("1.18x", "dscr"), ("1.25x", "dscr")])
+        rows = [("Year 1 DSCR", 1.18), ("Year 5 DSCR", 1.2451)]
+        self.assertEqual(self._cli(rows, ["DSCR of 1.18x in Year 1 and 1.25x in Year 5."]), 1)
+        rows = [("LTV at close", 0.60), ("LTV at refi", 0.6549)]
+        self.assertEqual(mt.main([str(self._memo(["LTV of 60% at close and 65% at refi."])),
+                                  str(self._model(rows, ("LTV at close", "LTV at refi")))]), 1)
+
+    def test_r3_year_and_qualifier_stay_in_their_clause(self):
+        c = mt.extract_claims(["NOI of $300,000 in Year 5; DSCR 1.25x."], [])
+        self.assertEqual(c[1].year, None)
+        c = mt.extract_claims(["DSCR 1.18x (Year 1); DSCR 1.32x (Year 5)."], [])
+        self.assertEqual([x.year for x in c], ["1", "5"])
+        c = mt.extract_claims(["A 7.5% going-in cap rate and a 7.5% exit cap rate."], [])
+        self.assertEqual([x.quals for x in c], [["going_in"], ["exit"]])
+        c = mt.extract_claims(["IRR of 14.1% levered and 11.2% unlevered"], [])
+        self.assertEqual([x.quals for x in c], [["levered"], ["unlevered"]])
+
+    def test_r3_hardcoded_floor_dscr_is_the_governor_input(self):
+        self.assertTrue(mt._is_threshold(mt.Cell("S", "B1", 1.25, False, "Floor DSCR")))
+        self.assertFalse(mt._is_threshold(mt.Cell("S", "B1", 1.19, False, "Floor DSCR", True)))
+        rows = [("Floor DSCR", 1.25), ("Stabilized DSCR", 1.2449)]
+        self.assertEqual(self._cli(rows, ["Floor DSCR of 1.25x."]), 1, self._statuses(rows, ["Floor DSCR of 1.25x."]))
+
+    def test_r3_typographic_minus_on_percent(self):
+        self.assertEqual(mt.extract_claims(["Unlevered IRR of −2.5%"], [])[0].value, -0.025)
+        self.assertEqual(mt.extract_claims(["IRR of –2.5%"], [])[0].value, -0.025)
+        self.assertEqual([c.value for c in mt.extract_claims(["band 14–17%"], [])], [0.17])
+
+    def test_r3_more_out_paths_refused(self):
+        memo = self._memo(["Bid $1.15M"])
+        for name in ("rep.xlsb", "rep.docm", "rep.pptx"):
+            self.assertEqual(mt.main([str(memo), str(self.model), "--out", str(self.tmp / name)]), 2, name)
+        self.assertEqual(mt.main([str(memo), str(self.model), "--out", str(self.tmp)]), 2)
+
+    def test_r3_threshold_named_before_metric(self):
+        for memo in ("Minimum DSCR of 1.25x.", "Max LTV: 65%."):
+            self.assertTrue(mt.extract_claims([memo], [])[0].threshold, memo)
+
+    def test_r3_property_ltv_held_to_per_property_ceiling(self):
+        self.assertEqual(self._cli([("LTV", 0.4049)], ["Per-property LTV 40%."]), 0)
+        self.assertEqual(self._cli([("Aggregate LTV", 0.4049)], ["Aggregate portfolio LTV of 40%."]), 1)
+
     def test_governor_constants_come_from_doctrine(self):
         from ora_walk import doctrine
         self.assertEqual(mt.GOVERNORS["dscr"], (doctrine.DSCR_FLOOR,))
