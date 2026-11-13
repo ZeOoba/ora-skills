@@ -16,7 +16,7 @@
 # import tools/ora_doc_qc.py, which package_skills.py injects as scripts/ora_doc_qc.py via
 # SHARED_ROOT_DEPS at package time. The suites themselves are written for the dev-checkout
 # layout (lease-form-qc's test_ora_doc_qc_resolves_to_the_repo_root_canonical_copy asserts NO
-# co-located copy exists in the checkout; others read cross-skill fixtures and git history),
+# co-located copy exists in the checkout; others read cross-skill fixtures),
 # where each script's sys.path fallback resolves tools/. So the suites run in place, and the
 # packaged layout is verified separately by `skill_ci_gates.py packaged-layout`, which builds
 # each SHARED_ROOT_DEPS skill with package_skills.package() outside the repo and confirms its
