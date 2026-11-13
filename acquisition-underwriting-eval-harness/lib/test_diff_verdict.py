@@ -2,7 +2,7 @@
 
 Written FIRST (TDD). Fixtures mirror the real golden_set/*.json shape:
 top-level `confidence` and `diff_policy`; scores under `golden`;
-`quality`/`economics`/`category_breakdown` sometimes null; Hamilton-style
+`quality`/`economics`/`category_breakdown` sometimes null; GS-D-style
 breakdowns carry non-numeric `*_flag` entries that must be skipped.
 
 Also loads the 6 real golden files as a smoke check that the engine
@@ -192,7 +192,7 @@ class TestTierInformational(unittest.TestCase):
         self.assertTrue(result["tier_match"])
 
     def test_tier_match_ignores_parenthetical_annotation(self):
-        """REDACTED-148's golden tier is 'KILLED (post-hoc status overwrite, ...)' —
+        """GS-F's golden tier is 'KILLED (post-hoc status overwrite, ...)' —
         normalization compares the label before the parenthetical."""
         golden = make_golden(
             golden_tier="KILLED (post-hoc status overwrite, not a skill verdict band -- see known_gaps)"
@@ -435,7 +435,7 @@ class TestFloorConstantDrift(unittest.TestCase):
     # confidently WRONG drift/stale-fixture verdict rather than the intended "not verified"
     # gap.
     def test_real_golden_file_phrasing_yoc_before_label_parses_correctly(self):
-        # Verbatim shape from golden_set/REDACTED-024.json's floor_result.
+        # Verbatim shape from golden_set/gs-a-flex-grand-rapids-mi.json's floor_result.
         golden = make_golden(floor_result="Yield breached (~6.0-6.9% YoC vs 8.0% floor)")
         result = diff_verdict(
             golden,
@@ -485,16 +485,16 @@ class TestRealGoldenFiles(unittest.TestCase):
         # finding), not the pre-v03 archived Notion scores. Confidence reflects how
         # many scorecard categories that fresh replay left null.
         expected_scored = {
-            "REDACTED-027": False,      # LOW
-            "REDACTED-021": False,    # LOW
-            "REDACTED-031": False,         # LOW
-            "REDACTED-024": True,      # HIGH
+            "gs-f-vacant-industrial-columbus-oh": False,      # LOW
+            "gs-d-net-lease-cincinnati-oh": False,    # LOW
+            "gs-e-single-tenant-industrial-columbus-oh": False,         # LOW
+            "gs-a-flex-grand-rapids-mi": True,      # HIGH
             # Enriched 2026-08-14 (real sourced physical specs, 3-run repeatability
             # check) -- promoted LOW -> MEDIUM. Tenancy & Lease stays null by design
             # (occupancy was a genuine unknown at the 6/9 screen date, not a research
             # gap), so it never reaches HIGH, but MEDIUM is scored=True same as HIGH.
-            "REDACTED-020": True,    # MEDIUM
-            "REDACTED-019": True,  # HIGH
+            "gs-c-industrial-portfolio-columbus-oh": True,    # MEDIUM
+            "gs-b-office-flex-cincinnati-oh": True,  # HIGH
         }
         for f in files:
             golden = json.loads(f.read_text(encoding="utf-8"))

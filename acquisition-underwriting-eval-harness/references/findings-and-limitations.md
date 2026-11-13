@@ -32,7 +32,9 @@ floor (old RCT v02 + 30%/25% ramp → RCT v03 + 65%/60% ramp; SKILL.md's own tex
 
 clears"). The first replay attempt diffed today's doctrine directly against each deal's
 
-pre-recalibration archived Notion score and got large "deltas" on every scored deal (e.g. REDACTED-119's Basis went from clearing comfortably pre-v03 to breaching post-v03, at an unchanged
+pre-recalibration archived Notion score and got large "deltas" on every scored deal (e.g. GS-A
+
+'s Basis went from clearing comfortably pre-v03 to breaching post-v03, at an unchanged
 
 price/SF) — all of them the already-ratified v03 effect, not a regression. **Comparing across a
 
@@ -78,9 +80,9 @@ Motivation, Tenancy & Lease most often) because the input packet — reconstruct
 
 *structured* fields — doesn't capture the physical/site/comp detail the *original* live-tooled
 
-screens evidently had. 2196 REDACTED-119 and REDACTED-069 resolved cleanly (zero nulls) from
+screens evidently had. GS-A and GS-B resolved cleanly (zero nulls) from
 
-the start; REDACTED-059 was enriched 2026-08-14 (Gabriel's request — see "REDACTED-156
+the start; GS-C portfolio was enriched 2026-08-14 (Gabriel's request — see "GS-C
 
 enrichment" below) to 1 null (Tenancy & Lease only). All three are `confidence: HIGH`/`MEDIUM` and
 
@@ -94,19 +96,21 @@ and only pass/fail-gating signal is the Combined-score delta — never the tier 
 
 `golden_set/SCHEMA.md` and each deal's `diff_policy`).
 
-**4. REDACTED-156 enrichment (2026-08-14, Gabriel's request) — closed the Economics-blind-spot.**
+**4. GS-C enrichment (2026-08-14, Gabriel's request) — closed the Economics-blind-spot.**
 
-Before this, both scored deals (REDACTED-119, Liberty) breach both the Basis and Yield floors,
+Before this, both scored deals (GS-A, GS-B) breach both the Basis and Yield floors,
 
 pinning Economics at 0.0 — a future edit to the Basis scale, Yield slope, or RCT top-of-scale would
 
 move neither one unless it flipped a floor from breach to clear, the exact class of edit that
 
-motivated this build. Enriching REDACTED-156's input packet with real, sourced physical specs (REDACTED-107 Co. OM, Crexi listing, Franklin County Auditor CAMA, pre-6/9 Morning Brief pages — full
+motivated this build. Enriching GS-C's input packet with real, sourced physical specs (listing-broker
+
+OM, Crexi listing, County Auditor CAMA, pre-6/9 Morning Brief pages — full
 
 citations in the golden file's `known_gaps`) resolved 6 of 7 scorecard categories and produced a
 
-Basis of 25.0/25 (full points, CapEx-supported) — REDACTED-156 is now `confidence: MEDIUM`, `scored:
+Basis of 25.0/25 (full points, CapEx-supported) — GS-C is now `confidence: MEDIUM`, `scored:
 
 true`, and the harness's only scored deal with nonzero Economics. Tenancy & Lease stays null by
 
@@ -124,13 +128,13 @@ runs independently flagged this as GATE-FLAGGED.
 
 **5. One replay agent can emit two conflicting completions (2026-09-12 scheduled-poll).** The
 
-Hamilton r3 subagent sent two completion notifications under the same task-id with different final
+GS-D r3 subagent sent two completion notifications under the same task-id with different final
 
 json blocks (Combined 15.0, then 11.0). A runner that records the first notification per slot and
 
 moves on would have silently kept 15.0 — nothing in the first result looked wrong. Per Step 2's
 
-never-guess rule both were excluded and Hamilton aggregated at n=2. Guarded by Step 1.5 (wait for
+never-guess rule both were excluded and GS-D aggregated at n=2. Guarded by Step 1.5 (wait for
 
 all completions; differing blocks from one task-id = failed replay). A first draft of that step
 
@@ -150,7 +154,7 @@ the 2026-08-15 re-baseline (see the "Fourth pass" Limitations entry); confidence
 
 of a replay's 7 scorecard categories are null (finding 3), except where a null is structurally
 
-| 470 REDACTED-148 Blvd, Columbus OH | LOW (2-3 nulls, Quality mostly null) | No — informational only | 16.5 (mean of 3, lower-bound run excluded — see caveat below) | **6.0 pts (n=3 clean) — exceeds tolerance** |
+| GS-F, Columbus OH | LOW (2-3 nulls, Quality mostly null) | No — informational only | 16.5 (mean of 3, lower-bound run excluded — see caveat below) | **6.0 pts (n=3 clean) — exceeds tolerance** |
 
 `golden.combined` for every deal is now a repeatability-checked mean, not a single unreplicated
 
@@ -158,11 +162,11 @@ run — the 2026-08-15 rebaseline (Gabriel-directed forced run, see the "Fourth 
 
 entry) extended this to all 6 deals, including the 3 that previously had no repeatability data at
 
-all. REDACTED-119 and REDACTED-148 each exclude one non-comparable sample; Hamilton excludes all four
+all. GS-A and GS-F each exclude one non-comparable sample; GS-D excludes all four
 
 pre-v4.21 runs (rebaselined under v4.21 on 2026-09-12) — see the leakage findings above and each
 
-file's `known_gaps` for why. 470 REDACTED-148's original 20.0-pt
+file's `known_gaps` for why. GS-F's original 20.0-pt
 
 4-run range was NOT ordinary replay noise: it was an artifact of pooling its 2026-08-14 single run
 
@@ -170,9 +174,9 @@ file's `known_gaps` for why. 470 REDACTED-148's original 20.0-pt
 
 full replays — that run is now excluded from the golden per the 2026-09-12 rebaseline (same
 
-treatment as REDACTED-119's and Hamilton's excluded runs), leaving a 3-run 6.0-pt range and golden
+treatment as GS-A's and GS-D's excluded runs), leaving a 3-run 6.0-pt range and golden
 
-Combined of 16.5 — see that file's `known_gaps` for the full rationale. REDACTED-113 Rd's 6.0-pt
+Combined of 16.5 — see that file's `known_gaps` for the full rationale. GS-E's 6.0-pt
 
 range appears to be genuine judgment variance, consistent with its null-heavy input packet. Both
 
@@ -182,7 +186,7 @@ anything, but both are recorded rather than smoothed over.
 
 **Every run gates on the MEAN of 3 replays per deal, never a single draw** (Steps 1–3 below).
 
-This is the direct consequence of the n=6 finding: at the time, REDACTED-119's single-draw range
+This is the direct consequence of the n=6 finding: at the time, GS-A's single-draw range
 
 was 7.0 pts against a 5.0-pt tolerance, so one replay could false-FLAG on noise alone. (That
 
@@ -218,32 +222,36 @@ motivated.** (1) Its `combined_observed` values are SINGLE replays, not 3-replay
 
 mean-of-3 gate was adopted *because* of what that run measured, so it is the last single-draw
 
-run, not an example of current procedure. Under the new gate the same replay data gives REDACTED-119 −1.25 rather than the −4.33 recorded there. (2) Its per-category deltas resolve rather
+run, not an example of current procedure. Under the new gate the same replay data gives GS-A
+
+ −1.25 rather than the −4.33 recorded there. (2) Its per-category deltas resolve rather
 
 than showing `None` only because the runner hand-normalized the display-name keys in a scratch
 
 driver; that normalization now lives in `aggregate_replays.py`, so later snapshots get it
 
-automatically. Its REDACTED-119 and Liberty rows also diff against the pre-rebaseline goldens
+automatically. Its GS-A and GS-B rows also diff against the pre-rebaseline goldens
 
 (29.33 / 28.67).
 
-**2026-11-05 Opus rebaseline (Gabriel-approved in-turn).** REDACTED-119, Liberty and REDACTED-156 now
+**2026-11-05 Opus rebaseline (Gabriel-approved in-turn).** GS-A, GS-B and GS-C now
 equal the mean of 6 `claude-opus-5-5` replays on acquisition-underwriting v4.41: the 2026-10-30
 run on `997fe4b2` plus the 2026-11-05 supervised run on `d7cab49e` (snapshot
 `runs/2026-11-05T212202Z_supervised-v4.41-pre-dec-backtest.json`). Gabriel added the 10-30 run on
 2026-11-06, after an adversarial review found the 11-05 triple alone sat at the edge of the Opus
-evidence. REDACTED-119 26.81 → 30.08, Liberty 28.11 → 29.0, REDACTED-156 56.79 → 52.98, and REDACTED-113 11.75 → 16.67 on the 11-05 run's 3 alone (its 10-30 draws include a 43.0 outlier).
+evidence. GS-A 26.81 → 30.08, GS-B 28.11 → 29.0, GS-C 56.79 → 52.98, and GS-E
+ 11.75 → 16.67 on the 11-05 run's 3 alone (its 10-30 draws include a 43.0 outlier).
 Reason: the 2026-10-05 baseline-model limitation. Every earlier golden sample is recorded as
-a Fable replay, and REDACTED-156 had sat below its Fable golden in all 11 runs since 2026-08-16
+a Fable replay, and GS-C had sat below its Fable golden in all 11 runs since 2026-08-16
 (Seller & Motivation and Value-Add judgment), crossing the tolerance (−5.16) in the last of them, on
 2026-11-05, with no rule change behind it. Fable-era runs stay in each file's
 `repeatability.runs`, tagged `excluded_from_golden`, and each re-baselined golden carries
-`baselined_model`. Hamilton and 470 REDACTED-148 were NOT re-baselined: Opus replays split between
-scoring no Quality category (Combined 0–2) and scoring most of them (up to 26; two 2026-10-16 REDACTED-148 draws of 45
+`baselined_model`. GS-D and GS-F were NOT re-baselined: Opus replays split between
+scoring no Quality category (Combined 0–2) and scoring most of them (up to 26; two 2026-10-16 GS-F draws of 45
 and 55 contradict their own all-null breakdowns), so whether their Combined
-should gate at all is an open decision. The same run explained the unreviewed 2026-09-29 REDACTED-119 FLAG (16.67). That run was a Sonnet 5.5 substitute after all 18 Fable replays hit the
-429 spend limit, and two of its three REDACTED-119 draws left Market & Location and Value-Add
+should gate at all is an open decision. The same run explained the unreviewed 2026-09-29 GS-A
+ FLAG (16.67). That run was a Sonnet 5.5 substitute after all 18 Fable replays hit the
+429 spend limit, and two of its three GS-A draws left Market & Location and Value-Add
 null.
 
 ---
@@ -284,7 +292,7 @@ delta given an IDENTICAL input, which is exactly what a real doctrine edit produ
 
 Found by two mandatory adversarial REFUTE passes (2026-08-14, both Fable-pinned) — the first
 
-against the original 6-deal build, the second against the REDACTED-156 enrichment + scheduled-task
+against the original 6-deal build, the second against the GS-C enrichment + scheduled-task
 
 registration — listed here rather than silently fixed where fixing would have meant fabricating
 
@@ -298,7 +306,7 @@ fixed same-day, plus a full rebaseline:**
 
    live data" list enumerated Notion/market-monitor/web/comp-pull/county-GIS but never named
 
-   local memory files. One 2026-08-15 replay of REDACTED-102 Ave read
+   local memory files. One 2026-08-15 replay of GS-D read
 
    `memory/deal-decision-ledger.md` (visible as an extra tool_use versus every other replay of the
 
@@ -314,11 +322,11 @@ fixed same-day, plus a full rebaseline:**
 
    names the ledger file directly, and instructs replays to treat Stage -1 item 5 (ledger
 
-   precedent check) as NOT PERFORMABLE rather than reading the ledger to answer it. Hamilton's
+   precedent check) as NOT PERFORMABLE rather than reading the ledger to answer it. GS-D's
 
    golden was rebaselined excluding the contaminated sample — see golden_set file — the same
 
-   treatment already established for REDACTED-119's SKILL.md-citation leak (finding 2 below), for
+   treatment already established for GS-A's SKILL.md-citation leak (finding 2 below), for
 
    the same reason: a future clean-prompt replay population no longer contains this failure mode,
 
@@ -328,7 +336,7 @@ fixed same-day, plus a full rebaseline:**
 
    (see "SKILL.md-citation leakage" under Data-quality findings) as a standing, unfixed 1-in-6
 
-   risk on REDACTED-119 specifically, because SKILL.md's own text cites that address by name as a
+   risk on GS-A specifically, because SKILL.md's own text cites that address by name as a
 
    worked validation example. Rather than continuing to just document the risk, the prompt
 
@@ -346,13 +354,13 @@ fixed same-day, plus a full rebaseline:**
 
 3. **Full rebaseline, 2026-08-15.** All 6 goldens updated to the mean of every same-doctrine,
 
-   non-contaminated sample now on file (REDACTED-119 n=8 of 9, excluding the one leaked run;
+   non-contaminated sample now on file (GS-A n=8 of 9, excluding the one leaked run;
 
-   Hamilton n=3 of 4, excluding the one ledger-read run; Liberty n=9; REDACTED-156 n=7 for
+   GS-D n=3 of 4, excluding the one ledger-read run; GS-B n=9; GS-C n=7 for
 
    Combined/Quality/Economics, n=4 for category-level detail — the original 3 baseline runs never
 
-   recorded per-category breakdowns; REDACTED-113 Rd and 470 REDACTED-148 n=4 each — each pools its
+   recorded per-category breakdowns; GS-E and GS-F n=4 each — each pools its
 
    original 2026-08-14 single baseline run with 3 new 2026-08-15 replays, its first-ever
 
@@ -360,19 +368,19 @@ fixed same-day, plus a full rebaseline:**
 
    and `baselined_method`. Both LOW-confidence deals' NEW 2026-08-15 samples came in noisier than
 
-   the scored set on their own (REDACTED-113 Rd's 3 new replays ranged 9.0-15.0; 470 REDACTED-148's
+   the scored set on their own (GS-E's 3 new replays ranged 9.0-15.0; GS-F's
 
    ranged 14.0-20.0), and both files' full n=4 range (6.0 and 20.0 pts respectively) exceeds the
 
    5.0-pt harness-wide tolerance — consistent with their null-heavy input packets; this is
 
-   evidence for, not against, keeping them out of the strict pass/fail gate. 470 REDACTED-148's
+   evidence for, not against, keeping them out of the strict pass/fail gate. GS-F's
 
    20.0-pt range is additionally inflated by its original run being a documented lower-bound
 
    construction rather than a comparable full replay — see that file's `known_gaps`.
 
-**Second REFUTE pass (REDACTED-156 enrichment + scheduled task) — 2 HIGH-severity findings, both
+**Second REFUTE pass (GS-C enrichment + scheduled task) — 2 HIGH-severity findings, both
 
 fixed same-day, not deferred:**
 
@@ -422,13 +430,13 @@ fixed same-day, not deferred:**
 
 window, not "any point in time" — condition-dependent sub-scores and the OM's "active" rail-spur
 
-claim were carved out as NOT covered by the invariance argument); REDACTED-156's repeatability stdev
+claim were carved out as NOT covered by the invariance argument); GS-C's repeatability stdev
 
 used population variance (0.85) where the other two HIGH-confidence deals used sample variance —
 
 corrected to 1.04 for consistency; `SCHEMA.md` updated to document the irreducible-null vs.
 
-recoverable-gap distinction that got REDACTED-156 to MEDIUM; a P(exec) mean-of-3-discrete-bands value
+recoverable-gap distinction that got GS-C to MEDIUM; a P(exec) mean-of-3-discrete-bands value
 
 flagged as informational-only, not a real band placement.
 
@@ -436,9 +444,9 @@ flagged as informational-only, not a real band placement.
 
   on the 2 HIGH-confidence deals (identical frozen inputs, identical doctrine, 3 independent
 
-  subagent replays each) found a 4.5-point Combined-score range on REDACTED-119 and a 1.0-point
+  subagent replays each) found a 4.5-point Combined-score range on GS-A and a 1.0-point
 
-  range on Liberty — see each deal's `repeatability` block in `golden_set/*.json`. The original
+  range on GS-B — see each deal's `repeatability` block in `golden_set/*.json`. The original
 
   3.0-pt tolerance would have produced false FLAGs from LLM run-to-run noise alone. Tolerance
 
@@ -454,15 +462,15 @@ latent defects surfaced on the first real diff:**
 
 1. **n=3 understated the noise; the fix is averaging, not a wider tolerance.** The scheduled-poll
 
-   run added 3 more replays per HIGH deal. At n=6, REDACTED-119's range is **7.0 pts** (samples
+   run added 3 more replays per HIGH deal. At n=6, GS-A's range is **7.0 pts** (samples
 
    25.0/27.0/27.5/28.5/28.5/32.0, stdev 2.31) — it EXCEEDS the 5.0-pt tolerance, so two honest
 
-   same-doctrine replays could false-FLAG each other. Liberty (2.0 pts, n=6) and REDACTED-156 (2.0
+   same-doctrine replays could false-FLAG each other. GS-B (2.0 pts, n=6) and GS-C (2.0
 
    pts, n=4) are tight; the noise is concentrated in one deal. Response (Gabriel-ratified): (a)
 
-   REDACTED-119's golden rebaselined to the n=6 mean **28.08** (was 29.33), and (b) **every run
+   GS-A's golden rebaselined to the n=6 mean **28.08** (was 29.33), and (b) **every run
 
    now gates on the mean of 3 replays** via `lib/aggregate_replays.py`, which cuts that mean's
 
@@ -502,7 +510,7 @@ latent defects surfaced on the first real diff:**
 
    golden-set category key is a reachable normalization target.
 
-4. **Concurrency hazard, observed live.** A concurrent session rebaselined REDACTED-156's golden
+4. **Concurrency hazard, observed live.** A concurrent session rebaselined GS-C's golden
 
    mid-run (LOW/47.0 → MEDIUM/57.17), so replays launched against the old input packet diffed
 
@@ -516,7 +524,7 @@ latent defects surfaced on the first real diff:**
 
 - **SKILL.md-citation leakage on named-example deals — MITIGATED 2026-08-15 (was: unfixed
 
-  standing risk).** REDACTED-119 is cited by address in SKILL.md's own text as the worked
+  standing risk).** GS-A is cited by address in SKILL.md's own text as the worked
 
   validation example for the price-watch trigger. The original baseline run (measured at n=6)
 
@@ -536,7 +544,7 @@ latent defects surfaced on the first real diff:**
 
   replay prompt itself can instruct the subagent to disregard SKILL.md's own narrative discussion
 
-  of the exact frozen address. The leaked sample was excluded from REDACTED-119's golden
+  of the exact frozen address. The leaked sample was excluded from GS-A's golden
 
   (rebaselined to n=8 of 9, see golden_set file) on the same reasoning already used for the
 
@@ -544,13 +552,15 @@ latent defects surfaced on the first real diff:**
 
   draw, so the golden should reflect the corrected process. No golden deal in this set other than
 
-  REDACTED-119 has ever shown this failure mode (checked: none of the others are cited by address
+  GS-A has ever shown this failure mode (checked: none of the others are cited by address
 
-  in SKILL.md) — the fix is general (any future self-citing deal is covered), but only REDACTED-119 has evidence either way.
+  in SKILL.md) — the fix is general (any future self-citing deal is covered), but only GS-A
+
+   has evidence either way.
 
 - **RESOLVED 2026-08-14 — the strict-scoring gate could not previously see an Economics-side
 
-  doctrine edit.** Both HIGH deals (REDACTED-119, Liberty) breach both the Basis and Yield floors,
+  doctrine edit.** Both HIGH deals (GS-A, GS-B) breach both the Basis and Yield floors,
 
   pinning Economics at 0.0 in every run; a future edit to the Basis linear scale, the Yield slope,
 
@@ -558,15 +568,15 @@ latent defects surfaced on the first real diff:**
 
   from breach to clear — the exact class of edit (a replacement-cost/floor recalibration) that
 
-  motivated this whole build. Closed by enriching REDACTED-156's input packet with real, sourced
+  motivated this whole build. Closed by enriching GS-C's input packet with real, sourced
 
-  physical facts (see "REDACTED-156 enrichment" above) rather than sourcing a new 7th golden deal —
+  physical facts (see "GS-C enrichment" above) rather than sourcing a new 7th golden deal —
 
-  REDACTED-156 is now `scored: true` with Basis 25.0/25 (full points), the harness's only scored deal
+  GS-C is now `scored: true` with Basis 25.0/25 (full points), the harness's only scored deal
 
   with nonzero Economics. **Residual gap:** this closes the blind spot for edits that move the
 
-  Basis scale/RCT floor near REDACTED-156's 90%+ discount (still comfortably clear of the ≥76%
+  Basis scale/RCT floor near GS-C's 90%+ discount (still comfortably clear of the ≥76%
 
   top-of-scale threshold, so a moderate recalibration might not move it either) — a broader edit
 
@@ -634,15 +644,15 @@ latent defects surfaced on the first real diff:**
 
   2-3 of 7 scorecard categories null in the replay) — a 4th scored golden deal (beyond the 3 now
 
-  scored: REDACTED-119, Liberty, REDACTED-156) would further strengthen the strict-scoring set; none of
+  scored: GS-A, GS-B, GS-C) would further strengthen the strict-scoring set; none of
 
-  the remaining 3 candidates (Hamilton, REDACTED-113 Rd, 470 REDACTED-148) currently have complete
+  the remaining 3 candidates (GS-D, GS-E, GS-F) currently have complete
 
-  enough facts to enrich the same way REDACTED-156 was (confirmed via the same research pass that
+  enough facts to enrich the same way GS-C was (confirmed via the same research pass that
 
-  enriched REDACTED-156, 2026-08-14 — Hamilton and 470 REDACTED-148 both lack any NOI/price basis at all,
+  enriched GS-C, 2026-08-14 — GS-D and GS-F both lack any NOI/price basis at all,
 
-  not just physical specs; REDACTED-113 Rd's underlying arithmetic inconsistency, per finding 2
+  not just physical specs; GS-E's underlying arithmetic inconsistency, per finding 2
 
   above, is a deeper archive problem physical enrichment wouldn't fix).
 

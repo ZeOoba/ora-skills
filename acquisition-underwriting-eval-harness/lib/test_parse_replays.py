@@ -146,7 +146,7 @@ class TestParseTranscript(unittest.TestCase):
         self.assertEqual(t["result"]["combined"], 15.0)
 
     def test_two_completions_differing_blocks_is_a_failure(self):
-        # Data-quality finding 5: Hamilton r3, 2026-09-12 (15.0 then 11.0).
+        # Data-quality finding 5: GS-D r3, 2026-09-12 (15.0 then 11.0).
         p = _write_agent(self.d, "a6", _prompt(GOLDEN_INPUTS), [
             _assistant(_block(_result(15.0)), "req1", "end_turn"),
             {"type": "user", "message": {"role": "user", "content": "resume"}},

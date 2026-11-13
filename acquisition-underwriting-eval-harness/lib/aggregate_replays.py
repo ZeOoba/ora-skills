@@ -1,7 +1,7 @@
 """Aggregate N independent frozen replays of ONE golden deal into a single observed result.
 
 Why this exists (2026-08-14, n=6 repeatability finding): a single frozen replay is
-not a stable measurement. Six independent replays of 2196 REDACTED-119 under
+not a stable measurement. Six independent replays of GS-A under
 IDENTICAL inputs and IDENTICAL doctrine spanned 25.0-32.0 Combined -- a 7.0-point
 range that exceeds the harness's own 5.0-point tolerance. Gating on one sample
 therefore risks both false FLAGs (noise read as doctrine drift) and false PASSes.

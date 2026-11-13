@@ -84,9 +84,9 @@ Sources (2026-09-23): count / SF / tenants / markets = Gabriel-confirmed outboun
 ## Letter file naming
 
 - Outbound LOI: `LOI [Property Street] [City] [State Abbr] [M.D.YYYY].docx`
-  - Example: `LOI REDACTED-113 Rd Gahanna OH 5.14.2026.docx`
+  - Example: `LOI 100 Example Way Anytown OH 5.14.2026.docx`
 - Internal versioning (during drafting): `YYYYMMDD_[PropertyShortName]_LOI_v##.docx`
-  - Example: `20260514_REDACTED-114-Rd_LOI_v05.docx`
+  - Example: `20260514_100-Example-Way_LOI_v05.docx`
 - The outbound name is what ships to the broker; the internal versioned name is for ORA workspace history
 
 ## Deal-size-adjusted defaults (from SKILL.md Decision Rule 6)

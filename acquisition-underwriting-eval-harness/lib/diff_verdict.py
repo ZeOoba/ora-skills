@@ -10,7 +10,8 @@ by this module — as of the 2026-08-14 rebaseline they are themselves a fresh
 replay's own output (see each golden file's `baselined_date`), not an
 external archive, so there is nothing to reconcile here. The ORIGINAL
 Notion-archived pre-rebaseline scores (where they carried their own internal
-arithmetic inconsistencies, e.g. quality + economics != combined on the REDACTED-113 Rd and REDACTED-069 rows) live under the sibling key
+arithmetic inconsistencies, e.g. quality + economics != combined on the GS-E
+and GS-B rows) live under the sibling key
 `archived_pre_v03_reference` and are never read by this module.
 """
 
@@ -72,8 +73,8 @@ _POSITIONAL_PCT_RE = re.compile(r"(\d+(?:\.\d+)?)%\s*(?:\bYo?C\b\s*)?(?:vs\.?|ag
 
 # Real floor_result prose always separates distinct metric assertions (Basis / YoC / DSCR
 # / IRR) with a semicolon -- confirmed across every golden file, including cases where
-# "and" joins two metrics' prose within a single semicolon-delimited segment (e.g. 1333
-# REDACTED-128's "...vs 65% vintage-ramp floor (...) and YoC ~6.5% vs 8.0% floor..."). A
+# "and" joins two metrics' prose within a single semicolon-delimited segment (e.g.
+# GS-E's "...vs 65% vintage-ramp floor (...) and YoC ~6.5% vs 8.0% floor..."). A
 # FIXED CHARACTER WINDOW around a label mention (the prior approach) can still reach past
 # that semicolon into an unrelated clause -- on "Basis 75.0% vs 65% floor; YoC 10.96% vs
 # 8%", a window centered on "YoC" easily spans back into the Basis clause, and
@@ -86,7 +87,7 @@ _POSITIONAL_PCT_RE = re.compile(r"(\d+(?:\.\d+)?)%\s*(?:\bYo?C\b\s*)?(?:vs\.?|ag
 #
 # KNOWN RESIDUAL LIMITATION (2026-08-22 re-review): this does not fully close the same bug
 # class WITHIN one semicolon-delimited clause. All 6 real golden files that join Basis and
-# YoC prose with "and" instead of ';' (e.g. REDACTED-113 Rd's "...vs 65% vintage-ramp
+# YoC prose with "and" instead of ';' (e.g. GS-E's "...vs 65% vintage-ramp
 # floor (...) and YoC ~6.5% vs 8.0% floor...") parse correctly today only because their
 # Basis text has a word (e.g. "discount", "vintage-ramp") sitting between a number and the
 # vs/floor keyword, which breaks _POSITIONAL_PCT_RE's adjacency requirement. A future
@@ -206,7 +207,7 @@ def _is_number_or_none(value):
 def _normalize_tier(tier):
     """Normalize a tier label for informational comparison.
 
-    Strips any trailing parenthetical annotation (REDACTED-148's archived tier is
+    Strips any trailing parenthetical annotation (GS-F's archived tier is
     'KILLED (post-hoc status overwrite, ...)'), then compares casefolded.
     Returns None for non-string/empty input.
     """
@@ -219,7 +220,7 @@ def _normalize_tier(tier):
 def _category_deltas(golden_bd, observed_bd):
     """Per-category observed-minus-golden deltas, or None if either side absent.
 
-    Only numeric golden entries are diffed (Hamilton's breakdown carries
+    Only numeric golden entries are diffed (GS-D's breakdown carries
     non-numeric '*_flag' annotation entries — skipped). A golden category
     missing or non-numeric on the observed side maps to None so the reader
     sees the gap rather than a silent omission.

@@ -15,7 +15,7 @@ These are the tokens that appear in the master template. The skill is responsibl
 | `{{PURCHASE_PRICE_NUMERIC}}` | `1,400,000.00` | Same |
 | `{{EMD_WORDS}}` | `One Hundred Thousand and 00/100` | User or ORA standard |
 | `{{EMD_NUMERIC}}` | `100,000.00` | Same |
-| `{{EMD_DUE_DAYS_WORDS}}` | `two (2)` | Deposit due window after PSA execution — DEFAULT two (2) for all-cash certainty signaling; SINGLE SOURCE: feeds §1 AND any PSA-deferral mention. Root cause of the 470 REDACTED-148 §1-vs-§10 conflict |
+| `{{EMD_DUE_DAYS_WORDS}}` | `two (2)` | Deposit due window after PSA execution — DEFAULT two (2) for all-cash certainty signaling; SINGLE SOURCE: feeds §1 AND any PSA-deferral mention. Root cause of the GS-F §1-vs-§10 conflict |
 
 ### Time periods (all phrased as `[word] (digit)`)
 | Token | Example |
@@ -29,36 +29,36 @@ These are the tokens that appear in the master template. The skill is responsibl
 ### Property
 | Token | Example |
 |---|---|
-| `{{PROPERTY_STREET_ADDRESS}}` | `1333 REDACTED-112` |
-| `{{PROPERTY_CITY}}` | `Gahanna` |
+| `{{PROPERTY_STREET_ADDRESS}}` | `100 Example Way` |
+| `{{PROPERTY_CITY}}` | `Anytown` |
 | `{{PROPERTY_STATE_FULL}}` | `Ohio` |
 | `{{PROPERTY_STATE_ABBR}}` | `OH` |
-| `{{PROPERTY_ZIP}}` | `43230` |
-| `{{PROPERTY_COUNTY}}` | `Franklin County` |
-| `{{PROPERTY_SF}}` | `19,018` |
-| `{{PROPERTY_ACRES}}` | `2.46` |
+| `{{PROPERTY_ZIP}}` | `43000` |
+| `{{PROPERTY_COUNTY}}` | `Example County` |
+| `{{PROPERTY_SF}}` | `20,000` |
+| `{{PROPERTY_ACRES}}` | `2.00` |
 | `{{PROPERTY_USE_TYPE}}` | `industrial` or `industrial / warehouse` or `flex` |
 | `{{PROPERTY_TENANCY_PHRASE}}` | `vacant` / `single-tenant` / `multi-tenant` |
 | `{{PROPERTY_ZONING_PHRASE}}` | `zoned M2 Manufacturing` — VERBATIM from the OM/listing. Body sentence reads "...acres of land {{PROPERTY_ZONING_PHRASE}}", so the value should read naturally after "land" (e.g. `zoned M2 Manufacturing`, `zoned CC`). Never invent a designation not in the marketing materials or a verified GIS pull — if unknown, ask rather than defaulting to a generic phrase. |
 | `{{ENTITY_INTEREST_TYPE}}` | `membership interests` / `equity interests` / `partnership interests` per Decision Rule 0 |
-| `{{PROPERTY_JURISDICTION_PHRASE}}` | `the City of Gahanna and Franklin County` |
+| `{{PROPERTY_JURISDICTION_PHRASE}}` | `the City of Anytown and Example County` |
 | `{{KNOWN_CONDITION_CARVEOUT}}` | `(except for the roof, which the parties acknowledge is approximately twenty-one (21) years old and approaching the end of its useful life)` or empty |
 
 ### Seller / broker
 | Token | Example |
 |---|---|
-| `{{SELLER_ENTITY_NAME}}` | `REDACTED-064 CO LLC` (preserve original capitalization) |
-| `{{SELLER_BROKER_FULL_NAME}}` | `David REDACTED-164` |
-| `{{SELLER_BROKER_FIRM}}` | `REDACTED-046 Real Estate Group` |
-| `{{SELLER_BROKER_ADDRESS_1}}` | `8800 REDACTED-130, Suite 600` |
-| `{{SELLER_BROKER_ADDRESS_2}}` | `Columbus, Ohio 43240` |
-| `{{SELLER_BROKER_SALUTATION}}` | `David` |
+| `{{SELLER_ENTITY_NAME}}` | `EXAMPLE SELLER HOLDINGS CO LLC` (preserve original capitalization) |
+| `{{SELLER_BROKER_FULL_NAME}}` | `[Broker Name]` |
+| `{{SELLER_BROKER_FIRM}}` | `Example Brokerage Group` |
+| `{{SELLER_BROKER_ADDRESS_1}}` | `200 Example Ave, Suite 100` |
+| `{{SELLER_BROKER_ADDRESS_2}}` | `Anytown, Ohio 43000` |
+| `{{SELLER_BROKER_SALUTATION}}` | `[First Name]` |
 
 ### Tenant (only if conditional §8 / §10 fires)
 | Token | Example |
 |---|---|
-| `{{TENANT_NAME}}` | `REDACTED-047, LLC` |
-| `{{TENANT_DISCLOSURE_PHRASE}}` | Arm's-length: `, leased to REDACTED-047, LLC (the "Tenant")`. Affiliated: `, leased to REDACTED-047, LLC, an affiliate of Seller`. Never end in a trailing comma — a period follows immediately in the template. |
+| `{{TENANT_NAME}}` | `Example Tenant Contracting, LLC` |
+| `{{TENANT_DISCLOSURE_PHRASE}}` | Arm's-length: `, leased to Example Tenant Contracting, LLC (the "Tenant")`. Affiliated: `, leased to Example Tenant Contracting, LLC, an affiliate of Seller`. Never end in a trailing comma — a period follows immediately in the template. |
 
 ### Buyer signatory
 | Token | Example |
