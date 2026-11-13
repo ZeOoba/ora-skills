@@ -27,6 +27,10 @@ BLOCK = ("---\nname: demo-skill\ndescription: >\n  Use when the user says \"go\"
 # flattened to one double-quoted line, inner quotes escaped, trailing \n kept as an escape.
 FLAT = ('---\nname: "demo-skill"\ndescription: "Use when the user says \\"go\\": run it, then report.\\n"\n'
         'license: X\n---\n\n# demo\nbody\n')
+# parcel-data-recovery, 2026-11-13: the repo copy opens with a blank line after the fence;
+# the platform drops it and quotes `name` on install.
+PDR_REPO = '---\n\nname: demo-skill\ndescription: "Recover county parcel data."\n---\n\n# demo\nbody\n'
+PDR_CACHE = '---\nname: "demo-skill"\ndescription: "Recover county parcel data."\n---\n\n# demo\nbody\n'
 
 
 class NormalizerTreatsSerializationAsSame(unittest.TestCase):
@@ -76,6 +80,19 @@ class NormalizerTreatsSerializationAsSame(unittest.TestCase):
     def test_body_text_untouched(self):
         self.assertNotEqual(N(BLOCK), N(BLOCK.replace("body\n", "body  changed\n")))
 
+    def test_blank_line_after_opening_fence_is_serialization(self):
+        # 2026-11-13, parcel-data-recovery: repo `---\n\nname: x`, install `---\nname: "x"`.
+        self.assertEqual(N(PDR_REPO), N(PDR_CACHE))
+        self.assertEqual(N('---\n \t\n\nname: x\n---\nb\n'), N('---\nname: x\n---\nb\n'))
+
+    def test_blank_line_between_keys_still_counts(self):
+        # Only the LEADING run is serialization; nothing else in the frontmatter moves.
+        self.assertNotEqual(N('---\nname: x\n\nlicense: a\n---\nb\n'),
+                            N('---\nname: x\nlicense: a\n---\nb\n'))
+
+    def test_leading_blank_line_does_not_hide_a_changed_value(self):
+        self.assertNotEqual(N(PDR_REPO), N(PDR_CACHE.replace('Recover county', 'Recover state')))
+
 
 class ClassifyIgnoresRuntimeStateAndFormatting(FixtureTestCase):
     def test_run_state_in_the_cache_is_never_bundled_so_never_flagged(self):
@@ -110,6 +127,14 @@ class ClassifyIgnoresRuntimeStateAndFormatting(FixtureTestCase):
     def test_platform_flattened_frontmatter_reads_in_sync(self):
         _commit(self.repo, 'demo-skill/SKILL.md', BLOCK, 'init')
         _write(self.cache / 'demo-skill' / 'SKILL.md', FLAT)
+        verdict, _ = rfc.classify_skill('demo-skill', self.repo, self.cache)
+        self.assertEqual(verdict, 'IN-SYNC')
+
+    def test_dropped_leading_blank_line_reads_in_sync_not_divergent(self):
+        # The live false DIVERGENT: a branch commit without the blank line existed, so the
+        # cache's form matched an off-ancestry commit instead of HEAD.
+        _commit(self.repo, 'demo-skill/SKILL.md', PDR_REPO, 'init')
+        _write(self.cache / 'demo-skill' / 'SKILL.md', PDR_CACHE)
         verdict, _ = rfc.classify_skill('demo-skill', self.repo, self.cache)
         self.assertEqual(verdict, 'IN-SYNC')
 

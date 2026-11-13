@@ -160,6 +160,16 @@ def _normalize_frontmatter(fm: str) -> str:
     # sides. Accepted cost: for that one key, a change that is purely whitespace,
     # line breaks or chomping compares equal. Any changed word still differs, and
     # literal `|` blocks and every other key are compared exactly as before.
+    #
+    # Leading blank lines (2026-11-13): the platform DROPS blank lines between the
+    # opening `---` fence and the first key on install. parcel-data-recovery's repo
+    # SKILL.md opened `---\n\nname: ...`; its correct install read `---\nname: "..."`,
+    # so postclick said CONTENT-MISMATCH and repo_first_check said DIVERGENT (the
+    # dropped-line form matched an unrelated off-branch commit) for an install whose
+    # YAML meant exactly the same thing. A blank line before the first key carries no
+    # YAML meaning, so it is serialization, not drift. Only the LEADING run is
+    # dropped: a blank line between keys, or inside a block scalar, is untouched.
+    fm = re.sub(r'\A(?:[ \t]*\n)+', '', fm)
     out = []
     lines = fm.split('\n')
     i = 0
