@@ -102,7 +102,7 @@ def main(argv=None) -> int:
               f"{_usd(res['max_premium_over_sum'])} · **Portfolio walk {_usd(res['portfolio_walk_price'])}** "
               f"(IRR floor {_pct(res['portfolio_irr_floor'])}; blended-YoC cap {_usd(res['max_price_blended_yoc'])}, "
               f"IRR cap {_usd(res['max_price_portfolio_irr'])})")
-        print(f"\nPremium allocation: {res['allocation_method']} (SKILL.md:103)")
+        print(f"\nPremium allocation: {res['allocation_method']} (SKILL.md STAGE 1 Portfolios)")
         print("\n| Building | Walk | Premium share | Allocated | Floors breached |\n|---|---:|---:|---:|---|")
         for al in res["allocation"]:
             print(f"| {al['name']} | {_usd(al['walk'])} | {_usd(al['premium_share'])} | "
