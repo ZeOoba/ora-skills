@@ -133,6 +133,8 @@ from pending_reimport import (  # noqa: E402
     cache_digest, event_log_blocks, logged_install_entry, write_recorded_install,
 )
 
+import reimport_claims as _claims  # noqa: E402
+
 ALREADY_RECORDED_RC = 3     # postclick: nothing to do, the install is already logged
 
 # The PRIMARY checkout's _staging/, never a worktree's: a baseline taken during a
@@ -863,6 +865,13 @@ def cmd_precheck(pkgs: list[str]) -> int:
             pkg_files = _package_manifest(p, skill)
         except (OSError, zipfile.BadZipFile, KeyError):
             pkg_version = pkg_files = None     # no readable SKILL.md: already a FAIL above
+        if not fails:
+            # Claim the reimport for this session from the pre-check to the log entry
+            # (tools/reimport_claims.py; 2026-11-13 double-log). Another session's live
+            # claim is a FAIL: that session is installing and logging this skill.
+            blocker = _claims.claim(skill, 'Entry point B: precheck -> Save skill -> postclick')
+            if blocker:
+                fails.append(blocker)
         note = _refresh_stale_baseline(skill)
         if note is not None:
             base_note = note
@@ -1080,6 +1089,13 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
     if no_append:
         print('CONFIRMED (--no-append: event log untouched).')
         return 0
+    holder = _claims.foreign_holder(skill)
+    if holder:
+        # 2026-11-13: two sessions logged the same 13 installs. The session holding the
+        # reimport claim logs it; a verify here is fine, a second log entry is not.
+        print('STOP: ' + _claims.describe(skill, holder) + ' Nothing appended, ledger and '
+              'baseline untouched.')
+        return 1
     vtxt = f' v{_norm_ver(version)}' if version else ''
     today = datetime.now().strftime('%Y-%m-%d')
     ef = REPO / '_staging' / f'_eventlog_entry_{skill}.md'
@@ -1098,6 +1114,7 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
         return 1
     print('event log appended (exit 0).')
     mark_logged(skill, snapshot, header, r.stdout + r.stderr)
+    _claims.release(skill)                # logged: this session's reimport is done
     consume_failed = 0
     try:
         consume_baseline(skill)

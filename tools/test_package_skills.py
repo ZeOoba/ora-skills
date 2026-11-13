@@ -39,8 +39,10 @@ from package_skills import (  # noqa: E402  (deliberate: needs the path bootstra
     _staged_content,
     check_named_counts,
     check_staged,
+    check_staged_artifacts,
     check_tree_hygiene,
     is_bundled,
+    staged_artifact_violations,
     resolve_outdir_collision,
     skill_source_files,
     staged_skill_dirs,
@@ -458,6 +460,64 @@ class CheckStagedLiveGitIndex(unittest.TestCase):
         )
         rc, _ = self._run_check()
         self.assertEqual(rc, 0, 'must validate the staged blob, not the dirtied working tree')
+
+
+class StagedArtifactCheck(unittest.TestCase):
+    """Pre-commit Check 6 (2026-11-13): a packaged .skill/.plugin or an rct-table* file must
+    never be committed -- ora-skills is public and the packages carry the private RCT table."""
+
+    def test_packages_and_rct_tables_blocked_anywhere_including_staging(self):
+        bad = ['_staging/handoff/x/acquisition-underwriting.skill', '_archive/a/b.plugin',
+               'rct-table.local.json', 'acquisition-underwriting/rct-table.local.json.bak',
+               'x/y.skill.bak', 'deep/RCT-TABLE.json', 'Z.SKILL']
+        self.assertEqual(staged_artifact_violations(bad), bad)
+
+    def test_synthetic_fixture_and_lookalike_names_pass(self):
+        ok = ['acquisition-underwriting/scripts/fixtures/rct-table.synthetic.json',
+              'README.md', 'daily-brief/SKILL.md', 'docs/skills.md', 'tools/plugin_util.py',
+              'tools/build_plugin.py', 'x/skill.md', 'notes/about-rct-table.md']
+        self.assertEqual(staged_artifact_violations(ok), [])
+
+    def test_backslash_paths_are_normalized(self):
+        self.assertEqual(staged_artifact_violations(['_archive\\x\\a.skill']), ['_archive/x/a.skill'])
+
+    def test_exit_codes_and_message(self):
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            self.assertEqual(check_staged_artifacts(files=['_archive/a.skill']), 1)
+        self.assertIn('PUBLIC', buf.getvalue())
+        self.assertEqual(check_staged_artifacts(files=['README.md']), 0)
+
+
+class StagedArtifactCheckLiveIndex(unittest.TestCase):
+    """Exercises the real `git diff --cached` path with a FORCE-added .skill -- the exact way
+    .gitignore is bypassed -- inside THIS worktree's repo, cleaned up even on failure."""
+
+    FIXTURE = '_fixture-artifact-check'
+
+    def setUp(self):
+        self.d = REPO / self.FIXTURE
+        self.d.mkdir(exist_ok=True)
+        (self.d / 'demo.skill').write_bytes(b'PK\x05\x06' + b'\0' * 18)
+
+    def tearDown(self):
+        subprocess.run(['git', '-C', str(REPO), 'reset', '-q', '--', self.FIXTURE], capture_output=True)
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def test_force_added_package_is_blocked(self):
+        subprocess.run(['git', '-C', str(REPO), 'add', '-f', f'{self.FIXTURE}/demo.skill'], check=True)
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            self.assertEqual(check_staged_artifacts(), 1)
+        self.assertIn(f'{self.FIXTURE}/demo.skill', buf.getvalue())
+
+    def test_untracked_ignored_package_does_not_block(self):
+        # On disk but not staged (the normal _archive/_staging state): not this check's job.
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            rc = check_staged_artifacts()
+        self.assertNotIn(f'{self.FIXTURE}/demo.skill', buf.getvalue())
+        self.assertEqual(rc, 0, buf.getvalue())
 
 
 class CheckStaged(unittest.TestCase):
