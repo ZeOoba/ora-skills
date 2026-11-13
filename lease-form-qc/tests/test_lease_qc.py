@@ -26,7 +26,7 @@ fallback, and a hard UNREADABLE floor) and reads meta["footer"] directly.
 THE PARITY TEST IS THE CENTRE OF THIS FILE
 ------------------------------------------
 _original_text_of() and _ORIGINAL_CHECKS below are FROZEN VERBATIM COPIES of
-the pre-retrofit implementation (worktree commit 5a8a98f). They exist only so
+the pre-retrofit implementation (worktree commit 1f033d8). They exist only so
 the tests can evaluate every one of the 51 original checks the OLD way and the
 NEW way over the same fixtures and assert the verdicts match. They are
 reference oracles for equivalence testing — never import them, never let them
@@ -83,11 +83,11 @@ from ora_doc_qc import extract, norm                           # noqa: E402
 
 
 # --------------------------------------------------------------------------
-# Frozen pre-retrofit reference oracle (commit 5a8a98f). Do not modify.
+# Frozen pre-retrofit reference oracle (commit 1f033d8). Do not modify.
 # --------------------------------------------------------------------------
 
 def _original_text_of(path):
-    """VERBATIM copy of lease_qc.text_of() as of 5a8a98f. Reference only."""
+    """VERBATIM copy of lease_qc.text_of() as of 1f033d8. Reference only."""
     if path.lower().endswith('.docx'):
         with zipfile.ZipFile(path) as z:
             xml = z.read('word/document.xml').decode('utf-8', 'replace')
@@ -117,7 +117,7 @@ def _orig_defined(t, term):
     return bool(re.search(_OQ + r'\s*' + term + r'\s*' + _OQ + r'\s*(shall\s+)?means?\b', t))
 
 
-# The 51 pre-retrofit (id, test) pairs, lambdas copied verbatim from 5a8a98f.
+# The 51 pre-retrofit (id, test) pairs, lambdas copied verbatim from 1f033d8.
 _ORIGINAL_CHECKS = [
     ("A1", lambda t: len({z for z in re.findall(r'\b4\d{4}\b', t)} - {'43215'}) > 1),
     ("A6", lambda t: not re.search(r'reconcil', t, re.I)),
@@ -810,7 +810,7 @@ class TestRegistryAndCli(TempDirCase):
 
     def test_severities_match_the_frozen_original(self):
         src = subprocess.run(
-            ["git", "show", "5a8a98f:lease-form-qc/scripts/lease_qc.py"],
+            ["git", "show", "1f033d8:lease-form-qc/scripts/lease_qc.py"],
             cwd=str(REPO), capture_output=True, text=True, encoding="utf-8")
         self.assertEqual(src.returncode, 0, src.stderr)
         old_sev = dict(re.findall(r'\("([A-Z0-9a-z]+)","(BLOCK|HIGH|MED|LOW)"', src.stdout))
@@ -821,7 +821,7 @@ class TestRegistryAndCli(TempDirCase):
 
     def test_titles_match_the_frozen_original(self):
         src = subprocess.run(
-            ["git", "show", "5a8a98f:lease-form-qc/scripts/lease_qc.py"],
+            ["git", "show", "1f033d8:lease-form-qc/scripts/lease_qc.py"],
             cwd=str(REPO), capture_output=True, text=True, encoding="utf-8")
         old_titles = dict(re.findall(r'\("([A-Z0-9a-z]+)","(?:BLOCK|HIGH|MED|LOW)","([^"]+)"',
                                      src.stdout))
