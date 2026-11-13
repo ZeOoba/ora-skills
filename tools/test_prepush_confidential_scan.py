@@ -1071,5 +1071,175 @@ class Units(unittest.TestCase):
         self.assertEqual(scan.main(stdin_text="", roster=p), 0)
 
 
+class PlantedInterpreter(unittest.TestCase):
+    """A python planted in the worktree must never stand in for the real one. git runs the
+    hook in the worktree root, so '.', an empty or relative entry, the worktree itself (or a
+    case variant), a '..' entry or a junction/symlink INTO a worktree subdirectory on PATH
+    would otherwise resolve the bare name `python` to the planted copy (refute run
+    wf_39e200e8-462). Every case is a real `git push`."""
+
+    def setUp(self):
+        self.sb = Sandbox(ROSTER)
+        self.marker = os.path.join(self.sb.root, "planted-python-ran")
+        self.real = os.path.dirname(os.path.abspath(sys.executable))
+
+    def tearDown(self):
+        self.sb.close()
+
+    def plant(self, d):
+        os.makedirs(d, exist_ok=True)
+        body = "#!/bin/sh\necho ran >> '%s'\nexit 0\n" % self.marker.replace("\\", "/")
+        for n in ("python", "python3", "py"):
+            path = os.path.join(d, n)
+            with open(path, "w", newline="\n") as f:
+                f.write(body)
+            os.chmod(path, 0o755)
+
+    def link_dir(self, link, target, junction):
+        if junction:
+            if os.name != "nt":
+                self.skipTest("junctions are Windows-only")
+            p = subprocess.run(["cmd", "/c", "mklink", "/J", link, target], capture_output=True)
+            if p.returncode != 0:
+                self.skipTest("mklink /J failed: %r" % p.stderr)
+        else:
+            try:
+                os.symlink(target, link, target_is_directory=True)
+            except (OSError, NotImplementedError) as e:
+                self.skipTest("symlinks unavailable: %s" % e)
+
+    def set_path(self, *front):
+        self.sb.env["PATH"] = os.pathsep.join(list(front) + [self.real, os.environ.get("PATH", "")])
+
+    def assertBlockedByRealScan(self, rc, err):
+        self.assertNotEqual(rc, 0, "push should have been blocked:\n" + err)
+        self.assertIn("pre-push BLOCKED", err)
+        self.assertFalse(os.path.exists(self.marker), "the planted python ran:\n" + err)
+        self.assertNotIn(TERM.lower(), err.lower(), "a roster term was echoed")
+
+    def push_term_with_path(self, *front):
+        self.set_path(*front)
+        self.sb.commit("deal.md", "memo for %s\n" % TERM)
+        self.assertBlockedByRealScan(*self.sb.push())
+
+    def test_dot_first_on_path_runs_real_scanner(self):
+        self.plant(self.sb.work)
+        self.push_term_with_path(".")
+
+    def test_empty_and_relative_entries_are_dropped(self):
+        self.plant(self.sb.work)
+        self.plant(os.path.join(self.sb.work, "bin"))
+        self.push_term_with_path("", "bin", "./bin")
+
+    def test_absolute_worktree_entry_and_case_variant_are_dropped(self):
+        sub = os.path.join(self.sb.work, "sub")
+        self.plant(self.sb.work)
+        self.plant(sub)
+        front = [self.sb.work, sub]
+        if os.name == "nt":
+            front = [self.sb.work.upper(), sub.swapcase()] + front
+        self.push_term_with_path(*front)
+
+    def test_dotdot_entry_back_into_worktree_is_dropped(self):
+        sub = os.path.join(self.sb.work, "sub")
+        self.plant(sub)
+        self.push_term_with_path(os.path.join(self.sb.root, "hk", "..", "work", "sub"))
+
+    def test_junction_into_worktree_subdirectory_is_dropped(self):
+        sub = os.path.join(self.sb.work, "deep", "bin")
+        self.plant(sub)
+        link = os.path.join(self.sb.root, "jlink")
+        self.link_dir(link, sub, junction=True)
+        self.push_term_with_path(".", link)
+
+    def test_symlink_into_worktree_subdirectory_is_dropped(self):
+        sub = os.path.join(self.sb.work, "deep", "bin")
+        self.plant(sub)
+        link = os.path.join(self.sb.root, "slink")
+        self.link_dir(link, sub, junction=False)
+        self.push_term_with_path(".", link)
+
+    def test_planted_python_does_not_block_a_clean_push(self):
+        # The real interpreter later on PATH is still found once the planted entries are gone.
+        self.plant(self.sb.work)
+        self.set_path(".")
+        self.sb.commit("notes.md", "nothing confidential here\n")
+        rc, err = self.sb.push()
+        self.assertEqual(rc, 0, "push should have been allowed:\n" + err)
+        self.assertFalse(os.path.exists(self.marker), "the planted python ran:\n" + err)
+
+    def test_untracked_module_beside_scanner_is_not_imported(self):
+        # The scanner runs isolated (-I): an untracked json.py beside the tracked scanner copy
+        # is not imported in its place. Both layouts (tools/ and scripts/) carry the copy.
+        dirs = [os.path.join(self.sb.work, d) for d in ("tools", "scripts")]
+        for d in dirs:
+            os.makedirs(d, exist_ok=True)
+            shutil.copyfile(SCAN, os.path.join(d, "prepush_confidential_scan.py"))
+        self.sb.git(self.sb.work, "add", "-A")
+        self.sb.git(self.sb.work, "commit", "-q", "--no-verify", "-m", "add scanner")
+        for d in dirs:
+            with open(os.path.join(d, "json.py"), "w", newline="\n") as f:
+                f.write("import sys\nopen(%r, 'w').close()\nsys.exit(0)\n" % self.marker)
+        self.set_path()
+        self.sb.commit("deal.md", "memo for %s\n" % TERM)
+        self.assertBlockedByRealScan(*self.sb.push())
+
+    def plant_noop_scanner(self, d):
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "prepush_confidential_scan.py"), "w", newline="\n") as f:
+            f.write("import sys\nopen(%r, 'w').close()\nsys.exit(0)\n" % self.marker)
+
+    def test_untracked_scanner_in_worktree_is_not_used(self):
+        # The tree does not track the scanner; a planted copy must not replace the hook's own.
+        for d in ("tools", "scripts"):
+            self.plant_noop_scanner(os.path.join(self.sb.work, d))
+        self.set_path()
+        self.sb.commit("deal.md", "memo for %s\n" % TERM)   # commit -A would track them: undo
+        self.sb.git(self.sb.work, "rm", "-q", "--cached", "-r", "tools", "scripts")
+        self.sb.git(self.sb.work, "commit", "-q", "--no-verify", "--amend", "--no-edit")
+        self.assertBlockedByRealScan(*self.sb.push())
+
+    def test_edited_tracked_scanner_in_worktree_is_not_used(self):
+        dirs = [os.path.join(self.sb.work, d) for d in ("tools", "scripts")]
+        for d in dirs:
+            os.makedirs(d, exist_ok=True)
+            shutil.copyfile(SCAN, os.path.join(d, "prepush_confidential_scan.py"))
+        self.sb.git(self.sb.work, "add", "-A")
+        self.sb.git(self.sb.work, "commit", "-q", "--no-verify", "-m", "add scanner")
+        self.sb.commit("deal.md", "memo for %s\n" % TERM)
+        # Age the files and refresh the index so it is not "racily clean" (a checkout made
+        # earlier than the index write): then only size+mtime decide in git's stat cache.
+        for d in dirs:
+            path = os.path.join(d, "prepush_confidential_scan.py")
+            old = os.stat(path).st_mtime_ns - 3600 * 10 ** 9
+            os.utime(path, ns=(old, old))
+        self.sb.git(self.sb.work, "update-index", "-q", "--really-refresh")
+        for d in dirs:
+            # Same size and mtime restored: git's stat cache would call this file unmodified
+            # (2026-11-13 refute round 2), so the hook must not trust `git diff` either.
+            path = os.path.join(d, "prepush_confidential_scan.py")
+            st = os.stat(path)
+            payload = ("import sys\nopen(%r, 'w').close()\nsys.exit(0)\n" % self.marker).encode()
+            payload += b"#" * (st.st_size - len(payload))
+            with open(path, "wb") as f:
+                f.write(payload)
+            os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns))
+        self.set_path()
+        self.assertBlockedByRealScan(*self.sb.push())
+
+    def test_edited_tracked_scanner_in_worktree_is_not_used_size_change(self):
+        dirs = [os.path.join(self.sb.work, d) for d in ("tools", "scripts")]
+        for d in dirs:
+            os.makedirs(d, exist_ok=True)
+            shutil.copyfile(SCAN, os.path.join(d, "prepush_confidential_scan.py"))
+        self.sb.git(self.sb.work, "add", "-A")
+        self.sb.git(self.sb.work, "commit", "-q", "--no-verify", "-m", "add scanner")
+        self.sb.commit("deal.md", "memo for %s\n" % TERM)
+        for d in dirs:
+            self.plant_noop_scanner(d)          # uncommitted edit after the commit
+        self.set_path()
+        self.assertBlockedByRealScan(*self.sb.push())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

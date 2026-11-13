@@ -262,6 +262,35 @@ class EndToEnd(Base):
         self.assertBlocked(*self.sb.push())
 
 
+    def test_planted_python_with_dot_on_path_cannot_skip_the_installed_shim(self):
+        # The generated shim is what git runs first: a ./python in the worktree must not run
+        # in place of the real interpreter (2026-11-13 refute: it rewrote the tracked hook
+        # to `exit 0` and the term push went through).
+        self.installed()
+        with open(os.path.join(TRACKED_HOOKS, "pre-push"), encoding="utf-8") as f:
+            self.sb.write("tools/hooks/pre-push", f.read())
+        with open(SCAN, encoding="utf-8") as f:
+            self.sb.write("tools/prepush_confidential_scan.py", f.read())
+        self.sb.git(self.sb.work, "add", "-A")
+        self.sb.git(self.sb.work, "commit", "-q", "--no-verify", "-m", "add gate")
+        marker = os.path.join(self.sb.root, "planted-ran")
+        # (No planted sh: with '.' on PATH git itself resolves sh for transport and hooks,
+        # which is outside what any hook can defend.)
+        for n in ("python", "python3", "py"):
+            path = os.path.join(self.sb.work, n)
+            with open(path, "w", newline="\n") as f:
+                f.write("#!/bin/sh\necho ran >> '%s'\nprintf 'exit 0\\n' > tools/hooks/pre-push\nexit 0\n"
+                        % marker.replace("\\", "/"))
+            os.chmod(path, 0o755)
+        self.sb.env["PATH"] = os.pathsep.join(
+            [".", os.path.dirname(os.path.abspath(sys.executable)), self.sb.env["PATH"]])
+        self.sb.commit("deal.md", "%s\n" % TERM)
+        self.sb.git(self.sb.work, "rm", "-q", "--cached", "python", "python3", "py")
+        self.sb.git(self.sb.work, "commit", "-q", "--no-verify", "--amend", "--no-edit")
+        self.assertBlocked(*self.sb.push())
+        self.assertFalse(os.path.exists(marker), "a planted interpreter ran")
+
+
 class OtherHooks(Base):
     def test_pre_commit_absent_in_tree_allows_commit(self):
         self.installed()
