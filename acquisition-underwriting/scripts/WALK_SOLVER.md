@@ -69,7 +69,7 @@ It flags, rather than rejects:
 - growth above 2.5%;
 - a lease-up deal with no `vacant_sf_at_close`;
 - `lease_up_carry` below the Lease-Up Block TI default alone ($8.00/SF × vacant SF at close);
-- Year-1 NOI (`in_place_noi`, or stabilized NOI when modeled stabilized at close) above the occupied share of stabilized NOI (SF pro-rata), whenever `vacant_sf_at_close` is given.
+- Year-1 NOI (`in_place_noi`, or stabilized NOI when modeled stabilized at close) above the occupied share of stabilized NOI, whenever `vacant_sf_at_close` is given. The share is SF pro-rata, grossed up for the 5% structural vacancy already netted into stabilized NOI and capped at stabilized NOI, so vacancy of 5% or less does not flag. It assumes no Year-1 rollover downtime on occupied suites (suite-level rollover is not modeled).
 
 The majority-vacant premium is derived from `vacant_sf_at_close`, and setting it to `False` cannot remove it.
 

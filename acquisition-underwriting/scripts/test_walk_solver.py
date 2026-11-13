@@ -31,6 +31,7 @@ class DoctrinePins(unittest.TestCase):
                          (0.02, 25, 0.01, 0.02))
         self.assertEqual((D.RESERVES_PSF, D.EXPENSE_GROWTH, D.MARKET_RENT_GROWTH), (0.15, 0.03, 0.025))
         self.assertEqual(D.LEASE_UP_TI_PSF, 8.00)  # Lease-Up Assumption Block TI default
+        self.assertEqual(D.STRUCTURAL_VACANCY, 0.05)  # Suite-Level Block vacancy-line floor
 
     def test_exit_caps(self):  # SKILL.md UNDERWRITING CONVENTIONS exit cap
         self.assertEqual(D.EXIT_CAPS, {
@@ -327,12 +328,13 @@ class LooserThanDoctrineGuards(unittest.TestCase):
     def test_in_place_noi_above_occupied_share_flagged(self):
         hi = lambda r: [f for f in r.flags if "exceeds the occupied share" in f]
         kw = dict(vacant_sf_at_close=10_000, stabilization_year=2, lease_up_carry=200_000)
-        # occupied share = (1 - 15,000/30,000) x 300,000 = 150,000 exactly: equal is not above
+        # occupied share = (1 - 15,000/30,000) / 0.95 x 300,000 = 157,894.74
         half = dict(kw, vacant_sf_at_close=15_000)
-        self.assertEqual(len(hi(solve(base(in_place_noi=150_001, **half), UST))), 1)
-        self.assertEqual(hi(solve(base(in_place_noi=150_000, **half), UST)), [])
-        # occupied share = (1 - 10,000/30,000) x 300,000 = 200,000
-        self.assertEqual(len(hi(solve(base(in_place_noi=200_001, **kw), UST))), 1)
+        self.assertEqual(len(hi(solve(base(in_place_noi=157_895, **half), UST))), 1)
+        self.assertEqual(hi(solve(base(in_place_noi=157_894, **half), UST)), [])
+        # occupied share = (1 - 10,000/30,000) / 0.95 x 300,000 = 210,526.32
+        self.assertEqual(len(hi(solve(base(in_place_noi=210_527, **kw), UST))), 1)
+        self.assertEqual(hi(solve(base(in_place_noi=210_526, **kw), UST)), [])
         # 100% vacant: any positive in-place NOI is above the occupied share of zero
         self.assertEqual(len(hi(solve(base(vacant_sf_at_close=30_000, in_place_noi=1, stabilization_year=2,
                                           lease_up_carry=240_000), UST))), 1)
@@ -344,6 +346,12 @@ class LooserThanDoctrineGuards(unittest.TestCase):
         self.assertEqual(len(hi(r)), 1)
         self.assertIn("modeled stabilized at close", hi(r)[0])
         self.assertEqual(hi(solve(base(vacant_sf_at_close=0), UST)), [])
+        # low vacancy (<= 5% structural, already in stabilized NOI) modeled stabilized at close: no flag
+        for v in (300, 900, 1_500):
+            self.assertEqual(hi(solve(base(vacant_sf_at_close=v), UST)), [], v)
+        # ... but Year-1 above stabilized still flags at low vacancy, and just over 5% vacancy flags
+        self.assertEqual(len(hi(solve(base(vacant_sf_at_close=900, in_place_noi=300_001, stabilization_year=2), UST))), 1)
+        self.assertEqual(len(hi(solve(base(vacant_sf_at_close=1_530), UST))), 1)  # 5.1% vacant
         # without vacant_sf_at_close there is no occupied share to test
         self.assertEqual(hi(solve(base(in_place_noi=290_000, stabilization_year=2), UST)), [])
         # the flag is reported only: it does not change the walk
