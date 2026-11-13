@@ -55,7 +55,7 @@ Resolve register names through `server/warehouse/property-crosswalk.ts`, then `p
 
 1. Known id → write it.
 2. **Building inside a consolidated entity** (Banwick, Old Morrison and the other Sepich buildings): alias to `sepich-portfolio-columbus-oh-8-props`, matching the existing `parse.ts` alias. Keep the building name in a `location`/`building` column so per-building detail survives the entity-level key.
-3. **Pipeline or acquired asset with no master row** (e.g. 3520 REDACTED-156): store `property_id = NULL` (FK-exempt, same as a portfolio-level loss) plus a `pipeline_ref` text column, and log a `data_quality_issues` row `kind='<domain>-pipeline-unmapped'`. Never invent an id and never add rows to `CANON_PROPERTIES` (ratified canon, "do not edit without a new ruling").
+3. **Pipeline or acquired asset with no master row** (e.g. a pipeline property): store `property_id = NULL` (FK-exempt, same as a portfolio-level loss) plus a `pipeline_ref` text column, and log a `data_quality_issues` row `kind='<domain>-pipeline-unmapped'`. Never invent an id and never add rows to `CANON_PROPERTIES` (ratified canon, "do not edit without a new ruling").
 4. Present, non-blank id not in `property_master` and not covered by the rules above: skip and log `kind='<domain>-unknown-property'` (never insert, the FK would misattribute).
 
 Confidential check before any row naming a deal: roster of record is `hooks/confidential-terms.json`; keep deal figures out of any public export.

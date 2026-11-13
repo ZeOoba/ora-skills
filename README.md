@@ -339,7 +339,7 @@ zero tests, and any bare module-level `def test_*`. The one plain-assert script 
 | [`tools-tests`](.github/workflows/tools-tests.yml) | every push, manual | `bash tools/run_suite.sh` on Python 3.13 with PyMuPDF |
 | [`skill-gates`](.github/workflows/skill-gates.yml) / `skill-gates` | every push, manual | `frontmatter` (all skills, tree hygiene, shared-dep declarations, README inventory), `memory-files`, `target-markets --base auto`, `suite-continuity --base auto` |
 | [`skill-gates`](.github/workflows/skill-gates.yml) / `skill-tests` | every push, manual | `bash tools/run_skill_suites.sh` with poppler and the document libraries |
-| [`claude-ci-fix`](.github/workflows/claude-ci-fix.yml) | failed PR check suite, changes-requested review, `@claude` or CodeRabbit comment | Runs `anthropics/claude-code-action` (SHA-pinned) to push a fix; human triggers limited to owner, member or collaborator |
+| [`claude-ci-fix`](.github/workflows/claude-ci-fix.yml) | failed PR check suite, changes-requested review, or CodeRabbit comment | Runs `anthropics/claude-code-action` (SHA-pinned) with a fixed prompt to push a fix; only PRs whose head is in this repo and whose author (and reviewer) is owner, member or collaborator. No `@claude` trigger (removed 2026-11-12: on a public repo the comment-built prompt is outsider-writable) |
 
 The gates that matter most when you change things:
 

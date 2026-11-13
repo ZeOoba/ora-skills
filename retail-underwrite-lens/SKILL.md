@@ -31,7 +31,7 @@ Layers on `acquisition-underwriting`. The industrial Basis/Yield/IRR floors stay
 8. **Trade area and traffic table** from the OM, verified against the OM image (road labels are easily mislabelled).
 9. **Retail replacement-cost caveat:** RCT v03 is an industrial proxy; require insurance or contractor verification pre-LOI.
 
-## Variant: credit tenant + vacant box (v1.1, from REDACTED-131 Hwy, 2026-10-29)
+## Variant: credit tenant + vacant box (v1.1, from the Louisville retail deal, 2026-10-29)
 
 When the roll is one credit tenant plus a large vacant suite, replace the Base / Case A / Case K rent-basis cases with **Base (doctrine), Evidence (documented marketing history: downtime, achieved/asking rent, retail-TI $25/SF [EST]) and Tenant-Dark (credit tenant does not renew at its next expiry)**. Apply the Lease-Up evidence override (Base downtime = MAX(9 mo, months marketed ÷ 2)). Report: share of stabilized NOI resting on the vacant suite; the credit tenant's income alone at its remaining-term cap band (Boulder Group term bands); and the nearest asking prices for comparable half-vacant centers, which usually sit below executed stabilized-center comps.
 
@@ -46,5 +46,5 @@ When the roll is one credit tenant plus a large vacant suite, replace the Base /
 
 ## VERSIONING
 
-- v1.1 — 2026-10-29 (Gabriel, in-turn; landed 2026-10-30 from runtime-cache capture PR #180): gate-first rule (run only when the retail asset qualifies under `acquisition-underwriting` Stage 0 Gate 6 as land-heavy quasi-IOS, land ≥40% of all-in basis, or on Gabriel's explicit ask; `acquisition-underwriting` v4.40) and the credit-tenant + vacant-box variant (Base / Evidence / Tenant-Dark cases), from REDACTED-131 Hwy. No governor constant changed.
+- v1.1 — 2026-10-29 (Gabriel, in-turn; landed 2026-10-30 from runtime-cache capture PR #180): gate-first rule (run only when the retail asset qualifies under `acquisition-underwriting` Stage 0 Gate 6 as land-heavy quasi-IOS, land ≥40% of all-in basis, or on Gabriel's explicit ask; `acquisition-underwriting` v4.40) and the credit-tenant + vacant-box variant (Base / Evidence / Tenant-Dark cases), from the Louisville retail deal. No governor constant changed.
 - v1.0 — 2026-10-01, template built by hand from the East Pointe Plaza FULL run (three revisions). Authored in the Cowork runtime cache; first captured 2026-10-16 (PR #122, closed without landing) and committed to the repo with v1.1.

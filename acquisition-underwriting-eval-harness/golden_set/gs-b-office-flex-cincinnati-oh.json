@@ -1,0 +1,108 @@
+{
+  "deal_id": "gs-b-office-flex-cincinnati-oh",
+  "deal_name": "GS-B (street address withheld -- synthetic alias), West Chester submarket, Cincinnati OH",
+  "mode": "SCREEN",
+  "date_seen": "2026-06-09",
+  "source": "Notion Deal Sourcing Log (collection://9a6ae219-85a3-4621-899c-c757fd062f8b), queried 2026-08-14",
+  "confidence": "HIGH",
+  "known_gaps": [
+    "REBASELINED 2026-11-05 ON OPUS 5.5 (Gabriel-approved in-turn 2026-11-05 ('Yes, rebaseline': re-baseline the goldens on Opus using that day's replays); widened by Gabriel on 2026-11-06 ('Add 10-30 Opus run') to fold in the verified-Opus 2026-10-30 v4.41 run, after an adversarial review found the 2026-11-05 triple alone sat at the edge of the Opus evidence (the highest GS-A and lowest GS-C of four verified Opus runs)). Golden Combined 28.11 -> 29 = mean of 6 claude-opus-5-5 replays: runs 10-12 from the 2026-10-30 'post-amendment-h-v4.41-final' run against acquisition-underwriting 997fe4b2 (session 5663921d transcripts; replays dispatched 19:23-19:27Z, a minute after that commit; 28/28/30) and runs 13-15 from the 2026-11-05 supervised run against d7cab49e (29/30/29; snapshot runs/2026-11-05T212202Z_supervised-v4.41-pre-dec-backtest.json); the two doctrine revisions differ only in Amendment H's IRR-test wording, which cannot move this deal. Why: the harness's 2026-10-05 baseline-model limitation -- every earlier golden sample is recorded as a Fable replay (the files' own fable-pinned notes; the 2026-08-14/15 transcripts are no longer on disk), and the harness moved replays from Fable to Opus 5.5 on 2026-10-05, so the golden described an instrument future runs no longer use; a golden meant to predict future replay output should reflect the model future replays actually run on (the same reasoning as the 2026-08-15 leakage exclusion). Earlier runs stay in repeatability.runs, tagged excluded_from_golden, for audit. Range 2.0 pts across the 6 (28-30). All six GATE-FLAG Gate 2 (76,501 SF treated as one building). P(exec) 12.5% in five runs; one 2026-10-30 replay placed 35% (the 30-50% band less 5 for a marketed process, its own judgment call), so golden.p_exec_pct is a mean across bands. Not folded in: 2026-10-16 v4.28 29.67 (30/29/30) and 2026-10-30 v4.40-wip 29.33 (29/29/30), both verified Opus but replaying other doctrine. n=6 is still thinner than the Fable-era golden it replaces (n=9): fold further Opus samples in at later runs rather than widening the tolerance.",
+    "RE-BASELINED 2026-08-14 (see harness README 'RCT v03 date-boundary finding'): original 2026-06-09 screen predates the 2026-07-14 RCT v03 recalibration. archived_pre_v03_reference is historical only. The `golden` block is the MEAN of 3 independent 2026-08-14 replays under current doctrine (see `repeatability` below).",
+    "REPEATABILITY FINDING (2026-08-14, added post-REFUTE-pass): 3 independent frozen replays, identical inputs, identical doctrine, produced Combined 28.0 / 29.0 / 29.0 -- only a 1.0-point range, the tightest of the two HIGH-confidence deals (GS-A's 3-run range was 4.5 pts). This deal's fully-disclosed NOI and detailed physical specs likely explain the lower variance -- less for the replay to judge, less spread in the result.",
+    "REBASELINED 2026-08-15 (n=6 -> n=9, Gabriel-directed): 3 more replays (28.5/27.0/27.5) collected by the forced-repeatability run, same doctrine SHA, same frozen inputs, no leakage risk on this deal (unlike GS-A, this address is not cited by SKILL.md's own text). Golden Combined moved 28.67 -> 28.11 -- a 0.56-pt shift, inside noise, but folded in this time (rather than left as an unfolded additional-samples note, per the earlier 6-run precedent) because this rebaseline pass touched every deal's golden uniformly. Range at n=9 is unchanged from the n=6 figure at 2.0 pts, stdev 0.82 -- still the tightest or near-tightest deal in the set.",
+    "Pre-v03 archived record separately carried its own internal inconsistency independent of the v03 boundary: archived Quality(36)+Economics(8)=44 != archived Combined(50), and the archived Verdict tier 'T2 WATCH' matched neither the raw-score band nor the FAIL-YIELD floor-breach label. Preserved for context, not used for diffing."
+  ],
+  "inputs": {
+    "address": "GS-B (street address withheld -- synthetic alias), West Chester submarket, Cincinnati OH",
+    "market": "Cincinnati OH (West Chester submarket)",
+    "asking_price": 8050000,
+    "price_used_for_scoring": 8050000,
+    "purchase_price_target_pipeline": 7490776,
+    "building_sf": 76501,
+    "year_built": 2007,
+    "occupancy_pct": 100,
+    "asset_type": "Multi-tenant office/flex",
+    "noi_annual": 617989,
+    "noi_basis": "Explicitly disclosed -- broker NOI, source listing-broker OM.",
+    "physical": {
+      "construction_type": "Tilt-up concrete",
+      "clear_height": "19 feet",
+      "docks_drive_ins": "8 docks + 1 drive-in",
+      "sprinkler": "Fully sprinklered, wet pipe",
+      "acreage": 6.873,
+      "tenant_count": 5,
+      "walt_years": 4.4
+    },
+    "environmental_notes": "Phase I not ordered as of screen date.",
+    "other_facts": "Roof KNOWN-bad (Yr-19 EPDM, priced but no dollar figure disclosed); county reassessment pending; zoning OK."
+  },
+  "repeatability": {
+    "runs": [
+      {"combined": 28.0, "quality": 28.0, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 15.0, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 3.0, "value_add": 1.0}, "note": "run 1 (original baseline)", "excluded_from_golden": true, "exclusion_reason": "Fable-era replay (doctrine 83547a76, 2026-08-14/15); superseded by the 2026-11-05 Opus 5.5 rebaseline -- kept for audit trail, not averaged into golden"},
+      {"combined": 29.0, "quality": 29.0, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 15.0, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 3.0, "value_add": 2.0}, "note": "run 2", "excluded_from_golden": true, "exclusion_reason": "Fable-era replay (doctrine 83547a76, 2026-08-14/15); superseded by the 2026-11-05 Opus 5.5 rebaseline -- kept for audit trail, not averaged into golden"},
+      {"combined": 29.0, "quality": 29.0, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 15.0, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 3.0, "value_add": 2.0}, "note": "run 3", "excluded_from_golden": true, "exclusion_reason": "Fable-era replay (doctrine 83547a76, 2026-08-14/15); superseded by the 2026-11-05 Opus 5.5 rebaseline -- kept for audit trail, not averaged into golden"},
+      {"combined": 27.0, "quality": 27.0, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 14.0, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 3.0, "value_add": 1.0}, "note": "run 4 (2026-08-14 scheduled-poll, replay A)", "excluded_from_golden": true, "exclusion_reason": "Fable-era replay (doctrine 83547a76, 2026-08-14/15); superseded by the 2026-11-05 Opus 5.5 rebaseline -- kept for audit trail, not averaged into golden"},
+      {"combined": 28.0, "quality": 28.0, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 14.0, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 3.0, "value_add": 2.0}, "note": "run 5 (2026-08-14 scheduled-poll, replay B)", "excluded_from_golden": true, "exclusion_reason": "Fable-era replay (doctrine 83547a76, 2026-08-14/15); superseded by the 2026-11-05 Opus 5.5 rebaseline -- kept for audit trail, not averaged into golden"},
+      {"combined": 29.0, "quality": 29.0, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 15.0, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 3.0, "value_add": 2.0}, "note": "run 6 (2026-08-14 scheduled-poll, replay C)", "excluded_from_golden": true, "exclusion_reason": "Fable-era replay (doctrine 83547a76, 2026-08-14/15); superseded by the 2026-11-05 Opus 5.5 rebaseline -- kept for audit trail, not averaged into golden"},
+      {"combined": 28.5, "quality": 28.5, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 14.5, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 3.0, "value_add": 2.0}, "note": "run 7 (2026-08-15 forced-repeatability run, replay A)", "excluded_from_golden": true, "exclusion_reason": "Fable-era replay (doctrine 83547a76, 2026-08-14/15); superseded by the 2026-11-05 Opus 5.5 rebaseline -- kept for audit trail, not averaged into golden"},
+      {"combined": 27.0, "quality": 27.0, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 14.0, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 3.0, "value_add": 1.0}, "note": "run 8 (2026-08-15 forced-repeatability run, replay B)", "excluded_from_golden": true, "exclusion_reason": "Fable-era replay (doctrine 83547a76, 2026-08-14/15); superseded by the 2026-11-05 Opus 5.5 rebaseline -- kept for audit trail, not averaged into golden"},
+      {"combined": 27.5, "quality": 27.5, "economics": 0.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 14.5, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 3.0, "value_add": 1.0}, "note": "run 9 (2026-08-15 forced-repeatability run, replay C)", "excluded_from_golden": true, "exclusion_reason": "Fable-era replay (doctrine 83547a76, 2026-08-14/15); superseded by the 2026-11-05 Opus 5.5 rebaseline -- kept for audit trail, not averaged into golden"},
+      {"combined": 28.0, "quality": 28.0, "economics": 0.0, "expected_score": 3.5, "p_exec_pct": 12.5, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 14.0, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 3.0, "value_add": 2.0}, "model": "claude-opus-5-5", "note": "run 10 (2026-10-30 post-amendment-h-v4.41-final run, replay 1, task adfdf18824b7902de, session 5663921d) -- claude-opus-5-5 against acquisition-underwriting 997fe4b2 (v4.41 pre-squash; differs from d7cab49e only in Amendment H's IRR-test wording)"},
+      {"combined": 28.0, "quality": 28.0, "economics": 0.0, "expected_score": 9.8, "p_exec_pct": 35.0, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 15.0, "market_location": 9.0, "seller_motivation": 0.0, "tenancy_lease": 2.0, "value_add": 2.0}, "model": "claude-opus-5-5", "note": "run 11 (2026-10-30 post-amendment-h-v4.41-final run, replay 2, task a4acb57d8c4b450ce, session 5663921d) -- claude-opus-5-5 against acquisition-underwriting 997fe4b2 (v4.41 pre-squash; differs from d7cab49e only in Amendment H's IRR-test wording)"},
+      {"combined": 30.0, "quality": 30.0, "economics": 0.0, "expected_score": 3.75, "p_exec_pct": 12.5, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 15.0, "market_location": 10.0, "seller_motivation": 0.0, "tenancy_lease": 3.0, "value_add": 2.0}, "model": "claude-opus-5-5", "note": "run 12 (2026-10-30 post-amendment-h-v4.41-final run, replay 3, task a358534c632113ad7, session 5663921d) -- claude-opus-5-5 against acquisition-underwriting 997fe4b2 (v4.41 pre-squash; differs from d7cab49e only in Amendment H's IRR-test wording)"},
+      {"combined": 29.0, "quality": 29.0, "economics": 0.0, "expected_score": 3.625, "p_exec_pct": 12.5, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 16.0, "market_location": 10.0, "seller_motivation": 0.0, "tenancy_lease": 2.0, "value_add": 1.0}, "model": "claude-opus-5-5", "note": "run 13 (2026-11-05 supervised run, replay r1, task a9cc36269010d6294) -- claude-opus-5-5 against acquisition-underwriting v4.41 (d7cab49e)"},
+      {"combined": 30.0, "quality": 30.0, "economics": 0.0, "expected_score": 3.75, "p_exec_pct": 12.5, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 16.0, "market_location": 10.0, "seller_motivation": 0.0, "tenancy_lease": 3.0, "value_add": 1.0}, "model": "claude-opus-5-5", "note": "run 14 (2026-11-05 supervised run, replay r2, task ad32e1e518c21c0b2) -- claude-opus-5-5 against acquisition-underwriting v4.41 (d7cab49e)"},
+      {"combined": 29.0, "quality": 29.0, "economics": 0.0, "expected_score": 3.625, "p_exec_pct": 12.5, "category_breakdown": {"basis": 0.0, "yield": 0.0, "product_physical": 15.0, "market_location": 10.0, "seller_motivation": 0.0, "tenancy_lease": 2.0, "value_add": 2.0}, "model": "claude-opus-5-5", "note": "run 15 (2026-11-05 supervised run, replay r3, task ac41d71c24b1c179a) -- claude-opus-5-5 against acquisition-underwriting v4.41 (d7cab49e)"}
+    ],
+    "combined_mean": 29.0,
+    "combined_stdev": 0.89,
+    "combined_sem": 0.37,
+    "combined_range": 2.0,
+    "n": 6,
+    "n_raw_including_excluded": 15,
+    "sampling_note": "Since the 2026-11-05 Opus rebaseline, n / combined_mean / combined_stdev / combined_sem / combined_range describe ONLY runs 10-15: 6 independent claude-opus-5-5 replays -- runs 10-12 from the 2026-10-30 v4.41 run (997fe4b2) and runs 13-15 from the 2026-11-05 supervised run (d7cab49e) -- identical frozen inputs. Runs 1-9 are the Fable-era population (doctrine 83547a76, 2026-08-14/15), all tagged excluded_from_golden and kept for audit; their stats were n=9, mean 28.11, stdev 0.82, sem 0.27, range 2. Fable-era sampling note, verbatim: Runs 1-3: 2026-08-14 original repeatability check. Runs 4-6: 2026-08-14 scheduled-poll (Gabriel-directed) -- recorded that same day but deliberately left unfolded from the golden at the time (the resulting shift, 28.67 -> 28.33, was under 0.4 pts, inside noise). Runs 7-9: 2026-08-15 forced-repeatability run (Gabriel-directed). All 9 are now folded into golden.combined -- this rebaseline touched every deal's golden uniformly, including two others that required exclusion logic for leaked samples, so keeping GS-B on the same fully-folded footing keeps the golden_set internally consistent about what golden.combined means across files. All 9 runs are same-doctrine-hash, same-frozen-inputs draws; no leakage risk identified on this deal."
+  },
+  "golden": {
+    "baselined_date": "2026-11-05",
+    "baselined_against_skill_sha": "d7cab49e96c7770677f46a7152cec7b987c44b3c",
+    "baselined_model": "claude-opus-5-5",
+    "baselined_method": "mean of 6 independent claude-opus-5-5 replays (repeatability runs 10-15): runs 10-12 from the 2026-10-30 v4.41 run (997fe4b2) and runs 13-15 from the 2026-11-05 supervised run (d7cab49e); the two doctrine revisions differ only in Amendment H's IRR-test wording, which cannot move this deal; REBASELINED 2026-11-05 from the Fable-era value 28.11 (n=9, doctrine 83547a76) per the harness's 2026-10-05 baseline-model limitation -- Gabriel-approved in-turn 2026-11-05 ('Yes, rebaseline': re-baseline the goldens on Opus using that day's replays), widened by Gabriel on 2026-11-06 ('Add 10-30 Opus run') to fold in the verified-Opus 2026-10-30 v4.41 run, after an adversarial review found the 2026-11-05 triple alone sat at the edge of the Opus evidence (the highest GS-A and lowest GS-C of four verified Opus runs)",
+    "quality": 29.0,
+    "economics": 0.0,
+    "combined": 29.0,
+    "category_breakdown": {
+      "basis": 0.0,
+      "yield": 0.0,
+      "product_physical": 15.17,
+      "market_location": 9.67,
+      "seller_motivation": 0.0,
+      "tenancy_lease": 2.5,
+      "value_add": 1.67
+    },
+    "category_breakdown_sum_check": "0+0+15.1667+9.6667+0+2.5+1.6667 = 29.0001, rounds to 29, matches Combined. Category means over the 6 Opus runs, a null counted as 0 points per lib/aggregate_replays.py.",
+    "expected_score": 4.67,
+    "expected_score_note": "Mean of the 6 runs' expected_score (3.5/9.8/3.75/3.625/3.75/3.625); P(exec) was not the same band in every run (see p_exec_pct_note), so this is not Combined x one band value.",
+    "p_exec_pct": 16.25,
+    "p_exec_pct_note": "Mean of 6 discrete band placements (12.5/35/12.5/12.5/12.5/12.5), not a real band value -- directional only (the same caveat as REFUTE finding F7 on the earlier goldens).",
+    "verdict_tier": "PASS-band (GATE-FLAGGED: Gate 2, 76,501 SF treated as one building > 50K SF/building; FLOOR-FLAGGED: Basis + Yield; DENOMINATOR-SENSITIVE; T2 ceilings from bear-mode UNKNOWN + DD-Critical unknowns are moot below 60)",
+    "floor_result": "FLOOR-FLAGGED in all 6 runs -- Basis breached (57.3% discount to RCT v03 Cincinnati LOW $251.46/SF, tilt-up x1.00, land $0 per Ruling 4, vs the 60% vintage-ramp floor for 2007; clears at POINT 61.6%, DENOMINATOR-SENSITIVE); Yield breached (YoC 7.53% vs 8.0% floor); IRR not computable without a rent roll (floor tested at 10.0% [UST UNVERIFIED]); DSCR loan not sizable ([DATA-GAP: UST]); carrying-cost floor UNKNOWN (no OpEx; county reassessment pending); the known-bad roof's CapEx is undisclosed and excluded, so both breaches are understated",
+    "replay_notes": "Opus runs (3 on 2026-10-30, 3 on 2026-11-05): 76,501 SF treated as one building (Gate 2 GATE-FLAGGED) in all 6 -- if the GS-B street-number range is 2-5 buildings, Amendment H per-building tests would apply instead (not resolvable from frozen facts). The known-bad roof's CapEx is excluded from all-in in every run (no dollar figure), so the floor breaches are conservative, not overstated. Bear-mode UNKNOWN -> OFF, T2 ceiling, moot. Market & Location 9-10 (established-cluster tier read on a ladder the doctrine does not number; West Chester ungraded). P(exec) 12.5% (institutional call-for-offers band midpoint) in five runs and 35% in one."
+  },
+  "archived_pre_v03_reference": {
+    "note": "Historical only -- screened 2026-06-09, before the 2026-07-14 RCT v03 recalibration, AND internally inconsistent independent of that boundary (see known_gaps). NOT the diff target.",
+    "quality": 36,
+    "economics": 8,
+    "combined": 50,
+    "quality_plus_economics_check": "36 + 8 = 44, vs archived Combined 50 -- 6pt unexplained discrepancy.",
+    "expected_score": 5.5,
+    "p_exec_pct": 12.5,
+    "archived_verdict_tier": "T2 WATCH (matches neither the raw-score PASS-band prediction nor the FLOOR-FLAGGED label implied by the archived FAIL-YIELD floor result)"
+  },
+  "diff_policy": {
+    "primary_signal": "combined_score",
+    "tolerance_combined_pts": 5.0,
+    "tolerance_rationale": "Widened harness-wide from an initial arbitrary 3.0 after the repeatability check on GS-A showed a 3-run range (4.5 pts) exceeding that tolerance. This deal's own range (2.0 pts at n=9) would have been fine at 3.0, but a single harness-wide tolerance keeps the pilot simple; per-deal tolerance calibration is a documented follow-up. 2026-11-05 Opus rebaseline: the golden is now an n=6 mean (stdev 0.89, SEM 0.37); a later 3-replay mean's dispersion against it is about sqrt(0.89^2/3 + 0.89^2/6) = 0.63 pts, so a +/-2 sigma band is about 1.26 pts inside the unchanged 5.0-pt tolerance -- fold further Opus samples into the golden at later runs rather than widening the tolerance.",
+    "tier_check": "informational_only",
+    "reason": "HIGH confidence: fully resolved (zero null categories) across all 9 replays, internally consistent (category sums match Combined in every run), and the tightest or near-tightest repeatability in the set (stdev 0.82, range 2.0 at n=9) -- one of the most reliable rows in the golden set for detecting a real doctrine-edit delta. 2026-11-05 Opus golden: n=6, stdev 0.89, range 2."
+  }
+}
