@@ -1095,18 +1095,27 @@ class PlantedInterpreter(unittest.TestCase):
                 f.write(body)
             os.chmod(path, 0o755)
 
-    def link_dir(self, link, target, junction):
-        if junction:
-            if os.name != "nt":
-                self.skipTest("junctions are Windows-only")
-            p = subprocess.run(["cmd", "/c", "mklink", "/J", link, target], capture_output=True)
-            if p.returncode != 0:
-                self.skipTest("mklink /J failed: %r" % p.stderr)
-        else:
+    def links_into(self, target):
+        """Directory links outside the worktree that point at `target` inside it. Windows: a
+        junction (no privilege needed; must succeed) plus a symlink when the account may make
+        one. Elsewhere: a symlink (must succeed). Never skips: CI's skip baseline is zero."""
+        links = []
+        if os.name == "nt":
+            j = os.path.join(self.sb.root, "jlink")
+            p = subprocess.run(["cmd", "/c", "mklink", "/J", j, target], capture_output=True)
+            self.assertEqual(p.returncode, 0, "mklink /J failed: %r" % p.stderr)
+            links.append(j)
+            s = os.path.join(self.sb.root, "slink")
             try:
-                os.symlink(target, link, target_is_directory=True)
-            except (OSError, NotImplementedError) as e:
-                self.skipTest("symlinks unavailable: %s" % e)
+                os.symlink(target, s, target_is_directory=True)
+                links.append(s)
+            except OSError:
+                pass        # WinError 1314 without Developer Mode; the junction covers it
+        else:
+            s = os.path.join(self.sb.root, "slink")
+            os.symlink(target, s, target_is_directory=True)
+            links.append(s)
+        return links
 
     def set_path(self, *front):
         self.sb.env["PATH"] = os.pathsep.join(list(front) + [self.real, os.environ.get("PATH", "")])
@@ -1145,19 +1154,16 @@ class PlantedInterpreter(unittest.TestCase):
         self.plant(sub)
         self.push_term_with_path(os.path.join(self.sb.root, "hk", "..", "work", "sub"))
 
-    def test_junction_into_worktree_subdirectory_is_dropped(self):
+    def test_link_into_worktree_subdirectory_is_dropped(self):
+        # A junction/symlink OUTSIDE the worktree whose target is INSIDE it has no string
+        # prefix equal to the worktree; only its physical path gives it away.
         sub = os.path.join(self.sb.work, "deep", "bin")
         self.plant(sub)
-        link = os.path.join(self.sb.root, "jlink")
-        self.link_dir(link, sub, junction=True)
-        self.push_term_with_path(".", link)
-
-    def test_symlink_into_worktree_subdirectory_is_dropped(self):
-        sub = os.path.join(self.sb.work, "deep", "bin")
-        self.plant(sub)
-        link = os.path.join(self.sb.root, "slink")
-        self.link_dir(link, sub, junction=False)
-        self.push_term_with_path(".", link)
+        links = self.links_into(sub)
+        for i, link in enumerate(links):
+            self.set_path(link)         # each link alone is the first hit for `python`
+            self.sb.commit("deal-%d.md" % i, "memo for %s\n" % TERM)
+            self.assertBlockedByRealScan(*self.sb.push())
 
     def test_planted_python_does_not_block_a_clean_push(self):
         # The real interpreter later on PATH is still found once the planted entries are gone.
