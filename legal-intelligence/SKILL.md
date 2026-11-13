@@ -61,7 +61,7 @@ Flag each of the following if present:
 - ⚠️ Extension notice period shorter than 9 months — risk of inadvertent holdover
 - ⚠️ No mark-to-market reset at extension — locks landlord into below-market rent for option term
 - ⚠️ Structural maintenance allocated to landlord — quantify roof/HVAC/structure CapEx exposure
-- ⚠️ Memorandum of lease provisions that conflict with lease body (per 1333 REDACTED-112 precedent)
+- ⚠️ Memorandum of lease provisions that conflict with lease body (per the GS-E golden-set precedent)
 - ⚠️ No explicit COI expiration tracking obligation on tenant
 - ⚠️ ROFR or purchase option that would impair lender financing or future sale
 
