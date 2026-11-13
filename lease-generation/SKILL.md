@@ -12,7 +12,7 @@ When a lease already exists (broker- or counsel-drafted, or a prior run) and the
 the LOI, do not enter this pipeline — run `lease-form-qc`'s LOI ↔ Lease Audit mode, which reuses this
 skill's register schema and `--loi-conformance` and adds the reverse pass and mechanics.
 
-Proven end-to-end on 2207 Northwood Suite 15A / Impact Home Technology LLC (2026-09-06/07): legacy draft failed
+Proven end-to-end on 2207 Northwood Suite 15A / Acme Widget Technology LLC (2026-09-06/07): legacy draft failed
 46/52 scanner checks and conformed to 7 of 16 LOI terms; the produced lease passed 51/52 (F5 Ohio-only), conformed
 to every LOI term, with a validator-clean tracked-change redline from the same op list.
 
@@ -130,4 +130,4 @@ notice-to-quit waiver, state-specific items).
   lease + LOI) to `lease-form-qc`'s LOI ↔ Lease Audit mode; this skill produces, that one grades. Handoff list
   updated for lease-form-qc v2.6/v2.7. No procedure, module, engine or schema change.
 - v1.0 (2026-09-07) — initial. Engine, xref audit, register schema, 13 modules, four-gate procedure. Built from the
-  Northwood 15A / Impact Home Technology run.
+  Northwood 15A / Acme Widget Technology run.

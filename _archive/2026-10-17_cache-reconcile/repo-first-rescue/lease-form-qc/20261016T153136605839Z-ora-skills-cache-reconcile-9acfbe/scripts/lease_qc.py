@@ -273,9 +273,8 @@ _TENANT_NAME_STOPWORDS = {
 def _extract_tenant_names(text):
     """Best-effort name(s) bound to the lease's own defined "Tenant" term,
     read from its parties clause (e.g. '... 2203 Northwood, LLC
-    ("Landlord") and Impact Home Technology LLC and Ryan Adam Spear,
-    individually (individually and collectively, "Tenant")' -> ["Impact
-    Home Technology LLC", "Ryan Adam Spear"]).
+    ("Landlord") and Acme Widget Technology LLC and Jordan Avery Example,
+    individually (individually and collectively, "Tenant")' -> ["Acme Widget Technology LLC", "Jordan Avery Example"]).
 
     Anchors on the LANDLORD's own defined-term parenthetical (a reliable
     landmark in ORA's standard preamble: '<Landlord entity> ("Landlord")

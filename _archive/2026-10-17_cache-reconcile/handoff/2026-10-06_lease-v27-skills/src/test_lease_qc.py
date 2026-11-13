@@ -1008,15 +1008,15 @@ class TestT2FooterTenantMismatch(TempDirCase):
         resolves to any ONE of the listed names is not stale boilerplate."""
         body = [
             'THIS LEASE AGREEMENT is made and entered into by and between '
-            '2203 Northwood, LLC ("Landlord") and Impact Home Technology LLC '
-            'and Ryan Adam Spear, individually (individually and collectively, "Tenant").',
+            '2203 Northwood, LLC ("Landlord") and Acme Widget Technology LLC '
+            'and Jordan Avery Example, individually (individually and collectively, "Tenant").',
             'Tenant, any person or entity comprising Tenant, or any guarantor '
             'of this Lease shall be jointly and severally liable.',
         ]
         p = self.tmp / "cotenant_lease.docx"
         make_docx(p, body, footer_text=None, extra_parts={
             "word/footer1.xml": _field_footer_xml(_complex_field_para(
-                ' DOCPROPERTY "TenantName" \\* MERGEFORMAT ', 'Ryan Adam Spear')),
+                ' DOCPROPERTY "TenantName" \\* MERGEFORMAT ', 'Jordan Avery Example')),
         })
         rc, out = run_cli(str(p))
         self.assertNotIn("] T2 ", out, out)
@@ -1100,10 +1100,10 @@ class TestT2FooterTenantMismatch(TempDirCase):
         self.assertEqual(entries[0][1], "BLOCK")
 
     def test_extract_tenant_names_handles_cotenant_list(self):
-        text = ('between 2203 Northwood, LLC ("Landlord") and Impact Home Technology LLC '
-                'and Ryan Adam Spear, individually (individually and collectively, "Tenant").')
+        text = ('between 2203 Northwood, LLC ("Landlord") and Acme Widget Technology LLC '
+                'and Jordan Avery Example, individually (individually and collectively, "Tenant").')
         names = lease_qc._extract_tenant_names(text)
-        self.assertEqual(names, ["Impact Home Technology LLC", "Ryan Adam Spear"])
+        self.assertEqual(names, ["Acme Widget Technology LLC", "Jordan Avery Example"])
 
     def test_extract_tenant_names_returns_empty_when_unconfident(self):
         self.assertEqual(lease_qc._extract_tenant_names("LEASE AGREEMENT with no parties clause."), [])
