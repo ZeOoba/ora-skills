@@ -84,7 +84,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # lease-form-qc tests `git show 5a8a98f:...` (frozen-original checks)
+          fetch-depth: 0  # lease-form-qc tests `git show 1f033d8:...` (frozen-original checks)
 
       - uses: actions/setup-python@v5
         if: vars.CI_RUNNER != 'self'
