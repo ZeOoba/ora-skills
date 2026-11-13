@@ -340,14 +340,20 @@ def _lease_up_hardening(deal: Deal, flags: list) -> None:
                      f"default alone (${D.LEASE_UP_TI_PSF:.2f}/SF x {vac:,.0f} vacant SF = ${ti_floor:,.0f}); "
                      "downtime and LC come on top — supply a leasing-broker quote or raise the carry")
     # (2) Year-1 NOI above the occupied share of stabilized NOI (SF pro-rata): vacant space would be
-    # earning at close, or stabilized NOI is understated. Year-1 NOI is in_place_noi, or stabilized_noi
+    # earning at close, or stabilized NOI is understated. Stabilized NOI already nets the 5% structural
+    # vacancy floor, so vacancy up to 5% is priced in: the share is grossed up by 1/(1 - 5%) and capped
+    # at stabilized NOI (Year-1 above stabilized still flags). Year-1 NOI is in_place_noi, or stabilized_noi
     # when the deal is modeled as stabilized at close. Either way it loosens the IRR leg.
     year1 = deal.in_place_noi if deal.in_place_noi is not None else deal.stabilized_noi
     source = "in_place_noi" if deal.in_place_noi is not None else "Year-1 NOI (modeled stabilized at close)"
-    occupied_share = (1 - vac / deal.sf) * deal.stabilized_noi
+    vac_share = vac / deal.sf
+    if vac_share <= D.STRUCTURAL_VACANCY:
+        occupied_share = deal.stabilized_noi
+    else:
+        occupied_share = (1 - vac_share) / (1 - D.STRUCTURAL_VACANCY) * deal.stabilized_noi
     if year1 > occupied_share:
         flags.append(f"CHECK: {source} ${year1:,.0f} exceeds the occupied share of "
-                     f"stabilized NOI (SF pro-rata ${occupied_share:,.0f}) — vacant space earning at "
+                     f"stabilized NOI (${occupied_share:,.0f}; SF pro-rata, vacancy up to 5% structural already priced in) — vacant space earning at "
                      "close or stabilized NOI understated; Year-1 NOI loosens the IRR leg")
 
 

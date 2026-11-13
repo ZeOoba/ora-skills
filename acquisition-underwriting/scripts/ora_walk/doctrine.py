@@ -38,6 +38,7 @@ RESERVES_PSF = 0.15               # $/SF/yr non-recoverable, grows with expenses
 EXPENSE_GROWTH = 0.03
 MARKET_RENT_GROWTH = 0.025        # Base case (SKILL.md Suite-Level Rollover & Credit Block (e)); 3% is the in-model contractual MINIMUM, not growth
 HOLD_YEARS = 10
+STRUCTURAL_VACANCY = 0.05         # vacancy line floor already netted into stabilized NOI (MAX(5%, downtime))
 LEASE_UP_TI_PSF = 8.00            # Lease-Up Assumption Block standing TI default, [EST] until a broker quote
 REFI_SPREAD = 0.02                # refi rate = 10-yr UST + 200 bps (v4.37)
 REFI_AMORT_YEARS = 25
