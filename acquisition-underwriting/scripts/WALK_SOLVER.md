@@ -1,6 +1,6 @@
 # ORA Walk-Price Solver
 
-Takes an offering memorandum (OM) to ORA's walk price in under a second, the same way every time. The solver inverts the acquisition-underwriting STAGE 1 floors (v4.45 / RCT v03) in closed form and reports which floor binds.
+Takes an offering memorandum (OM) to ORA's walk price in under a second, the same way every time. The solver inverts the acquisition-underwriting STAGE 1 floors (v4.48 / RCT v03) in closed form and reports which floor binds.
 
 ## Why it exists
 
@@ -31,10 +31,10 @@ Run from `acquisition-underwriting/scripts/`:
 python -m ora_walk deal.json --fetch-ust          # live FRED DGS10 30-day avg (no key, no user data sent)
 python -m ora_walk deal.json --ust 0.0452         # supplied UST (cite source/date)
 python -m ora_walk walk_examples/example_portfolio.json --ust 0.0452 --json
-python test_walk_solver.py                        # 48 tests; every doctrine constant pinned; 22/22 mutations killed
+python test_walk_solver.py                        # 60 tests; every doctrine constant pinned
 ```
 
-`ora_walk/doctrine.py` pins SKILL.md v4.45. Any SKILL.md version that changes a constant mirrored there must update `doctrine.py` and the `DoctrinePins` tests in the same PR.
+`ora_walk/doctrine.py` pins SKILL.md v4.48 (v4.46 through v4.48 changed no constant; the values date from v4.45). Any SKILL.md version that changes a constant mirrored there must update `doctrine.py` and the `DoctrinePins` tests in the same PR.
 
 Deal fields (see `ora_walk/solver.py: Deal`): `name, sf, stabilized_noi` (pre-reserves, stabilization-year $), plus optional:
 - Location and building:
@@ -51,7 +51,7 @@ Examples with synthetic data are in `walk_examples/`.
 
 ## NOI input basis (read this)
 
-`stabilized_noi` and `in_place_noi` must already be after 5% structural vacancy, credit loss and the 4% management fee. The solver deducts only reserves. If you feed OM NOI at 100% occupancy, every leg is overstated.
+`stabilized_noi` and `in_place_noi` must already be net of the vacancy line, credit loss and the 4% EGI management fee. The vacancy line each year is MAX(5% structural, expected modeled downtime): the 5% is a floor, never added on top. For `in_place_noi` that downtime covers space vacant at close and in-place leases expiring in Year 1. The solver deducts only reserves. If you feed OM NOI at 100% occupancy, every leg is overstated.
 
 NOI grows at the market Base of 2.5%. The 3% escalator is a contractual minimum, not a growth rate, and anything above 2.5% is flagged. Suite-level rollover is not modeled. For a deal where IRR binds, confirm the walk against the full UNDERWRITE model.
 

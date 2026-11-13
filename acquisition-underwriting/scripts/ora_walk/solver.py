@@ -7,9 +7,12 @@ For one building it solves, in closed form, the highest price that still clears 
                  (unlevered cash flows do not depend on price, so NPV(r_floor) = 0 solves exactly)
 where all-in = price x 1.02 + CapEx + lease-up carry. The walk is the lowest leg; that leg binds.
 
-NOI INPUT BASIS: `stabilized_noi` / `in_place_noi` must already be after structural vacancy (5%),
-credit loss and 4% management — the solver deducts only reserves. Feeding OM NOI at 100% occupancy
-overstates every leg. Suite-level rollover is NOT modeled; NOI grows at market Base 2.5%.
+NOI INPUT BASIS: both NOI inputs must already be net of the vacancy line, credit loss and 4% EGI
+management; the solver deducts only reserves. The vacancy line each year is MAX(5% structural,
+expected modeled downtime as % of GPR): the 5% is a floor, never added on top. So `stabilized_noi`
+nets 5% (or modeled downtime if higher), and `in_place_noi` nets Year-1 MAX(5%, downtime on space
+vacant at close + expected downtime on in-place leases expiring in Year 1).
+Feeding OM NOI at 100% occupancy overstates every leg. Suite-level rollover is NOT modeled; NOI grows at market Base 2.5%.
 
 Reports the per-property refi governor at the walk (LESSER of 65% LTV and 1.25x DSCR, UST + 200 bps,
 25-yr amortization, 1% cost), the 65%-LTV DSCR floor test, and levered IRR (reported only).
