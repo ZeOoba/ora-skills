@@ -1,6 +1,5 @@
 ---
-
-name: parcel-data-recovery
+name: "parcel-data-recovery"
 description: "Use when an Oxford Realty Advisors off-market screen workbook has rows lacking Bldg SF or auditor values and county-level building SF, market value, year-built, or tax-delinquency data must be recovered from county GIS/CAMA sources (Jackson MO, Wyandotte KS, Clay MO, Hamilton/Butler/Clermont/Warren OH; endpoints and their last-verified status in references/endpoints.md). Trigger on: recover SF, missing building SF, parcel data gap, UNSCREENABLE rows, DATA-GAP rows, county GIS pull, footprint SF, assessor values, CAMA extract, recover year built, recover market value, tax delinquency flags, refresh parcel data, re-run P1 on recovered data, off-market master rebuild. Companion to county-parcel-screen; patches an existing master."
 ---
 
