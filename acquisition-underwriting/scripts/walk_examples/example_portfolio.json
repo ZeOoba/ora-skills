@@ -1,0 +1,25 @@
+{
+  "portfolio_ask": 5400000,
+  "portfolio": [
+    {
+      "name": "ILLUSTRATIVE Bldg A",
+      "sf": 22000,
+      "market": "Cincinnati OH",
+      "year_built": 1979,
+      "stabilized_noi": 215000,
+      "construction_type": "tilt-up"
+    },
+    {
+      "name": "ILLUSTRATIVE Bldg B",
+      "sf": 18000,
+      "market": "Cincinnati OH",
+      "year_built": 2001,
+      "stabilized_noi": 190000,
+      "in_place_noi": 60000,
+      "stabilization_year": 2,
+      "lease_up_carry": 55000,
+      "vacant_sf_at_close": 12000,
+      "construction_type": "pemb"
+    }
+  ]
+}
