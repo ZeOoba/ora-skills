@@ -392,6 +392,160 @@ class TieOutTests(unittest.TestCase):
         claims = mt.extract_claims(["band $9.00-$9.60 and $1.1M-$1.2M"], [])
         self.assertTrue(all(c.value > 0 for c in claims), [(c.text, c.value) for c in claims])
 
+    # ---- post-merge refute regressions (RE-4.47-1, v4.48) ----
+    def _statuses(self, rows, paras, pct=()):
+        res, _, _ = mt.run(self._memo(paras), self._model(rows, pct))
+        return [(r.claim.text, r.status, r.cell) for r in res]
+
+    def _cli(self, rows, paras):
+        return mt.main([str(self._memo(paras)), str(self._model(rows))])
+
+    def test_c2a_result_sentences_are_not_threshold_statements(self):
+        for memo in ("DSCR clears the floor: 1.25x.", "DSCR comes in above target at 1.25x."):
+            rows = [("Min DSCR", 1.25), ("Target DSCR", 1.25), ("DSCR", 1.10)]
+            self.assertEqual(self._cli(rows, [memo]), 1, memo)
+
+    def test_c2b_floor_dscr_is_an_achieved_metric(self):
+        rows = [("Floor DSCR (65% LTV loan)", 1.10), ("Year 1 DSCR", 1.30)]
+        self.assertEqual(self._cli(rows, ["Floor DSCR of 1.30x."]), 1, self._statuses(rows, ["Floor DSCR of 1.30x."]))
+
+    def test_c2b_dscr_at_max_loan_competes(self):
+        rows = [("DSCR at Max Loan", 1.10), ("Stabilized DSCR", 1.40)]
+        self.assertEqual(self._cli(rows, ["DSCR of 1.40x."]), 1, self._statuses(rows, ["DSCR of 1.40x."]))
+
+    def test_c3a_year_does_not_carry_over_from_previous_figure(self):
+        rows = [("Year 1 DSCR", 1.40), ("Year 5 DSCR", 1.10), ("Year 5 NOI", 300000)]
+        memo = ["Year 5 NOI $300K; DSCR 1.10x."]
+        self.assertEqual(self._cli(rows, memo), 1, self._statuses(rows, memo))
+
+    def test_c3b_near_match_still_checks_ambiguity(self):
+        rows = [("Year 1 DSCR", 1.10), ("Year 5 DSCR", 1.394)]
+        self.assertEqual(self._cli(rows, ["DSCR of 1.40x."]), 1, self._statuses(rows, ["DSCR of 1.40x."]))
+
+    def test_c1_trailing_metric_does_not_steal_a_bound_figure(self):
+        rows = [("Cap Rate", 0.065), ("IRR", 0.075)]
+        memo = ["Cap rate 7.5%, IRR 7.5%."]
+        st = self._statuses(rows, memo, pct=("Cap Rate", "IRR"))
+        self.assertEqual(st[0][1], "CONFLICT", st)
+        self.assertEqual(st[1][1], "TIED", st)
+
+    def test_trailing_metric_still_binds_unclaimed_figure(self):
+        claims = mt.extract_claims(["IRR 14.1%, 60% LTV"], [])
+        self.assertEqual([c.metric for c in claims], ["irr", "ltv"])
+
+    def test_c4_uncached_array_formula_exits_2(self):
+        path = self.tmp / "arr.xlsx"
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws["A1"] = "DSCR"
+        ws["B1"] = openpyxl.worksheet.formula.ArrayFormula("B1", "=1+1")
+        ws["A2"] = "NOI"
+        ws["B2"] = 300000
+        wb.save(path)
+        self.assertEqual(mt.main([str(self._memo(["NOI of $300,000"])), str(path)]), 2)
+
+    def test_c5_corrupt_docx_stream_exits_2(self):
+        rebuilt = self.tmp / "deflated.docx"
+        with zipfile.ZipFile(rebuilt, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("[Content_Types].xml", "<Types/>")
+            z.writestr("word/document.xml", "<x>" + "A" * 4000 + "</x>")
+        raw = bytearray(rebuilt.read_bytes())
+        start = raw.find(b"word/document.xml") + len("word/document.xml")
+        for i in range(start + 4, start + 40):  # corrupt the deflate stream of the first entry's data
+            raw[i] ^= 0xFF
+        rebuilt.write_bytes(bytes(raw))
+        self.assertEqual(mt.main([str(rebuilt), str(self.model)]), 2)
+
+    def test_c7_rounding_band_never_straddles_the_dscr_governor(self):
+        self.assertEqual(self._cli([("DSCR", 1.2445)], ["DSCR of 1.25x."]), 1)
+        self.assertEqual(self._cli([("DSCR", 1.24)], ["DSCR of 1.3x."]), 1)
+
+    def test_c7_rounding_band_never_straddles_the_ltv_governor(self):
+        self.assertEqual(self._cli([("LTV", 0.6451)], ["LTV of 65%."]), 0)  # same side of 65%: rounding is fine
+        self.assertEqual(self._cli([("LTV", 0.6549)], ["LTV of 65%."]), 1)  # model breaches the ceiling
+        self.assertEqual(self._cli([("DSCR", 1.2512)], ["DSCR of 1.25x."]), 0)  # at the floor on both sides
+
+    def test_c7_near_on_governed_metric_fails(self):
+        self.assertEqual(self._cli([("DSCR", 1.3167)], ["DSCR of 1.3201x."]), 1)
+
+    def test_c8_minus_after_a_year_is_a_sign(self):
+        claims = mt.extract_claims(["Year 1 -$50,000 cash flow shortfall; price $2,000,000."], [])
+        self.assertEqual(claims[0].value, -50000.0)
+
+    def test_paren_percent_is_a_parenthetical(self):
+        self.assertEqual(mt.extract_claims(["Less: Vacancy & Credit (5%)"], [])[0].value, 0.05)
+
+    def test_unicode_times_sign_is_extracted(self):
+        rows = [("DSCR", 1.40), ("Purchase Price", 2000000)]
+        self.assertEqual(self._cli(rows, ["DSCR of 1.10× and price of $2,000,000."]), 1)
+
+    def test_out_equal_to_json_and_pdf_are_refused(self):
+        memo = self._memo(["Bid $1.15M"])
+        same = self.tmp / "r.md"
+        self.assertEqual(mt.main([str(memo), str(self.model), "--out", str(same), "--json", str(same)]), 2)
+        pdf = self.tmp / "IC_Memo.pdf"
+        pdf.write_bytes(b"%PDF")
+        self.assertEqual(mt.main([str(memo), str(self.model), "--out", str(pdf)]), 2)
+        self.assertEqual(pdf.read_bytes(), b"%PDF")
+
+    # ---- second refute round on the v4.48 fix ----
+    def test_r2_limit_labels_with_loan_or_floor_stay_thresholds(self):
+        cases = [
+            ([("Min DSCR (loan sizing)", 1.25), ("Loan Amount", 747500)], "DSCR of 1.25x."),
+            ([("Maximum Loan-to-Value", 0.65), ("Loan Amount", 805000), ("Purchase Price", 1150000)],
+             "Leverage: 65% LTV."),
+            ([("Loan Covenant: Minimum DSCR", 1.25)], "DSCR of 1.25x."),
+            ([("DSCR Floor", 1.25)], "DSCR of 1.25x."),
+            ([("DSCR Floor", 1.25), ("DSCR at 65% LTV (stabilized NOI)", 1.19)], "Floor DSCR of 1.25x."),
+            ([("Max Loan DSCR Constraint", 1.25), ("Year 1 DSCR", 1.18)], "DSCR at max loan of 1.25x."),
+        ]
+        for rows, memo in cases:
+            self.assertEqual(self._cli(rows, [memo]), 1, (memo, self._statuses(rows, [memo])))
+
+    def test_r2_achieved_forms_still_compete(self):
+        self.assertFalse(mt._is_threshold(mt.Cell("S", "B1", 1.1, False, "Floor DSCR (65% LTV loan)")))
+        self.assertFalse(mt._is_threshold(mt.Cell("S", "B1", 1.1, False, "DSCR at Max Loan")))
+        self.assertTrue(mt._is_threshold(mt.Cell("S", "B1", 1.25, False, "Max Loan DSCR Constraint")))
+
+    def test_r2_straddle_checked_on_every_matching_cell(self):
+        rows = [("DSCR", 1.2501), ("Floor DSCR (65% LTV loan)", 1.2451)]
+        self.assertEqual(self._cli(rows, ["DSCR of 1.25x."]), 1, self._statuses(rows, ["DSCR of 1.25x."]))
+        rows = [("LTV", 0.6499), ("Floor LTV (max loan)", 0.6504)]
+        self.assertEqual(self._cli(rows, ["LTV of 65%."]), 1, self._statuses(rows, ["LTV of 65%."]))
+
+    def test_r2_threshold_claim_on_achieved_cell_is_governed(self):
+        rows = [("Floor DSCR (65% LTV loan)", 1.2449)]
+        self.assertEqual(self._cli(rows, ["DSCR of 1.25x minimum."]), 1)
+
+    def test_r2_float_noise_at_the_governor_passes(self):
+        self.assertEqual(self._cli([("LTV", 0.6500000000000001)], ["LTV of 65%."]), 0)
+
+    def test_r2_distant_keyword_does_not_beat_trailing_metric(self):
+        rows = [("Exit Cap Rate", 0.075), ("Vacancy", 0.05)]
+        st = self._statuses(rows, ["Exit cap rate assumes 7.5% vacancy."], pct=("Exit Cap Rate", "Vacancy"))
+        self.assertNotEqual(st[0][1], "TIED", st)
+        claims = mt.extract_claims(["Levered IRR at 60% LTV is 14.1%."], [])
+        self.assertEqual(claims[0].metric, "ltv")  # the 60% is the LTV, not the IRR
+
+    def test_r2_en_dash_and_tab_negatives(self):
+        self.assertEqual(mt.extract_claims(["Year 1 –$50,000 cash flow."], [])[0].value, -50000.0)
+        self.assertEqual(mt.extract_claims(["Cash flow after DS\t1.05x\t-$12,500"], [])[1].value, -12500.0)
+        self.assertTrue(all(c.value > 0 for c in mt.extract_claims(["Rents 9.00-$9.60 NNN."], [])))
+
+    def test_r2_trailing_dot_or_space_out_paths_refused(self):
+        memo = self._memo(["Bid $1.15M"])
+        pdf = self.tmp / "other.pdf"
+        pdf.write_bytes(b"%PDF")
+        self.assertEqual(mt.main([str(memo), str(self.model), "--out", str(pdf) + "."]), 2)
+        self.assertEqual(mt.main([str(memo), str(self.model), "--out", str(self.tmp / "o.xlsx") + " "]), 2)
+        self.assertEqual(pdf.read_bytes(), b"%PDF")
+
+    def test_governor_constants_come_from_doctrine(self):
+        from ora_walk import doctrine
+        self.assertEqual(mt.GOVERNORS["dscr"], (doctrine.DSCR_FLOOR,))
+        self.assertEqual(set(mt.GOVERNORS["ltv"]),
+                         {doctrine.PER_PROPERTY_LTV_CEILING, doctrine.AGGREGATE_LTV_CEILING})
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
