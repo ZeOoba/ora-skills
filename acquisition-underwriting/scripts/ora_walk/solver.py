@@ -198,7 +198,7 @@ def _construction_mult(deal: Deal, flags: list) -> tuple[float, float]:
 
 
 def _effective_vintage(deal: Deal, point_psf_r: float, flags: list) -> Optional[float]:
-    """R% rule (SKILL.md:96), continuous (no rounding). An asserted effective_vintage can only tighten:
+    """R% rule (SKILL.md STAGE 1 renovation effective-vintage rule), continuous (no rounding). An asserted effective_vintage can only tighten:
     it is capped at the vintage the documented renovation spend supports."""
     computed = deal.year_built
     if deal.renovation_spend > 0:
@@ -311,16 +311,44 @@ def _is_majority_vacant(deal: Deal, flags: list) -> bool:
         flags.append("[DATA-GAP: vacancy at close] lease-up deal without vacant_sf_at_close — "
                      "majority-vacant +100 bps IRR premium NOT applied; supply it")
     mv = bool(derived) or bool(deal.majority_vacant)
-    # SKILL.md:245 Lease-Up Assumption Block: a vacant deal must carry its lease-up (downtime, TI, LC)
+    # SKILL.md Lease-Up Assumption Block (UNDERWRITING CONVENTIONS): a vacant deal must carry its lease-up (downtime, TI, LC)
     # in all-in and in the Year-1 NOI line. Modeling it as stabilized at close prices it looser.
     if mv and deal.stabilization_year == 1:
         flags.append("LOOSER THAN DOCTRINE: majority-vacant at close but modeled as stabilized at close — "
-                     "Lease-Up Block (SKILL.md:245) not applied; set in_place_noi, stabilization_year >= 2 "
+                     "Lease-Up Block (SKILL.md UNDERWRITING CONVENTIONS) not applied; set in_place_noi, stabilization_year >= 2 "
                      "and lease_up_carry")
     if deal.vacant_sf_at_close is not None and deal.vacant_sf_at_close >= deal.sf and deal.lease_up_carry == 0:
         flags.append("LOOSER THAN DOCTRINE: 100% vacant with no lease_up_carry — Lease-Up Block downtime, "
-                     "TI and LC (SKILL.md:245) missing from all-in")
+                     "TI and LC (SKILL.md Lease-Up Assumption Block) missing from all-in")
+    _lease_up_hardening(deal, flags)
     return mv
+
+
+def _lease_up_hardening(deal: Deal, flags: list) -> None:
+    """Two plausibility checks on lease-up inputs; flags only (a leasing-broker quote can supersede
+    the Lease-Up Block defaults, so neither is a hard error)."""
+    vac = deal.vacant_sf_at_close
+    if vac is None:
+        return
+    # (1) Token carry: the Block's TI default alone is $8.00/SF on the vacant space; downtime and LC
+    # come on top. 100% vacant with zero carry is already flagged above, so it is not repeated.
+    ti_floor = D.LEASE_UP_TI_PSF * vac
+    fully_vacant_no_carry = vac >= deal.sf and deal.lease_up_carry == 0
+    if vac > 0 and deal.lease_up_carry < ti_floor and not fully_vacant_no_carry:
+        head = "LOOSER THAN DOCTRINE" if vac >= deal.sf else "CHECK"
+        flags.append(f"{head}: lease_up_carry ${deal.lease_up_carry:,.0f} is below the Lease-Up Block TI "
+                     f"default alone (${D.LEASE_UP_TI_PSF:.2f}/SF x {vac:,.0f} vacant SF = ${ti_floor:,.0f}); "
+                     "downtime and LC come on top — supply a leasing-broker quote or raise the carry")
+    # (2) Year-1 NOI above the occupied share of stabilized NOI (SF pro-rata): vacant space would be
+    # earning at close, or stabilized NOI is understated. Year-1 NOI is in_place_noi, or stabilized_noi
+    # when the deal is modeled as stabilized at close. Either way it loosens the IRR leg.
+    year1 = deal.in_place_noi if deal.in_place_noi is not None else deal.stabilized_noi
+    source = "in_place_noi" if deal.in_place_noi is not None else "Year-1 NOI (modeled stabilized at close)"
+    occupied_share = (1 - vac / deal.sf) * deal.stabilized_noi
+    if year1 > occupied_share:
+        flags.append(f"CHECK: {source} ${year1:,.0f} exceeds the occupied share of "
+                     f"stabilized NOI (SF pro-rata ${occupied_share:,.0f}) — vacant space earning at "
+                     "close or stabilized NOI understated; Year-1 NOI loosens the IRR leg")
 
 
 def solve(deal: Deal, ust: float, portfolio_mode: bool = False) -> Result:
@@ -383,7 +411,7 @@ def solve(deal: Deal, ust: float, portfolio_mode: bool = False) -> Result:
             flags.append("GATE: ask outside $500K–$10M single-asset band")
     if deal.sf >= D.MAX_SF_PER_BUILDING:
         flags.append("GATE: building >= 50,000 SF")
-    # SKILL.md:97 DENOMINATOR-SENSITIVE: within ±5 discount-pts of the floor at LOW or POINT, or the
+    # SKILL.md STAGE 1 DENOMINATOR-SENSITIVE flag: within ±5 discount-pts of the floor at LOW or POINT, or the
     # floor verdict flips between LOW and POINT -> local replacement verification REQUIRED pre-LOI.
     for label, price in (("walk", walk), ("ask", deal.ask_price)):
         if not price or price <= 0:
@@ -434,7 +462,7 @@ def solve_portfolio(deals: list, ust: float, portfolio_ask: Optional[float] = No
     premium = walk - base
 
     flags = [f"{r.name}: {f}" for r in results for f in r.flags]
-    # SKILL.md:103: (1) stabilized NOI share when every building has credible positive NOI and none is
+    # SKILL.md STAGE 1 Portfolios allocation priority: (1) stabilized NOI share when every building has credible positive NOI and none is
     # vacant; otherwise (2) replacement-cost-weighted GBA (SF x construction-adjusted POINT). An unknown
     # type uses (2) at the strictest multiplier, so (3) raw GBA never applies here.
     # "a vacant building in a leased portfolio is always allocated by (2)": majority-vacant, or no

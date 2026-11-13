@@ -30,8 +30,9 @@ class DoctrinePins(unittest.TestCase):
         self.assertEqual((D.REFI_SPREAD, D.REFI_AMORT_YEARS, D.REFI_FINANCING_COST, D.CLOSING_COST),
                          (0.02, 25, 0.01, 0.02))
         self.assertEqual((D.RESERVES_PSF, D.EXPENSE_GROWTH, D.MARKET_RENT_GROWTH), (0.15, 0.03, 0.025))
+        self.assertEqual(D.LEASE_UP_TI_PSF, 8.00)  # Lease-Up Assumption Block TI default
 
-    def test_exit_caps(self):  # SKILL.md:240
+    def test_exit_caps(self):  # SKILL.md UNDERWRITING CONVENTIONS exit cap
         self.assertEqual(D.EXIT_CAPS, {
             "Columbus OH": 0.075, "Cincinnati OH": 0.075, "Indianapolis IN": 0.075,
             "Kansas City MO": 0.0775, "Madison WI": 0.0725, "Mid-Atlantic": 0.0725,
@@ -39,7 +40,7 @@ class DoctrinePins(unittest.TestCase):
             "Louisville KY": 0.0775, "Chicago-Cook IL": 0.08})
         self.assertEqual(D.DEFAULT_EXIT_CAP, 0.0775)
 
-    def test_rct_points(self):  # SKILL.md:270-285 / replacement-cost.v3.json
+    def test_rct_points(self):  # SKILL.md RCT v03 / replacement-cost.v3.json
         self.assertEqual(D.RCT_POINT, {
             "Columbus OH": 255.16, "Cincinnati OH": 279.40, "Kansas City MO": 253.22,
             "Indianapolis IN": 282.03, "Mid-Atlantic": 258.85, "Madison WI": 254.53,
@@ -47,12 +48,12 @@ class DoctrinePins(unittest.TestCase):
             "Louisville KY": 263.41, "Chicago-Cook IL": 250.66})
         self.assertEqual(D.RCT_FALLBACK_POINT, 250.66)
 
-    def test_construction(self):  # SKILL.md:292-305
+    def test_construction(self):  # SKILL.md Construction-Type Multiplier Schedule
         self.assertEqual(D.CONSTRUCTION_MULT, {"tilt-up": 1.00, "precast": 1.00, "cmu": 0.97, "brick": 1.10, "hybrid": 0.93})
         self.assertEqual(D.PEMB_TILT, ((20_000, 0.88), (40_000, 0.90), (float("inf"), 0.92)))
         self.assertEqual(D.UNKNOWN_MULT_CAP, 0.90)
 
-    def test_denominator_sensitive(self):  # SKILL.md:287
+    def test_denominator_sensitive(self):  # SKILL.md RCT v03 standing-flag markets
         self.assertEqual(D.DENOMINATOR_SENSITIVE, {"Madison WI", "Grand Rapids MI", "Richmond VA",
                                                     "Des Moines IA", "Chicago-Cook IL", "Indianapolis IN"})
 
@@ -294,6 +295,68 @@ class LooserThanDoctrineGuards(unittest.TestCase):
         self.assertAlmostEqual(over.refi["dscr_at_65_ltv"], market.refi["dscr_at_65_ltv"])
         self.assertTrue(any("above the doctrine cap" in f for f in over.flags))
         self.assertLess(over.legs["irr"], market.legs["irr"])  # the IRR leg still uses the stricter override
+
+    def test_token_lease_up_carry_flagged(self):
+        token = lambda r: [f for f in r.flags if "below the Lease-Up Block TI default" in f]
+        lu = dict(in_place_noi=0, stabilization_year=2)
+        # 100% vacant: $8.00 x 30,000 = $240,000 is the TI floor alone
+        r = solve(base(vacant_sf_at_close=30_000, lease_up_carry=239_999, **lu), UST)
+        self.assertEqual(len(token(r)), 1)
+        self.assertTrue(token(r)[0].startswith("LOOSER THAN DOCTRINE"))
+        self.assertEqual(token(solve(base(vacant_sf_at_close=30_000, lease_up_carry=240_000, **lu), UST)), [])
+        # partial vacancy: a CHECK, scaled to the vacant SF only (10,000 SF -> $80,000)
+        r = solve(base(vacant_sf_at_close=10_000, lease_up_carry=79_999, in_place_noi=150_000, stabilization_year=2), UST)
+        self.assertEqual(len(token(r)), 1)
+        self.assertTrue(token(r)[0].startswith("CHECK"))
+        self.assertEqual(token(solve(base(vacant_sf_at_close=10_000, lease_up_carry=80_000,
+                                          in_place_noi=150_000, stabilization_year=2), UST)), [])
+        # partial vacancy with zero carry is token too
+        self.assertEqual(len(token(solve(base(vacant_sf_at_close=10_000), UST))), 1)
+        # 100% vacant with $1 carry is token: exactly one token flag, on top of no zero-carry flag
+        r = solve(base(vacant_sf_at_close=30_000, lease_up_carry=1, **lu), UST)
+        self.assertEqual(len(token(r)), 1)
+        self.assertFalse(any("no lease_up_carry" in f for f in r.flags))
+        # 100% vacant with zero carry keeps its existing flag and is not double-counted
+        r = solve(base(vacant_sf_at_close=30_000), UST)
+        self.assertEqual(token(r), [])
+        self.assertEqual(sum(f.startswith("LOOSER THAN DOCTRINE") for f in r.flags), 2)
+        # no vacancy given, or none at close: nothing to test against
+        self.assertEqual(token(solve(base(), UST)), [])
+        self.assertEqual(token(solve(base(vacant_sf_at_close=0), UST)), [])
+
+    def test_in_place_noi_above_occupied_share_flagged(self):
+        hi = lambda r: [f for f in r.flags if "exceeds the occupied share" in f]
+        kw = dict(vacant_sf_at_close=10_000, stabilization_year=2, lease_up_carry=200_000)
+        # occupied share = (1 - 15,000/30,000) x 300,000 = 150,000 exactly: equal is not above
+        half = dict(kw, vacant_sf_at_close=15_000)
+        self.assertEqual(len(hi(solve(base(in_place_noi=150_001, **half), UST))), 1)
+        self.assertEqual(hi(solve(base(in_place_noi=150_000, **half), UST)), [])
+        # occupied share = (1 - 10,000/30,000) x 300,000 = 200,000
+        self.assertEqual(len(hi(solve(base(in_place_noi=200_001, **kw), UST))), 1)
+        # 100% vacant: any positive in-place NOI is above the occupied share of zero
+        self.assertEqual(len(hi(solve(base(vacant_sf_at_close=30_000, in_place_noi=1, stabilization_year=2,
+                                          lease_up_carry=240_000), UST))), 1)
+        # vacancy known to be zero: in-place above stabilized still flags (review C2)
+        self.assertEqual(len(hi(solve(base(vacant_sf_at_close=0, in_place_noi=400_000, stabilization_year=3), UST))), 1)
+        self.assertEqual(hi(solve(base(vacant_sf_at_close=0, in_place_noi=300_000, stabilization_year=3), UST)), [])
+        # partly vacant but modeled stabilized at close: Year-1 NOI = stabilized > occupied share (review C10)
+        r = solve(base(vacant_sf_at_close=12_000, lease_up_carry=96_000), UST)
+        self.assertEqual(len(hi(r)), 1)
+        self.assertIn("modeled stabilized at close", hi(r)[0])
+        self.assertEqual(hi(solve(base(vacant_sf_at_close=0), UST)), [])
+        # without vacant_sf_at_close there is no occupied share to test
+        self.assertEqual(hi(solve(base(in_place_noi=290_000, stabilization_year=2), UST)), [])
+        # the flag is reported only: it does not change the walk
+        a = solve(base(in_place_noi=200_000, **kw), UST)
+        b = solve(base(in_place_noi=250_000, **kw), UST)
+        self.assertGreater(b.legs["irr"], a.legs["irr"])  # higher Year-1 NOI loosens the IRR leg ...
+        self.assertEqual(len(hi(b)), 1)                    # ... which is why it is flagged
+
+    def test_hardening_flags_roll_up_to_portfolio(self):
+        lu = dict(in_place_noi=250_000, stabilization_year=2, vacant_sf_at_close=10_000, lease_up_carry=1)
+        res = solve_portfolio([base(name="A", **lu), base(name="B")], UST)
+        self.assertTrue(any("below the Lease-Up Block TI default" in f for f in res["flags"]))
+        self.assertTrue(any("exceeds the occupied share" in f for f in res["flags"]))
 
     def test_exactly_half_vacant_is_not_majority(self):
         r = solve(base(vacant_sf_at_close=15_000), UST)
