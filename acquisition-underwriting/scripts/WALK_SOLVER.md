@@ -60,14 +60,16 @@ NOI grows at the market Base of 2.5%. The 3% escalator is a contractual minimum,
 The solver raises an error for:
 - negative cost inputs;
 - `in_place_noi` with no lease-up year;
-- a construction multiplier outside 0.88–1.10, or an unknown construction type;
+- an unknown construction type, or a repeated or stacked adder;
 - an effective vintage that is in the future or earlier than the build year;
 - an exit cap outside 3–20%.
 
 It flags, rather than rejects:
 - an exit-cap override below the market cap;
 - growth above 2.5%;
-- a lease-up deal with no `vacant_sf_at_close`.
+- a lease-up deal with no `vacant_sf_at_close`;
+- `lease_up_carry` below the Lease-Up Block TI default alone ($8.00/SF × vacant SF at close);
+- Year-1 NOI (`in_place_noi`, or stabilized NOI when modeled stabilized at close) above the occupied share of stabilized NOI (SF pro-rata), whenever `vacant_sf_at_close` is given.
 
 The majority-vacant premium is derived from `vacant_sf_at_close`, and setting it to `False` cannot remove it.
 
