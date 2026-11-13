@@ -84,7 +84,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # lease-form-qc tests `git show 1f033d8:...` (frozen-original checks)
+          # Full history is a safe default, not a current need: since #254 the lease-form-qc
+          # frozen-original checks read a vendored fixture instead of `git show <sha>`, and the
+          # only suite that runs git (dirty-tree-triage) builds its own temp repo.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         if: vars.CI_RUNNER != 'self'
