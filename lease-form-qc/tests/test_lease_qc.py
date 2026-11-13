@@ -68,6 +68,12 @@ SCRIPTS = SKILL / "scripts"
 REPO = SKILL.parent
 LEASE_QC = SCRIPTS / "lease_qc.py"
 PDF_FIXTURE = HERE / "no_text_layer_fixture.pdf"
+# Pre-retrofit lease_qc.py at commit 1f033d8, vendored verbatim (data only, never imported).
+# The commit is no longer reachable from any remote ref after the 2026-11 history rewrites,
+# so reading it with `git show` failed in CI. SHA-256 is pinned so the oracle cannot drift.
+FROZEN_ORIGINAL = HERE / "fixtures" / "lease_qc_frozen_1f033d8.py.txt"
+FROZEN_ORIGINAL_SHA256 = "1cc71d0a6389ca766e45f5bd328d1f9bf91516f601aed6bd914fcaeae8508db2"
+FROZEN_ORIGINAL_SRC = FROZEN_ORIGINAL.read_text(encoding="utf-8")
 MASTER_V26 = (REPO / "masterlease-jurisdiction-rebase" / "scripts" / "fixtures"
               / "ORA_MasterLease_ShallowBayIndustrial_v2.6_TEMPLATE.docx")
 # v2.7 (2026-10-06) is the clean-benchmark master: v2.6 now fails exactly the
@@ -809,22 +815,21 @@ class TestRegistryAndCli(TempDirCase):
             self.assertTrue(callable(fn))
 
     def test_severities_match_the_frozen_original(self):
-        src = subprocess.run(
-            ["git", "show", "1f033d8:lease-form-qc/scripts/lease_qc.py"],
-            cwd=str(REPO), capture_output=True, text=True, encoding="utf-8")
-        self.assertEqual(src.returncode, 0, src.stderr)
-        old_sev = dict(re.findall(r'\("([A-Z0-9a-z]+)","(BLOCK|HIGH|MED|LOW)"', src.stdout))
+        old_sev = dict(re.findall(r'\("([A-Z0-9a-z]+)","(BLOCK|HIGH|MED|LOW)"', FROZEN_ORIGINAL_SRC))
         self.assertEqual(len(old_sev), 51)
         new_sev = {c[0]: c[1] for c in lease_qc.CHECKS}
         for cid, sev in old_sev.items():
             self.assertEqual(new_sev.get(cid), sev, f"{cid} severity changed")
 
+    def test_frozen_original_fixture_is_unmodified(self):
+        import hashlib
+        data = FROZEN_ORIGINAL.read_bytes().replace(b"\r\n", b"\n")
+        self.assertEqual(hashlib.sha256(data).hexdigest(), FROZEN_ORIGINAL_SHA256,
+                         "the frozen pre-retrofit oracle must never change")
+
     def test_titles_match_the_frozen_original(self):
-        src = subprocess.run(
-            ["git", "show", "1f033d8:lease-form-qc/scripts/lease_qc.py"],
-            cwd=str(REPO), capture_output=True, text=True, encoding="utf-8")
         old_titles = dict(re.findall(r'\("([A-Z0-9a-z]+)","(?:BLOCK|HIGH|MED|LOW)","([^"]+)"',
-                                     src.stdout))
+                                     FROZEN_ORIGINAL_SRC))
         self.assertEqual(len(old_titles), 51)
         new_titles = {c[0]: c[2] for c in lease_qc.CHECKS}
         for cid, title in old_titles.items():
