@@ -33,7 +33,7 @@ git tooling that keeps the library itself honest.
 
 | | |
 |---|---|
-| Live skills | 90 top-level folders with a `SKILL.md` (recount: `ls */SKILL.md \| wc -l`) |
+| Live skills | 89 top-level folders with a `SKILL.md` (recount: `ls */SKILL.md \| wc -l`) |
 | Shared data | [`target-markets.json`](target-markets.json), the canonical buy-box market list, injected into 8 skills at package time |
 | Shared code | [`tools/ora_doc_qc.py`](tools/ora_doc_qc.py), the document-QC harness, injected into 5 QC skills as `scripts/ora_doc_qc.py` |
 | Tooling | [`tools/`](tools): packaging, CI gates, drift and mirror sync, hooks, 26 `tools/test_*.py` suites |
@@ -81,7 +81,7 @@ derived copies; Cowork only picks up a change when a packaged `.skill` is import
 
 ## Skill catalog
 
-90 skills, grouped by domain. Purposes are condensed from each skill's frontmatter `description`;
+89 skills, grouped by domain. One more, `personal-portfolio`, is kept local-only and gitignored because it holds personal (non-firm) financial data. Purposes are condensed from each skill's frontmatter `description`;
 the `SKILL.md` is authoritative. Expand a group to browse it.
 
 <details open>
@@ -175,7 +175,7 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 </details>
 
 <details>
-<summary><strong>Finance, capital and reporting</strong> (9)</summary>
+<summary><strong>Finance, capital and reporting</strong> (8)</summary>
 
 | Skill | Purpose |
 |---|---|
@@ -187,7 +187,6 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 | `portfolio-growth` | Long-range AUM growth, acquisition capacity and capital-deployment scenarios |
 | `portfolio-reporting` | Portfolio-level and investor-ready performance reporting |
 | `ratify-hurdle-rate` | Formal ratification workflow for the unlevered IRR hurdle rate |
-| `personal-portfolio` | Analysis of the principal's personal (non-firm) investments |
 
 </details>
 
