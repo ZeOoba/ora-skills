@@ -863,8 +863,42 @@ def format_ledger_line(skill, when, shorthash, subject, trig, owner=None):
     return line
 
 
-def cmd_record(commit: str) -> None:
-    files = changed_files(commit)
+def changed_files_range(old: str, new: str) -> list[str]:
+    """Files that differ between two revisions -- what a merge / pull / fast-forward
+    brought in (post-merge passes ORIG_HEAD HEAD). [] when either side does not resolve
+    (no ORIG_HEAD yet) or they are the same commit."""
+    try:
+        a = _git('rev-parse', '--verify', '--quiet', old + '^{commit}').strip()
+        b = _git('rev-parse', '--verify', '--quiet', new + '^{commit}').strip()
+    except Exception:  # noqa: BLE001 -- an unresolvable side records nothing
+        return []
+    if not a or not b or a == b:
+        return []
+    out = _git('diff', '--name-only', '--no-renames', a, b)
+    return [ln.strip() for ln in out.splitlines() if ln.strip()]
+
+
+def cmd_record_range(old: str, new: str) -> None:
+    """post-merge entry point (2026-11-14). git runs post-commit ONLY for `git commit`, so a
+    PR squash-merged on GitHub and pulled into a checkout by fast-forward never reached
+    cmd_record(): six skills (repo-architecture-review, settlement-basis-extraction,
+    tax-appeal, verified-deal-recon, website-perfection, xlsx-warehouse-importer) changed on
+    main between 10-29 and 11-12 and were caught only because unrelated branches later
+    merged main in and committed the merge. Records the same way as cmd_record; re-recording
+    a skill only replaces its line, so a merge seen by both hooks is harmless."""
+    files = changed_files_range(old, new)
+    if not files:
+        return
+    head = _git('rev-parse', '--short', new).strip()
+    n = _git('rev-list', '--count', f'{old}..{new}').strip() or '?'
+    subject = _git('log', '-1', '--format=%s', new).strip()
+    cmd_record(new, files=files, shorthash=head,
+               subject=f'merged/pulled {n} commit(s) into {_git("rev-parse", "--short", old).strip()}: {subject}')
+
+
+def cmd_record(commit: str, files: list[str] | None = None, shorthash: str | None = None,
+               subject: str | None = None) -> None:
+    files = changed_files(commit) if files is None else files
     hits = affected_skills(files)
     if not hits:
         return
@@ -878,8 +912,8 @@ def cmd_record(commit: str) -> None:
               f'so no reimport applies): {", ".join(code_only)}')
         if not hits:
             return
-    shorthash = _git('rev-parse', '--short', commit).strip()
-    subject = _git('log', '-1', '--format=%s', commit).strip().replace('|', '/')
+    shorthash = shorthash or _git('rev-parse', '--short', commit).strip()
+    subject = (subject or _git('log', '-1', '--format=%s', commit)).strip().replace('|', '/')
     try:
         record_hits(hits, shorthash, subject)
     except OSError as exc:
@@ -1447,6 +1481,11 @@ def main() -> None:
     cmd = argv[0] if argv else 'list'
     if cmd == 'record':
         cmd_record(argv[1] if len(argv) > 1 else 'HEAD')
+    elif cmd == 'record-range':
+        if len(argv) != 3:
+            raise SystemExit('usage: pending_reimport.py record-range <old> <new>   '
+                             '(post-merge: ORIG_HEAD HEAD)')
+        cmd_record_range(argv[1], argv[2])
     elif cmd == 'list':
         cmd_list()
     elif cmd == 'candidates':

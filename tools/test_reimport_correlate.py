@@ -2500,5 +2500,49 @@ class CycleRespectsTheClaim(_WithFakeClaims, unittest.TestCase):
         self.assertNotIn('reimport-demo-skill', self.lib.claims)
 
 
+class HelpFlag(unittest.TestCase):
+    """2026-11-14: `postclick --help` was refused as an unrecognised option."""
+
+    def _run(self, *argv):
+        buf = io.StringIO()
+        with unittest.mock.patch.object(sys, 'argv', ['reimport_correlate.py', *argv]), \
+                redirect_stdout(buf):
+            rc_ = rc.main()
+        return rc_, buf.getvalue()
+
+    def test_subcommand_help_prints_only_its_section_and_exits_0(self):
+        code, out = self._run('postclick', '--help')
+        self.assertEqual(code, 0)
+        self.assertIn('reimport_correlate.py postclick', out)
+        self.assertIn('--clear-ledger', out)
+        self.assertNotIn('reimport_correlate.py consume', out)
+        self.assertNotIn('reimport_correlate.py baseline', out)
+
+    def test_every_subcommand_has_a_section(self):
+        for cmd in rc.SUBCOMMANDS:
+            with self.subTest(cmd=cmd):
+                code, out = self._run(cmd, '-h')
+                self.assertEqual(code, 0)
+                self.assertIn(f'reimport_correlate.py {cmd}', out)
+                self.assertLess(len(out), len(rc.__doc__))
+
+    def test_help_after_skill_names_still_helps_and_does_nothing(self):
+        with unittest.mock.patch.object(rc, 'cmd_postclick') as run:
+            code, out = self._run('postclick', 'demo-skill', '--version', '1.0', '--help')
+        self.assertEqual(code, 0)
+        run.assert_not_called()
+
+    def test_bare_help_prints_the_whole_docstring(self):
+        for flag in ('--help', '-h', 'help'):
+            with self.subTest(flag=flag):
+                code, out = self._run(flag)
+                self.assertEqual(code, 0)
+                self.assertEqual(out.strip(), rc.__doc__.strip())
+
+    def test_no_arguments_is_still_a_usage_error(self):
+        code, _ = self._run()
+        self.assertEqual(code, 2)
+
+
 if __name__ == '__main__':
     unittest.main()
