@@ -3,7 +3,7 @@ name: portfolio-reporting
 description: "Use when the user mentions: portfolio report, quarterly report, annual report, investor report, portfolio summary, portfolio overview, portfolio performance, KPI report, management report, board presentation, portfolio PowerPoint, or any request to produce a summary of portfolio performance across all properties and markets — Oxford Realty Advisors portfolio-level reporting and investor-ready output generation. Also trigger when the user asks for a consolidated view of the entire Oxford portfolio."
 ---
 
-# Portfolio Reporting — Oxford Realty Advisors (v1.2)
+# Portfolio Reporting — Oxford Realty Advisors (v1.2.1)
 
 ## MODULE 1: REPORT TYPES
 
@@ -136,7 +136,7 @@ For portfolio valuation updates:
 - Portfolio value = Sum of all property values
 
 **Replacement Cost Check (secondary validation):**
-- Estimated replacement cost per SF by market: $85–$120/SF depending on market
+- Estimated replacement cost per SF by market: USD 85–USD 120/SF depending on market
 - If income approach value < replacement cost, flag as below-replacement-cost confirmation
 
 **Discount to Replacement Cost:**
@@ -152,5 +152,6 @@ Activate this skill when Gabriel says:
 ## Changelog
 (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
 
+- **v1.2.1 (2026-11-14):** Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - **v1.2 (2026-11-05):** source-of-record order. Portfolio AUM and LTV came from memory context plus manual input. They now come from the live Master Workbook first, then the Notion Portfolio Intelligence Dashboard, labeled STALE when more than 7 days behind (firm read-order and freshness canon). The source-freshness flag moved from 30 days to 7 to match that canon. The February Annual Report is now described as the LP-facing derivative of annual-cycle's Year-In-Review (ora-year-end-review), not a second year-end review. Review corrections applied the same day: STALE is one test (lag behind the live Master Workbook of more than 7 days, never the workbook's own age); Module 3 AUM, total debt and LTV read the same workbook cells as Module 2 (`00_Home` Portfolio Value, the `External Loans Summary` borrower total, and the `00_Home` gross-external LTV per ora-master-workbook-ingest T3); debt is workbook-first, with the Loan Portfolio Tracker as a dated fallback. Round-2 review correction: sources that do not copy the workbook (Tenant Database, memory, market cap rates) keep the prior 30-day age limit alongside the 7-day workbook-lag test. No scored or governor constant changed.
 - **v1.1 (2026-07-15):** LOW fix, ora-skill-text-audit — Parchment token corrected #F5F0E8 -> #F5F3EF to match ORA Institutional Style Guide v1.0+.
