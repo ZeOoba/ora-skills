@@ -12,7 +12,10 @@ management; the solver deducts only reserves. The vacancy line each year is MAX(
 expected modeled downtime as % of GPR): the 5% is a floor, never added on top. So `stabilized_noi`
 nets 5% (or modeled downtime if higher), and `in_place_noi` nets Year-1 MAX(5%, downtime on space
 vacant at close + expected downtime on in-place leases expiring in Year 1).
-Feeding OM NOI at 100% occupancy overstates every leg. Suite-level rollover is NOT modeled; NOI grows at market Base 2.5%.
+Feeding OM NOI at 100% occupancy overstates every leg. NOI grows at market Base 2.5%.
+v4.52: optional cash_rent_start_month (partial-year lease-up instead of a linear ramp) and one
+expected-value rollover (lease_expiry_month, renewal_prob, rollover_downtime_months, rollover_cost) per
+the Rollover Block. Without them a lease expiring inside the hold is flagged as LOOSER THAN DOCTRINE.
 
 Reports the per-property refi governor at the walk (LESSER of 65% LTV and 1.25x DSCR, UST + 200 bps,
 25-yr amortization, 1% cost), the 65%-LTV DSCR floor test, and levered IRR (reported only).
@@ -57,6 +60,13 @@ class Deal:
     sale_cost_pct: float = 0.0            # doctrine silent; supply if known
     reserves_psf: float = D.RESERVES_PSF
     noi_growth: float = D.MARKET_RENT_GROWTH
+    # --- v4.52: lease-up timing and expected-value rollover (SKILL.md Lease-Up and Rollover Blocks) ---
+    cash_rent_start_month: Optional[int] = None   # first month of cash rent after close (1 = month 1); replaces the
+                                                  # linear ramp with partial-year rent in the lease-up years
+    lease_expiry_month: Optional[int] = None      # last month of the lease (or the largest suite's lease) inside the hold
+    renewal_prob: Optional[float] = None          # None -> Rollover Block (a) default for the SF band
+    rollover_downtime_months: Optional[int] = None  # non-renewal downtime incl. free rent; None -> (b) default + 2 mo free
+    rollover_cost: float = 0.0                    # EXPECTED re-leasing TI + LC $ at expiry (renewal/new weighted)
 
 
 @dataclass
@@ -171,6 +181,17 @@ def validate(deal: Deal) -> None:
         raise ValueError("exit_cap must be a decimal between 0.03 and 0.20")
     if not 0 <= deal.noi_growth <= 0.10:
         raise ValueError("noi_growth must be a decimal between 0 and 0.10")
+    for f in ("cash_rent_start_month", "lease_expiry_month", "rollover_downtime_months"):
+        v = getattr(deal, f)
+        if v is not None and (isinstance(v, bool) or not isinstance(v, int) or v < 1):
+            raise ValueError(f"{f} must be a positive integer month")
+    if deal.renewal_prob is not None and not 0 <= deal.renewal_prob <= 1:
+        raise ValueError("renewal_prob must be a decimal between 0 and 1")
+    if deal.rollover_cost < 0:
+        raise ValueError("rollover_cost cannot be negative")
+    if deal.cash_rent_start_month is not None and deal.stabilization_year > 1 and \
+            deal.cash_rent_start_month > 12 * (deal.stabilization_year - 1) + 1:
+        raise ValueError("cash_rent_start_month falls after the stabilization year begins")
     this_year = date.today().year
     for f in ("effective_vintage", "renovation_year", "year_built"):
         v = getattr(deal, f)
@@ -238,25 +259,71 @@ def _exit_cap(deal: Deal, market: Optional[str], flags: list) -> float:
     return market_cap
 
 
+def _renewal_defaults(deal: Deal) -> tuple[float, int]:
+    """Rollover Block (a)/(b) defaults by SF band; downtime gets the Lease-Up Block's 2 months free on top."""
+    p = deal.renewal_prob
+    m = deal.rollover_downtime_months
+    if p is None:
+        p = next(v for bound, v in D.RENEWAL_PROB_BY_SF if deal.sf < bound)
+    if m is None:
+        m = next(v for bound, v in D.ROLLOVER_DOWNTIME_BY_SF if deal.sf < bound) + D.LEASE_UP_FREE_MONTHS
+    return p, m
+
+
+def _rollover_frac(deal: Deal, t: int) -> float:
+    """Expected downtime share of year t's rent from the modeled expiry (0 when none)."""
+    if deal.lease_expiry_month is None:
+        return 0.0
+    p, m = _renewal_defaults(deal)
+    first, last = deal.lease_expiry_month + 1, deal.lease_expiry_month + m
+    lo, hi = 12 * (t - 1) + 1, 12 * t
+    months = max(0, min(hi, last) - max(lo, first) + 1)
+    return (1 - p) * months / 12
+
+
+def _rollover_year(deal: Deal) -> Optional[int]:
+    if deal.lease_expiry_month is None:
+        return None
+    return deal.lease_expiry_month // 12 + 1
+
+
 def noi_path(deal: Deal, years: int = D.HOLD_YEARS + 1) -> list:
-    """NOI net of reserves for years 1..years. Linear lease-up ramp to stabilization, then market growth."""
+    """NOI net of reserves for years 1..years. Lease-up: linear ramp to stabilization, or partial-year rent
+    from cash_rent_start_month when given. Rollover: stabilized NOI already nets 5% structural vacancy, so an
+    expected downtime share f in a year reduces it by MAX(0, f - 5%) / (1 - 5%) (MAX rule, never additive)."""
     s = max(1, deal.stabilization_year)
     start = deal.stabilized_noi if deal.in_place_noi is None else deal.in_place_noi
     out = []
     for t in range(1, years + 1):
         if t >= s:
             gross = deal.stabilized_noi * (1 + deal.noi_growth) ** (t - s)
+        elif deal.cash_rent_start_month is not None:
+            lo = 12 * (t - 1) + 1
+            cash = max(0, 12 * t - max(lo, deal.cash_rent_start_month) + 1) / 12
+            gross = start + (deal.stabilized_noi - start) * cash
         else:
             gross = start + (deal.stabilized_noi - start) * (t - 1) / (s - 1)
+        f = _rollover_frac(deal, t)
+        if f > D.STRUCTURAL_VACANCY:
+            gross *= 1 - (f - D.STRUCTURAL_VACANCY) / (1 - D.STRUCTURAL_VACANCY)
         reserves = deal.reserves_psf * deal.sf * (1 + D.EXPENSE_GROWTH) ** (t - 1)
         out.append(gross - reserves)
     return out
 
 
+def cash_path(deal: Deal, years: int = D.HOLD_YEARS + 1) -> list:
+    """Cash flow before debt: NOI less the expected re-leasing cost in the rollover year."""
+    path = noi_path(deal, years)
+    ry = _rollover_year(deal)
+    if ry is not None and 1 <= ry <= years:
+        path[ry - 1] -= deal.rollover_cost
+    return path
+
+
 def _unlevered_pv(deal: Deal, rate: float, cap: float) -> float:
     path = noi_path(deal)
     reversion = path[D.HOLD_YEARS] / cap * (1 - deal.sale_cost_pct)
-    flows = [0.0] + path[: D.HOLD_YEARS]
+    flows = [0.0] + cash_path(deal)[: D.HOLD_YEARS]
     flows[-1] += reversion
     return npv(rate, flows)
 
@@ -283,7 +350,7 @@ def _refi(deal: Deal, price: float, ust: float, cap: float) -> dict:
     net_proceeds = loan * (1 - D.REFI_FINANCING_COST)
 
     # Levered (reported only): all-cash close, refi at end of stabilization year, payoff at exit.
-    flows = [-_allin(price, deal)] + path[: D.HOLD_YEARS]
+    flows = [-_allin(price, deal)] + cash_path(deal)[: D.HOLD_YEARS]
     flows[s] += net_proceeds
     for t in range(s + 1, D.HOLD_YEARS + 1):
         flows[t] -= loan * k
@@ -398,6 +465,14 @@ def solve(deal: Deal, ust: float, portfolio_mode: bool = False) -> Result:
     if deal.noi_growth > D.MARKET_RENT_GROWTH:
         flags.append(f"NOI growth {deal.noi_growth:.2%} above market Base {D.MARKET_RENT_GROWTH:.2%} — looser than doctrine")
 
+    if deal.lease_expiry_month is None and deal.stabilization_year > 1:
+        flags.append("LOOSER THAN DOCTRINE: lease-up deal with no modeled rollover — if the new lease (term "
+                     "<= hold) expires inside the 10-yr hold, set lease_expiry_month and rollover_cost "
+                     "(Rollover Block); the walk is otherwise higher than the full model's")
+    if deal.lease_expiry_month is not None and deal.rollover_cost == 0 and \
+            _rollover_year(deal) <= D.HOLD_YEARS + 1:
+        flags.append("LOOSER THAN DOCTRINE: rollover modeled with rollover_cost $0 — supply the expected "
+                     "re-leasing TI/LC (renewal-weighted)")
     stab_noi_net = noi_path(deal)[deal.stabilization_year - 1]
     legs = {
         "basis": _price_from_allin((1 - v_floor) * replacement, deal),
