@@ -613,9 +613,9 @@ class RolloverAndLeaseUpTiming(unittest.TestCase):
     def test_exit_year_rollover_is_a_credit_not_capitalized(self):
         no = solve(self._lease_up(lease_expiry_month=200), UST)
         y9 = solve(self._lease_up(lease_expiry_month=96, rollover_cost=1), UST)    # year 9, inside the hold
-        y11 = solve(self._lease_up(lease_expiry_month=120, rollover_cost=1), UST)  # forward (exit) year
+        y11 = solve(self._lease_up(lease_expiry_month=120), UST)                   # forward (exit) year, no cost
         loss9, loss11 = no.legs["irr"] - y9.legs["irr"], no.legs["irr"] - y11.legs["irr"]
-        self.assertGreater(loss11, 0)
+        self.assertGreater(loss11, 0.5 * loss9)  # the forward-year rent loss is credited at sale on its own
         self.assertLess(loss11, 2 * loss9)   # capitalizing it at the exit cap would be ~1/cap (13x) larger
         c0 = solve(self._lease_up(lease_expiry_month=120), UST)
         c5 = solve(self._lease_up(lease_expiry_month=120, rollover_cost=500_000), UST)
@@ -624,6 +624,29 @@ class RolloverAndLeaseUpTiming(unittest.TestCase):
         self.assertAlmostEqual(past.legs["irr"], no.legs["irr"], places=2)
         self.assertFalse(any("rollover_cost $0" in f
                              for f in solve(self._lease_up(lease_expiry_month=140), UST).flags))
+        self.assertTrue(any("rollover_cost $0" in f for f in y11.flags))  # forward year: cost matters, so flag
+
+    def test_exit_credit_equals_forward_year_rent_loss(self):
+        from ora_walk.solver import _reversion
+        d0 = self._lease_up(lease_expiry_month=200)
+        d = self._lease_up(lease_expiry_month=120, rollover_cost=50_000)
+        cap = D.EXIT_CAPS["Columbus OH"]
+        loss = noi_path(d, rollover=False)[10] - noi_path(d)[10]
+        self.assertGreater(loss, 0)
+        self.assertAlmostEqual(_reversion(d0, cap) - _reversion(d, cap), loss + 50_000)
+
+    def test_non_finite_leg_is_an_error_even_past_validation(self):
+        from unittest import mock
+        from ora_walk import solver as S
+        with mock.patch.object(S, "validate", lambda deal: None):  # backstop behind validate()
+            with self.assertRaises(ValueError):
+                solve(self._lease_up(lease_expiry_month=81, rollover_cost=float("nan")), UST)
+
+    def test_non_finite_and_bool_rollover_inputs_rejected(self):
+        for kw in (dict(rollover_cost=float("nan")), dict(rollover_cost=float("inf")), dict(rollover_cost=True),
+                   dict(renewal_prob=float("nan")), dict(renewal_prob=True), dict(rollover_cost="40000")):
+            with self.assertRaises(ValueError, msg=str(kw)):
+                solve(self._lease_up(lease_expiry_month=81, **kw), UST)
 
     def test_levered_irr_reflects_rollover_cost(self):
         r0 = solve(self._lease_up(lease_expiry_month=81), UST)
