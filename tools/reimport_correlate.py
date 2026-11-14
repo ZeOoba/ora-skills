@@ -80,6 +80,12 @@ Usage
         --no-append verifies only (safe to re-run). After a successful append
         the baselines that predate this install are used up (see `consume`); if
         that fails it warns and exits 1 even though the append succeeded.
+        ONE skill per call when it appends: several skills from one set of
+        Save-skill clicks close through `reimport_cycle.py close <skill> ...`
+        (one combined entry, a marker per skill, consume). With several skills
+        postclick exits 2 and prints that command -- unless it is a plain
+        --no-append verify, which runs per skill (2026-11-13: it used to verify
+        the first skill and silently ignore the rest).
 
     python tools/reimport_correlate.py consume <skill> [<skill> ...]
         Once an install is recorded, use up EVERY session's baseline for the skill
@@ -126,6 +132,8 @@ from pending_reimport import (  # noqa: E402
     _normalized_hash, _normalized_hash_bytes,
     cache_digest, event_log_blocks, logged_install_entry, write_recorded_install,
 )
+
+import reimport_claims as _claims  # noqa: E402
 
 ALREADY_RECORDED_RC = 3     # postclick: nothing to do, the install is already logged
 
@@ -710,6 +718,30 @@ def _plugin_of(skill: str):
         return f'UNKNOWN ({type(e).__name__}: {e})'
 
 
+def _packager_deps(skill: str) -> tuple[dict[str, str], list[str]]:
+    """The packager's OWN record of what it injects into `skill`'s package, so precheck
+    never re-derives it: ({packaged relpath: repo-root relpath} for SHARED_ROOT_DEPS --
+    a renamed one such as tools/ora_doc_qc.py -> scripts/ora_doc_qc.py included -- and
+    the PRIVATE_LOCAL_DEPS names, which have no repo copy at all). Before 2026-11-13
+    precheck only knew same-named root files, so every RCT consumer and lease-form-qc
+    FAILed "no repo counterpart" on a correct package."""
+    import package_skills as ps  # type: ignore
+    shared = {dst: src for src, dst in (ps._dep_pair(d) for d in ps.SHARED_ROOT_DEPS.get(skill, []))}
+    return shared, list(ps.PRIVATE_LOCAL_DEPS.get(skill, []))
+
+
+def _private_bytes(skill: str, name: str) -> bytes:
+    """The exact bytes the packager ships for a private dep (validated, tied to the
+    authoritative source), or SystemExit naming why not. Never prints a figure."""
+    import package_skills as ps  # type: ignore
+    return ps.private_dep_bytes(skill, name, REPO)
+
+
+def _is_bundled(rel: str) -> bool:
+    import package_skills as ps  # type: ignore
+    return ps.is_bundled(rel)
+
+
 def _raw_entry_names(path: Path) -> list[str]:
     """Entry names exactly as stored in the zip central directory.
 
@@ -774,29 +806,57 @@ def cmd_precheck(pkgs: list[str]) -> int:
             plug = _plugin_of(skill)
             if plug is not None:
                 fails.append(f'plugin_of -> {plug!r}: NOT a standalone Save-skill target')
-            shared = 0
+            shared = private_n = 0
             in_pkg = set()
+            try:
+                shared_map, private_names = _packager_deps(skill)
+            except Exception as exc:  # packager unimportable is a finding, not a pass
+                shared_map, private_names = {}, []
+                fails.append(f'packager dep lists unreadable ({type(exc).__name__}: {exc})')
             for n in names:
                 rel = n.split('/', 1)[1] if '/' in n else n
                 in_pkg.add(rel)
-                rp = REPO / skill / Path(*rel.split('/'))
-                if not rp.is_file() and '/' not in rel and (REPO / rel).is_file():
-                    rp = REPO / rel  # SHARED_ROOT_DEPS injected from repo root
+                if rel in private_names:
+                    # No repo copy by design: compare to the bytes the packager would ship.
+                    try:
+                        want = _private_bytes(skill, rel)
+                    except SystemExit as exc:
+                        fails.append(f'{rel}: private source not usable -- {exc}')
+                        continue
+                    private_n += 1
+                    if z.read(n) != want:
+                        fails.append(f'{rel}: content MISMATCH vs its validated private source '
+                                     f'(stale package)')
+                    continue
+                if rel in shared_map:
+                    rp = REPO / Path(*shared_map[rel].split('/'))   # declared SHARED_ROOT_DEPS
                     shared += 1
+                else:
+                    rp = REPO / skill / Path(*rel.split('/'))
+                    if not rp.is_file() and '/' not in rel and (REPO / rel).is_file():
+                        rp = REPO / rel  # same-named repo-root file (pre-declaration form)
+                        shared += 1
                 if not rp.is_file():
                     fails.append(f'{rel}: no repo counterpart')
                     continue
                 a, b = z.read(n), rp.read_bytes()
                 if a != b and _norm(a) != _norm(b):
                     fails.append(f'{rel}: content MISMATCH vs repo (stale package)')
+            # A package without a dep the packager always injects would install broken (an
+            # RCT consumer without its table fails closed on every basis test).
+            for rel in sorted(set(shared_map) | set(private_names)):
+                if rel not in in_pkg:
+                    fails.append(f'{rel}: declared packager dep missing from the package')
             sd = REPO / skill
             if sd.is_dir():
                 for root, dirs, files in os.walk(sd):
                     dirs[:] = [d for d in dirs if d != '__pycache__' and not d.startswith('.')]
                     for f in files:
                         rel = Path(root, f).relative_to(sd).as_posix()
+                        # Only files the packager would ship can be "missing" from a package
+                        # (tests/, runs/, versions/, PACKAGING-NOTE.md never are).
                         if (rel not in in_pkg and f not in IGNORED_REPO_FILES
-                                and not rel.startswith('versions/') and not f.endswith('.pyc')):
+                                and _is_bundled(rel)):
                             warns.append(f'{rel}: in repo, not in package')
             else:
                 fails.append(f'repo skill dir not found: {sd}')
@@ -805,6 +865,14 @@ def cmd_precheck(pkgs: list[str]) -> int:
             pkg_files = _package_manifest(p, skill)
         except (OSError, zipfile.BadZipFile, KeyError):
             pkg_version = pkg_files = None     # no readable SKILL.md: already a FAIL above
+        if not fails:
+            # The installing session claims the reimport, so only it logs the install
+            # (tools/reimport_claims.py; 2026-11-13 double-log). Another session's claim is
+            # TAKEN OVER with a warning, never a FAIL: build-in-one-session, install-in-
+            # another is the documented handoff (PR #260 review finding 1).
+            notice = _claims.claim(skill, 'installing: precheck -> Save skill -> postclick/close')
+            if notice:
+                warns.append(notice)
         note = _refresh_stale_baseline(skill)
         if note is not None:
             base_note = note
@@ -819,7 +887,8 @@ def cmd_precheck(pkgs: list[str]) -> int:
             rc = 1
             print(f'{skill}: PRECHECK FAIL -- ' + '; '.join(fails))
         else:
-            print(f'{skill}: PRECHECK OK -- {len(names)} entries ({shared} shared root dep), '
+            print(f'{skill}: PRECHECK OK -- {len(names)} entries ({shared} shared root dep, '
+                  f'{private_n} private dep), '
                   f'forward-slash, no dir records, all match repo, name==dir, '
                   f'description {dlen}/1024, plugin_of None; {base_note}')
         for w in warns:
@@ -1021,6 +1090,13 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
     if no_append:
         print('CONFIRMED (--no-append: event log untouched).')
         return 0
+    holder = _claims.foreign_holder(skill)
+    if holder:
+        # 2026-11-13: two sessions logged the same 13 installs. The session holding the
+        # reimport claim logs it; a verify here is fine, a second log entry is not.
+        print('STOP: ' + _claims.describe(skill, holder) + ' Nothing appended, ledger and '
+              'baseline untouched.')
+        return 1
     vtxt = f' v{_norm_ver(version)}' if version else ''
     today = datetime.now().strftime('%Y-%m-%d')
     ef = REPO / '_staging' / f'_eventlog_entry_{skill}.md'
@@ -1039,6 +1115,7 @@ def cmd_postclick(skill: str, version: str | None, no_append: bool, clear_ledger
         return 1
     print('event log appended (exit 0).')
     mark_logged(skill, snapshot, header, r.stdout + r.stderr)
+    _claims.release(skill)                # logged: this session's reimport is done
     consume_failed = 0
     try:
         consume_baseline(skill)
@@ -1105,6 +1182,24 @@ def main() -> int:
     if cmd == 'precheck':
         return cmd_precheck(rest)
     if cmd == 'postclick':
+        if len(rest) > 1:
+            if no_append and version is None and not clear_ledger:
+                # Verify-only cannot log anything, so one skill at a time is harmless.
+                # Worst result wins, ranked by meaning, not number: a failure (1) or a usage
+                # error (2) must never be reported as ALREADY-RECORDED (3), which is "nothing
+                # to do" (PR #260 review finding 5).
+                codes = [cmd_postclick(s, None, True, False, baseline_override) for s in rest]
+                return max(codes, key=lambda c: {0: 0, ALREADY_RECORDED_RC: 1, 2: 2}.get(c, 3))
+            # 2026-11-13: `postclick a b c` used to verify `a` and silently ignore `b c`, and
+            # a hand-written combined log entry then left no recorded-install marker, so no
+            # baseline was ever used up. The batch path already exists: ONE combined entry,
+            # a marker per skill, consume, ledger clear.
+            print(f'postclick logs ONE skill per entry. For one set of Save-skill clicks use:\n'
+                  f'  python tools/reimport_cycle.py close {" ".join(rest)}'
+                  f'{chr(32) + "--baseline " + chr(34) + baseline_override + chr(34) if baseline_override else ""}\n'
+                  f'(one combined entry, a recorded-install marker per skill, consume, ledger '
+                  f'clear and the closing sweep). Verify only: postclick ... --no-append.')
+            return 2
         return cmd_postclick(rest[0], version, bool(no_append), bool(clear_ledger),
                              baseline_override)
     return cmd_verify(rest, baseline_override)

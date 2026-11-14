@@ -12,4 +12,6 @@ python tools/sync_local_skills_mirror.py --all 2>&1 || true
 # divergent from the repo.
 # Skip amend: it does not move ORIG_HEAD, and pre-commit Check 4 already ran for it.
 [ "$1" = amend ] || python tools/sync_appdata_mirror.py --changed-range ORIG_HEAD HEAD 2>&1 || true
+# Hook pins, 2026-11-13 (see post-merge): `pull --rebase` lands here instead.
+[ "$1" = amend ] || python tools/hook_pin_check.py --range ORIG_HEAD HEAD 2>&1 || true
 exit 0

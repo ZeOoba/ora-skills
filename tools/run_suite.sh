@@ -45,6 +45,13 @@ if [ "${OS:-}" != "Windows_NT" ]; then
   # off Windows. On Windows the baseline stays zero.
   ALLOWED_SKIPS="$ALLOWED_SKIPS tools/test_package_census.py=1"
 fi
+# test_reimport_claims.py's RealClaimWork class is skipUnless the real ~/.claude claim library
+# exists (it lives in the separate ora-claude-config repo, which CI never checks out). Where the
+# library is present it runs and the baseline stays zero. RealClaimWork has ONE test method --
+# adding a second one makes CI report skipped=2 and fail, which is the intended alarm.
+if [ ! -f "$HOME/.claude/hooks/lib/claim_work.py" ]; then
+  ALLOWED_SKIPS="$ALLOWED_SKIPS tools/test_reimport_claims.py=1"
+fi
 
 # Plain-assert check scripts with no unittest runner; each prints `all checks passed`
 # on success. A listed file that stops printing it still fails.
