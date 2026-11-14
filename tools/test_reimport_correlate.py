@@ -2337,6 +2337,19 @@ class PostclickSeveralSkills(unittest.TestCase):
         self.assertTrue(all(c[2] is True and c[3] is False for c in calls))
         self.assertEqual(code, 1)
 
+    def test_verify_only_batch_never_reports_a_failure_as_already_recorded(self):
+        # PR #260 review finding 5: max(1, 3) used to exit 3, the "nothing to do" code.
+        codes = {'a': 1, 'b': rc.ALREADY_RECORDED_RC, 'c': 0}
+        with unittest.mock.patch.object(rc, 'cmd_postclick', lambda s, *a: codes[s]), \
+                unittest.mock.patch.object(sys, 'argv', ['x', 'postclick', 'a', 'b', 'c', '--no-append']), \
+                redirect_stdout(io.StringIO()):
+            self.assertEqual(rc.main(), 1)
+        codes = {'a': rc.ALREADY_RECORDED_RC, 'b': 0}
+        with unittest.mock.patch.object(rc, 'cmd_postclick', lambda s, *a: codes[s]), \
+                unittest.mock.patch.object(sys, 'argv', ['x', 'postclick', 'a', 'b', '--no-append']), \
+                redirect_stdout(io.StringIO()):
+            self.assertEqual(rc.main(), rc.ALREADY_RECORDED_RC)
+
     def test_single_skill_unchanged(self):
         code, calls, _ = self._main('postclick', 'a', '--version', '1.2', '--clear-ledger')
         self.assertEqual(code, 0)
@@ -2370,12 +2383,18 @@ class PrecheckClaimsTheReimport(_WithFakeClaims, PrecheckTests):
         self.assertEqual(code, 0, out)
         self.assertEqual(self.lib.claims['reimport-demo-skill']['session_id'], 'session-me')
 
-    def test_another_sessions_claim_fails_precheck(self):
+    def test_handoff_precheck_takes_the_claim_over_and_passes(self):
+        # PR #260 review finding 1: the builder (cb36d24b) holds the claim; the installer's
+        # precheck must pass, take the claim, and record the builder's as prior_claim.
         self._foreign()
         _make_pkg(self.pkg, 'demo-skill', self._good_entries())
         code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
-        self.assertEqual(code, 1)
-        self.assertIn('CLAIMED by session cb36d24b', out)
+        self.assertEqual(code, 0, out)
+        self.assertIn('TAKEN OVER from session cb36d24b', out)
+        c = self.lib.claims['reimport-demo-skill']
+        self.assertEqual(c['session_id'], 'session-me')
+        self.assertEqual(c['prior_claim']['session_id'], 'cb36d24b')
+        self.assertEqual(c['prior_claim_reason'], 'force')
 
     def test_failing_precheck_claims_nothing(self):
         e = self._good_entries()
@@ -2449,6 +2468,29 @@ class CycleRespectsTheClaim(_WithFakeClaims, unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertFalse(any(c[0] == str(cyc.APPEND) for c in calls), 'no append')
         self.assertIn('CLAIMED by session cb36d24b', out)
+
+    def test_handoff_builder_cannot_log_after_the_installer_prechecked(self):
+        # The 2026-11-13 double log, end to end: the installer's precheck took the claim, so
+        # the builder session's close (the batch logger) refuses to write a second entry.
+        self._fake_claims(me='builder')
+        self._foreign(sid='installer')
+        code, calls, out = self._close()
+        self.assertEqual(code, 1)
+        self.assertFalse(any(c[0] == str(cyc.APPEND) for c in calls))
+
+    def test_prep_does_not_claim(self):
+        # Gates pass and every tool "succeeds", so prep runs past where it used to claim; it
+        # then fails reading the (never built) package, which is fine for this test.
+        out = Path(tempfile.mkdtemp(prefix='reimport_correlate_test_'))
+        self.addCleanup(_rmtree, out)
+        with unittest.mock.patch.object(cyc, 'gate_failures', lambda *a: []), \
+                unittest.mock.patch.object(cyc, '_run', lambda *a, **k: subprocess.CompletedProcess(a, 0, '', '')), \
+                redirect_stdout(io.StringIO()):
+            try:
+                cyc.cmd_prep(['demo-skill'], out)
+            except OSError:
+                pass
+        self.assertEqual(self.lib.claims, {})
 
     def test_close_releases_its_own_claim_after_the_append(self):
         self.lib.claims['reimport-demo-skill'] = {'session_id': 'session-me', 'description': 'd'}

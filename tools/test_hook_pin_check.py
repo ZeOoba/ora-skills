@@ -21,8 +21,16 @@ class Check(unittest.TestCase):
             return rc, out
         buf = io.StringIO()
         with redirect_stderr(buf):
-            verdict = hpc.check(Path('/r'), 'A', 'B', changed=lambda *a: changed, run=run)
+            verdict = hpc.check(Path('/r'), 'A', 'B', changed=lambda *a: changed, run=run,
+                                gate=lambda r: True)
         return verdict, calls, buf.getvalue()
+
+    def test_outside_the_primary_on_main_it_stays_silent(self):
+        # PR #260 review finding 2: advice from an older worktree would downgrade the pin.
+        calls = []
+        verdict = hpc.check(Path('/r'), 'A', 'B', changed=lambda *a: ['tools/hooks/pre-push'],
+                            run=lambda r: calls.append(r) or (1, 'x'), gate=lambda r: False)
+        self.assertEqual((verdict, calls), ('skip', []))
 
     def test_unrelated_merge_does_not_run_the_check(self):
         verdict, calls, err = self._check([])
@@ -89,6 +97,17 @@ class ChangedPinnedInputsLiveGit(unittest.TestCase):
 
     def test_missing_ref_reads_as_unknown(self):
         self.assertIsNone(hpc.changed_pinned_inputs(self.r, 'ORIG_HEAD', 'HEAD'))
+
+    def test_primary_on_main_gate(self):
+        self.g('branch', '-M', 'main')
+        self.assertTrue(hpc.primary_on_main(self.r))
+        self.g('checkout', '-q', '-b', 'feature')
+        self.assertFalse(hpc.primary_on_main(self.r), 'a branch other than main')
+        self.g('checkout', '-q', 'main')
+        wt = Path(self.tmp.name + '-wt')
+        self.g('worktree', 'add', '-q', '-b', 'wt-branch', str(wt))
+        self.addCleanup(lambda: __import__('shutil').rmtree(wt, ignore_errors=True))
+        self.assertFalse(hpc.primary_on_main(wt), 'a linked worktree is never the primary')
 
 
 if __name__ == '__main__':

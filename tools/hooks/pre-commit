@@ -43,12 +43,14 @@ if ! python tools/package_skills.py --check-tree-hygiene; then
   exit 1
 fi
 
-# Check 6 (2026-11-13): no packaged .skill/.plugin and no rct-table* file may be committed
-# ANYWHERE, _staging/ included (ora-skills is public; the packages carry the private RCT
-# table). .gitignore already ignores both, but only against a plain `git add` -- an
+# Check 6 (2026-11-13): no packaged skill/plugin and no copy of the private RCT table may be
+# committed ANYWHERE, _staging/ included (ora-skills is public; the packages carry the
+# private table). .gitignore already ignores them, but only against a plain `git add` -- an
 # install session left 13 such packages untracked in _archive/ on 2026-11-13, one
-# `git add -f` from publication. Deletions pass. The synthetic RCT fixture is allowlisted
-# (package_skills.STAGED_ARTIFACT_ALLOW).
+# `git add -f` from publication. By NAME (.skill/.plugin and their .bak/.b64/.zip copies,
+# rct-table*.json, replacement-cost*.json) and by CONTENT (a zip holding a SKILL.md or the
+# table, a byte copy of the table under any name). Every staged status but deletion is
+# checked. The synthetic fixture is allowlisted and must keep "_synthetic": true.
 if ! python tools/package_skills.py --check-staged-artifacts; then
   echo 'BLOCKED: packaged skill/plugin or private RCT table staged (see above).' >&2
   echo 'Unstage it; --no-verify only if you are certain it holds nothing private.' >&2
