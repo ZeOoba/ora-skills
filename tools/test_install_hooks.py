@@ -262,6 +262,125 @@ class EndToEnd(Base):
         self.assertBlocked(*self.sb.push())
 
 
+    def test_planted_python_with_dot_on_path_cannot_skip_the_installed_shim(self):
+        # The generated shim is what git runs first: a ./python in the worktree must not run
+        # in place of the real interpreter (2026-11-13 refute: it rewrote the tracked hook
+        # to `exit 0` and the term push went through).
+        self.installed()
+        with open(os.path.join(TRACKED_HOOKS, "pre-push"), encoding="utf-8") as f:
+            self.sb.write("tools/hooks/pre-push", f.read())
+        with open(SCAN, encoding="utf-8") as f:
+            self.sb.write("tools/prepush_confidential_scan.py", f.read())
+        self.sb.git(self.sb.work, "add", "-A")
+        self.sb.git(self.sb.work, "commit", "-q", "--no-verify", "-m", "add gate")
+        marker = os.path.join(self.sb.root, "planted-ran")
+        # (No planted sh: with '.' on PATH git itself resolves sh for transport and hooks,
+        # which is outside what any hook can defend.)
+        for n in ("python", "python3", "py"):
+            path = os.path.join(self.sb.work, n)
+            with open(path, "w", newline="\n") as f:
+                f.write("#!/bin/sh\necho ran >> '%s'\nprintf 'exit 0\\n' > tools/hooks/pre-push\nexit 0\n"
+                        % marker.replace("\\", "/"))
+            os.chmod(path, 0o755)
+        self.sb.env["PATH"] = os.pathsep.join(
+            [".", os.path.dirname(os.path.abspath(sys.executable)), self.sb.env["PATH"]])
+        self.sb.commit("deal.md", "%s\n" % TERM)
+        self.sb.git(self.sb.work, "rm", "-q", "--cached", "python", "python3", "py")
+        self.sb.git(self.sb.work, "commit", "-q", "--no-verify", "--amend", "--no-edit")
+        self.assertBlocked(*self.sb.push())
+        self.assertFalse(os.path.exists(marker), "a planted interpreter ran")
+
+    @staticmethod
+    def _path_block(text):
+        lines = text.replace("\r\n", "\n").split("\n")
+        start = lines.index("NoDefaultCurrentDirectoryInExePath=1")
+        end = next(i for i, ln in enumerate(lines) if "no usable PATH entry outside the worktree" in ln)
+        assert lines[end + 1:end + 3] == ["  exit 1", "fi"], lines[end:end + 3]
+        return "\n".join(lines[start:end + 3])
+
+    def test_shim_path_block_is_identical_to_the_tracked_hook(self):
+        # The tracked hook's PATH block is what test_prepush_confidential_scan.py attacks case
+        # by case (PlantedInterpreter: junction, case variant, absolute, '.'; PathBlock: the
+        # relative, '..', mount and root filters). The shim git runs FIRST must carry exactly
+        # that block (2026-11-14 refute: deleting the shim's _inside checks passed every test
+        # here), and nothing after it may redefine _inside or PATH (refute round 2: an
+        # `_inside() { return 1; }` after the block passed parity); the end-to-end case below
+        # covers the rest.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("install_hooks_under_test", INSTALLER)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        with open(os.path.join(TRACKED_HOOKS, "pre-push"), encoding="utf-8") as f:
+            hook = self._path_block(f.read())
+        self.assertIn("_inside", hook)
+        shim = mod.shim_text("pre-push")
+        self.assertEqual(self._path_block(shim), hook)
+        lines = shim.split("\n")
+        self.assertEqual(sum(1 for ln in lines if ln.lstrip().startswith("_inside()")), 1, shim)
+        self.assertEqual(sum(1 for ln in lines if ln.lstrip().startswith("PATH=")), 1, shim)
+
+    def test_absolute_and_linked_worktree_entries_cannot_skip_the_installed_shim(self):
+        # The '.' case above is stopped by the absolute-only filter alone. These entries are
+        # absolute and only the shim's physical-path check (_inside) drops them: the worktree's
+        # own bin/, and a junction/symlink outside the worktree that points into it.
+        self.installed()
+        self._add_real_gate()
+        marker = os.path.join(self.sb.root, "planted-ran")
+        sub = os.path.join(self.sb.work, "deep", "bin")
+        os.makedirs(sub)
+        for n in ("python", "python3", "py"):
+            path = os.path.join(sub, n)
+            with open(path, "w", newline="\n") as f:
+                f.write("#!/bin/sh\necho ran >> '%s'\nprintf 'exit 0\\n' > tools/hooks/pre-push\nexit 0\n"
+                        % marker.replace("\\", "/"))
+            os.chmod(path, 0o755)
+        link = os.path.join(self.sb.root, "link")
+        if os.name == "nt":
+            p = subprocess.run(["cmd", "/c", "mklink", "/J", link, sub], capture_output=True)
+            self.assertEqual(p.returncode, 0, "mklink /J failed: %r" % p.stderr)
+        else:
+            os.symlink(sub, link, target_is_directory=True)
+        with open(os.path.join(self.sb.work, ".git", "info", "exclude"), "a") as f:
+            f.write("deep/\n")
+        real = os.path.dirname(os.path.abspath(sys.executable))
+        orig_path = self.sb.env["PATH"]
+        for i, front in enumerate((sub, link)):
+            self.sb.env["PATH"] = os.pathsep.join([front, real, orig_path])
+            self.sb.commit("deal-%d.md" % i, "%s\n" % TERM)
+            self.assertBlocked(*self.sb.push())
+            self.assertFalse(os.path.exists(marker), "a planted interpreter ran via %s" % front)
+
+    def test_installed_shim_runs_every_interpreter_isolated_with_cwd_exe_search_off(self):
+        # A python OUTSIDE the worktree logs each call, then runs the real one. The inherited
+        # no-cwd-search variable is removed, so only the shim's own export can supply it.
+        self.installed()
+        self._add_real_gate()
+        wrap = os.path.join(self.sb.root, "wrap")
+        os.makedirs(wrap)
+        log = os.path.join(self.sb.root, "wrap.log")
+        real = os.path.abspath(sys.executable).replace("\\", "/")
+        body = ('#!/bin/sh\n'
+                'printf \'%s|%s|%s\\n\' "${NoDefaultCurrentDirectoryInExePath-}" "$1" "$2" >> \'@LOG@\'\n'
+                'exec \'@REAL@\' "$@"\n').replace("@LOG@", log.replace("\\", "/")).replace("@REAL@", real)
+        for n in ("python", "python3", "py"):
+            path = os.path.join(wrap, n)
+            with open(path, "w", newline="\n") as f:
+                f.write(body)
+            os.chmod(path, 0o755)
+        for k in [k for k in self.sb.env if k.upper() == "NODEFAULTCURRENTDIRECTORYINEXEPATH"]:
+            del self.sb.env[k]
+        self.sb.env["PATH"] = wrap + os.pathsep + self.sb.env["PATH"]
+        self.sb.commit("deal.md", "%s\n" % TERM)
+        self.assertBlocked(*self.sb.push())
+        with open(log, encoding="utf-8") as f:
+            calls = [ln.rstrip("\n").split("|") for ln in f if ln.strip()]
+        self.assertTrue([c for c in calls if "ora-hooks" in c[2]],
+                        "the pinned scan never ran through the logged interpreter: %r" % calls)
+        for c in calls:
+            self.assertEqual(c[0], "1", "NoDefaultCurrentDirectoryInExePath not exported: %r" % c)
+            self.assertEqual(c[1], "-I", "interpreter called without -I: %r" % c)
+
+
 class OtherHooks(Base):
     def test_pre_commit_absent_in_tree_allows_commit(self):
         self.installed()
