@@ -65,6 +65,12 @@ jobs:
       - name: Frontmatter (all skills) + tree hygiene + shared-dep declarations
         run: python tools/skill_ci_gates.py frontmatter
 
+      - name: No dollar-digit figures in SKILL.md bodies (skill-argument substitution corrupts them)
+        # Invoking a skill with arguments replaces a dollar sign followed by digits with an argument
+        # token ("USD 4.00/SF" written with a dollar sign arrived as "<street-name>.00/SF", 2026-11-14).
+        # Fix locally with: python tools/lint_skill_dollar_args.py . --fix
+        run: python tools/lint_skill_dollar_args.py .
+
       - name: No tracked Claude memory files (node_type memory / event_log frontmatter)
         run: python tools/skill_ci_gates.py memory-files
 

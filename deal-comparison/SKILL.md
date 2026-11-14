@@ -43,7 +43,7 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 > **Construction type (acquisition-underwriting v4.37):** the LOW above is the construction-type-adjusted LOW (RCT POINT × multiplier + adders, LOW re-derived at 0.9). Take it from the `acquisition-underwriting` screen; never recompute from the bare table for a non-tilt-up building (PEMB, masonry, brick or hybrid; precast is ×1.00). An unknown type takes the strictest applicable multiplier (the PEMB value for its SF, capped at 0.90), tagged `[DATA-GAP: construction type]`, so not checking never outscores a checked metal building (any renovation R% is computed at ×1.00 for an unknown type, and its Yield (only) is scored at the ×1.00 walk; Basis stays strict). A screen that predates v4.37 carries no construction-type adjustment: note "pre-v4.37 screen" and re-derive from the current schedule.
 >
 > ⚠️ Do NOT use: the retired RCT v02 constants, the retired C&W-hard "operative
-> benchmark" briefly in `target-markets.json`, or the old $140/$170/$150/$130 scan
+> benchmark" briefly in `target-markets.json`, or the old USD 140/USD 170/USD 150/USD 130 scan
 > constants. **If you find a second denominator, it is a bug.**
 
 ### Category 2 — Physical & Market (30 pts)
@@ -92,7 +92,7 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 |--------|-----|---------|
 | Market Cluster Fit | 6 | Strengthens existing cluster=6; New target market=4; Isolated=1 |
 | Operational Leverage | 5 | Same PM platform=5; Known platform=3; New platform=1 |
-| Capital Efficiency | 4 | <$7M=4; $7-10M=3; >$10M=1 |
+| Capital Efficiency | 4 | <USD 7M=4; USD 7-10M=3; >USD 10M=1 |
 
 **Market Cluster Fit — designated target markets (canonical source: `target-markets.json` v1.0+ (bundled into this skill's own package as of 2026-07-09 — master copy at repo root `ora-skills/target-markets.json`); narrative twin: memory "ORA Target Markets / Primary Clusters", updated 2026-05-30):**
 - Established clusters (score 6) = Columbus OH, Kansas City MO/KS, Indianapolis IN, Maryland, Cincinnati OH, Madison WI.
@@ -106,7 +106,7 @@ Rate 1-5 on each criterion:
 1. Geographic diversification improvement
 2. Lease term diversification improvement
 3. Tenant type mix improvement
-4. AUM compounding velocity ($60M → $700-800M trajectory)
+4. AUM compounding velocity (USD 60M → USD 700-800M trajectory)
 5. Operational absorption capacity (2-person team)
 6. Forever-hold compounding quality (35-year thesis)
 

@@ -90,7 +90,7 @@ Score the appeal opportunity on a 12-point scale:
 | Income approach gap | +3 | Assessed value > income approach (mid) by >15% |
 | Sales comp gap | +3 | Assessed value > comparable sales value by >15% |
 | YoY spike | +2 | Assessment increased >10% YoY without physical improvement |
-| Dollar savings | +2 | Potential annual tax savings > $5,000 |
+| Dollar savings | +2 | Potential annual tax savings > USD 5,000 |
 | Timeline | +1 | Appeal deadline is >30 days away |
 | Jurisdiction track record | +1 | Jurisdiction has historically favorable appeal outcomes |
 

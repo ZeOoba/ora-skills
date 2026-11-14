@@ -41,7 +41,7 @@ Three findings drove the design:
    fire on absence, not on language.
 3. **Auto-renewal means no one ever re-reads it.** §1 renews annually with no
    notice requirement in either direction. The 2020 form has governed through
-   six renewals unexamined; its $2,000 approval threshold and $45/hour rates are
+   six renewals unexamined; its USD 2,000 approval threshold and USD 45/hour rates are
    2020 dollars.
 
 Scanner benchmarks:
@@ -168,8 +168,8 @@ missing) as **provisional** and confirm against the page images before
 reporting a missing clause to a counterparty. Presence findings are reliable;
 absence findings on OCR are not. **Every dollar figure read from OCR must be
 confirmed against a crop of the page image before it enters a report or the fee
-register** — observed 2026-09-21: tesseract read Peak's "$1250/month" as
-"$7250/month" and "$1000" as "$7000".
+register** — observed 2026-09-21: tesseract read Peak's "USD 1250/month" as
+"USD 7250/month" and "USD 1000" as "USD 7000".
 
 claude.ai Project uploads of scanned PDFs return empty text to `project_read`.
 When that happens, pull the original from OneDrive › `Business/<property>/`
@@ -328,7 +328,7 @@ Compute and state:
   template for 754 Old SR 74, which arrived carrying another client's property
   (Fairfield Professional Park, Mack Rd), dates, SF, a garbled construction-fee
   tier and a healthcare Anti-Kickback clause; and by a tesseract misread of
-  Peak's $1,250 fee as $7,250. P0 is procedural only — `pma_qc.py` does not
+  Peak's USD 1,250 fee as USD 7,250. P0 is procedural only — `pma_qc.py` does not
   implement it yet.
 
 - **v1.2 (2026-09-09)** — Adds **PM-19** (manager contracting authority) and the

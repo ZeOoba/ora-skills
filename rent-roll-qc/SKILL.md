@@ -9,9 +9,9 @@ Two uses. **Outbound:** a final quality audit before a rent roll goes to an exte
 
 ## Step 0A — Inbound column-integrity check (underwriting intake; added after East Pointe Plaza, 2026-10-01)
 
-Origin: on East Pointe Plaza the rent roll printed a Rent/SF column that did not equal annual rent ÷ SF for 6 of 16 suites. The model treated the monthly-rent column as pure base rent and added separate recoveries on top, which likely double counted about $36K of income and overstated the walk price by about $330K. Two outside LLMs quoted the printed column; the first-pass underwrite labelled those figures errors. Run these tests before building NOI:
+Origin: on East Pointe Plaza the rent roll printed a Rent/SF column that did not equal annual rent ÷ SF for 6 of 16 suites. The model treated the monthly-rent column as pure base rent and added separate recoveries on top, which likely double counted about USD 36K of income and overstated the walk price by about USD 330K. Two outside LLMs quoted the printed column; the first-pass underwrite labelled those figures errors. Run these tests before building NOI:
 
-1. **Printed vs computed.** For every column pair that should reconcile (Rent/SF vs Annual ÷ SF; Monthly × 12 vs Annual; Total vs sum of parts), compute the difference per row and in aggregate. Report suites that differ by more than $0.05/SF or 1% and the aggregate dollar gap. A gap in a minority of suites, in uneven amounts, is the signature of pass-throughs or other charges billed inside the monthly-rent column.
+1. **Printed vs computed.** For every column pair that should reconcile (Rent/SF vs Annual ÷ SF; Monthly × 12 vs Annual; Total vs sum of parts), compute the difference per row and in aggregate. Report suites that differ by more than USD 0.05/SF or 1% and the aggregate dollar gap. A gap in a minority of suites, in uneven amounts, is the signature of pass-throughs or other charges billed inside the monthly-rent column.
 2. **Never call a printed column an error until the alternative is tested.** Treat both columns as candidate base rent. Compute implied base rent from each and compare to the seller's collected base rent in the P&L.
 3. **Like-for-like total test.** Compare the roll's all-in annual total to the P&L's TOTAL rent income (base plus recoveries), and the roll's base to the P&L's base. Whichever pair moves by a normal year-over-year amount (about 0–5%) is the likelier reading. A +9–10% move without new leases is a red flag.
 4. **Double-count guard.** If the roll's monthly rent may include pass-throughs, never add a separate recoveries line on top without proof. Build three cases and show NOI, cap, yield on cost, walk price and IRR for each: face-value (roll base plus recoveries), all-in (roll total, no separate recoveries), and collected (P&L base plus recoveries). Default the price-watch ceiling to the evidence-weighted case until the rent ledger and leases are read.
@@ -94,7 +94,7 @@ A PM company is evaluating management workload, tenant administration complexity
 
 **Additional flags:**
 - Any tenant missing a lease expiration date (PM cannot plan lease admin)
-- Any occupied suite with $0 or blank rent
+- Any occupied suite with USD 0 or blank rent
 - Any suite with SF = 0 or blank
 - Any lease with expiration before today not marked "Expired" or "Month-to-Month" (holdover risk unclear)
 - Missing tenant contact information (PM needs this for onboarding)

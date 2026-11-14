@@ -611,7 +611,7 @@ saved to the Leases project and mirrored to SharePoint when the destination is k
 
 1. **Bottom line** — one paragraph: economics conform / N deviations / N defects / N blockers.
 2. **Conforming terms** — table: LOI § · term · lease clause · ✓ (with any benign
-   variance noted inline, e.g. the $0.03 rounding case).
+   variance noted inline, e.g. the USD 0.03 rounding case).
 3. **Deviations** — numbered, each with LOI § · lease clause · class from Step C ·
    action. Conformance defects (MISSING-GRANT, CONFLICT, unanswered open item) first;
    NARROWING positions second; STANDARD-FORM last.

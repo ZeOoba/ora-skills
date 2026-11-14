@@ -289,7 +289,7 @@ eval harness's daily `runs/` output.
 | Packaging | `package_skills.py`, `package_batch.py`, `build_plugin.py`, `release_plugin.py` (plugin tooling dormant) |
 | Drift and reimport | `repo_first_check.py`, `pending_reimport.py`, `skill_drift_report.py`, `reimport_cycle.py`, `reimport_correlate.py`, `stage_transfer.py`, `entry_b_precheck.py`, `verify_installed_cache.py`, `verify_install.ps1` |
 | Mirror sync | `sync_appdata_mirror.py` (Cowork cache), `sync_local_skills_mirror.py` (Code mirror), `capture_runtime_cache.py` + `register_capture_task.ps1` |
-| Frontmatter and lint | `description_budget.py`, `desc_lengths.py`, `frontmatter_sweep.py`, `skill_md_normalize.py`, `script_resource_lint.py`, `doctrine_consistency.py` |
+| Frontmatter and lint | `description_budget.py`, `desc_lengths.py`, `frontmatter_sweep.py`, `skill_md_normalize.py`, `script_resource_lint.py`, `doctrine_consistency.py`, `lint_skill_dollar_args.py` (no dollar sign followed by a digit in a SKILL.md body; write `USD 4.00`) |
 | Hooks and safety | `install_hooks.py`, `prepush_confidential_scan.py`, `catch_up_main.py` |
 | Shared and misc | `ora_doc_qc.py`, `review_copy.py`, `pause_resume.py`, `notion_fetch_digest.py`, `usage_ledger.py`, `backtest_agenda.py` |
 

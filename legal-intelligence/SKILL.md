@@ -118,10 +118,10 @@ Oxford's preferred clause language for key provisions:
 - Mutual indemnification with 3-year survival period post-lease expiration
 
 ### INSURANCE MINIMUMS (Oxford standard)
-- Commercial General Liability: $1,000,000 per occurrence / $2,000,000 aggregate
+- Commercial General Liability: USD 1,000,000 per occurrence / USD 2,000,000 aggregate
 - Property / Casualty: replacement cost value of all tenant improvements and personal property
-- Workers' Compensation: statutory limits; Employer's Liability: $500,000
-- Umbrella / Excess Liability: $5,000,000 per occurrence
+- Workers' Compensation: statutory limits; Employer's Liability: USD 500,000
+- Umbrella / Excess Liability: USD 5,000,000 per occurrence
 - Oxford named as additional insured on all policies
 - 30-day advance written notice of cancellation or material change
 - Certificates provided to Oxford within 10 days of policy inception and annually thereafter
@@ -162,10 +162,10 @@ Common deletion attempts — HOLD FIRM on all three:
 Common tenant pushback areas:
 - Personal guaranty (can concede burn-off but not full waiver for new tenants)
 - CAM reconciliation transparency (can concede annual statement; cannot concede audit right)
-- Insurance minimums (can reduce umbrella to $2M for small tenants; cannot waive additional insured)
+- Insurance minimums (can reduce umbrella to USD 2M for small tenants; cannot waive additional insured)
 
 Oxford can offer without significant risk:
-- Minor TI allowance ($3-5/SF for paint/carpet)
+- Minor TI allowance (USD 3-5/SF for paint/carpet)
 - 1 month free rent on new leases (not renewals)
 - Flexible move-in timing (2-4 week window)
 

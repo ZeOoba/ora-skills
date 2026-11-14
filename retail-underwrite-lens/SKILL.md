@@ -24,7 +24,7 @@ Layers on `acquisition-underwriting`. The industrial Basis/Yield/IRR floors stay
 1. **Rent Roll tab** with printed Rent/SF, computed Rent/SF, implied base (printed x SF) and the per-suite gap, plus aggregate gap. Run rent-roll-qc Step 0A first.
 2. **Rent-basis cases (formula-linked, live engines):** Base (roll base plus separate recoveries), Case A (roll all-in, no separate recoveries), Case K (P&L collected base plus recoveries). Each shows PGI rent, stabilized NOI, going-in cap, yield on cost, walk price (8% yield on cost), gap to ask, and levered/unlevered IRR and equity multiple at ask and at its own walk price from full re-levered engines. Default price-watch ceiling = evidence-weighted case.
 3. **NOI bridge** from 2025A normalized NOI to stabilized NOI with a zero-tie to the Pro Forma, and the share of stabilized NOI resting on any unverified rent-roll gap.
-4. **Required-rent solve:** blended gross rent per leasable SF that clears 8% yield on cost at the ask, holding ORA's vacancy, management, reserves and reassessed tax. Plus a $11-$15 rent grid (NOI, cap, yield on cost, price clearing 8%).
+4. **Required-rent solve:** blended gross rent per leasable SF that clears 8% yield on cost at the ask, holding ORA's vacancy, management, reserves and reassessed tax. Plus a USD 11-USD 15 rent grid (NOI, cap, yield on cost, price clearing 8%).
 5. **Rent-normalization scenario:** capture percentage (default 50%) of the gap to a labelled [EST] target gross rent, phased over Years 2-4, with renewal TI and no LC; full engine at ask and at walk; walk price with uplift counted as NOI (labelled lens ceiling, not base).
 6. **Outlot option:** NNN rent low/mid/high, value at an outlot cap, all-in cost including site work, net value creation, yield on cost. Option value only; flag entitlement, parking ratio and stormwater as unverified.
 7. **Stage 2.9 income value:** comp-implied value at the market cap band, $/SF comp band, ask vs each; side-by-side with the industrial-floor lens.
@@ -33,7 +33,7 @@ Layers on `acquisition-underwriting`. The industrial Basis/Yield/IRR floors stay
 
 ## Variant: credit tenant + vacant box (v1.1, from the Louisville retail deal, 2026-10-29)
 
-When the roll is one credit tenant plus a large vacant suite, replace the Base / Case A / Case K rent-basis cases with **Base (doctrine), Evidence (documented marketing history: downtime, achieved/asking rent, retail-TI $25/SF [EST]) and Tenant-Dark (credit tenant does not renew at its next expiry)**. Apply the Lease-Up evidence override (Base downtime = MAX(9 mo, months marketed ÷ 2)). Report: share of stabilized NOI resting on the vacant suite; the credit tenant's income alone at its remaining-term cap band (Boulder Group term bands); and the nearest asking prices for comparable half-vacant centers, which usually sit below executed stabilized-center comps.
+When the roll is one credit tenant plus a large vacant suite, replace the Base / Case A / Case K rent-basis cases with **Base (doctrine), Evidence (documented marketing history: downtime, achieved/asking rent, retail-TI USD 25/SF [EST]) and Tenant-Dark (credit tenant does not renew at its next expiry)**. Apply the Lease-Up evidence override (Base downtime = MAX(9 mo, months marketed ÷ 2)). Report: share of stabilized NOI resting on the vacant suite; the credit tenant's income alone at its remaining-term cap band (Boulder Group term bands); and the nearest asking prices for comparable half-vacant centers, which usually sit below executed stabilized-center comps.
 
 ## Rules
 

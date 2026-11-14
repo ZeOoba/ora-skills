@@ -149,12 +149,12 @@ If fewer than 2 dated items exist, print those and `No further dated items in fe
 
 Search for industrial sale transactions matching ORA criteria:
 
-- Sub-$10M total consideration
+- Sub-USD 10M total consideration
 - Shallow-bay, flex, office-warehouse product type
 - Target markets: OH, MD, IN, MO, KS, WI (Columbus, Cincinnati, Baltimore/DC, Indianapolis, Kansas City, Madison) + entry-phase MI (Grand Rapids), VA (Richmond), IA (Des Moines), KY (Louisville), IL (Chicago–Greater Cook County); TN watch
 - Multi-tenant preferred; sub-50,000 SF per building preferred
 
-Include when available: Price, SF, price/SF, cap rate, buyer, seller, broker. Sources: the FIXED SOURCE LIST (A). LoopNet, CoStar and Crexi return 403 to this host — do not cite them. **This section stays thin by design:** press-release sale items usually state SF and buyer but not price or cap rate. Print only what the fetched item states, mark absent fields `n/d`, and if no in-window sale meets ORA's box print `No qualifying sub-$10M sale in fetched sources for {window}` — never pad, never infer price or cap rate. Flag with ⚠️ any deal that would have passed ORA's investment screen.
+Include when available: Price, SF, price/SF, cap rate, buyer, seller, broker. Sources: the FIXED SOURCE LIST (A). LoopNet, CoStar and Crexi return 403 to this host — do not cite them. **This section stays thin by design:** press-release sale items usually state SF and buyer but not price or cap rate. Print only what the fetched item states, mark absent fields `n/d`, and if no in-window sale meets ORA's box print `No qualifying sub-USD 10M sale in fetched sources for {window}` — never pad, never infer price or cap rate. Flag with ⚠️ any deal that would have passed ORA's investment screen.
 
 Format: \[Address\], \[City State\] | \[SF\] SF | $\[Price\] ($\[$/SF\]) | \[Cap Rate\] | Buyer/Seller
 
@@ -206,7 +206,7 @@ Execute Notion/HubSpot checks:
 
 4c — Delinquency (last Delinquency Tracker output in Notion):
 
-- Any AR balance &gt; $0? Flag anyone &gt;30 days. Format: \[Tenant\] | \[Property\] | $\[Amount\] | \[Days Outstanding\]
+- Any AR balance &gt; USD 0? Flag anyone &gt;30 days. Format: \[Tenant\] | \[Property\] | $\[Amount\] | \[Days Outstanding\]
 
 4d — Active Deal Actions (Notion Acquisition Pipeline Tracker):
 

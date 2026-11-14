@@ -95,7 +95,7 @@ Two known illegible-field patterns worth watching for specifically:
 `transcribed` (read directly off the document), `derived` (computed or
 corroborated from other lines or a public record -- record the method in
 the adjacent note; an exact back-solve), `lower-bound` (a floor the other
-figures bound but do not fix, e.g. "at least ~$4.78M implied" from a
+figures bound but do not fix, e.g. "at least ~USD 4.78M implied" from a
 minimum transfer-tax line), or `blank` (the cell is left empty -- an
 unreadable digit per step 2 or a missing allocation per step 5 -- and has
 an EXCEPTIONS row). A cell with no digit read from a source document is
@@ -151,16 +151,16 @@ allocate), flag it immediately in EXCEPTIONS -- "zero land basis, needs
 assessor ratio or appraisal split" -- rather than letting it silently
 capitalize 100% to depreciable improvements. This has been a recurring
 finding (1100 Rarig, and 401 Sunburst's Dorchester County SDAT record showing
-Land Value $0) -- treat a missing split as a standing exception category, not
+Land Value USD 0) -- treat a missing split as a standing exception category, not
 a one-off.
 
-A $0 or blank land line does not mean zero land basis: leave the register
-cell blank (never $0), set `basis = blank`, and log "needs assessor ratio
+A USD 0 or blank land line does not mean zero land basis: leave the register
+cell blank (never USD 0), set `basis = blank`, and log "needs assessor ratio
 or appraisal split". Franklin County OH, Baltimore City and County MD,
 Dorchester County MD and Talbot County MD publish land/improvement
 ratios; cite the source and as-of date and set `basis = derived`. Seller
 credits reduce basis -- carry them in their own column (for example the
-5600 Sunnyside 1992 credit of $1,137.30), never netted into a charge line. A 1031 replacement row's
+5600 Sunnyside 1992 credit of USD 1,137.30), never netted into a charge line. A 1031 replacement row's
 "indicated basis" is COST; tax basis is carryover, so label it as such.
 
 ### 6. Update the EXCHANGE_1031 tab and the 1031 chain register together, at every closing
@@ -284,7 +284,7 @@ builder's own recalc.
 - v1.3 (2026-09-21): Added persistent `basis` column (`transcribed` /
   `derived` / `lower-bound` / `blank`) and the pre-ship re-check of every
   non-`transcribed` cell against the step 0 package, after a `lower-bound`
-  price ("at least ~$4.78M implied") in the 2026-08-17 register turned out
+  price ("at least ~USD 4.78M implied") in the 2026-08-17 register turned out
   to be stated outright in the closing package. Description unchanged
   except the version tag.
 

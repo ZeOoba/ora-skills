@@ -88,7 +88,7 @@ county verified individually before it's trusted in a real digest.
   only: **5-93, 5-83, 6-63, 6-73, 8-93** (Assessor `classcode.pdf`); land,
   minor/ancillary improvements, special improvements and condo units excluded.
   Live probe 2026-10-30: 440 in-scope sale rows in 12 months → 303 deeds → 276
-  under the SF cap → 206 clean $/SF comps (median $95.31), 27 RATIO-REVIEW.
+  under the SF cap → 206 clean $/SF comps (median USD 95.31), 27 RATIO-REVIEW.
   SF is published only when every building PIN on the deed is valued and each
   valuation group lies wholly inside the deed (a house or store on a mixed deed
   blocks it). The reassessment year carries SF but no market value yet, so the
@@ -230,7 +230,7 @@ Nominal-transfer share of recent sale dates runs **40%+ in some counties**
 them silently is wrong twice — it hides re-titling activity that is itself a
 signal, and it makes the digest look thinner than the recording activity was.
 Flag `NONARMS` when any of:
-- price = $0 or < $25,000 (the county-parcel-screen threshold), or
+- price = USD 0 or < USD 25,000 (the county-parcel-screen threshold), or
 - price / assessed total value is wildly off-band (outside ~0.5-4.0x), or
 - the county publishes a validity/conveyance code saying so — Hamilton
   `VSALEVAL`, Henrico `val_code_1` ('1 - VALID SALE'), Clermont `SALETYPE`,
@@ -247,7 +247,7 @@ assessed values trip it on genuine high-value sales). A real-priced row whose
 ONLY non-arm's-length signal is the ratio band carries `RATIO-REVIEW` instead of
 `NONARMS`: it keeps its Price PSF on the row but is excluded from the coverage
 median and the Clean $/SF count until a human validates it, and the digest lists
-those rows separately. $0 / under $25K, shared grantor/grantee stem and county
+those rows separately. USD 0 / under USD 25K, shared grantor/grantee stem and county
 validity codes stay hard `NONARMS`. Known gap: the worker's 0.5-4.0x band is
 global, while this skill requires per-county ratio tests (Baltimore Co assessments
 run ~64% below sales).
@@ -290,7 +290,7 @@ transaction with:
 | `sf_source` | in-layer / CAMA extract / footprint join / ECF study / none |
 | `price_psf` | blank if not derivable |
 | `buyer` / `seller` | where public; `not published` where the county scrubs names (Anne Arundel, Howard) or publishes grantee only. Franklin (worker, v0.7): Seller is the INFERRED prior owner of the parcel, always labelled "(prior owner, inferred)", never a published grantor; blank when a different grantee recorded the same day (chain) or the deed is not matched. An inferred seller never feeds the shared-stem NONARMS test or ORA-AFFILIATED. |
-| `convey_number` / `instrument_type` | Worker rows: deed number (Franklin ConveyNumber) and raw instrument code (Franklin InstrumentType: LW, GW, WD, QC, AF ...; Polk Deed / Contract). Codes are shown raw and are NOT an arm's-length gate: LW appears on both priced sales and $0 re-titlings. |
+| `convey_number` / `instrument_type` | Worker rows: deed number (Franklin ConveyNumber) and raw instrument code (Franklin InstrumentType: LW, GW, WD, QC, AF ...; Polk Deed / Contract). Codes are shown raw and are NOT an arm's-length gate: LW appears on both priced sales and USD 0 re-titlings. |
 | `use_code` + `use_description` | native code and its meaning |
 | `flags` | NONARMS / RATIO-REVIEW / CONTRACT-SALE / MULTI-PARCEL(n) / LATE-POSTED / ORA-AFFILIATED / SF-UNPUBLISHED (Worker rows also carry SF-INCOMPLETE and MULTI-PARCEL-INFERRED) |
 | `source` | county + layer/file the row came from, so any row is re-verifiable |
@@ -543,8 +543,8 @@ sales, so ratio-based arm's-length tests must be per-county, never global.
   excluded; the name test run on 91 distinct live Franklin owner names flagged 21,
   all public bodies, and kept private owners such as OHIOHEALTH CORPORATION and
   OHIO POWER COMPANY. The `simulate` comps cycle moved Franklin from 164 to 160
-  rows and the harness's own median from $117.77 to $113.14 (Columbus State
-  Community College, $236.05/SF, was the only excluded sale with a $/SF; see the
+  rows and the harness's own median from USD 117.77 to USD 113.14 (Columbus State
+  Community College, USD 236.05/SF, was the only excluded sale with a $/SF; see the
   post-deploy note below for the Coverage-basis figures). **Orphaned rows:** the four existing
   Franklin comps below were written before the filter and are now excluded, so
   they stay in the Comps DB with a frozen `Last Synced` and no longer update.
@@ -570,15 +570,15 @@ sales, so ratio-based arm's-length tests must be per-county, never global.
   Notion:** the Franklin Coverage row is OK and its Notes read "4
   government/public-institution sale(s) excluded", as predicted. Franklin
   Transactions 160 (167 on 2026-10-10), clean $/SF rows 40, NONARMS rows 90,
-  median $100.68. That median reproduces exactly from the Comps DB: the 40 clean
+  median USD 100.68. That median reproduces exactly from the Comps DB: the 40 clean
   rows have a median of (100.64 + 100.71) / 2. The filter's own effect on it is
-  about $0.04 (removing the $236.05/SF college row moves the median from 100.71
-  to 100.68), so the filter is not what moved it from $117.77 on 2026-10-10. That
+  about USD 0.04 (removing the USD 236.05/SF college row moves the median from 100.71
+  to 100.68), so the filter is not what moved it from USD 117.77 on 2026-10-10. That
   fall coincides with the window rolling forward five days and new sales posting
-  (the Comps DB now holds a $35.73/SF sale dated 2026-10-09), on a distribution
+  (the Comps DB now holds a USD 35.73/SF sale dated 2026-10-09), on a distribution
   with a gap around the middle (100.71, 113.14, 117.77), where a few rows
   crossing the window edge move the median this far; the exact rows that left the
-  window were not diffed. The `simulate` figures above (a $113.14
+  window were not diffed. The `simulate` figures above (a USD 113.14
   median) are on the harness basis, which includes RATIO-REVIEW rows and takes
   the upper middle value, so they do not compare to the Coverage median. Comps DB
   after the cycle: Franklin 172 rows / 172 distinct Comp Keys (160 upserted this
@@ -586,7 +586,7 @@ sales, so ratio-based arm's-length tests must be per-county, never global.
   0 duplicate Comp Keys; 0 LATE-POSTED; `Price PSF` never 0 and blank on every
   NONARMS, CONTRACT-SALE and SF-INCOMPLETE row. The four orphaned keys above are
   present and unchanged (Last Synced 2026-10-10, same flags, the college row
-  still carrying its $236.05/SF).
+  still carrying its USD 236.05/SF).
 - **v0.8 (2026-10-15):** Post-deploy verification of the Worker databases and a
   fresh parity run against the legacy pilot (read-only; no Worker or database
   change). Worker DB state 2026-10-15: 273 comps (Franklin 171 / Baltimore Co 38
@@ -599,13 +599,13 @@ sales, so ratio-based arm's-length tests must be per-county, never global.
   38 match once NULL-safe), 14 Polk rows where the legacy ID is the 14-digit `dp`
   and the Worker lists the member `gp` PINs, and 7 Franklin legacy rows vs 14
   Worker rows from multi-parcel deed granularity (priced deeds roll up in the
-  Worker; $0 NONARMS deeds emit one row per parcel and now carry SF). The 31
+  Worker; USD 0 NONARMS deeds emit one row per parcel and now carry SF). The 31
   remaining legacy-only rows resolve to: 20 with SF >= 150K (Worker SF gate), 2
-  Franklin deeds legacy marked SF-UNPUBLISHED that are over the cap ($15.4M
-  Action Group parcel 010-000782 at 153,412 SF; $137.8M NLF Columbus parcel
+  Franklin deeds legacy marked SF-UNPUBLISHED that are over the cap (USD 15.4M
+  Action Group parcel 010-000782 at 153,412 SF; USD 137.8M NLF Columbus parcel
   495-286103 at 1,600,052 SF), 3 Franklin sales dated 2025-10-01 before the
-  Worker's first window start, 4 Franklin parcels (Westerville Rd, $0 on
-  2026-07-29) whose GIS `SALEDATE` was overwritten by a 2026-08-18 $13,005,000
+  Worker's first window start, 4 Franklin parcels (Westerville Rd, USD 0 on
+  2026-07-29) whose GIS `SALEDATE` was overwritten by a 2026-08-18 USD 13,005,000
   resale (G7, verified against the live layer), and 2 Polk sales whose DOR
   `quality` is "Government or Exempt" (a church and a nonprofit; verified in the
   live CSV), which the Worker excludes by design. This closes the "1 Polk
@@ -614,7 +614,7 @@ sales, so ratio-based arm's-length tests must be per-county, never global.
   has aged past the rolling 365-day window stay (10-10: 167 / 37 / 62 vs 171 /
   38 / 64; 4 / 1 / 2 rows dated before 2025-10-10). **Open defect (Worker, not
   fixed here):** Step 3's government/exempt exclusion is implemented for Baltimore
-  (`EXCLASS`) and Polk (DOR quality) but NOT for Franklin; two $0 NONARMS rows
+  (`EXCLASS`) and Polk (DOR quality) but NOT for Franklin; two USD 0 NONARMS rows
   with government buyers (State of Ohio, City of Columbus) are in the Franklin
   set. Ruled a Worker defect by Gabriel 2026-10-15; fix is a Worker change
   (src/counties/franklin.ts) and needs a separate approved redeploy.
@@ -625,8 +625,8 @@ sales, so ratio-based arm's-length tests must be per-county, never global.
   parcel counts and an inferred, labelled prior-owner Seller; deed-numbered groups
   replace the buyer-name inference. First deployed cycle: Franklin 173 -> 169 rows
   (5 superseded rows deleted, 1 regrouped row added; 3 of the 5 are large groups
-  now correctly over the 150K SF cap: a $117M Parsons Ave foundry, a $137.7M Shook
-  Rd group, a $15.4M Reynoldsburg-New Albany group, each with a single parcel above
+  now correctly over the 150K SF cap: a USD 117M Parsons Ave foundry, a USD 137.7M Shook
+  Rd group, a USD 15.4M Reynoldsburg-New Albany group, each with a single parcel above
   the cap on its own), Baltimore 38 and Polk 64 unchanged, 194 of 215 sales
   matched (199 before the same-day-deed ambiguity rule withheld 5; the other 16
   unmatched are all dated after the 09-15 drop). Adversarial review took three
@@ -643,7 +643,7 @@ sales, so ratio-based arm's-length tests must be per-county, never global.
   / Polk 64), 275 distinct keys, 0 LATE-POSTED (baseline cycle), `Price PSF`
   blank on every NONARMS / CONTRACT-SALE / SF-INCOMPLETE row and never 0;
   coverage database 7 rows. Clean $/SF medians (coverage rows): Franklin
-  $115.46, Baltimore Co $155.68, Polk $120.08. Parity vs the legacy pilot
+  USD 115.46, Baltimore Co USD 155.68, Polk USD 120.08. Parity vs the legacy pilot
   (strict County+Parcel+Date+Price, 2025-10-01 to 2026-08-15; the worker's own
   window starts 2025-10-02): 207 matched (Franklin 119 / Baltimore 38 / Polk
   50); 51 legacy-only, 32 new-only. Legacy-only causes: multi-parcel
@@ -676,8 +676,8 @@ sales, so ratio-based arm's-length tests must be per-county, never global.
   undocumented anywhere public. Franklin's NONARMS rate (81.6%) ran well above
   the ~40% Ohio baseline — partly real, partly the documented G8 stale-assessment
   failure mode tripping the ratio test on genuine high-value 2025-26 sales.
-  Per-county medians: Franklin $120.27/SF (n=25), Baltimore Co $152.51/SF
-  (n=18), Polk $105.04/SF (n=43) — not blended into a portfolio figure, the
+  Per-county medians: Franklin USD 120.27/SF (n=25), Baltimore Co USD 152.51/SF
+  (n=18), Polk USD 105.04/SF (n=43) — not blended into a portfolio figure, the
   three markets aren't comparable on one number. Franklin also found its bulk
   transfer file lags the live GIS layer by ~1 month (25 of 179 rows had no
   transfer-file match yet, Seller reported "not published" rather than guessed).

@@ -13,7 +13,7 @@ Purpose: convert "FEMA UNK" and "zoning UNK" into sourced determinations at SCRE
 
 ## Decision rules (Buy Box v1.1 — acquisition-underwriting STAGE 0 item 5 and STAGE 2.5 govern; this section restates them)
 - SFHA (Zone A/AE/AH/AO/VE) on the **building pad** = **GATE FLAG** (verdict label GATE-FLAGGED). Ruling 5: no hard kills — the deal is still screened as an exception, and only Gabriel kills a deal.
-- SFHA on **excess land only** = proceed; land valued at **$0 in the basis test until FEMA determination is verified** (then re-credit and re-score — report both as a band, e.g., "58 → 71 if dry").
+- SFHA on **excess land only** = proceed; land valued at **USD 0 in the basis test until FEMA determination is verified** (then re-credit and re-score — report both as a band, e.g., "58 → 71 if dry").
 - Zone X (shaded/unshaded) = no flood constraint; record panel + effective date anyway.
 - Zoning at screen = GIS designation + permitted-use check vs the municipal code. A **formal municipal zoning letter remains mandatory pre-LOI** — this skill does not substitute for it.
 - **PD/PUD is not a use answer (added v1.4).** Where the GIS returns a planned-development designation, the code carries no by-right use table and an empty permitted-use lookup is a **FALSE NEGATIVE, not an UNK** — the governing instrument is the approved PD plan and its agreement, held by the planning department. Run **Step 6A**: obtain the plan, and get the minor-vs-major amendment tier for any intended site change in writing from a named official.
