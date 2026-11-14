@@ -298,7 +298,8 @@ class LooserThanDoctrineGuards(unittest.TestCase):
         r = solve(base(vacant_sf_at_close=30_000), UST)
         looser = [f for f in r.flags if f.startswith("LOOSER THAN DOCTRINE")]
         self.assertEqual(len(looser), 2)
-        r = solve(base(vacant_sf_at_close=30_000, in_place_noi=0, stabilization_year=2, lease_up_carry=245_000), UST)
+        r = solve(base(vacant_sf_at_close=30_000, in_place_noi=0, stabilization_year=2, lease_up_carry=245_000,
+                       lease_expiry_month=200), UST)  # v4.52: lease runs past the hold -> no rollover flag
         self.assertFalse(any(f.startswith("LOOSER THAN DOCTRINE") for f in r.flags))
         # majority (not fully) vacant, stabilized at close -> only the stabilization flag
         r = solve(base(vacant_sf_at_close=20_000), UST)
@@ -511,6 +512,51 @@ class AskAndPortfolio(unittest.TestCase):
         self.assertTrue(any(f.startswith("B: [DATA-GAP: construction type]") for f in p["flags"]))
         p = solve_portfolio([base(name="A"), base(name="B", majority_vacant=True)], UST)
         self.assertAlmostEqual(p["portfolio_irr_floor"], 0.11)
+
+
+class RolloverAndLeaseUpTiming(unittest.TestCase):
+    """v4.52: partial-year lease-up and one expected-value rollover (Rollover Block)."""
+
+    def _lease_up(self, **kw):
+        d = dict(vacant_sf_at_close=30_000, in_place_noi=0, stabilization_year=3, lease_up_carry=300_000)
+        d.update(kw)
+        return base(**d)
+
+    def test_lease_up_without_rollover_flagged(self):
+        r = solve(self._lease_up(), UST)
+        self.assertTrue(any("no modeled rollover" in f for f in r.flags))
+
+    def test_partial_year_cash_start_lowers_irr_leg_vs_linear_ramp(self):
+        lin = solve(self._lease_up(lease_expiry_month=200), UST)
+        part = solve(self._lease_up(lease_expiry_month=200, cash_rent_start_month=24), UST)
+        self.assertLess(part.legs["irr"], lin.legs["irr"])
+        self.assertAlmostEqual(part.legs["yield"], lin.legs["yield"], places=2)  # stabilized year unchanged
+
+    def test_rollover_lowers_irr_leg_and_flags_zero_cost(self):
+        no = solve(self._lease_up(lease_expiry_month=200), UST)
+        r0 = solve(self._lease_up(lease_expiry_month=81), UST)
+        self.assertTrue(any("rollover_cost $0" in f for f in r0.flags))
+        r = solve(self._lease_up(lease_expiry_month=81, rollover_cost=150_000), UST)
+        self.assertLess(r0.legs["irr"], no.legs["irr"])
+        self.assertLess(r.legs["irr"], r0.legs["irr"])
+
+    def test_rollover_defaults_by_sf_band(self):
+        from ora_walk.solver import _renewal_defaults
+        self.assertEqual(_renewal_defaults(base(sf=30_000)), (0.75, 14))
+        self.assertEqual(_renewal_defaults(base(sf=4_000)), (0.65, 7))
+
+    def test_rollover_max_rule_not_additive(self):
+        from ora_walk.solver import noi_path
+        d = self._lease_up(lease_expiry_month=81, renewal_prob=0.95, rollover_downtime_months=12)
+        p, q = noi_path(d), noi_path(self._lease_up(lease_expiry_month=200))
+        # 5% x 3/12 and 5% x 9/12 expected downtime both sit under the 5% structural floor -> no haircut
+        self.assertAlmostEqual(p[6], q[6]); self.assertAlmostEqual(p[7], q[7])
+
+    def test_bad_rollover_inputs_rejected(self):
+        for kw in (dict(renewal_prob=1.5), dict(lease_expiry_month=0), dict(rollover_cost=-1),
+                   dict(cash_rent_start_month=40)):
+            with self.assertRaises(ValueError, msg=str(kw)):
+                solve(self._lease_up(**kw), UST)
 
 
 if __name__ == "__main__":
