@@ -3,7 +3,7 @@ name: legal-intelligence
 description: "Use when the user mentions: lease review, PSA review, contract analysis, redline, clause comparison, compare two versions, blackline, Litera, Workshare, indemnification, default provisions, personal guaranty, estoppel clause / SNDA analysis (NOT certificate drafting — that's estoppel-request-generation), CAM clause, assignment and subletting, loan document, solar lease, vendor contract, or any request to analyze, compare, draft or negotiate a legal document, or an uploaded lease, contract, PSA or loan agreement. PSA drafts and redlines enter via deal-execution Workflow 2A; this skill is its redline sub-step. Oxford Realty Advisors legal analysis, clause library and contract intelligence."
 ---
 
-# Legal Intelligence — Oxford Realty Advisors (v1.4.1)
+# Legal Intelligence — Oxford Realty Advisors (v1.4.2)
 
 ## MODULE 1: DOCUMENT CLASSIFICATION
 
@@ -118,10 +118,10 @@ Oxford's preferred clause language for key provisions:
 - Mutual indemnification with 3-year survival period post-lease expiration
 
 ### INSURANCE MINIMUMS (Oxford standard)
-- Commercial General Liability: $1,000,000 per occurrence / $2,000,000 aggregate
+- Commercial General Liability: USD 1,000,000 per occurrence / USD 2,000,000 aggregate
 - Property / Casualty: replacement cost value of all tenant improvements and personal property
-- Workers' Compensation: statutory limits; Employer's Liability: $500,000
-- Umbrella / Excess Liability: $5,000,000 per occurrence
+- Workers' Compensation: statutory limits; Employer's Liability: USD 500,000
+- Umbrella / Excess Liability: USD 5,000,000 per occurrence
 - Oxford named as additional insured on all policies
 - 30-day advance written notice of cancellation or material change
 - Certificates provided to Oxford within 10 days of policy inception and annually thereafter
@@ -162,10 +162,10 @@ Common deletion attempts — HOLD FIRM on all three:
 Common tenant pushback areas:
 - Personal guaranty (can concede burn-off but not full waiver for new tenants)
 - CAM reconciliation transparency (can concede annual statement; cannot concede audit right)
-- Insurance minimums (can reduce umbrella to $2M for small tenants; cannot waive additional insured)
+- Insurance minimums (can reduce umbrella to USD 2M for small tenants; cannot waive additional insured)
 
 Oxford can offer without significant risk:
-- Minor TI allowance ($3-5/SF for paint/carpet)
+- Minor TI allowance (USD 3-5/SF for paint/carpet)
 - 1 month free rent on new leases (not renewals)
 - Flexible move-in timing (2-4 week window)
 
@@ -218,6 +218,7 @@ Counsel COMMENTS are a fourth case and are equally invisible to a tracked-change
 
 ## Changelog
 
+- v1.4.2 (2026-11-14): Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - v1.4.1 (2026-10-29): Spelled out the cross-skill path of `extract_revisions.py`. This was a reference-path clarification only (wording; no change to procedures, scored or governor constants): NO change to scored or governor constants.
 - v1.4 (2026-10-26): Module 1 pointers: any loan document, any PSA that sells, changes Oxford's share or carries a loan, and any agreement (amendment or new) that sells, contributes or changes Oxford's share of an asset or increases a loan's principal or commitment, follow the `debt-management` v1.6 INTERIM aggregate-LTV checklist (pointer only; no review rule changed). No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).
 - v1.3 (2026-08-21, adversarial review): "estoppel"/"SNDA" triggers (frontmatter description and TRIGGER PHRASES)

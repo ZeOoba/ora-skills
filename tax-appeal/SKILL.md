@@ -3,7 +3,7 @@ name: tax-appeal
 description: "Use whenever the user mentions: property tax, tax assessment, tax appeal, assessed value, tax reduction, county assessor, millage rate, tax bill, reassessment, tax protest, tax grievance, income approach valuation, or any request to evaluate whether an Oxford Realty Advisors property tax assessment should be appealed. Also trigger when the user uploads a property tax bill or assessment notice."
 ---
 
-# Property Tax Appeal Decision Engine (v1.4)
+# Property Tax Appeal Decision Engine (v1.4.1)
 
 Systematic tax assessment analysis and appeal recommendation for Oxford Realty Advisors.
 
@@ -90,7 +90,7 @@ Score the appeal opportunity on a 12-point scale:
 | Income approach gap | +3 | Assessed value > income approach (mid) by >15% |
 | Sales comp gap | +3 | Assessed value > comparable sales value by >15% |
 | YoY spike | +2 | Assessment increased >10% YoY without physical improvement |
-| Dollar savings | +2 | Potential annual tax savings > $5,000 |
+| Dollar savings | +2 | Potential annual tax savings > USD 5,000 |
 | Timeline | +1 | Appeal deadline is >30 days away |
 | Jurisdiction track record | +1 | Jurisdiction has historically favorable appeal outcomes |
 
@@ -209,6 +209,7 @@ Output as XLSX per ORA's three standing naming schemas (ratified 2026-06-10; ORA
 
 ## Changelog
 
+- v1.4.1 (2026-11-14): Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - v1.4 (2026-11-05): §7 deadline tracking repointed from `ora-pm-ledger`, which is currently not running (disabled since the 2026-09-22 fleet pause, which the stalled 2026-09-28 resume did not undo; Gabriel deferred its status 2026-10-30), to `outlook-calendar-sync`, which puts dated deadlines and hearings on Gabriel's Outlook calendar. No scoring, threshold, or valuation math changed. Review corrections applied the same day: the pause date was corrected, and filing deadlines now also get a reminder-task proposal and a `monthly-close` checklist line. No scored or governor constant changed.
 - v1.3 (2026-08-24): Added the **confirm-the-mechanism** rule at the head of §5. The jurisdiction table already told the reader to re-verify deadlines; it said nothing about the far more common failure, which is taking a favorable answer from a board clerk or assessor as a resolved filing path. "You can still file for that year," "no hearing needed," and "we can adjust that administratively" each answer the question asked and stop there — and an administrative adjustment and a formal BOR complaint carry different calendars, evidence burdens and appeal rights. The rule now requires the instrument, the permitted signatory (several states restrict who may file for an entity), the venue and date, whether it is decided administratively or at a hearing, and what the decision instrument is; an appeal whose mechanism is unconfirmed must not be carried in the §3 ROI calc as if only the deadline stood in the way. Sibling rules landed the same day in `ora-flood-zoning-dd` Step 6A (entitlements, the origin case at 754 Old State Route 74) and `ora-millage-lookup` (rate pulls). No scoring, threshold, or valuation math changed.
 - v1.2 (2026-08-15): HIGH fix (Skill Text Audit findings F1/coverage-gap-3). §2.A/§2.B comp-grid pointers repointed from market-monitor (which never had comp-grid mechanics — its "absorbed" claim didn't survive inspection) to acquisition-underwriting's COMP GRID DISCIPLINE section, absorbed there 2026-08-12 per Gabriel's scoped-restore ruling; §7 cross-skill integration line repointed to match. File-naming citations in §4/§6 updated from the archived "ORA Cowork Global Settings v2.0" (2026-06-11) to the current "ORA Cowork Global Operating Prompt v3.0" (2026-07-16) — the underlying three-schema rule is unchanged, only the version/document-name citation. No scoring, threshold, or valuation math changed.
