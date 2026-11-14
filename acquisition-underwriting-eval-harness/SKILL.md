@@ -244,7 +244,7 @@ golden-set edit, or an input-packet change. Check `git log` on the golden file b
 Never run this against a real `golden_set/*.json` file — always against a copy in `fixtures/`.
 
 `fixtures/regression_test_mutation.json` (mutated copy of the GS-A golden file,
-`asking_price` cut ~50%, $1,995,000 → $995,000) and `fixtures/self_test_result.py` are kept as
+`asking_price` cut ~50%, USD 1,995,000 → USD 995,000) and `fixtures/self_test_result.py` are kept as
 permanent, re-runnable self-test assets — not scratch output. Re-run anytime with
 `python fixtures/self_test_result.py` (no live calls; it re-derives the diff from a
 already-captured mutated-replay result and asserts `status == "FLAG"`). Nothing under

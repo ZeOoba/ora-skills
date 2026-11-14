@@ -35,7 +35,7 @@ scripts/import-<thing>.ts
 
 - **Format failures are rejected and reported, never persisted and never auto-fixed.** Missing required field, wrong type, negative or non-finite money, non-ISO date. A human fixes the source file.
 - **Dates are strict ISO `YYYY-MM-DD`** via `isIsoCalendarDate` (`server/warehouse/placeholder-data.ts`). A US `MM/DD/YYYY` or an Excel serial silently corrupts downstream year extraction. Convert Excel serials in the xlsx reader, then validate; reject anything that is not a real calendar day.
-- Money ceilings share the loader's constant (`MAX_LOSS_EVENT_USD` pattern) so an accepted row is never coerced to $0 on read.
+- Money ceilings share the loader's constant (`MAX_LOSS_EVENT_USD` pattern) so an accepted row is never coerced to USD 0 on read.
 - Cross-field invariants are checked at the boundary (example: `deductible <= coverageLimit`). Do not patch the engine to mask bad input.
 - Source flags travel with the row: `[OCR-UNVERIFIED]`, `[DERIVED]`, Verified = No, Confidence. Import carries flags; it does not fix or drop them.
 - Blank beats inferred. Leave Funding Class `Unknown` and Lease Recovery `Unreviewed`; those are human tags.

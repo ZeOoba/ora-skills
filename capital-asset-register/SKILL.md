@@ -120,8 +120,8 @@ replacement pipeline. For each, carry `Est. Replacement Cost` and `Lease Recover
 
 `Lease Recovery` defaults to **Unreviewed** and may only be set after reading the governing
 lease. Landlord capital not recoverable, landlord capital amortizable into CAM, and tenant
-obligation are three different answers with materially different economics — on a ~$28K
-rooftop unit, CAM amortization over a 15-year life is roughly $2,500–3,300/yr recoverable
+obligation are three different answers with materially different economics — on a ~USD 28K
+rooftop unit, CAM amortization over a 15-year life is roughly USD 2,500–3,300/yr recoverable
 `[FORECAST, rate-dependent]`. Guessing this field is worse than leaving it blank.
 
 Hand the pipeline to `annual-cycle`, which owns the annual budget and powers the
@@ -134,7 +134,7 @@ inputs; it does not set reserve levels or approve spend.
   onto that roof, not only roofing work. A crane set, a curb adapter or a new penetration
   all qualify. Membrane patching and roof-warranty survival must be assigned in writing
   before work starts. Enforced in `capital-bid-comparison` Step 5 and `vendor-management`.
-- **`Rebate Status`** must move off *Not Checked* before any replacement over $10,000 is
+- **`Rebate Status`** must move off *Not Checked* before any replacement over USD 10,000 is
   awarded, because the eligible specification has to be inside the awarded scope. *Not
   Checked* on a completed replacement is a process failure to report.
 

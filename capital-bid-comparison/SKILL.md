@@ -16,20 +16,20 @@ anyway, and state what a second bid would test.
 ## Why this exists
 
 Seed pair: the **9050 Red Branch Rd Unit K rooftop replacement**, 2026-09-17. Two HVAC
-proposals, $1,100 apart on a ~$28K job — a 4.0% spread that read as a price decision and
+proposals, USD 1,100 apart on a ~USD 28K job — a 4.0% spread that read as a price decision and
 was not one.
 
 | | Hayden Mechanical | JEM Heating & A/C |
 |---|---|---|
-| As bid | $27,600 | $28,700 |
+| As bid | USD 27,600 | USD 28,700 |
 | Economizer, duct smoke detector, permit | included | **absent** |
 | Two-zone control, bypass damper, duct mods | **absent** | included |
-| Normalized | ~$30.6–32.6K | ~$30.8–32.5K |
+| Normalized | ~USD 30.6–32.6K | ~USD 30.8–32.5K |
 
 Three findings drove the design:
 
 1. **The spread was not the price, it was the scope.** Normalized, the two bids converge
-   inside $500. Every minute spent on the $1,100 was a minute not spent on the fact that
+   inside USD 500. Every minute spent on the USD 1,100 was a minute not spent on the fact that
    one bid omitted an economizer that IECC 2021 very likely requires and the other omitted
    the zone controls that are the tenant's actual complaint.
 2. **Absences do not appear in a price table.** The lower bid carried the code items; the
@@ -123,7 +123,7 @@ Gabriel to ignore the review.
 Run the **payment-leverage test** on every bid: compute the dollars paid before
 substantial completion and the dollars still retained at punch list. Report both in
 dollars, not percentages — "80% paid before the unit is set" reads differently as
-"$22,080 out the door with $5,520 of leverage left." Recommend retainage to passed
+"USD 22,080 out the door with USD 5,520 of leverage left." Recommend retainage to passed
 inspection.
 
 An **absent exclusion list is a finding, not a convenience.** Report it as ambiguity that
@@ -137,7 +137,7 @@ Run all three on every comparison. Each exists because it was missed once.
    Status` is *Bid-Only — Not Prequalified*. COI naming the ORA property entity as
    additional insured, license number, W-9 and Workers Comp are collected **before** the
    award, not after. Route to `vendor-management` MANAGE mode to run it.
-2. **Utility incentive gate — mandatory on any equipment replacement over $10,000.**
+2. **Utility incentive gate — mandatory on any equipment replacement over USD 10,000.**
    Identify the serving utility and check the commercial prescriptive program before
    award, because the eligible specification has to be in the awarded scope. In BGE
    territory that is Smart Energy Savers. Record the outcome on the asset row's `Rebate
@@ -150,7 +150,7 @@ Run all three on every comparison. Each exists because it was missed once.
    all qualify. HVAC and roofing proposals both routinely exclude roofing. Before award,
    assign in writing (a) who patches and warrants the membrane at every penetration and
    (b) whether the building's roof warranty survives the work. Price the roofer's
-   attendance as a line item. A $28K mechanical job can void a roof warranty worth many
+   attendance as a line item. A USD 28K mechanical job can void a roof warranty worth many
    multiples of itself.
 
 ## Step 6 — Check the physical evidence against the scope
@@ -225,9 +225,9 @@ naming files `YYYY-MM-DD_[Property]_[Trade]-BidEval_v##.docx`.
   `vendor-management` v2.0's bid-comparison stub and was lost when that stub was removed in
   the v2.1 split-out. Additive only; no other section changed.
 - **v1.0 (2026-09-17) — initial.** Built from the 9050 Red Branch Rd Unit K rooftop pair
-  (Hayden $27,600 / JEM $28,700, 2026-09-17). Carries the standing normalization table
+  (Hayden USD 27,600 / JEM USD 28,700, 2026-09-17). Carries the standing normalization table
   (11 trades), the code-check matrix (5 trades), the three gates — prequalification,
-  utility incentive over $10K, roof coordination — and the payment-leverage test.
+  utility incentive over USD 10K, roof coordination — and the payment-leverage test.
   Instituted as the sibling of `vendor-management` QC mode: multi-bid leveling routes
   here, single-document pre-signature defect scanning stays there, and the awarded bid
   passes through QC before signature. No QC check or standing position was altered.

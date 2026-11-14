@@ -154,7 +154,7 @@ CategoryDefinitionAction**ACCEPT**Immaterial clarification, consistent with ORA 
 
 **Walk-price check (v1.14).** At the start of Workflows 2A, 3 (DD) and 4 (closing), and on each outbound 2B round, compare the PSA contract price with the current walk, read from the deal's Deal Sourcing Log row (`collection://9a6ae219-85a3-4621-899c-c757fd062f8b`; the last `RE-SOLVED v4.37 (YYYY-MM-DD): $X` line appended in `Notes / Flags` if present, otherwise a `Walk Price` solved under v4.37 or later (re-solve if neither)). If the price exceeds it and no exception is ratified against a walk solved under v4.37 or later, stop and raise the live-offer exception trigger (`acquisition-underwriting`, Pre-v4.37 walks) before the next step.
 
-When ANY PSA draft arrives that this skill did not generate — own counsel's initial draft, seller counsel's first draft, or a counter-draft — review it BEFORE it circulates. Own-counsel drafts get the same scrutiny as seller paper: a recycled template that ships today is an executed contract next month. Origin (754 Old State, 2026-06-11 — $50K deposit error, 9 LOI-conformance failures, linchpin easement omitted): references/rationale-and-incidents.md.
+When ANY PSA draft arrives that this skill did not generate — own counsel's initial draft, seller counsel's first draft, or a counter-draft — review it BEFORE it circulates. Own-counsel drafts get the same scrutiny as seller paper: a recycled template that ships today is an executed contract next month. Origin (754 Old State, 2026-06-11 — USD 50K deposit error, 9 LOI-conformance failures, linchpin easement omitted): references/rationale-and-incidents.md.
 
 ### Step 1 — Assemble ground truth
 1. Read the EXECUTED LOI in full (signed copy, not a prior draft).
@@ -288,8 +288,8 @@ Generate a full checklist in XLSX format with:
 
 Flag any DD finding that should trigger price renegotiation:
 
-- Environmental contamination with estimated remediation cost &gt;$50K
-- Structural issues with estimated repair cost &gt;$100K
+- Environmental contamination with estimated remediation cost &gt;USD 50K
+- Structural issues with estimated repair cost &gt;USD 100K
 - Roof replacement required within 2 years
 - Any tenant with &gt;60 days delinquency not disclosed pre-contract
 - Zoning non-conformance that limits redevelopment rights

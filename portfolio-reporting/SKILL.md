@@ -136,7 +136,7 @@ For portfolio valuation updates:
 - Portfolio value = Sum of all property values
 
 **Replacement Cost Check (secondary validation):**
-- Estimated replacement cost per SF by market: $85–$120/SF depending on market
+- Estimated replacement cost per SF by market: USD 85–USD 120/SF depending on market
 - If income approach value < replacement cost, flag as below-replacement-cost confirmation
 
 **Discount to Replacement Cost:**
