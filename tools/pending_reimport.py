@@ -878,6 +878,23 @@ def changed_files_range(old: str, new: str) -> list[str]:
     return [ln.strip() for ln in out.splitlines() if ln.strip()]
 
 
+def is_canonical_checkout() -> bool:
+    """True only in the PRIMARY checkout with `main` checked out (same rule as
+    sync_appdata_mirror.is_canonical_checkout, which gates the cache sync in the same
+    hooks). record-range must not run anywhere else: a feature worktree catching up with
+    `git merge main` would otherwise write every skill main changed since the branch point
+    into the shared ledger, already-reimported ones included (PR #262 review finding 1).
+    main's content reaches the ledger when the primary pulls it, so nothing is lost."""
+    try:
+        branch = _git('rev-parse', '--abbrev-ref', 'HEAD').strip()
+        git_dir = Path(_git('rev-parse', '--absolute-git-dir').strip()).resolve()
+        common = Path(_git('rev-parse', '--git-common-dir').strip())
+        common = (common if common.is_absolute() else REPO / common).resolve()
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    return branch == 'main' and git_dir == common
+
+
 def cmd_record_range(old: str, new: str) -> None:
     """post-merge entry point (2026-11-14). git runs post-commit ONLY for `git commit`, so a
     PR squash-merged on GitHub and pulled into a checkout by fast-forward never reached
@@ -885,12 +902,17 @@ def cmd_record_range(old: str, new: str) -> None:
     tax-appeal, verified-deal-recon, website-perfection, xlsx-warehouse-importer) changed on
     main between 10-29 and 11-12 and were caught only because unrelated branches later
     merged main in and committed the merge. Records the same way as cmd_record; re-recording
-    a skill only replaces its line, so a merge seen by both hooks is harmless."""
+    a skill only replaces its line, so a merge seen by both hooks is harmless. Runs only in
+    the primary checkout on main (is_canonical_checkout); post-rewrite calls it too, for
+    `pull --rebase` with local commits, which never fires post-merge."""
+    if not is_canonical_checkout():
+        return
     files = changed_files_range(old, new)
     if not files:
         return
     head = _git('rev-parse', '--short', new).strip()
-    n = _git('rev-list', '--count', f'{old}..{new}').strip() or '?'
+    # --no-merges: a non-ff merge's own merge commit is not a commit it brought in.
+    n = _git('rev-list', '--count', '--no-merges', f'{old}..{new}').strip() or '?'
     subject = _git('log', '-1', '--format=%s', new).strip()
     cmd_record(new, files=files, shorthash=head,
                subject=f'merged/pulled {n} commit(s) into {_git("rev-parse", "--short", old).strip()}: {subject}')
