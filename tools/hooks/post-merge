@@ -11,4 +11,8 @@ python tools/sync_local_skills_mirror.py --all 2>&1 || true
 # Check 4: primary checkout on main only, and never over a cache that is ahead of or
 # divergent from the repo.
 python tools/sync_appdata_mirror.py --changed-range ORIG_HEAD HEAD 2>&1 || true
+# Hook pins, 2026-11-13: a merge that changes the pre-push scanner or tools/hooks leaves
+# install_hooks.py's pinned copies stale until the next push notices (after #257). Warn
+# here with the re-pin command. Never re-pins, never fails the merge.
+python tools/hook_pin_check.py --range ORIG_HEAD HEAD 2>&1 || true
 exit 0

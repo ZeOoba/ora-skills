@@ -29,6 +29,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pending_reimport as pr  # noqa: E402
 import reimport_correlate as rc  # noqa: E402
 import reimport_cycle as cyc  # noqa: E402
+import reimport_claims as claims  # noqa: E402
+from test_reimport_claims import FakeLib  # noqa: E402
+
+# Never touch the real ~/.claude claims directory from a test (2026-11-13): precheck and
+# postclick now claim / check reimport claims. Tests that exercise claims inject a FakeLib.
+claims.load_lib = lambda: None
 
 
 def _write(path: Path, text: str) -> None:
@@ -319,6 +325,104 @@ class PrecheckTests(FixtureTestCase):
         code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
         self.assertEqual(code, 0, out)
         self.assertIn('WARN references/extra.md', out)
+
+
+class PrecheckUsesThePackagersDepLists(PrecheckTests):
+    """2026-11-13 RCT re-upload: precheck FAILed every correct RCT package
+    ('rct-table.local.json: no repo counterpart') and lease-form-qc ('scripts/ora_doc_qc.py:
+    no repo counterpart'), because it only knew same-named repo-root files. It now asks the
+    packager (SHARED_ROOT_DEPS via _dep_pair, PRIVATE_LOCAL_DEPS, private_dep_bytes)."""
+
+    PRIVATE = b'{"synthetic": "private table bytes"}\n'
+
+    def setUp(self):
+        super().setUp()
+        _write(self.repo / 'tools' / 'qc.py', 'print("qc")\n')
+        self.deps = ({'scripts/qc.py': 'tools/qc.py'}, ['private.local.json'])
+        self.private_source = lambda skill, name: self.PRIVATE
+        for p in (unittest.mock.patch.object(rc, '_packager_deps', lambda s: self.deps),
+                  unittest.mock.patch.object(rc, '_private_bytes',
+                                             lambda s, n: self.private_source(s, n))):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def _entries(self, **over):
+        e = {'demo-skill/SKILL.md': self.SKILL_MD.encode(),
+             'demo-skill/references/a.md': b'ref a\n',
+             'demo-skill/scripts/qc.py': b'print("qc")\n',
+             'demo-skill/private.local.json': self.PRIVATE}
+        e.update(over)
+        return {k: v for k, v in e.items() if v is not None}
+
+    def _good_entries(self):
+        # Every inherited PrecheckTests case re-runs with both kinds of packager dep present.
+        return self._entries()
+
+    def test_renamed_shared_dep_and_private_dep_pass(self):
+        _make_pkg(self.pkg, 'demo-skill', self._entries())
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 0, out)
+        self.assertIn('PRECHECK OK', out)
+        self.assertIn('1 shared root dep, 1 private dep', out)
+        self.assertNotIn('no repo counterpart', out)
+
+    def test_stale_renamed_shared_dep_fails(self):
+        _make_pkg(self.pkg, 'demo-skill', self._entries(**{'demo-skill/scripts/qc.py': b'old\n'}))
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 1)
+        self.assertIn('scripts/qc.py: content MISMATCH vs repo', out)
+
+    def test_private_dep_not_matching_its_validated_source_fails(self):
+        _make_pkg(self.pkg, 'demo-skill', self._entries(**{'demo-skill/private.local.json': b'{}\n'}))
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 1)
+        self.assertIn('private.local.json: content MISMATCH vs its validated private source', out)
+
+    def test_private_dep_compared_exactly_not_eol_normalized(self):
+        # The packager ships private_dep_bytes() verbatim, so the package copy must be identical.
+        _make_pkg(self.pkg, 'demo-skill',
+                  self._entries(**{'demo-skill/private.local.json': self.PRIVATE.replace(b'\n', b'\r\n')}))
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 1)
+
+    def test_unusable_private_source_fails_without_passing_the_package(self):
+        def refuse(skill, name):
+            raise SystemExit(f'{skill}: REFUSING to package -- private {name} not found')
+        self.private_source = refuse
+        _make_pkg(self.pkg, 'demo-skill', self._entries())
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 1)
+        self.assertIn('private.local.json: private source not usable', out)
+
+    def test_declared_deps_missing_from_the_package_fail(self):
+        _make_pkg(self.pkg, 'demo-skill', self._entries(**{'demo-skill/private.local.json': None,
+                                                           'demo-skill/scripts/qc.py': None}))
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 1)
+        self.assertIn('private.local.json: declared packager dep missing from the package', out)
+        self.assertIn('scripts/qc.py: declared packager dep missing from the package', out)
+
+    def test_files_the_packager_never_ships_do_not_warn(self):
+        _write(self.repo / 'demo-skill' / 'tests' / 'test_x.py', 'x\n')
+        _write(self.repo / 'demo-skill' / 'versions' / 'CHANGELOG-v1.md', 'x\n')
+        _write(self.repo / 'demo-skill' / 'PACKAGING-NOTE.md', 'x\n')
+        _make_pkg(self.pkg, 'demo-skill', self._entries())
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 0, out)
+        self.assertNotIn('WARN', out)
+
+    def test_real_packager_lists_are_what_precheck_reads(self):
+        # Not mocked: the production helper must return the packager's own entries.
+        import package_skills as ps
+        with unittest.mock.patch.object(rc, '_packager_deps', self._real_deps):
+            shared, private = rc._packager_deps('lease-form-qc')
+            self.assertEqual(shared, {'scripts/ora_doc_qc.py': 'tools/ora_doc_qc.py'})
+            self.assertEqual(private, [])
+            shared, private = rc._packager_deps('acquisition-underwriting')
+            self.assertEqual(private, [ps.RCT_TABLE_FILE])
+            self.assertEqual(shared.get('target-markets.json'), 'target-markets.json')
+
+    _real_deps = staticmethod(rc._packager_deps)
 
 
 class PostclickTests(FixtureTestCase):
@@ -2189,6 +2293,211 @@ class PrecheckRecordsManifest(PrecheckTests):
         code, out = self._run(rc.cmd_baseline, ['demo-skill'], str(self.pkg))
         self.assertEqual(code, 0, out)
         self.assertIn('SKILL.md', self._read()['expected_files'])
+
+
+class PostclickSeveralSkills(unittest.TestCase):
+    """2026-11-13: `postclick a b c` verified `a` and silently ignored `b c`. An appending
+    multi-skill postclick now refuses and names reimport_cycle.py close (the batch path that
+    writes ONE entry plus a recorded-install marker per skill, so consume works); a plain
+    --no-append verify runs per skill."""
+
+    def _main(self, *argv):
+        calls = []
+
+        def fake(skill, version, no_append, clear_ledger, baseline_override=None):
+            calls.append((skill, version, no_append, clear_ledger, baseline_override))
+            return {'b': 1}.get(skill, 0)
+
+        buf = io.StringIO()
+        with unittest.mock.patch.object(rc, 'cmd_postclick', fake), \
+                unittest.mock.patch.object(sys, 'argv', ['reimport_correlate.py', *argv]), \
+                redirect_stdout(buf):
+            code = rc.main()
+        return code, calls, buf.getvalue()
+
+    def test_appending_batch_refuses_and_names_reimport_cycle_close(self):
+        code, calls, out = self._main('postclick', 'a', 'b', 'c')
+        self.assertEqual(code, 2)
+        self.assertEqual(calls, [], 'nothing may be verified-and-logged for only the first skill')
+        self.assertIn('reimport_cycle.py close a b c', out)
+
+    def test_clear_ledger_or_version_batch_also_refuses(self):
+        for extra in (['--no-append', '--clear-ledger'], ['--no-append', '--version', '1.2']):
+            code, calls, _ = self._main('postclick', 'a', 'b', *extra)
+            self.assertEqual(code, 2, extra)
+            self.assertEqual(calls, [], extra)
+
+    def test_baseline_is_carried_into_the_close_hint(self):
+        _, _, out = self._main('postclick', 'a', 'b', '--baseline', '2026-11-13 14:30:00')
+        self.assertIn('close a b --baseline "2026-11-13 14:30:00"', out)
+
+    def test_verify_only_batch_runs_every_skill_and_returns_the_worst(self):
+        code, calls, _ = self._main('postclick', 'a', 'b', 'c', '--no-append')
+        self.assertEqual([c[0] for c in calls], ['a', 'b', 'c'])
+        self.assertTrue(all(c[2] is True and c[3] is False for c in calls))
+        self.assertEqual(code, 1)
+
+    def test_verify_only_batch_never_reports_a_failure_as_already_recorded(self):
+        # PR #260 review finding 5: max(1, 3) used to exit 3, the "nothing to do" code.
+        codes = {'a': 1, 'b': rc.ALREADY_RECORDED_RC, 'c': 0}
+        with unittest.mock.patch.object(rc, 'cmd_postclick', lambda s, *a: codes[s]), \
+                unittest.mock.patch.object(sys, 'argv', ['x', 'postclick', 'a', 'b', 'c', '--no-append']), \
+                redirect_stdout(io.StringIO()):
+            self.assertEqual(rc.main(), 1)
+        codes = {'a': rc.ALREADY_RECORDED_RC, 'b': 0}
+        with unittest.mock.patch.object(rc, 'cmd_postclick', lambda s, *a: codes[s]), \
+                unittest.mock.patch.object(sys, 'argv', ['x', 'postclick', 'a', 'b', '--no-append']), \
+                redirect_stdout(io.StringIO()):
+            self.assertEqual(rc.main(), rc.ALREADY_RECORDED_RC)
+
+    def test_single_skill_unchanged(self):
+        code, calls, _ = self._main('postclick', 'a', '--version', '1.2', '--clear-ledger')
+        self.assertEqual(code, 0)
+        self.assertEqual(calls, [('a', '1.2', False, True, None)])
+
+
+class _WithFakeClaims:
+    """Mixin: a fresh FakeLib as the claim library for one test (never the real one)."""
+
+    def _fake_claims(self, me='session-me'):
+        self.lib = FakeLib(me=me)
+        p = unittest.mock.patch.object(claims, 'load_lib', lambda: self.lib)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def _foreign(self, skill='demo-skill', sid='cb36d24b'):
+        self.lib.claims[claims.slug(skill)] = {'session_id': sid, 'description': 'install',
+                                              'age_minutes': 3.0}
+
+
+class PrecheckClaimsTheReimport(_WithFakeClaims, PrecheckTests):
+    """2026-11-13: precheck (Entry point B) claims the reimport for this session."""
+
+    def setUp(self):
+        super().setUp()
+        self._fake_claims()
+
+    def test_passing_precheck_claims_the_reimport(self):
+        _make_pkg(self.pkg, 'demo-skill', self._good_entries())
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.lib.claims['reimport-demo-skill']['session_id'], 'session-me')
+
+    def test_handoff_precheck_takes_the_claim_over_and_passes(self):
+        # PR #260 review finding 1: the builder (cb36d24b) holds the claim; the installer's
+        # precheck must pass, take the claim, and record the builder's as prior_claim.
+        self._foreign()
+        _make_pkg(self.pkg, 'demo-skill', self._good_entries())
+        code, out = self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(code, 0, out)
+        self.assertIn('TAKEN OVER from session cb36d24b', out)
+        c = self.lib.claims['reimport-demo-skill']
+        self.assertEqual(c['session_id'], 'session-me')
+        self.assertEqual(c['prior_claim']['session_id'], 'cb36d24b')
+        self.assertEqual(c['prior_claim_reason'], 'force')
+
+    def test_failing_precheck_claims_nothing(self):
+        e = self._good_entries()
+        e['demo-skill/references/a.md'] = b'OLD\n'
+        _make_pkg(self.pkg, 'demo-skill', e)
+        self._run(rc.cmd_precheck, [str(self.pkg)])
+        self.assertEqual(self.lib.claims, {})
+
+
+class PostclickRespectsTheClaim(_WithFakeClaims, PostclickTests):
+    """2026-11-13: the session holding the reimport claim logs it; others may verify only."""
+
+    def setUp(self):
+        super().setUp()
+        self._fake_claims()
+
+    def test_another_sessions_claim_stops_the_append(self):
+        self._confirmable()
+        self._foreign()
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.23', False, False)
+        self.assertEqual(code, 1)
+        self.assertIn('CLAIMED by session cb36d24b', out)
+        self.assertFalse(self.calls.exists(), 'nothing may be appended')
+
+    def test_bridge_sessions_unknown_claim_stops_a_code_session(self):
+        self._fake_claims(me='cb36d24b')
+        self._confirmable()
+        self._foreign(sid='unknown')
+        code, _ = self._run(rc.cmd_postclick, 'demo-skill', '4.23', False, False)
+        self.assertEqual(code, 1)
+        self.assertFalse(self.calls.exists())
+
+    def test_own_claim_appends_then_releases(self):
+        self._confirmable()
+        self.lib.claims['reimport-demo-skill'] = {'session_id': 'session-me', 'description': 'd'}
+        code, out = self._run(rc.cmd_postclick, 'demo-skill', '4.23', False, False)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(self.calls.exists())
+        self.assertNotIn('reimport-demo-skill', self.lib.claims)
+
+    def test_verify_only_ignores_claims(self):
+        self._confirmable()
+        self._foreign()
+        code, _ = self._run(rc.cmd_postclick, 'demo-skill', None, True, False)
+        self.assertEqual(code, 0)
+
+
+class CycleRespectsTheClaim(_WithFakeClaims, unittest.TestCase):
+    """reimport_cycle prep claims; close refuses to log another session's claimed reimport."""
+
+    def setUp(self):
+        self._fake_claims()
+
+    def _close(self):
+        calls = []
+
+        def fake_run(args, echo=True):
+            calls.append([str(a) for a in args])
+            return subprocess.CompletedProcess(args, 0, stdout='', stderr='')
+
+        repo = Path(tempfile.mkdtemp(prefix='reimport_correlate_test_'))
+        self.addCleanup(_rmtree, repo)
+        with unittest.mock.patch.object(cyc, '_run', fake_run), \
+                unittest.mock.patch.object(cyc, 'REPO', repo), redirect_stdout(io.StringIO()) as out:
+            code = cyc.cmd_close(['demo-skill'], None, False, False, None, None)
+        return code, calls, out.getvalue()
+
+    def test_close_stops_before_the_append_on_another_sessions_claim(self):
+        self._foreign()
+        code, calls, out = self._close()
+        self.assertEqual(code, 1)
+        self.assertFalse(any(c[0] == str(cyc.APPEND) for c in calls), 'no append')
+        self.assertIn('CLAIMED by session cb36d24b', out)
+
+    def test_handoff_builder_cannot_log_after_the_installer_prechecked(self):
+        # The 2026-11-13 double log, end to end: the installer's precheck took the claim, so
+        # the builder session's close (the batch logger) refuses to write a second entry.
+        self._fake_claims(me='builder')
+        self._foreign(sid='installer')
+        code, calls, out = self._close()
+        self.assertEqual(code, 1)
+        self.assertFalse(any(c[0] == str(cyc.APPEND) for c in calls))
+
+    def test_prep_does_not_claim(self):
+        # Gates pass and every tool "succeeds", so prep runs past where it used to claim; it
+        # then fails reading the (never built) package, which is fine for this test.
+        out = Path(tempfile.mkdtemp(prefix='reimport_correlate_test_'))
+        self.addCleanup(_rmtree, out)
+        with unittest.mock.patch.object(cyc, 'gate_failures', lambda *a: []), \
+                unittest.mock.patch.object(cyc, '_run', lambda *a, **k: subprocess.CompletedProcess(a, 0, '', '')), \
+                redirect_stdout(io.StringIO()):
+            try:
+                cyc.cmd_prep(['demo-skill'], out)
+            except OSError:
+                pass
+        self.assertEqual(self.lib.claims, {})
+
+    def test_close_releases_its_own_claim_after_the_append(self):
+        self.lib.claims['reimport-demo-skill'] = {'session_id': 'session-me', 'description': 'd'}
+        code, calls, _ = self._close()
+        self.assertEqual(code, 0)
+        self.assertTrue(any(c[0] == str(cyc.APPEND) for c in calls))
+        self.assertNotIn('reimport-demo-skill', self.lib.claims)
 
 
 if __name__ == '__main__':
