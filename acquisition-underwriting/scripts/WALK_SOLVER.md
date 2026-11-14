@@ -34,7 +34,7 @@ python -m ora_walk walk_examples/example_portfolio.json --ust 0.0452 --json
 python test_walk_solver.py                        # 60 tests; every doctrine constant pinned
 ```
 
-`ora_walk/doctrine.py` pins SKILL.md v4.49 (v4.46 through v4.49 changed no constant; v4.49 moved the RCT figures to the private `rct-table.local.json`; the values date from v4.45). Any SKILL.md version that changes a constant mirrored there must update `doctrine.py` and the `DoctrinePins` tests in the same PR.
+`ora_walk/doctrine.py` pins SKILL.md v4.51 (v4.46 through v4.51 changed no governor or scored constant; v4.51 mirrors the Rollover Block tables; v4.49 moved the RCT figures to the private `rct-table.local.json`; the values date from v4.45). Any SKILL.md version that changes a constant mirrored there must update `doctrine.py` and the `DoctrinePins` tests in the same PR.
 
 Deal fields (see `ora_walk/solver.py: Deal`): `name, sf, stabilized_noi` (pre-reserves, stabilization-year $), plus optional:
 - Location and building:
@@ -53,7 +53,23 @@ Examples with synthetic data are in `walk_examples/`.
 
 `stabilized_noi` and `in_place_noi` must already be net of the vacancy line, credit loss and the 4% EGI management fee. The vacancy line each year is MAX(5% structural, expected modeled downtime): the 5% is a floor, never added on top. For `in_place_noi` that downtime covers space vacant at close and in-place leases expiring in Year 1. The solver deducts only reserves. If you feed OM NOI at 100% occupancy, every leg is overstated.
 
-NOI grows at the market Base of 2.5%. The 3% escalator is a contractual minimum, not a growth rate, and anything above 2.5% is flagged. Suite-level rollover is not modeled. For a deal where IRR binds, confirm the walk against the full UNDERWRITE model.
+NOI grows at the market Base of 2.5%. The 3% escalator is a contractual minimum, not a growth rate, and anything above 2.5% is flagged.
+
+## Lease-up timing and rollover (v4.51)
+
+Before v4.51 the solver treated stabilized NOI as arriving in full from the stabilization year and modeled no lease expiry, so when the IRR floor bound its walk ran about 12% above the full model (2026-11-14 Walker MI lease-up test: +12.5%). Five optional `Deal` fields close the gap:
+
+| Field | Meaning | Default when omitted |
+|---|---|---|
+| `cash_rent_start_month` | First month of cash rent counted from close (after downtime and free rent). Year rent is pro-rated by months paid. | Off: whole-year stabilization as before |
+| `lease_expiry_month` | Last month of the lease (or of the largest suite) inside the hold. Rollover then applies one time. | No rollover, flagged when a lease-up deal has none |
+| `renewal_prob` | Probability the tenant renews. | Rollover Block (a) by SF band: ≤5K 65%, ≤10K 70%, ≤25K 72%, larger 75% |
+| `rollover_downtime_months` | Downtime if it does not renew, including free rent. | Rollover Block (b): ≤10K 5, ≤25K 9, larger 12, plus 2 months free |
+| `rollover_cost` | EXPECTED re-leasing TI + LC dollars at expiry (renewal and new weighted). | 0, flagged when the rollover year falls inside the hold or the exit year |
+
+In each rollover month the expected rent loss is (1 − renewal_prob). The year's vacancy line is MAX(5% structural, expected downtime share), the same MAX rule as the model, so downtime is never stacked on the 5%. `rollover_cost` comes out of cash flow in the rollover year. Both feed the IRR leg and the refi sizing; the YoC and basis legs are unchanged.
+
+For a deal where IRR binds, still confirm the walk against the full UNDERWRITE model. With these fields set, the test deal's walk came within 2.0% of the model.
 
 ## Guards against walks looser than doctrine
 
@@ -68,8 +84,10 @@ It flags, rather than rejects:
 - an exit-cap override below the market cap;
 - growth above 2.5%;
 - a lease-up deal with no `vacant_sf_at_close`;
+- a lease-up deal with no modeled rollover (`lease_expiry_month` missing), labelled LOOSER THAN DOCTRINE;
+- `rollover_cost` of $0 when the rollover year falls inside the hold or the exit year;
 - `lease_up_carry` below the Lease-Up Block TI default alone ($8.00/SF × vacant SF at close);
-- Year-1 NOI (`in_place_noi`, or stabilized NOI when modeled stabilized at close) above the occupied share of stabilized NOI, whenever `vacant_sf_at_close` is given. The share is SF pro-rata, grossed up for the 5% structural vacancy already netted into stabilized NOI and capped at stabilized NOI, so vacancy of 5% or less does not flag. It assumes no Year-1 rollover downtime on occupied suites (suite-level rollover is not modeled).
+- Year-1 NOI (`in_place_noi`, or stabilized NOI when modeled stabilized at close) above the occupied share of stabilized NOI, whenever `vacant_sf_at_close` is given. The share is SF pro-rata, grossed up for the 5% structural vacancy already netted into stabilized NOI and capped at stabilized NOI, so vacancy of 5% or less does not flag. It assumes no Year-1 rollover downtime on occupied suites.
 
 The majority-vacant premium is derived from `vacant_sf_at_close`, and setting it to `False` cannot remove it.
 
