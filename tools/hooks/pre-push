@@ -1,8 +1,9 @@
 #!/bin/sh
 # ORA-PREPUSH-CONFIDENTIAL-SCAN -- git pre-push shim (Hard Invariant 3, fail-closed).
 # ora-skills pre-push (canonical, versioned; run by the per-clone shim that tools/install_hooks.py writes).
-# Runs the confidentiality scan as committed at HEAD (never the worktree file); if HEAD predates
-# the scan, falls back to the copy beside this hook directory (tools/). No scan script or no usable
+# Runs the confidentiality scan as committed at HEAD; if HEAD does not track it, falls back to the
+# copy beside this hook directory (tools/), which in a checkout is a working-tree file: the
+# install_hooks.py shim runs its pinned scan first, so this stage can only add blocks. No scan script or no usable
 # Python 3.8+ => the push is BLOCKED. git's ref lines reach the scan on stdin unchanged.
 # Emergency bypass (only after verifying the push is clean): git push --no-verify
 # PATH is rebuilt FIRST, with shell built-ins only, before this hook runs any external command
@@ -55,9 +56,9 @@ fi
 HOOK_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 REL=tools/prepush_confidential_scan.py
-# The worktree file itself never runs: an untracked, edited or stat-cache-hidden copy there could
-# stand in for the scanner. When HEAD tracks the scan, its committed blob is extracted to a temp
-# file and run; otherwise (or on any failure) the copy beside the hook runs.
+# When HEAD tracks the scan, its committed blob is extracted to a temp file and run, so an
+# untracked, edited or stat-cache-hidden worktree copy at $REL never stands in for it. Otherwise
+# (or on any failure) the copy beside the hook runs.
 SCAN="$HOOK_DIR/../prepush_confidential_scan.py"
 TMPSCAN=
 trap '[ -n "$TMPSCAN" ] && rm -f "$TMPSCAN"' EXIT
