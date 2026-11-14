@@ -148,7 +148,8 @@ def normalize_market(market: Optional[str]) -> Optional[str]:
 def validate(deal: Deal) -> None:
     """Reject inputs that would price a deal looser than doctrine."""
     for f in ("sf", "stabilized_noi", "in_place_noi", "vacant_sf_at_close", "renovation_spend", "land_value",
-              "capex", "lease_up_carry", "ask_price", "exit_cap", "sale_cost_pct", "reserves_psf", "noi_growth"):
+              "capex", "lease_up_carry", "ask_price", "exit_cap", "sale_cost_pct", "reserves_psf", "noi_growth",
+              "rollover_cost", "renewal_prob"):
         v = getattr(deal, f)
         if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)):
             raise ValueError(f"{f} must be a finite number (got {v!r})")
@@ -492,6 +493,9 @@ def solve(deal: Deal, ust: float, portfolio_mode: bool = False) -> Result:
         "yield": _price_from_allin(stab_noi_net / D.YOC_FLOOR, deal),
         "irr": _price_from_allin(_unlevered_pv(deal, r_floor, cap), deal),
     }
+    bad = [k for k, v in legs.items() if not math.isfinite(v)]
+    if bad:  # a NaN leg would silently drop out of min() and loosen the walk
+        raise ValueError(f"non-finite walk leg(s) {bad}: check the deal inputs")
     binding = min(legs, key=legs.get)
     walk = legs[binding]
     if walk <= 0:
