@@ -1148,9 +1148,35 @@ def _pop(rest: list[str], flag: str, has_val: bool):
     return True, rest[:i] + rest[i + 1:]
 
 
+SUBCOMMANDS = ('baseline', 'verify', 'precheck', 'postclick', 'consume')
+HELP_FLAGS = ('-h', '--help', 'help')
+
+
+def usage(cmd: str | None = None) -> str:
+    """The module docstring, or just one subcommand's section of it. A section runs from
+    its `python tools/reimport_correlate.py <cmd>` line to the next subcommand's line."""
+    doc = __doc__ or ''
+    if cmd not in SUBCOMMANDS:
+        return doc
+    head = re.compile(r'^\s*python tools/reimport_correlate\.py (' + '|'.join(SUBCOMMANDS) + r')\b')
+    lines, out, inside = doc.splitlines(), [], False
+    for ln in lines:
+        m = head.match(ln)
+        if m:
+            inside = m.group(1) == cmd
+        if inside:
+            out.append(ln)
+    return '\n'.join(out).rstrip() + '\n' if out else doc
+
+
 def main() -> int:
     args = sys.argv[1:]
-    if len(args) < 2 or args[0] not in ('baseline', 'verify', 'precheck', 'postclick', 'consume'):
+    # -h/--help anywhere (2026-11-14): `postclick --help` used to be refused as an
+    # unrecognised option, so the flags could only be found by reading the source.
+    if any(a in HELP_FLAGS for a in args):
+        print(usage(args[0] if args and args[0] in SUBCOMMANDS else None))
+        return 0
+    if len(args) < 2 or args[0] not in SUBCOMMANDS:
         print(__doc__)
         return 2
     cmd, rest = args[0], args[1:]

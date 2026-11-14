@@ -15,4 +15,11 @@ python tools/sync_appdata_mirror.py --changed-range ORIG_HEAD HEAD 2>&1 || true
 # install_hooks.py's pinned copies stale until the next push notices (after #257). Warn
 # here with the re-pin command. Never re-pins, never fails the merge.
 python tools/hook_pin_check.py --range ORIG_HEAD HEAD 2>&1 || true
+# PENDING-REIMPORT ledger, 2026-11-14: post-commit records only `git commit`, so a PR
+# squash-merged on GitHub and pulled here by fast-forward never reached the ledger. Record
+# what this merge / pull brought in. Skipped for `git merge --squash` ($1 = 1): HEAD does
+# not move, so ORIG_HEAD..HEAD would describe an older operation. Primary checkout on main
+# only (enforced in the script): a feature worktree merging main in must not re-record
+# skills main changed.
+[ "$1" = 1 ] || python tools/pending_reimport.py record-range ORIG_HEAD HEAD 2>/dev/null || true
 exit 0
