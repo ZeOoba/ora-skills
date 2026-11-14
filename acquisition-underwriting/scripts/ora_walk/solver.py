@@ -189,9 +189,10 @@ def validate(deal: Deal) -> None:
         raise ValueError("renewal_prob must be a decimal between 0 and 1")
     if deal.rollover_cost < 0:
         raise ValueError("rollover_cost cannot be negative")
-    if deal.cash_rent_start_month is not None and deal.stabilization_year > 1 and \
+    if deal.cash_rent_start_month is not None and \
             deal.cash_rent_start_month > 12 * (deal.stabilization_year - 1) + 1:
-        raise ValueError("cash_rent_start_month falls after the stabilization year begins")
+        raise ValueError("cash_rent_start_month falls after the stabilization year begins (with "
+                         "stabilization_year=1 rent must start in month 1; set the lease-up year instead)")
     this_year = date.today().year
     for f in ("effective_vintage", "renovation_year", "year_built"):
         v = getattr(deal, f)
@@ -287,10 +288,12 @@ def _rollover_year(deal: Deal) -> Optional[int]:
     return deal.lease_expiry_month // 12 + 1
 
 
-def noi_path(deal: Deal, years: int = D.HOLD_YEARS + 1) -> list:
+def noi_path(deal: Deal, years: int = D.HOLD_YEARS + 1, rollover: bool = True) -> list:
     """NOI net of reserves for years 1..years. Lease-up: linear ramp to stabilization, or partial-year rent
     from cash_rent_start_month when given. Rollover: stabilized NOI already nets 5% structural vacancy, so an
-    expected downtime share f in a year reduces it by MAX(0, f - 5%) / (1 - 5%) (MAX rule, never additive)."""
+    expected downtime share f in a year reduces it by MAX(0, f - 5%) / (1 - 5%) (MAX rule, never additive).
+    rollover=False gives the stabilized path (no one-time rollover haircut), used for YoC, refi sizing and
+    the exit-cap base."""
     s = max(1, deal.stabilization_year)
     start = deal.stabilized_noi if deal.in_place_noi is None else deal.in_place_noi
     out = []
@@ -303,7 +306,7 @@ def noi_path(deal: Deal, years: int = D.HOLD_YEARS + 1) -> list:
             gross = start + (deal.stabilized_noi - start) * cash
         else:
             gross = start + (deal.stabilized_noi - start) * (t - 1) / (s - 1)
-        f = _rollover_frac(deal, t)
+        f = _rollover_frac(deal, t) if rollover else 0.0
         if f > D.STRUCTURAL_VACANCY:
             gross *= 1 - (f - D.STRUCTURAL_VACANCY) / (1 - D.STRUCTURAL_VACANCY)
         reserves = deal.reserves_psf * deal.sf * (1 + D.EXPENSE_GROWTH) ** (t - 1)
@@ -320,9 +323,20 @@ def cash_path(deal: Deal, years: int = D.HOLD_YEARS + 1) -> list:
     return path
 
 
+def _reversion(deal: Deal, cap: float) -> float:
+    """Net sale proceeds at the end of the hold. The exit cap is applied to the stabilized forward NOI (a
+    one-time rollover is never capitalized); a rollover falling in the forward year is a one-time buyer
+    credit instead: its expected rent loss and re-leasing cost come off the proceeds."""
+    stab = noi_path(deal, rollover=False)[D.HOLD_YEARS]
+    actual = noi_path(deal)[D.HOLD_YEARS]
+    proceeds = stab / cap * (1 - deal.sale_cost_pct) - (stab - actual)
+    if _rollover_year(deal) == D.HOLD_YEARS + 1:
+        proceeds -= deal.rollover_cost
+    return proceeds
+
+
 def _unlevered_pv(deal: Deal, rate: float, cap: float) -> float:
-    path = noi_path(deal)
-    reversion = path[D.HOLD_YEARS] / cap * (1 - deal.sale_cost_pct)
+    reversion = _reversion(deal, cap)
     flows = [0.0] + cash_path(deal)[: D.HOLD_YEARS]
     flows[-1] += reversion
     return npv(rate, flows)
@@ -338,8 +352,7 @@ def _allin(price: float, deal: Deal) -> float:
 
 def _refi(deal: Deal, price: float, ust: float, cap: float) -> dict:
     s = deal.stabilization_year
-    path = noi_path(deal)
-    stab_noi = path[s - 1]
+    stab_noi = noi_path(deal, rollover=False)[s - 1]  # refi is sized on stabilized NOI, not a rollover year
     rate = ust + D.REFI_SPREAD
     k = annual_debt_constant(rate)
     value = max(0.0, stab_noi / cap)
@@ -354,7 +367,7 @@ def _refi(deal: Deal, price: float, ust: float, cap: float) -> dict:
     flows[s] += net_proceeds
     for t in range(s + 1, D.HOLD_YEARS + 1):
         flows[t] -= loan * k
-    flows[-1] += path[D.HOLD_YEARS] / cap * (1 - deal.sale_cost_pct)
+    flows[-1] += _reversion(deal, cap)
     flows[-1] -= loan_balance(loan, rate, D.HOLD_YEARS - s)
     return {
         "refi_rate": rate,
@@ -473,7 +486,7 @@ def solve(deal: Deal, ust: float, portfolio_mode: bool = False) -> Result:
             _rollover_year(deal) <= D.HOLD_YEARS + 1:
         flags.append("LOOSER THAN DOCTRINE: rollover modeled with rollover_cost $0 — supply the expected "
                      "re-leasing TI/LC (renewal-weighted)")
-    stab_noi_net = noi_path(deal)[deal.stabilization_year - 1]
+    stab_noi_net = noi_path(deal, rollover=False)[deal.stabilization_year - 1]  # YoC on stabilized NOI
     legs = {
         "basis": _price_from_allin((1 - v_floor) * replacement, deal),
         "yield": _price_from_allin(stab_noi_net / D.YOC_FLOOR, deal),
