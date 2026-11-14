@@ -61,13 +61,18 @@ Before v4.52 the solver treated stabilized NOI as arriving in full from the stab
 
 | Field | Meaning | Default when omitted |
 |---|---|---|
-| `cash_rent_start_month` | First month of cash rent counted from close (after downtime and free rent). Year rent is pro-rated by months paid. | Off: whole-year stabilization as before |
+| `cash_rent_start_month` | First month of cash rent counted from close (after downtime and free rent). Year rent is pro-rated by months paid. Must fall no later than the first month of the stabilization year; with `stabilization_year` 1 only month 1 is accepted. | Off: whole-year stabilization as before |
 | `lease_expiry_month` | Last month of the lease (or of the largest suite) inside the hold. Rollover then applies one time. | No rollover, flagged when a lease-up deal has none |
-| `renewal_prob` | Probability the tenant renews. | Rollover Block (a) by SF band: ≤5K 65%, ≤10K 70%, ≤25K 72%, larger 75% |
-| `rollover_downtime_months` | Downtime if it does not renew, including free rent. | Rollover Block (b): ≤10K 5, ≤25K 9, larger 12, plus 2 months free |
-| `rollover_cost` | EXPECTED re-leasing TI + LC dollars at expiry (renewal and new weighted). | 0, flagged when the rollover year falls inside the hold or the exit year |
+| `renewal_prob` | Probability the tenant renews. | Rollover Block (a) by SF band: under 5,000 SF 65%; 5,000–9,999 70%; 10,000–24,999 72%; 25,000 and up 75% |
+| `rollover_downtime_months` | Downtime if it does not renew, including free rent. | Rollover Block (b): under 10,000 SF 5; 10,000–24,999 9; 25,000 and up 12; plus 2 months free |
+| `rollover_cost` | EXPECTED re-leasing TI + LC dollars at expiry (renewal and new weighted). | 0, flagged when downtime starts inside the hold or in the forward (exit) year |
 
-In each rollover month the expected rent loss is (1 − renewal_prob). The year's vacancy line is MAX(5% structural, expected downtime share), the same MAX rule as the model, so downtime is never stacked on the 5%. `rollover_cost` comes out of cash flow in the rollover year. Both feed the IRR leg and the refi sizing; the YoC and basis legs are unchanged.
+In each rollover month the expected rent loss is (1 − renewal_prob). The year's vacancy line is MAX(5% structural, expected downtime share), the same MAX rule as the model, so downtime is never stacked on the 5%. `rollover_cost` comes out of cash flow in the year downtime starts (the month after `lease_expiry_month`).
+
+Rollover is one-time, so it reaches the walk only through the IRR leg:
+- **YoC leg and refi sizing** use stabilized NOI with no rollover haircut (Gabriel, 2026-11-14). The basis leg is unaffected.
+- **Exit:** the exit cap is applied to the stabilized forward-year NOI. When downtime falls in the forward year (year 11), its expected rent loss and `rollover_cost` come off the sale proceeds as a one-time buyer credit; they are never capitalized at the exit cap.
+- A rollover that starts after the forward year has no effect.
 
 For a deal where IRR binds, still confirm the walk against the full UNDERWRITE model. With these fields set, the test deal's walk came within 2.0% of the model.
 

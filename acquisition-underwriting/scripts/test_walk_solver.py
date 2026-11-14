@@ -40,7 +40,7 @@ def base(**kw):
 
 
 class DoctrinePins(unittest.TestCase):
-    """Literal values from SKILL.md v4.49 (constants unchanged since v4.45) — any drift fails (Hard Invariant 4 for governors)."""
+    """Literal values from SKILL.md v4.52 (governor constants unchanged since v4.45) — any drift fails (Hard Invariant 4 for governors)."""
     def test_governors(self):
         self.assertEqual((D.DSCR_FLOOR, D.PER_PROPERTY_LTV_CEILING, D.AGGREGATE_LTV_CEILING), (1.25, 0.65, 0.40))
         self.assertEqual((D.YOC_FLOOR, D.IRR_FLOOR_MIN, D.IRR_FLOOR_UST_SPREAD, D.MAJORITY_VACANT_PREMIUM),
@@ -50,6 +50,12 @@ class DoctrinePins(unittest.TestCase):
         self.assertEqual((D.RESERVES_PSF, D.EXPENSE_GROWTH, D.MARKET_RENT_GROWTH), (0.15, 0.03, 0.025))
         self.assertEqual(D.LEASE_UP_TI_PSF, 8.00)  # Lease-Up Assumption Block TI default
         self.assertEqual(D.STRUCTURAL_VACANCY, 0.05)  # Suite-Level Block vacancy-line floor
+
+    def test_rollover_block(self):  # SKILL.md Suite-Level Rollover & Credit Block (a)/(b); Lease-Up Block free rent
+        inf = float("inf")
+        self.assertEqual(D.RENEWAL_PROB_BY_SF, ((5_000, 0.65), (10_000, 0.70), (25_000, 0.72), (inf, 0.75)))
+        self.assertEqual(D.ROLLOVER_DOWNTIME_BY_SF, ((10_000, 5), (25_000, 9), (inf, 12)))
+        self.assertEqual(D.LEASE_UP_FREE_MONTHS, 2)
 
     def test_exit_caps(self):  # SKILL.md UNDERWRITING CONVENTIONS exit cap
         self.assertEqual(D.EXIT_CAPS, {
@@ -551,6 +557,78 @@ class RolloverAndLeaseUpTiming(unittest.TestCase):
         p, q = noi_path(d), noi_path(self._lease_up(lease_expiry_month=200))
         # 5% x 3/12 and 5% x 9/12 expected downtime both sit under the 5% structural floor -> no haircut
         self.assertAlmostEqual(p[6], q[6]); self.assertAlmostEqual(p[7], q[7])
+
+    def test_rollover_band_boundaries(self):
+        from ora_walk.solver import _renewal_defaults
+        expect = {4_999: (0.65, 7), 5_000: (0.70, 7), 9_999: (0.70, 7), 10_000: (0.72, 11),
+                  24_999: (0.72, 11), 25_000: (0.75, 14)}
+        for sf, want in expect.items():
+            self.assertEqual(_renewal_defaults(base(sf=sf)), want, msg=sf)
+
+    def test_rollover_year_and_cost_pinned(self):
+        from ora_walk.solver import cash_path
+        d = self._lease_up(lease_expiry_month=81, rollover_cost=150_000)   # month 81 -> year 7
+        n, c = noi_path(d), cash_path(d)
+        for t in range(11):
+            self.assertAlmostEqual(c[t], n[t] - (150_000 if t == 6 else 0), msg=t)
+        # The cost lands in the year downtime starts (month expiry + 1): expiry 83 -> month 84 (year 7),
+        # expiry 84 -> month 85 (year 8).
+        d = self._lease_up(lease_expiry_month=83, rollover_cost=1)
+        self.assertAlmostEqual(cash_path(d)[6], noi_path(d)[6] - 1)
+        d = self._lease_up(lease_expiry_month=84, rollover_cost=1)
+        self.assertAlmostEqual(cash_path(d)[6], noi_path(d)[6])
+        self.assertAlmostEqual(cash_path(d)[7], noi_path(d)[7] - 1)
+
+    def test_rollover_haircut_exact_above_floor(self):
+        # 30,000 SF defaults: renewal 75%, downtime 12 + 2 free = 14 months. Expiry month 72 -> months 73-84
+        # (12 in year 7) and 85-86 (2 in year 8). f7 = 0.25 x 12/12, f8 = 0.25 x 2/12 (under the 5% floor).
+        d = self._lease_up(lease_expiry_month=72)
+        roll, flat = noi_path(d), noi_path(d, rollover=False)
+        f7 = 0.25
+        self.assertAlmostEqual(roll[6], flat[6] * (1 - (f7 - 0.05) / 0.95))
+        self.assertAlmostEqual(roll[7], flat[7])          # 0.25 x 2/12 = 4.2% < 5% -> no haircut
+        self.assertAlmostEqual(roll[5], flat[5])
+        d = self._lease_up(lease_expiry_month=66)         # months 67-72 (6 in y6) and 73-80 (8 in y7)
+        roll, flat = noi_path(d), noi_path(d, rollover=False)
+        self.assertAlmostEqual(roll[5], flat[5] * (1 - (0.25 * 6 / 12 - 0.05) / 0.95))
+        self.assertAlmostEqual(roll[6], flat[6] * (1 - (0.25 * 8 / 12 - 0.05) / 0.95))
+
+    def test_partial_year_cash_share_exact(self):
+        d = self._lease_up(lease_expiry_month=200, cash_rent_start_month=18)   # year 2: months 18-24 paid
+        self.assertAlmostEqual(noi_path(d)[1], 300_000 * 7 / 12)
+        self.assertAlmostEqual(noi_path(d)[0], 0.0)
+
+    def test_cash_start_with_stabilized_close_rejected(self):
+        with self.assertRaises(ValueError):
+            solve(base(cash_rent_start_month=7), UST)
+        solve(base(cash_rent_start_month=1), UST)  # month 1 is consistent with stabilized at close
+
+    def test_yield_leg_and_refi_ignore_one_time_rollover(self):
+        no = solve(self._lease_up(lease_expiry_month=200), UST)
+        early = solve(self._lease_up(lease_expiry_month=26, renewal_prob=0.0, rollover_cost=100_000), UST)
+        self.assertAlmostEqual(early.legs["yield"], no.legs["yield"], places=2)
+        self.assertAlmostEqual(early.refi["loan"], no.refi["loan"], places=2)
+        self.assertLess(early.legs["irr"], no.legs["irr"])
+
+    def test_exit_year_rollover_is_a_credit_not_capitalized(self):
+        no = solve(self._lease_up(lease_expiry_month=200), UST)
+        y9 = solve(self._lease_up(lease_expiry_month=96, rollover_cost=1), UST)    # year 9, inside the hold
+        y11 = solve(self._lease_up(lease_expiry_month=120, rollover_cost=1), UST)  # forward (exit) year
+        loss9, loss11 = no.legs["irr"] - y9.legs["irr"], no.legs["irr"] - y11.legs["irr"]
+        self.assertGreater(loss11, 0)
+        self.assertLess(loss11, 2 * loss9)   # capitalizing it at the exit cap would be ~1/cap (13x) larger
+        c0 = solve(self._lease_up(lease_expiry_month=120), UST)
+        c5 = solve(self._lease_up(lease_expiry_month=120, rollover_cost=500_000), UST)
+        self.assertLess(c5.legs["irr"], c0.legs["irr"])  # forward-year re-leasing cost is credited at sale
+        past = solve(self._lease_up(lease_expiry_month=140, rollover_cost=500_000), UST)
+        self.assertAlmostEqual(past.legs["irr"], no.legs["irr"], places=2)
+        self.assertFalse(any("rollover_cost $0" in f
+                             for f in solve(self._lease_up(lease_expiry_month=140), UST).flags))
+
+    def test_levered_irr_reflects_rollover_cost(self):
+        r0 = solve(self._lease_up(lease_expiry_month=81), UST)
+        r1 = solve(self._lease_up(lease_expiry_month=81, rollover_cost=400_000), UST)
+        self.assertLess(r1.refi["levered_irr_reported"], r0.refi["levered_irr_reported"])
 
     def test_bad_rollover_inputs_rejected(self):
         for kw in (dict(renewal_prob=1.5), dict(lease_expiry_month=0), dict(rollover_cost=-1),
