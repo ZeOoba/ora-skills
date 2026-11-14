@@ -1337,6 +1337,57 @@ class CmdRecordDeliberatelyUnpublishedWarning(unittest.TestCase):
         self.assertNotIn('ordinary-skill', warning_line)
 
 
+class RecordRangeForPulls(CmdRecordDeliberatelyUnpublishedWarning):
+    """2026-11-14: post-merge records ORIG_HEAD..HEAD. A PR squash-merged on GitHub and
+    pulled by fast-forward ran no post-commit, so six skills changed on main went
+    unrecorded until unrelated branches merged main in. Same fixture as the parent (fake
+    ledger, no real _staging/); the parent's own tests run again here too, harmlessly."""
+
+    def _range(self, old, new):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            pr.cmd_record_range(old, new)
+        return buf.getvalue()
+
+    def test_fast_forward_pull_records_the_skills_it_brought_in(self):
+        old = self._git('rev-parse', 'HEAD').strip()
+        self._git('checkout', '-q', '-b', 'upstream')
+        self._commit_skill('pulled-skill', 'name: pulled-skill\nv2\n', 'squash-merged PR (#9)')
+        _write(self.repo / 'README.md', 'docs only\n')
+        self._git('add', '-A')
+        self._git('commit', '-q', '-m', 'docs')
+        self._git('checkout', '-q', 'main')
+        self._git('merge', '-q', '--ff-only', 'upstream')
+        new = self._git('rev-parse', 'HEAD').strip()
+
+        out = self._range(old, new)
+
+        self.assertEqual(set(self.fake_ledger), {'pulled-skill'})
+        line = self.fake_ledger['pulled-skill']
+        self.assertIn('merged/pulled 2 commit(s)', line)
+        self.assertIn(new[:7], line)
+        self.assertIn('recorded 1 skill', out)
+
+    def test_range_that_touches_no_skill_records_nothing(self):
+        old = self._git('rev-parse', 'HEAD').strip()
+        _write(self.repo / 'README.md', 'docs\n')
+        self._git('add', '-A')
+        self._git('commit', '-q', '-m', 'docs')
+        self.assertEqual(self._range(old, 'HEAD'), '')
+        self.assertEqual(self.fake_ledger, {})
+
+    def test_unresolvable_or_empty_range_records_nothing_and_never_raises(self):
+        self._commit_skill('x-skill', 'name: x-skill\n', 'edit')
+        self.assertEqual(self._range('ORIG_HEAD', 'HEAD'), '')     # no ORIG_HEAD yet
+        self.assertEqual(self._range('HEAD', 'HEAD'), '')
+        self.assertEqual(self.fake_ledger, {})
+
+    def test_post_merge_hook_calls_record_range_except_for_squash(self):
+        hook = (Path(__file__).resolve().parent / 'hooks' / 'post-merge').read_text(encoding='utf-8')
+        self.assertIn('[ "$1" = 1 ] || python tools/pending_reimport.py record-range '
+                      'ORIG_HEAD HEAD', hook)
+
+
 class LedgerResolvesToPrimaryCheckout(FixtureTestCase):
     """The ledger is untracked, gitignored state. Resolved relative to a git
     worktree it lands in that worktree's _staging/ and is destroyed by
