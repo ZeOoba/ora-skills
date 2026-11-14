@@ -866,12 +866,13 @@ def cmd_precheck(pkgs: list[str]) -> int:
         except (OSError, zipfile.BadZipFile, KeyError):
             pkg_version = pkg_files = None     # no readable SKILL.md: already a FAIL above
         if not fails:
-            # Claim the reimport for this session from the pre-check to the log entry
-            # (tools/reimport_claims.py; 2026-11-13 double-log). Another session's live
-            # claim is a FAIL: that session is installing and logging this skill.
-            blocker = _claims.claim(skill, 'Entry point B: precheck -> Save skill -> postclick')
-            if blocker:
-                fails.append(blocker)
+            # The installing session claims the reimport, so only it logs the install
+            # (tools/reimport_claims.py; 2026-11-13 double-log). Another session's claim is
+            # TAKEN OVER with a warning, never a FAIL: build-in-one-session, install-in-
+            # another is the documented handoff (PR #260 review finding 1).
+            notice = _claims.claim(skill, 'installing: precheck -> Save skill -> postclick/close')
+            if notice:
+                warns.append(notice)
         note = _refresh_stale_baseline(skill)
         if note is not None:
             base_note = note
@@ -1184,7 +1185,11 @@ def main() -> int:
         if len(rest) > 1:
             if no_append and version is None and not clear_ledger:
                 # Verify-only cannot log anything, so one skill at a time is harmless.
-                return max(cmd_postclick(s, None, True, False, baseline_override) for s in rest)
+                # Worst result wins, ranked by meaning, not number: a failure (1) or a usage
+                # error (2) must never be reported as ALREADY-RECORDED (3), which is "nothing
+                # to do" (PR #260 review finding 5).
+                codes = [cmd_postclick(s, None, True, False, baseline_override) for s in rest]
+                return max(codes, key=lambda c: {0: 0, ALREADY_RECORDED_RC: 1, 2: 2}.get(c, 3))
             # 2026-11-13: `postclick a b c` used to verify `a` and silently ignore `b c`, and
             # a hand-written combined log entry then left no recorded-install marker, so no
             # baseline was ever used up. The batch path already exists: ONE combined entry,

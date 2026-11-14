@@ -103,15 +103,8 @@ def cmd_prep(skills: list[str], out: Path) -> int:
     if stop:
         print("prep: gate failed -- nothing packaged.")
         return 1
-    # Claim each reimport for this session through close (tools/reimport_claims.py,
-    # 2026-11-13 double-log): another session's live claim stops prep before packaging.
-    held = [b for b in (_claims.claim(s, "Entry point A: reimport_cycle prep -> close")
-                        for s in skills) if b]
-    if held:
-        for b in held:
-            print(f"   STOP: {b}")
-        print("prep: reimport claimed by another session -- nothing packaged.")
-        return 1
+    # No reimport claim here: the INSTALLING session claims at precheck, and prep may hand
+    # its packages to another session (PR #260 review finding 1; tools/reimport_claims.py).
     _run([str(TOOLS / "description_budget.py"), *skills])
     out.mkdir(parents=True, exist_ok=True)
     print(f"== package -> {out}")

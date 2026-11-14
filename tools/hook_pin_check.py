@@ -43,8 +43,34 @@ def run_install_check(repo: Path) -> tuple[int, str]:
     return p.returncode, (p.stdout + p.stderr).strip()
 
 
-def check(repo: Path, a: str, b: str, changed=changed_pinned_inputs, run=run_install_check) -> str:
-    """'skip' (no pinned input changed), 'ok' or 'stale'. Prints the warning for 'stale'."""
+def primary_on_main(repo: Path) -> bool:
+    """True only in the PRIMARY checkout with `main` checked out. The pins are shared by every
+    worktree of the clone, and install_hooks.py pins whatever scanner the tree it runs in
+    has -- so advice given from an older branch or worktree would re-pin an OLDER scanner
+    for everyone (merge-gate review of PR #260, finding 2). Main in the primary is the one
+    tree whose scanner is the one the pin should match."""
+    def git(*args):
+        p = subprocess.run(['git', '-C', str(repo), *args], capture_output=True, text=True,
+                           encoding='utf-8', errors='replace')
+        return p.stdout.strip() if p.returncode == 0 else None
+    if git('rev-parse', '--abbrev-ref', 'HEAD') != 'main':
+        return False
+    top, common = git('rev-parse', '--show-toplevel'), git('rev-parse', '--git-common-dir')
+    if not top or not common:
+        return False
+    common_path = Path(common) if Path(common).is_absolute() else Path(top) / common
+    try:
+        return common_path.resolve().parent == Path(top).resolve()
+    except OSError:
+        return False
+
+
+def check(repo: Path, a: str, b: str, changed=changed_pinned_inputs, run=run_install_check,
+          gate=primary_on_main) -> str:
+    """'skip' (not the primary on main, or no pinned input changed), 'ok' or 'stale'.
+    Prints the warning for 'stale'."""
+    if not gate(repo):
+        return 'skip'
     files = changed(repo, a, b)
     if files == []:
         return 'skip'
@@ -52,8 +78,9 @@ def check(repo: Path, a: str, b: str, changed=changed_pinned_inputs, run=run_ins
     if rc == 0:
         return 'ok'
     what = ', '.join(files) if files else 'unknown range (no ORIG_HEAD)'
-    print('WARNING: ora-skills hook pins are stale after this update '
-          f'({what}). Pushes run the OLD pinned scanner until you re-pin:', file=sys.stderr)
+    print('WARNING: ora-skills hook pins no longer match main after this update '
+          f'({what}). Pushes keep using the previously pinned scanner until you re-pin '
+          'from this checkout (the primary, on main):', file=sys.stderr)
     print(f'  python tools/install_hooks.py --repo "{repo}"', file=sys.stderr)
     if out:
         print('  ' + out.replace('\n', '\n  '), file=sys.stderr)

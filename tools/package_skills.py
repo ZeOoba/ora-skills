@@ -490,51 +490,129 @@ def check_hygiene_cli() -> int:
 # Tracked files that look like a private or packaged artifact but are not: the RCT test
 # fixture holds synthetic figures by design (rct_table.py's tests load it).
 STAGED_ARTIFACT_ALLOW = {'acquisition-underwriting/scripts/fixtures/rct-table.synthetic.json'}
-_PACKAGE_EXT_RE = re.compile(r'\.(skill|plugin)(\.|$)', re.I)
+# A package, or a backup / encoded copy of one. Exact suffixes only, so `foo.plugin.json`
+# or `package.skill.md` are NOT matched (merge-gate review, PR #260 finding 4).
+_PACKAGE_NAME_RE = re.compile(r'\.(skill|plugin)(\.(bak|old|orig|tmp|b64|zip))?$|\.(skill|plugin)~$', re.I)
+# The private table under its skill-format name or its authoritative master's name, plus
+# backups (`.bak`, `.old`). Data files only: `rct-table-format.md` is documentation.
+_PRIVATE_NAME_RE = re.compile(r'^(rct-table[^/]*|replacement-cost[^/]*)\.json([.~][^/]*)?$', re.I)
+_ZIP_MAGIC = b'PK\x03\x04'
 
 
 def staged_artifact_violations(files: list[str]) -> list[str]:
-    """Staged repo paths that must never be committed: a packaged .skill/.plugin (it carries
-    every bundled file, including the private RCT table, PRIVATE_LOCAL_DEPS) or any
-    rct-table* file (the private table itself, or a copy/backup of it), at ANY depth.
-    `_staging/` is not exempt: it is gitignored, so a file there can only be staged with
-    `git add -f`, and committing it publishes it all the same (ora-skills is public).
-    Suffixed copies (`x.skill.bak`, `rct-table.local.json.old`) count too.
+    """NAME check: staged repo paths that must never be committed -- a packaged .skill /
+    .plugin (or a .bak/.b64/.zip copy of one; packages carry the private RCT table,
+    PRIVATE_LOCAL_DEPS) or the private table itself (`rct-table*.json`, its master
+    `replacement-cost*.json`, and backups), at ANY depth. `_staging/` is not exempt: it is
+    gitignored, so a file there can only be staged with `git add -f`, and committing it
+    publishes it all the same (ora-skills is public). check_staged_artifacts adds a CONTENT
+    check, since a name is easy to change.
 
     Motivation (2026-11-13): an install session left 13 RCT-carrying packages, its
     scripts and an event-log draft untracked in `_archive/` of this public repo. .gitignore
     already ignored `*.skill` and `rct-table.local.json*`, but ignore rules stop only a
-    plain `git add`; `git add -f`, or a later .gitignore edit, would have published them.
-    This check enforces it at commit time."""
+    plain `git add`; `git add -f`, or a later .gitignore edit, would have published them."""
     out = []
     for f in files:
         f = f.replace('\\', '/')
         if f in STAGED_ARTIFACT_ALLOW:
             continue
         base = f.rsplit('/', 1)[-1]
-        if _PACKAGE_EXT_RE.search(base) or base.lower().startswith('rct-table'):
+        if _PACKAGE_NAME_RE.search(base) or _PRIVATE_NAME_RE.match(base):
             out.append(f)
     return out
 
 
-def check_staged_artifacts(files: list[str] | None = None) -> int:
-    """tools/hooks/pre-commit entry point (Check 6): exit 1 if any staged addition or
-    modification is a packaged .skill/.plugin or an rct-table* file (see
-    staged_artifact_violations). Deletions are allowed, so removing a committed artifact
-    is never blocked. Fails CLOSED when git cannot list the index."""
+def _private_digests() -> set[str]:
+    """SHA256 of the private table's sources present on this machine (the skill-format copy
+    and the authoritative master), so a renamed copy is caught by content. Empty off-host."""
+    import hashlib
+    out = set()
+    for p in (private_dep_path(RCT_TABLE_FILE), rct_master_path()):
+        try:
+            if p is not None and Path(p).is_file():
+                out.add(hashlib.sha256(_lf(Path(p).read_bytes())).hexdigest())
+        except OSError:
+            pass
+    return out
+
+
+def _lf(data: bytes) -> bytes:
+    """LF-normalized bytes. Both sides of the private-table digest compare go through this:
+    with core.autocrlf a CRLF table on disk is staged as an LF blob, so a raw digest missed
+    it (PR #260 re-review finding B)."""
+    return data.replace(b'\r\n', b'\n')
+
+
+def staged_content_violations(files: list[str], read_blob, private_digests=None) -> list[str]:
+    """CONTENT check (merge-gate review, PR #260 finding 3), each as 'path: reason':
+      - the allowlisted fixture must still carry `"_synthetic": true` (real figures pasted
+        over it would otherwise ride the allowlist);
+      - any zip archive, whatever its name, holding a skill package (a SKILL.md entry) or a
+        private-table entry;
+      - any file byte-identical to the private table or its master on this machine.
+    `read_blob(path) -> bytes | None` reads the STAGED blob (None = unreadable, skipped)."""
+    import hashlib
+    import io as _io
+    digests = _private_digests() if private_digests is None else private_digests
+    out = []
+    for f in files:
+        f = f.replace('\\', '/')
+        data = read_blob(f)
+        if data is None:
+            continue
+        if f in STAGED_ARTIFACT_ALLOW:
+            try:
+                marked = json.loads(data.decode('utf-8-sig')).get('_synthetic') is True
+            except (ValueError, UnicodeDecodeError, AttributeError):
+                marked = False
+            if not marked:
+                out.append(f'{f}: allowlisted fixture no longer carries "_synthetic": true')
+            continue
+        if digests and hashlib.sha256(_lf(data)).hexdigest() in digests:
+            out.append(f'{f}: byte-identical (line endings aside) to the private RCT table')
+            continue
+        if data[:4] == _ZIP_MAGIC:
+            try:
+                with zipfile.ZipFile(_io.BytesIO(data)) as z:
+                    names = z.namelist()
+            except (zipfile.BadZipFile, OSError, ValueError):
+                continue
+            bases = [n.replace('\\', '/').rsplit('/', 1)[-1] for n in names]
+            if any(b == 'SKILL.md' for b in bases) or any(_PRIVATE_NAME_RE.match(b) for b in bases):
+                out.append(f'{f}: zip archive holding a skill package or the private RCT table')
+    return out
+
+
+def _read_staged_blob(path: str) -> bytes | None:
+    p = subprocess.run(['git', '-C', str(REPO), 'cat-file', 'blob', f':{path}'], capture_output=True)
+    return p.stdout if p.returncode == 0 else None
+
+
+def check_staged_artifacts(files: list[str] | None = None, read_blob=None) -> int:
+    """tools/hooks/pre-commit entry point (Check 6): exit 1 if any staged change other than
+    a deletion is a packaged .skill/.plugin or the private RCT table, by NAME
+    (staged_artifact_violations) or by CONTENT (staged_content_violations). Deletions pass,
+    so removing a committed artifact is never blocked; every other status (added, copied,
+    modified, renamed, TYPE-changed) is checked. Fails CLOSED when git cannot list the
+    index."""
     if files is None:
         p = subprocess.run(['git', '-C', str(REPO), 'diff', '--cached', '--name-only',
-                            '--diff-filter=ACMR', '-z'], capture_output=True)
+                            '--diff-filter=d', '-z'], capture_output=True)
         if p.returncode:
             print('BLOCKED: could not list staged files (git diff --cached failed): '
                   + p.stderr.decode('utf-8', 'replace').strip(), file=sys.stderr)
             return 1
         files = [f for f in p.stdout.decode('utf-8', 'replace').split('\0') if f]
-    bad = staged_artifact_violations(files)
-    for f in bad:
-        print(f'{f}: packaged skill/plugin or private RCT table staged for commit -- '
-              f'ora-skills is PUBLIC. Unstage it (git reset -- "{f}") and keep it outside '
-              f'the repo or in gitignored _staging/ without -f.', file=sys.stderr)
+    bad = [f'{f}: packaged skill/plugin or private RCT table (by name)'
+           for f in staged_artifact_violations(files)]
+    flagged = {b.split(': ', 1)[0] for b in bad}
+    bad += staged_content_violations([f for f in files if f.replace('\\', '/') not in flagged],
+                                     read_blob or _read_staged_blob)
+    for b in bad:
+        f = b.split(': ', 1)[0]
+        print(f'{b} -- staged for commit, and ora-skills is PUBLIC. Unstage it '
+              f'(git reset -- "{f}") and keep it outside the repo.', file=sys.stderr)
     return 1 if bad else 0
 
 

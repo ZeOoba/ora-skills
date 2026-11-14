@@ -466,16 +466,20 @@ class StagedArtifactCheck(unittest.TestCase):
     """Pre-commit Check 6 (2026-11-13): a packaged .skill/.plugin or an rct-table* file must
     never be committed -- ora-skills is public and the packages carry the private RCT table."""
 
-    def test_packages_and_rct_tables_blocked_anywhere_including_staging(self):
+    def test_packages_and_private_tables_blocked_anywhere_including_staging(self):
         bad = ['_staging/handoff/x/acquisition-underwriting.skill', '_archive/a/b.plugin',
                'rct-table.local.json', 'acquisition-underwriting/rct-table.local.json.bak',
-               'x/y.skill.bak', 'deep/RCT-TABLE.json', 'Z.SKILL']
+               'x/y.skill.bak', 'deep/RCT-TABLE.json', 'Z.SKILL', '_archive/x.skill.b64',
+               '_staging/replacement-cost.json', 'a/replacement-cost.json.old', 'p.plugin~']
         self.assertEqual(staged_artifact_violations(bad), bad)
 
     def test_synthetic_fixture_and_lookalike_names_pass(self):
+        # PR #260 review finding 4: suffix matching must be exact.
         ok = ['acquisition-underwriting/scripts/fixtures/rct-table.synthetic.json',
               'README.md', 'daily-brief/SKILL.md', 'docs/skills.md', 'tools/plugin_util.py',
-              'tools/build_plugin.py', 'x/skill.md', 'notes/about-rct-table.md']
+              'tools/build_plugin.py', 'x/skill.md', 'notes/about-rct-table.md',
+              'docs/package.skill.md', 'plugins/x/foo.plugin.json', 'tools/rct-table-format.md',
+              'acquisition-underwriting/references/cw-2025-construction-costs.json']
         self.assertEqual(staged_artifact_violations(ok), [])
 
     def test_backslash_paths_are_normalized(self):
@@ -484,40 +488,131 @@ class StagedArtifactCheck(unittest.TestCase):
     def test_exit_codes_and_message(self):
         buf = io.StringIO()
         with redirect_stderr(buf):
-            self.assertEqual(check_staged_artifacts(files=['_archive/a.skill']), 1)
+            self.assertEqual(check_staged_artifacts(files=['_archive/a.skill'], read_blob=lambda f: None), 1)
         self.assertIn('PUBLIC', buf.getvalue())
-        self.assertEqual(check_staged_artifacts(files=['README.md']), 0)
+        self.assertEqual(check_staged_artifacts(files=['README.md'], read_blob=lambda f: b'# hi\n'), 0)
+
+
+def _zip_bytes(entries):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w') as z:
+        for n, d in entries.items():
+            z.writestr(n, d)
+    return buf.getvalue()
+
+
+class StagedArtifactContentCheck(unittest.TestCase):
+    """PR #260 review finding 3: a name is easy to change, so Check 6 also reads content."""
+
+    FIXTURE = 'acquisition-underwriting/scripts/fixtures/rct-table.synthetic.json'
+
+    def _bad(self, blobs, digests=frozenset()):
+        from package_skills import staged_content_violations
+        return staged_content_violations(list(blobs), blobs.get, private_digests=set(digests))
+
+    def test_renamed_package_zip_is_blocked(self):
+        pkg = _zip_bytes({'demo/SKILL.md': '---\nname: demo\n---\n'})
+        self.assertEqual(len(self._bad({'_staging/pkg.zip': pkg, 'notes.bin': pkg})), 2)
+
+    def test_zip_holding_the_private_table_is_blocked(self):
+        z = _zip_bytes({'x/rct-table.local.json': '{}'})
+        self.assertEqual(len(self._bad({'archive.zip': z})), 1)
+
+    def test_ordinary_zip_passes(self):
+        z = _zip_bytes({'data/report.csv': 'a,b\n'})
+        self.assertEqual(self._bad({'fixtures/data.zip': z}), [])
+
+    def test_copy_of_the_private_table_under_any_name_is_blocked(self):
+        import hashlib
+        from package_skills import _lf
+        secret = b'{"markets": {"X": {"point": 1}}}'
+        bad = self._bad({'docs/notes.json': secret}, {hashlib.sha256(_lf(secret)).hexdigest()})
+        self.assertEqual(len(bad), 1)
+        self.assertIn('byte-identical', bad[0])
+
+    def test_crlf_and_lf_copies_of_the_private_table_both_match(self):
+        # PR #260 re-review finding B: autocrlf stages a CRLF table as an LF blob.
+        import hashlib
+        from package_skills import _lf
+        on_disk = b'{\r\n "markets": {"X": {"point": 1}}\r\n}\r\n'
+        digests = {hashlib.sha256(_lf(on_disk)).hexdigest()}
+        self.assertEqual(len(self._bad({'notes.json': on_disk.replace(b'\r\n', b'\n')}, digests)), 1)
+        self.assertEqual(len(self._bad({'notes.json': on_disk}, digests)), 1)
+
+    def test_allowlisted_fixture_must_keep_its_synthetic_marker(self):
+        self.assertEqual(self._bad({self.FIXTURE: b'{"_synthetic": true, "markets": {}}'}), [])
+        self.assertEqual(len(self._bad({self.FIXTURE: b'{"markets": {}}'})), 1)
+        self.assertEqual(len(self._bad({self.FIXTURE: b'not json'})), 1)
+
+    def test_the_real_fixture_keeps_its_marker(self):
+        self.assertEqual(self._bad({self.FIXTURE: (REPO / self.FIXTURE).read_bytes()}), [])
+
+    def test_check_combines_name_and_content(self):
+        pkg = _zip_bytes({'demo/SKILL.md': 'x'})
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            rc = check_staged_artifacts(files=['ok.md', 'pkg.zip'],
+                                        read_blob={'ok.md': b'x', 'pkg.zip': pkg}.get)
+        self.assertEqual(rc, 1)
+        self.assertIn('pkg.zip', buf.getvalue())
 
 
 class StagedArtifactCheckLiveIndex(unittest.TestCase):
-    """Exercises the real `git diff --cached` path with a FORCE-added .skill -- the exact way
-    .gitignore is bypassed -- inside THIS worktree's repo, cleaned up even on failure."""
+    """The real `git diff --cached` / `git cat-file` path with a FORCE-added package -- the
+    exact way .gitignore is bypassed. Uses a TEMPORARY index (GIT_INDEX_FILE), never the
+    shared checkout's real one (PR #260 review finding 6)."""
 
     FIXTURE = '_fixture-artifact-check'
 
     def setUp(self):
-        self.d = REPO / self.FIXTURE
-        self.d.mkdir(exist_ok=True)
-        (self.d / 'demo.skill').write_bytes(b'PK\x05\x06' + b'\0' * 18)
+        import os
+        self.tmp = Path(tempfile.mkdtemp(prefix='artifact_idx_'))
+        self.env = {'GIT_INDEX_FILE': str(self.tmp / 'index')}
+        subprocess.run(['git', '-C', str(REPO), 'read-tree', 'HEAD'], check=True,
+                       env={**os.environ, **self.env}, capture_output=True)
+        p = mock.patch.dict('os.environ', self.env)
+        p.start()
+        self.addCleanup(p.stop)
 
     def tearDown(self):
-        subprocess.run(['git', '-C', str(REPO), 'reset', '-q', '--', self.FIXTURE], capture_output=True)
-        shutil.rmtree(self.d, ignore_errors=True)
+        shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def test_force_added_package_is_blocked(self):
-        subprocess.run(['git', '-C', str(REPO), 'add', '-f', f'{self.FIXTURE}/demo.skill'], check=True)
-        buf = io.StringIO()
-        with redirect_stderr(buf):
-            self.assertEqual(check_staged_artifacts(), 1)
-        self.assertIn(f'{self.FIXTURE}/demo.skill', buf.getvalue())
+    def _add(self, name, data):
+        # Straight into the object store and the TEMPORARY index: nothing is written to the
+        # shared working tree, where another session's `git add -A` could pick it up
+        # (PR #260 re-review finding E). The loose object is unreferenced and gc'd normally.
+        sha = subprocess.run(['git', '-C', str(REPO), 'hash-object', '-w', '--stdin'],
+                             input=data, capture_output=True, check=True).stdout.decode().strip()
+        subprocess.run(['git', '-C', str(REPO), 'update-index', '--add', '--cacheinfo',
+                        f'100644,{sha},{self.FIXTURE}/{name}'], check=True, capture_output=True)
 
-    def test_untracked_ignored_package_does_not_block(self):
-        # On disk but not staged (the normal _archive/_staging state): not this check's job.
+    def _check(self):
         buf = io.StringIO()
         with redirect_stderr(buf):
             rc = check_staged_artifacts()
-        self.assertNotIn(f'{self.FIXTURE}/demo.skill', buf.getvalue())
-        self.assertEqual(rc, 0, buf.getvalue())
+        return rc, buf.getvalue()
+
+    def test_force_added_package_is_blocked(self):
+        self._add('demo.skill', b'PK\x05\x06' + b'\0' * 18)
+        rc, err = self._check()
+        self.assertEqual(rc, 1)
+        self.assertIn(f'{self.FIXTURE}/demo.skill', err)
+
+    def test_force_added_renamed_package_is_blocked_by_content(self):
+        self._add('demo.zip', _zip_bytes({'demo/SKILL.md': 'x'}))
+        rc, err = self._check()
+        self.assertEqual(rc, 1)
+        self.assertIn(f'{self.FIXTURE}/demo.zip', err)
+
+    def test_clean_temporary_index_passes(self):
+        # Compare before/after rather than asserting absence: a leftover dir from a killed
+        # run of the pre-fix version of this test must not make it fail (re-review, LOW).
+        existed = (REPO / self.FIXTURE).exists()
+        self._add('ok.md', b'x')
+        rc, err = self._check()
+        self.assertEqual(rc, 0, err)
+        self.assertEqual((REPO / self.FIXTURE).exists(), existed,
+                         'staging into the temporary index wrote nothing to the working tree')
 
 
 class CheckStaged(unittest.TestCase):
