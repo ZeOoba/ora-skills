@@ -14,4 +14,8 @@ python tools/sync_local_skills_mirror.py --all 2>&1 || true
 [ "$1" = amend ] || python tools/sync_appdata_mirror.py --changed-range ORIG_HEAD HEAD 2>&1 || true
 # Hook pins, 2026-11-13 (see post-merge): `pull --rebase` lands here instead.
 [ "$1" = amend ] || python tools/hook_pin_check.py --range ORIG_HEAD HEAD 2>&1 || true
+# PENDING-REIMPORT ledger, 2026-11-14 (see post-merge): `pull --rebase` with local commits
+# fires post-rewrite, not post-merge, so what upstream brought in is recorded here. Rebase
+# only (an amend changes nothing upstream); primary checkout on main only (in the script).
+[ "$1" = rebase ] && python tools/pending_reimport.py record-range ORIG_HEAD HEAD 2>/dev/null || true
 exit 0
