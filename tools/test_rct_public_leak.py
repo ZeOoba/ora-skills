@@ -121,6 +121,23 @@ class Structural(unittest.TestCase):
             self.assertNotRegex(s, r1)
 
 
+def money_patterns(whole: str) -> list:
+    """Whole-dollar roundings written as money, in both house styles: "$N" and, since the dollar-digit rule
+    (CLAUDE.md; lint_skill_dollar_args), "USD N"; plus "N/SF" closing a "$A-N" or "USD A-N" range."""
+    return [rf'(?:\$|USD)\s?(?:{whole})(?![\d.,KkMmB])', rf'[–-]\s?(?:\$|USD\s?)?(?:{whole})\s?/\s?SF']
+
+
+class MoneyPatterns(unittest.TestCase):
+    """Runs without the private table: synthetic whole-dollar figures only."""
+    def test_both_money_styles_and_ranges_match(self):
+        rx = re.compile('|'.join(f'({p})' for p in money_patterns('777|778')))
+        for s in ('$777/SF', '$ 778', 'USD 777/SF', 'USD777', 'cost USD 778 per SF', 'USD 600-777/SF',
+                  '$600–778 /SF', 'USD 600–USD 777/SF'):
+            self.assertRegex(s, rx, s)
+        for s in ('USD 7770', 'USD 777.5', 'USD 777K', '$777M', '777 SF', 'USD 776'):
+            self.assertNotRegex(s, rx, s)
+
+
 class ValueScan(unittest.TestCase):
     def test_real_figures_appear_nowhere_in_the_tree(self):
         table, source = load_real_table()
@@ -129,12 +146,12 @@ class ValueScan(unittest.TestCase):
         figures = sorted({float(m[k]) for m in table['markets'].values() for k in ('low', 'point', 'high')})
         # One alternation, one pass per file; each figure is its own group, so distinct figures are counted.
         # Rounded forms too (adversarial review 2026-11-13): a one-decimal rounding anywhere, and a whole-dollar
-        # rounding written as money ("$N", "$N/SF", "N/SF" at the end of a "$A-N" range).
+        # rounding written as money ("$N" or "USD N", "N/SF" at the end of a "$A-N" or "USD A-N" range).
         ints = sorted({math.floor(f) for f in figures} | {round(f) for f in figures})
         whole = '|'.join(str(i) for i in ints)
         patterns = [figure_regex(f).pattern for f in figures]
         patterns += [one_decimal_regex(f) for f in figures]
-        patterns += [rf'\$\s?(?:{whole})(?![\d.,KkMmB])', rf'[–-]\s?\$?(?:{whole})\s?/\s?SF']
+        patterns += money_patterns(whole)
         # The escalation parameter (derivation block) as a multiplier and as a percentage. The soft-cost
         # multiplier and reference SF are too common as bare numbers to scan without false positives.
         esc = float(table['derivation']['escalation'])

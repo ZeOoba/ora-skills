@@ -74,6 +74,8 @@ Rollover is one-time, so it reaches the walk only through the IRR leg:
 - **Exit:** the exit cap is applied to the stabilized forward-year NOI. When downtime falls in the forward year (year 11), its expected rent loss and `rollover_cost` come off the sale proceeds as a one-time buyer credit; they are never capitalized at the exit cap.
 - A rollover that starts after the forward year has no effect.
 
+`rollover_cost` and `renewal_prob` must be finite numbers (not true/false); a walk leg that comes out non-finite raises instead of dropping out of the minimum.
+
 For a deal where IRR binds, still confirm the walk against the full UNDERWRITE model. With these fields set, the test deal's walk came within 2.0% of the model.
 
 ## Guards against walks looser than doctrine
