@@ -299,10 +299,13 @@ class EndToEnd(Base):
         return "\n".join(lines[start:end + 3])
 
     def test_shim_path_block_is_identical_to_the_tracked_hook(self):
-        # The tracked hook's PATH block is what PlantedInterpreter in
-        # test_prepush_confidential_scan.py attacks case by case (junction, case variant,
-        # absolute, '..', mounts). The shim git runs FIRST must carry exactly that block
-        # (2026-11-14 refute: deleting the shim's _inside checks passed every test here).
+        # The tracked hook's PATH block is what test_prepush_confidential_scan.py attacks case
+        # by case (PlantedInterpreter: junction, case variant, absolute, '.'; PathBlock: the
+        # relative, '..', mount and root filters). The shim git runs FIRST must carry exactly
+        # that block (2026-11-14 refute: deleting the shim's _inside checks passed every test
+        # here), and nothing after it may redefine _inside or PATH (refute round 2: an
+        # `_inside() { return 1; }` after the block passed parity); the end-to-end case below
+        # covers the rest.
         import importlib.util
         spec = importlib.util.spec_from_file_location("install_hooks_under_test", INSTALLER)
         mod = importlib.util.module_from_spec(spec)
@@ -310,7 +313,42 @@ class EndToEnd(Base):
         with open(os.path.join(TRACKED_HOOKS, "pre-push"), encoding="utf-8") as f:
             hook = self._path_block(f.read())
         self.assertIn("_inside", hook)
-        self.assertEqual(self._path_block(mod.shim_text("pre-push")), hook)
+        shim = mod.shim_text("pre-push")
+        self.assertEqual(self._path_block(shim), hook)
+        lines = shim.split("\n")
+        self.assertEqual(sum(1 for ln in lines if ln.lstrip().startswith("_inside()")), 1, shim)
+        self.assertEqual(sum(1 for ln in lines if ln.lstrip().startswith("PATH=")), 1, shim)
+
+    def test_absolute_and_linked_worktree_entries_cannot_skip_the_installed_shim(self):
+        # The '.' case above is stopped by the absolute-only filter alone. These entries are
+        # absolute and only the shim's physical-path check (_inside) drops them: the worktree's
+        # own bin/, and a junction/symlink outside the worktree that points into it.
+        self.installed()
+        self._add_real_gate()
+        marker = os.path.join(self.sb.root, "planted-ran")
+        sub = os.path.join(self.sb.work, "deep", "bin")
+        os.makedirs(sub)
+        for n in ("python", "python3", "py"):
+            path = os.path.join(sub, n)
+            with open(path, "w", newline="\n") as f:
+                f.write("#!/bin/sh\necho ran >> '%s'\nprintf 'exit 0\\n' > tools/hooks/pre-push\nexit 0\n"
+                        % marker.replace("\\", "/"))
+            os.chmod(path, 0o755)
+        link = os.path.join(self.sb.root, "link")
+        if os.name == "nt":
+            p = subprocess.run(["cmd", "/c", "mklink", "/J", link, sub], capture_output=True)
+            self.assertEqual(p.returncode, 0, "mklink /J failed: %r" % p.stderr)
+        else:
+            os.symlink(sub, link, target_is_directory=True)
+        with open(os.path.join(self.sb.work, ".git", "info", "exclude"), "a") as f:
+            f.write("deep/\n")
+        real = os.path.dirname(os.path.abspath(sys.executable))
+        orig_path = self.sb.env["PATH"]
+        for i, front in enumerate((sub, link)):
+            self.sb.env["PATH"] = os.pathsep.join([front, real, orig_path])
+            self.sb.commit("deal-%d.md" % i, "%s\n" % TERM)
+            self.assertBlocked(*self.sb.push())
+            self.assertFalse(os.path.exists(marker), "a planted interpreter ran via %s" % front)
 
     def test_installed_shim_runs_every_interpreter_isolated_with_cwd_exe_search_off(self):
         # A python OUTSIDE the worktree logs each call, then runs the real one. The inherited
