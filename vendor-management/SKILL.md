@@ -4,7 +4,7 @@ license: ORA Internal
 description: "Use for ORA vendor relationships, in two modes. MANAGE (default): prequalification, scoring, RFP issuance, contract intake, performance review — trigger on vendor, contractor, prequalify, vendor score, 1099, W-9, COI, MSA, concentration, rebid, onboarding, offboarding, vendor audit. QC: pre-execution defect scan of a SINGLE proposal or service agreement (paving, roofing, snow, HVAC) where an ORA property entity is Owner — trigger on QC this vendor contract, review this proposal before I sign, should we sign this bid, wrong Purchaser entity. Run QC before ANY proposal is signed. Multi-bid leveling routes to capital-bid-comparison. Distinct from pma-qc, listing-agreement-qc, legal-intelligence."
 ---
 
-# Vendor Management (v2.2)
+# Vendor Management (v2.2.1)
 
 Two modes for the vendor relationship. **MANAGE** (default) owns the lifecycle —
 prequalification, onboarding, RFP/rebid, performance review, concentration, COI/W-9
@@ -66,7 +66,7 @@ Neither could have been awarded compliantly on the day the bids arrived.
 2. Verify the COI names **the ORA property entity** as additional insured — entity-specific,
    not firm-generic. A COI naming the wrong Oxford entity is a VC-1 defect wearing an
    insurance costume.
-3. Check limits against ORA standards (GL $1M/$2M, umbrella where applicable) plus Workers
+3. Check limits against ORA standards (GL USD 1M/USD 2M, umbrella where applicable) plus Workers
    Comp.
 4. Set `Prequal Status`. **Bid-Only — Not Prequalified** means pricing was solicited or
    received but the file is incomplete. **No award issues against Bid-Only.** This is a
@@ -81,7 +81,7 @@ Neither could have been awarded compliantly on the day the bids arrived.
 #### Vendor Onboarding
 1. Collect W-9, COI, and references.
 2. Verify COI naming ORA entities as additional insured.
-3. Check insurance limits against ORA standards (GL $1M/$2M, umbrella where applicable).
+3. Check insurance limits against ORA standards (GL USD 1M/USD 2M, umbrella where applicable).
 4. Issue MSA from template library.
 5. Create the Directory record and QuickBooks vendor entry; set `Prequal Status`.
 6. Output: vendor onboarding packet (DOCX) and SharePoint folder.
@@ -158,14 +158,14 @@ leases, PSAs, loan documents and negotiated AIA-family construction contracts us
 
 ### Why this exists
 
-Trade paper is where ORA signs the most instruments and reads them the least. A $75,223
+Trade paper is where ORA signs the most instruments and reads them the least. A USD 75,223
 paving proposal is small enough to feel routine and large enough to carry a full one-sided
 risk allocation, and it arrives as a marketing PDF — logo, drone photograph, warranty
 matrix — which is not the shape the eye reads as a contract.
 
 Seed document: the **Standard Paving & Concrete proposal 26-9465-1**, dated 8/28/2026, for
 Technology Commons, 29000 Information Ln, Easton MD — mill patching (2,590 SY), sealcoat
-(10,100 SY) and striping, $75,223. Fourteen pages, of which four are photographs. It scans
+(10,100 SY) and striping, USD 75,223. Fourteen pages, of which four are photographs. It scans
 **26 of 27**.
 
 Three findings drove the design:
@@ -302,7 +302,7 @@ same three on multi-bid work; they apply identically to a single-bid award.
 
 1. **Prequalification.** No award against `Prequal Status` = Bid-Only. See the MANAGE-mode
    Prequalification workflow.
-2. **Utility incentive — mandatory on any equipment replacement over $10,000.** Identify the
+2. **Utility incentive — mandatory on any equipment replacement over USD 10,000.** Identify the
    serving utility and check the commercial prescriptive program **before** award, because
    the eligible specification must be inside the awarded scope. In BGE territory that is
    Smart Energy Savers. Record the result on the asset's `Rebate Status`. Where ORA funds the
@@ -312,7 +312,7 @@ same three on multi-bid work; they apply identically to a single-bid award.
    roofing work: a crane set, a curb adapter, a new penetration or an HVAC change-out all
    qualify, and HVAC and roofing proposals both routinely exclude roofing. Assign in writing,
    before award, who patches and warrants the membrane at every penetration and whether the
-   building's roof warranty survives. Price the roofer's attendance as a line item. A $28K
+   building's roof warranty survives. Price the roofer's attendance as a line item. A USD 28K
    mechanical job can void a roof warranty worth several multiples of itself. Driven by
    `Roof-Mounted` on the asset row.
 
@@ -366,8 +366,9 @@ Style Guide with the 16-point QC Gate applied.
 
 ## Changelog
 
+- **v2.2.1 (2026-11-14):** Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - **v2.2 (2026-09-21) — restored what the 2026-09-18 platform-side v2.1 edit dropped; nothing new added.** An independent comparison against v2.0 found six regressions and two false changelog statements. Restored: the `license: ORA Internal` frontmatter line; the QC trade list, the "Run QC before ANY proposal is signed" imperative and the defect exemplars in the description (routing words like roofing, HVAC, snow and janitorial had stopped matching this skill; the v2.0 merge provenance (vendor-contract-qc, R25-8) is left to the v2.0 Changelog entry because the 1024-char description budget has no room for it); the `capex-budgeting` reserve-study boundary row, kept beside the new `annual-cycle` row because they answer different questions (reserve vs annual budget); the VC-13 confidentiality-legend note, now in `capital-bid-comparison` Step 2, where bid comparison lives. Removed the dated Howard County bench fact from Prequalification step 5, leaving the dateless rule and moving the fact to the event log. Corrected the v2.1 changelog: `capex-budgeting` exists in the repo (absent only from the installed cache), and Steps 7 and 8 were never renumbered. Deliberately left as authored in v2.1: the prequalification gate, the two new QC gates, the multi-bid routing split, the named PM platforms replaced by the Property Register field. No QC check, standing position, script or reference file was altered.
-- **v2.1 (2026-09-17) — prequalification gate, two new gates, and multi-bid routing split out.** Added the MANAGE-mode **Prequalification** workflow against the 19 columns added to the Notion Vendor & Advisor Directory the same day (`Trade`, `Prequal Status`, license no./state/verified, COI carrier/expiry/additional-insured, GL per-occurrence and aggregate, umbrella, Workers Comp, W-9, MSA, home base, service radius, counties served, emergency response, last review). Before this the COI/W-9 Renewal workflow **could not execute** — the Directory had no `COI Expiry` field to scan, so a quarterly sweep would have returned nothing and read as clean. Added QC Step 6: the **utility-incentive gate** (>$10K equipment replacement) and the **roof-coordination gate** (any trade mobilizing onto a roof), both driven off the Building Asset Register; the old Step 6 bid-comparison stub was replaced by this new Step 6 (Steps 7 and 8 keep their numbers). Step 7 now writes nameplate and warranty data back to that register. Multi-bid work routes to the new `capital-bid-comparison`; the trigger phrases "compare these bids" and bare "bid" were removed from this skill's description to end the collision, and "prequalify" added. Added an `annual-cycle` boundary row (annual budget and the Nov 1 kickoff task); the `capex-budgeting` row was dropped here on the wrong premise that it did not exist, and is restored in v2.2. Recorded the Notion wrapper-vs-data-source id hazard in Inputs. Seed defect: both bidders on the 9050 Red Branch Rd Unit K rooftop pair were asked for COI, license and W-9 after bidding, and Howard County MD has no prequalified HVAC bench. No QC check, standing position, script or reference file was altered; `scripts/vendor_qc.py`, `scripts/ora_doc_qc.py`, `references/standing-positions.md` and `references/trade-file-checklist.md` are referenced unchanged.
+- **v2.1 (2026-09-17) — prequalification gate, two new gates, and multi-bid routing split out.** Added the MANAGE-mode **Prequalification** workflow against the 19 columns added to the Notion Vendor & Advisor Directory the same day (`Trade`, `Prequal Status`, license no./state/verified, COI carrier/expiry/additional-insured, GL per-occurrence and aggregate, umbrella, Workers Comp, W-9, MSA, home base, service radius, counties served, emergency response, last review). Before this the COI/W-9 Renewal workflow **could not execute** — the Directory had no `COI Expiry` field to scan, so a quarterly sweep would have returned nothing and read as clean. Added QC Step 6: the **utility-incentive gate** (>USD 10K equipment replacement) and the **roof-coordination gate** (any trade mobilizing onto a roof), both driven off the Building Asset Register; the old Step 6 bid-comparison stub was replaced by this new Step 6 (Steps 7 and 8 keep their numbers). Step 7 now writes nameplate and warranty data back to that register. Multi-bid work routes to the new `capital-bid-comparison`; the trigger phrases "compare these bids" and bare "bid" were removed from this skill's description to end the collision, and "prequalify" added. Added an `annual-cycle` boundary row (annual budget and the Nov 1 kickoff task); the `capex-budgeting` row was dropped here on the wrong premise that it did not exist, and is restored in v2.2. Recorded the Notion wrapper-vs-data-source id hazard in Inputs. Seed defect: both bidders on the 9050 Red Branch Rd Unit K rooftop pair were asked for COI, license and W-9 after bidding, and Howard County MD has no prequalified HVAC bench. No QC check, standing position, script or reference file was altered; `scripts/vendor_qc.py`, `scripts/ora_doc_qc.py`, `references/standing-positions.md` and `references/trade-file-checklist.md` are referenced unchanged.
 - **v2.0 (2026-09-11) — merged the standalone `vendor-contract-qc` skill in as QC mode (ORA Automation Audit R25-8, Gabriel in-turn).** The two skills' trigger phrases collided ("vendor contract" matched both, neither named the other as a sibling) with no CLAUDE.md tie-break arbitrating the pair — the first genuine collision since Revision 24's clean sweep. Merging removes the ambiguity by construction: routing is now MANAGE-vs-QC intent, decided inside one skill, not a cross-skill guess. `scripts/`, `references/` and `tests/` moved from `vendor-contract-qc/` into this skill's directory unchanged; `tools/package_skills.py`'s `SHARED_ROOT_DEPS` key repointed from `vendor-contract-qc` to `vendor-management`. Five references in `pma-qc` (`SKILL.md` ×4, `references/standing-positions.md` ×1) repointed from `vendor-contract-qc` to `vendor-management` so nothing dangles. `vendor-contract-qc/` archived to `_archive/2026-09-11_vendor-contract-qc-merged-into-vendor-management/`. No QC logic, check, or standing position changed — routing and packaging only.
 - **v1.0 (vendor-management, lifecycle-only) — initial.** MANAGE-mode workflows as built: onboarding, RFP/rebid, performance review, concentration audit, COI/W-9 renewal.
 - **v1.0 (vendor-contract-qc, standalone, 2026-09-09) — initial.** 27 checks, 18 proposed standing positions, trade-file checklist, Standard Paving seed defect register. Benchmarked at 26/27 (Standard Paving 26-9465-1) and 0/27 (remediated fixture). Two checks were corrected during benchmarking after false-positiving on the remediated fixture (V13 baseline-anchor phrasing, V26 governing-law phrasing) and one after false-negativing on the seed (V27 now scopes its capacity test to the acceptance block, so "duly authorized" in the modification clause can no longer mask an unidentified contracting entity).
