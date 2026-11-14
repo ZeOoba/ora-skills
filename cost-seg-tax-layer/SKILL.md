@@ -5,6 +5,8 @@ description: "Use when an ORA underwrite needs after-tax returns: cost-segregati
 
 # Cost-Seg & State Tax Layer for ORA Underwrites
 
+v1.2.1 (2026-11-14): Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
+
 v1.2 (2026-11-14): Michigan row added (PARTIAL, pending CPA) from a Walker MI lease-up underwrite, with the Michigan notes in §3. Michigan individual/FTE tax follows pre-OBBBA bonus, so for 2027 placements the Michigan value of cost seg is small (about 800 USD PV on that deal); the federal bonus carries the benefit. City income taxes added to the locality rule.
 
 v1.1 (2026-10-17): land-allocation method selector, placed-in-service tax-year timing, 7-yr bucket fix and a workbook-vs-memo parity check, from the 8625 Troost Ave external reviews and v05 audit (the workbook used a 57.9% land share built from the Ruling 4 dry-land credit over a hard-coded county total while the memo's mirror used 75.2%; depreciation started in model Year 1 at 11.5/12 although the property was placed in service in December of the prior year). Origin: East Pointe Plaza FULL underwrite (2026-10-01), model v06. The flat 15% cost-seg share and the single hard-coded Wisconsin layer in v01-v04 were replaced by asset-class allocation, class-by-class recapture and a state table. Cost seg is TIMING, not value: it never changes NOI, pre-tax IRR, walk price or any floor test. Report after-tax IRR beside pre-tax, never instead of it.
@@ -50,9 +52,9 @@ State/local combined marginal rate; SB = share of 5/7/15-yr basis the state lets
 | State | Rate (as modeled) | Bonus | Gain treatment | Confidence |
 |---|---|---|---|---|
 | WI | 7.65% | Decoupled (2014 IRC): SB 0, regular MACRS | 30% exclusion of net LTCG | PRIMARY (WI DOR) |
-| OH | 3% business rate above $250K business-income deduction + municipal ~2% [EST] | Decoupled: 5/6 add-back (6/6 if NOL), recovered 1/5 per year over 5 years -> SB 1/6, DR 5/6, DN 5 | No exclusion found | PARTIAL: municipal tax and rental-income business classification unverified |
+| OH | 3% business rate above USD 250K business-income deduction + municipal ~2% [EST] | Decoupled: 5/6 add-back (6/6 if NOL), recovered 1/5 per year over 5 years -> SB 1/6, DR 5/6, DN 5 | No exclusion found | PARTIAL: municipal tax and rental-income business classification unverified |
 | IN | 2.95% (2.90% in 2027) + county (Marion 2.02%; range 0.5-3.0%) | Decoupled (S.B. 243, 2026): add-back then regular MACRS | No exclusion found | PARTIAL: county tax on nonresident passive rental income and statute mechanics unverified |
-| MD | 6.5% top (5.75% above $250K) + county ~3.2% [EST] (range 2.25-3.3%) | Decoupled since 2002; subtraction schedule unverified -> modeled as regular MACRS | 2% surtax on net capital gain when AGI > $350K | PARTIAL |
+| MD | 6.5% top (5.75% above USD 250K) + county ~3.2% [EST] (range 2.25-3.3%) | Decoupled since 2002; subtraction schedule unverified -> modeled as regular MACRS | 2% surtax on net capital gain when AGI > USD 350K | PARTIAL |
 | MO | 4.7% (2026 conflicts: 4.7 vs 4.8) | Appears to conform: SB 1 | 100% capital-gain deduction from 2025 (HB 594); unrecaptured Sec 1250 eligibility unverified | PARTIAL |
 | KS | 5.58% (SB 269 step-down trigger unverified) | Appears to conform: SB 1 | No preferential rate | PARTIAL |
 | TN | No individual tax; 6.5% excise on LLC net earnings (entity level) + 0.25% franchise on net worth (NOT modeled) | TCJA phase-down only: 20% for 2026 (TN DOR Notice 23-07); did not adopt OBBBA 100% -> SB 20% | Gain in net earnings, no exclusion | PARTIAL: family-owned non-code LLC exemption (T.C.A. 67-4-2008) unverified and potentially decisive |

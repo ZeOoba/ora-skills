@@ -3,7 +3,7 @@ name: "lease-form-qc"
 description: "Pre-execution QC gate for leases on Oxford Realty Advisors' own landlord form. Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, review our lease draft, or uploads an ORA-form lease DOCX. Run before ANY outbound lease goes to a tenant or broker: 60-73 checks by form line (v2.x NNN long form or v3.x MG short form, auto-detected; --form to force), incl. cross-refs, undefined terms, OpEx, statutory cites, rent arithmetic and the roof/energy/EV power-rights checks, PASS/FAIL. ALSO the sole path for grading an existing lease against its LOI: does the lease match the LOI, LOI vs lease, LOI conformance (LOI-Lease Audit mode; no lease yet = lease-generation). Not legal-intelligence (counterparty paper) or deal-execution 2A (PSA vs LOI)."
 ---
 
-# Lease Form QC — Oxford Realty Advisors own paper (v2.11: mutation suite — every check must be able to fail; v2.10: v3.0 short-form mode + `--form` + power-rights standard FP1–FP8; v2.9 F19–F21; v2.8 LOI-Lease Audit + --loi-audit)
+# Lease Form QC — Oxford Realty Advisors own paper (v2.11.1: mutation suite — every check must be able to fail; v2.10: v3.0 short-form mode + `--form` + power-rights standard FP1–FP8; v2.9 F19–F21; v2.8 LOI-Lease Audit + --loi-audit)
 
 Pre-execution gate for leases drafted on the ORA landlord form. Run BEFORE a draft
 goes to a tenant, broker, or counsel. This is a defect scan of **our** paper — for
@@ -611,7 +611,7 @@ saved to the Leases project and mirrored to SharePoint when the destination is k
 
 1. **Bottom line** — one paragraph: economics conform / N deviations / N defects / N blockers.
 2. **Conforming terms** — table: LOI § · term · lease clause · ✓ (with any benign
-   variance noted inline, e.g. the $0.03 rounding case).
+   variance noted inline, e.g. the USD 0.03 rounding case).
 3. **Deviations** — numbered, each with LOI § · lease clause · class from Step C ·
    action. Conformance defects (MISSING-GRANT, CONFLICT, unanswered open item) first;
    NARROWING positions second; STANDARD-FORM last.
@@ -668,6 +668,10 @@ Section 24 defect was born.
 ## Changelog
 
 **Retention rule:** keep the 6 most recent versions as full inline entries, each capped at ~2,000 characters. Adding a 7th compresses the oldest to a one-line pointer here and moves its full text, newest first, into a `versions/CHANGELOG-vA-vB.md` file named for the range it holds (open a new range file once the latest is closed out; repo-only, excluded from packaging), in the same edit that adds the new entry.
+
+### v2.11.1 (2026-11-14) — wording only
+
+Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 
 ### v2.11 (2026-10-15) — mutation suite; FP7 single-tenant branch
 
@@ -740,20 +744,7 @@ two independent code-review passes — pass 1: 2 Critical (D2 PSF-column and TI-
 pass 2: 2 Important (T3 signature-block layout, initials/witness lines) + 2 Minor, all fixed.
 
 ### v2.7 (2026-09-24) — LOI ↔ Lease Audit standalone mode
-
-Doctrine-only change (no scanner code touched; `checks_run` still 53). Systematizes the
-FCSS / 9620 State 350 run, where the question "do the LOI and the lease match up"
-arrived with a broker-drafted lease and a tenant-redlined, tenant-signed LOI —
-outside `lease-generation`'s pipeline, so Gate 4 never ran, and outside anything the
-matrix checks (redline intake, unanswered tenant questions, terms beyond the LOI,
-exhibit stubs, underscore blanks, schedule arithmetic).
-
-| Change | Why |
-|---|---|
-| Description gains the LOI-vs-lease trigger phrases and routes "no lease yet" to `lease-generation` | `lease-generation`'s own description says "make the lease match the LOI", which reads as grading; the two skills now split produce/grade explicitly (mirrored in `lease-generation` v1.1). |
-| Five-step audit procedure (intake → register/matrix → reverse pass → mechanics → memo) | Each step covers a finding class the matrix cannot produce. The reverse pass's four classes (STANDARD-FORM / NARROWING / USE-CONFLICT / MISSING-GRANT) separate conformance defects from negotiating positions so the memo's "fix before release" list is not padded with positions. |
-| Redline-intake rule | `pdftotext` on the FCSS LOI produced "Octoberupon the latter of November" — struck and inserted text fused. A register built from that text would have carried the wrong commencement date. |
-| Code-surface handoff list (T3/T4, BLI diff, schedule recompute, `open_items` carry-through, `--loi-audit`) | The mechanics are deterministic and belong in the scanner with tests; kept out of this release so the doctrine could ship without an untested code change. |
+Full text: `versions/CHANGELOG-v2.7.md`.
 
 ### v2.6 — T2 + `--loi-conformance` mode (lease-generation handoff)
 Full text: `versions/CHANGELOG-v2.5-v2.6.md`.

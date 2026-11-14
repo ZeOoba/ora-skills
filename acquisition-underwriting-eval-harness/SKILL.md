@@ -3,7 +3,7 @@ name: acquisition-underwriting-eval-harness
 description: "Use when a doctrine edit to acquisition-underwriting (a scorecard-weight amendment, a new QC-gate rule, a ruling/amendment, an RCT table revision) needs a regression check against the frozen SCREEN-mode golden set. Trigger on: eval harness, golden set, golden-set regression, replay the golden set, did the doctrine change move scores, rebaseline the goldens, harness run, scheduled-poll, doctrine skip gate. NOT a live deal-evaluation tool — never invoke this for an actual acquisition screen (that is acquisition-underwriting). PILOT — piloted on one skill only; runs as a daily-polling scheduled task."
 ---
 
-# Acquisition-Underwriting Eval Harness (v1.6 — pilot)
+# Acquisition-Underwriting Eval Harness (v1.6.1 — pilot)
 
 Companion to `acquisition-underwriting/SKILL.md`, not a replacement for it. This skill answers
 one question the firm previously had no way to answer: **after a doctrine edit, did the skill's
@@ -244,7 +244,7 @@ golden-set edit, or an input-packet change. Check `git log` on the golden file b
 Never run this against a real `golden_set/*.json` file — always against a copy in `fixtures/`.
 
 `fixtures/regression_test_mutation.json` (mutated copy of the GS-A golden file,
-`asking_price` cut ~50%, $1,995,000 → $995,000) and `fixtures/self_test_result.py` are kept as
+`asking_price` cut ~50%, USD 1,995,000 → USD 995,000) and `fixtures/self_test_result.py` are kept as
 permanent, re-runnable self-test assets — not scratch output. Re-run anytime with
 `python fixtures/self_test_result.py` (no live calls; it re-derives the diff from a
 already-captured mutated-replay result and asserts `status == "FLAG"`). Nothing under
@@ -280,6 +280,7 @@ Standing limitations, each in force today. **Read `references/findings-and-limit
 
 ## Changelog
 
+- **v1.6.1 (2026-11-14):** Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - **v1.6 (2026-11-12):** Golden-set identifiers pseudonymized (egress audit, finding `eval-golden-set-real-pipeline-public`; the repo is public). Deals are now GS-A to GS-F: `deal_id`, file names, `deal_name`, `inputs.address`, street numbers, ZIPs, parcel IDs, a zoning case number, a litigation caption, tenant, broker and neighbor names were replaced with synthetic aliases or role descriptions across `golden_set/`, `fixtures/`, `lib/` docstrings and test names, `references/` and this file. Market, submarket, asset type and every number are unchanged: a numeric fingerprint of every golden and fixture JSON value matched before and after, and the lib suite and self-test pass unchanged. The alias-to-deal key is kept off-repo. Caveat: the replay prompt's "disregard SKILL.md discussion of THIS EXACT property (by street address)" clause can no longer match by address, because the frozen inputs no longer carry one; `acquisition-underwriting` doctrine files still cite the original addresses (open item for Gabriel). No tolerance, golden value, floor constant or governor changed.
 - **v1.5 (2026-11-08):** Non-finite number guards (audit row `eval-harness-nan-passes`). `abs(NaN) > tol` is False, so a NaN combined score or tolerance used to return PASS. Every number guard in `lib/diff_verdict.py`, `lib/aggregate_replays.py` and `lib/parse_replays.py` now rejects NaN and ±Infinity; a non-finite combined/tolerance raises, a non-finite category or scalar is a reported gap, and a non-finite `combined_range` raises. Replay fenced blocks and golden files load through `parse_replays.load_json_strict`, which refuses the `NaN`/`Infinity` literals, floats that overflow to infinity and integers too large to convert to float (REFUTE pass: those used to escape as an `OverflowError` traceback outside the 0/3/4 exit contract). New suite `lib/test_nonfinite_guards.py` (runs in CI). No tolerance, golden value, DSCR/YoC floor constant or governor changed.
 
