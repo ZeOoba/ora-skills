@@ -1337,6 +1337,104 @@ class CmdRecordDeliberatelyUnpublishedWarning(unittest.TestCase):
         self.assertNotIn('ordinary-skill', warning_line)
 
 
+class RecordRangeForPulls(CmdRecordDeliberatelyUnpublishedWarning):
+    """2026-11-14: post-merge records ORIG_HEAD..HEAD. A PR squash-merged on GitHub and
+    pulled by fast-forward ran no post-commit, so six skills changed on main went
+    unrecorded until unrelated branches merged main in. Same fixture as the parent (fake
+    ledger, no real _staging/); the parent's own tests run again here too, harmlessly."""
+
+    def _range(self, old, new):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            pr.cmd_record_range(old, new)
+        return buf.getvalue()
+
+    def test_fast_forward_pull_records_the_skills_it_brought_in(self):
+        old = self._git('rev-parse', 'HEAD').strip()
+        self._git('checkout', '-q', '-b', 'upstream')
+        self._commit_skill('pulled-skill', 'name: pulled-skill\nv2\n', 'squash-merged PR (#9)')
+        _write(self.repo / 'README.md', 'docs only\n')
+        self._git('add', '-A')
+        self._git('commit', '-q', '-m', 'docs')
+        self._git('checkout', '-q', 'main')
+        self._git('merge', '-q', '--ff-only', 'upstream')
+        new = self._git('rev-parse', 'HEAD').strip()
+
+        out = self._range(old, new)
+
+        self.assertEqual(set(self.fake_ledger), {'pulled-skill'})
+        line = self.fake_ledger['pulled-skill']
+        self.assertIn('merged/pulled 2 commit(s)', line)
+        self.assertIn(new[:7], line)
+        self.assertIn('recorded 1 skill', out)
+
+    def test_range_that_touches_no_skill_records_nothing(self):
+        old = self._git('rev-parse', 'HEAD').strip()
+        _write(self.repo / 'README.md', 'docs\n')
+        self._git('add', '-A')
+        self._git('commit', '-q', '-m', 'docs')
+        self.assertEqual(self._range(old, 'HEAD'), '')
+        self.assertEqual(self.fake_ledger, {})
+
+    def test_unresolvable_or_empty_range_records_nothing_and_never_raises(self):
+        self._commit_skill('x-skill', 'name: x-skill\n', 'edit')
+        self.assertEqual(self._range('ORIG_HEAD', 'HEAD'), '')     # no ORIG_HEAD yet
+        self.assertEqual(self._range('HEAD', 'HEAD'), '')
+        self.assertEqual(self.fake_ledger, {})
+
+    def _ahead_branch(self, name, skill):
+        """A branch one skill commit ahead of main; returns main's tip."""
+        old = self._git('rev-parse', 'HEAD').strip()
+        self._git('checkout', '-q', '-b', name)
+        self._commit_skill(skill, f'name: {skill}\nv2\n', 'upstream change')
+        self._git('checkout', '-q', 'main')
+        return old
+
+    def test_feature_worktree_merging_main_records_nothing(self):
+        # PR #262 review finding 1: a linked worktree catching up with main must not
+        # re-record skills main changed (they reach the ledger when the primary pulls).
+        self._ahead_branch('upstream', 'main-side-skill')
+        wt = self.tmp / 'wt'
+        self._git('worktree', 'add', '-q', '-b', 'feat', str(wt), 'main')
+        old = subprocess.run(['git', '-C', str(wt), 'rev-parse', 'HEAD'], capture_output=True,
+                             text=True, check=True).stdout.strip()
+        subprocess.run(['git', '-C', str(wt), 'merge', '-q', '--ff-only', 'upstream'], check=True,
+                       capture_output=True)
+        with unittest.mock.patch.object(pr, 'REPO', wt):
+            self.assertFalse(pr.is_canonical_checkout())
+            self.assertEqual(self._range(old, 'HEAD'), '')
+        self.assertEqual(self.fake_ledger, {})
+
+    def test_primary_checkout_on_another_branch_records_nothing(self):
+        old = self._ahead_branch('upstream', 'x-skill')
+        self._git('checkout', '-q', '-b', 'side')
+        self._git('merge', '-q', '--ff-only', 'upstream')
+        self.assertFalse(pr.is_canonical_checkout())
+        self.assertEqual(self._range(old, 'HEAD'), '')
+        self.assertEqual(self.fake_ledger, {})
+
+    def test_non_ff_merge_label_counts_only_the_commits_brought_in(self):
+        # review finding 3: the merge commit itself is not counted.
+        old = self._ahead_branch('upstream', 'merged-skill')
+        _write(self.repo / 'local.md', 'local\n')
+        self._git('add', '-A')
+        self._git('commit', '-q', '-m', 'local')
+        old = self._git('rev-parse', 'HEAD').strip()
+        self._git('merge', '-q', '--no-ff', '-m', 'merge upstream', 'upstream')
+        self._range(old, 'HEAD')
+        self.assertIn('merged/pulled 1 commit(s)', self.fake_ledger['merged-skill'])
+
+    def test_post_rewrite_hook_records_rebases_only(self):
+        hook = (Path(__file__).resolve().parent / 'hooks' / 'post-rewrite').read_text(encoding='utf-8')
+        self.assertIn('[ "$1" = rebase ] && python tools/pending_reimport.py record-range '
+                      'ORIG_HEAD HEAD', hook)
+
+    def test_post_merge_hook_calls_record_range_except_for_squash(self):
+        hook = (Path(__file__).resolve().parent / 'hooks' / 'post-merge').read_text(encoding='utf-8')
+        self.assertIn('[ "$1" = 1 ] || python tools/pending_reimport.py record-range '
+                      'ORIG_HEAD HEAD', hook)
+
+
 class LedgerResolvesToPrimaryCheckout(FixtureTestCase):
     """The ledger is untracked, gitignored state. Resolved relative to a git
     worktree it lands in that worktree's _staging/ and is destroyed by
