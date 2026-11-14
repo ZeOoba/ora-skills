@@ -75,6 +75,54 @@ SHIM_PREPUSH = """#!/bin/sh
 #    Python 3.8+, or any nonzero result => the push is BLOCKED.
 # 2) Then, if the tree git invoked this in has tools/hooks/pre-push, run it on the same input.
 # Emergency bypass (only after verifying the push is clean): git push --no-verify
+# PATH is rebuilt FIRST, with shell built-ins only, before this hook runs any external command
+# or picks an interpreter (refute runs wf_39e200e8-462 and the 2026-11-13 shim refute; same
+# pattern as the oxford-command-center pre-push wrapper). git runs this hook in the worktree
+# root. Kept: absolute entries with no '.' or '..' segment whose PHYSICAL path (cd -P, so a
+# junction or symlink is followed) is neither the current directory nor inside it, checked up to
+# and including '/'. Parents are compared with test -ef, so case variants match; on MSYS the
+# Windows spelling (pwd -W) is walked too, so a mount such as /usr/bin whose real folder sits
+# inside the worktree is caught. Dropped: empty, '.', relative, '..' and unenterable entries. So
+# nothing untracked in the worktree (a planted python, git, mktemp) can stand in for a tool this
+# script runs after this block. (git itself resolves sh before any hook runs: out of reach.)
+# Windows: children (python, git) must not search the current directory either.
+NoDefaultCurrentDirectoryInExePath=1
+export NoDefaultCurrentDirectoryInExePath
+here=$(pwd -P) || exit 1
+_inside() {{
+  _p=$1
+  while [ -n "$_p" ]; do
+    [ "$_p" -ef "$here" ] && return 0
+    _next=${{_p%/*}}
+    case "$_next" in ''|*:) _next=$_next/ ;; esac
+    [ "$_next" = "$_p" ] && return 1
+    _p=$_next
+  done
+  return 1
+}}
+_safe=
+_ifs=$IFS
+IFS=:
+set -f
+for _d in $PATH; do
+  case "$_d" in /*) ;; *) continue ;; esac
+  case "$_d/" in */./*|*/../*) continue ;; esac
+  cd -P -- "$_d" 2>/dev/null || continue
+  _phys=$PWD
+  _win=$(pwd -W 2>/dev/null) || _win=
+  cd -P -- "$here" || exit 1
+  _inside "$_phys" && continue
+  [ -n "$_win" ] && _inside "$_win" && continue
+  _safe=${{_safe:+$_safe:}}$_d
+done
+set +f
+IFS=$_ifs
+PATH=$_safe
+export PATH
+if [ -z "$PATH" ]; then
+  echo "pre-push BLOCKED (fail-closed): no usable PATH entry outside the worktree." >&2
+  exit 1
+fi
 block() {{ echo "pre-push BLOCKED (fail-closed): $1" >&2; exit 1; }}
 HOOKS_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) || block "cannot resolve the hooks directory."
 SCAN="$HOOKS_DIR/{scan}"
@@ -82,8 +130,8 @@ SCAN="$HOOKS_DIR/{scan}"
 PY=
 for c in python python3 py; do
   if command -v "$c" >/dev/null 2>&1 &&
-     "$c" -c "import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)" </dev/null >/dev/null 2>&1; then
-    PY=$c
+     "$c" -I -c "import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)" </dev/null >/dev/null 2>&1; then
+    PY=$(command -v "$c")
     break
   fi
 done
@@ -92,7 +140,7 @@ REFS=$(mktemp "${{TMPDIR:-/tmp}}/ora-prepush.XXXXXX") || block "cannot create a 
 trap 'rm -f "$REFS"' EXIT
 trap 'rm -f "$REFS"; exit 1' INT TERM HUP
 cat > "$REFS" || block "cannot buffer the ref lines from git."
-"$PY" "$SCAN" "$@" < "$REFS" || exit 1
+"$PY" -I "$SCAN" "$@" < "$REFS" || exit 1
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 if [ -n "$ROOT" ] && [ -f "$ROOT/tools/prepush_confidential_scan.py" ] && command -v cmp >/dev/null 2>&1 &&
    ! cmp -s "$ROOT/tools/prepush_confidential_scan.py" "$SCAN"; then
