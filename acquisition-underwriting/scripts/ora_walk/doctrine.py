@@ -1,15 +1,15 @@
 """ORA acquisition doctrine constants — READ-ONLY mirror of acquisition-underwriting SKILL.md.
 
-Source of record: ora-skills/acquisition-underwriting/SKILL.md (v4.53, 2026-11-14: land at market
-in the basis test, risk-tiered IRR add-ons; v4.52 mirrors the Lease-Up free months and Rollover Block
-tables; governor constants unchanged since v4.45) and
+Source of record: ora-skills/acquisition-underwriting/SKILL.md (v4.54, 2026-11-14: the vetted rollover model
+replaces the v4.52 pro-rata one; v4.53 land at market in the basis test and risk-tiered IRR add-ons; Rollover
+Block, renewal-economics, management and credit-loss values mirrored; governor constants unchanged since v4.45) and
 the private RCT v03 table (ratified 2026-07-14), loaded by rct_table.py from rct-table.local.json.
 If these values and SKILL.md disagree, SKILL.md wins and this file is the bug.
 Governor constants (DSCR 1.25 / LTV 65 per-property / LTV 40 aggregate) change only by
 Gabriel's in-turn ratification (Hard Invariant 4) — never edit them to make a deal work.
 """
 
-DOCTRINE_VERSION = "acquisition-underwriting v4.53 / RCT v03 (replacement-cost.v3.1)"
+DOCTRINE_VERSION = "acquisition-underwriting v4.54 / RCT v03 (replacement-cost.v3.1)"
 
 # --- Governors (Hard Invariant 4) ---
 DSCR_FLOOR = 1.25                 # the 1.25x floor DSCR is tested at a 65%-LTV loan on stabilized NOI (v4.44/v4.45)
@@ -56,6 +56,11 @@ LEASE_UP_FREE_MONTHS = 2          # Lease-Up Block free rent, added to non-renew
 # Rollover Block (a)/(b) (v4.33) [EST]: (SF upper bound, value)
 RENEWAL_PROB_BY_SF = ((5_000, 0.65), (10_000, 0.70), (25_000, 0.72), (float("inf"), 0.75))
 ROLLOVER_DOWNTIME_BY_SF = ((10_000, 5), (25_000, 9), (float("inf"), 12))
+RENEWAL_CAPTURE = 0.50            # Renewal economics (v4.33): a renewal captures 50% of the gap to market; a new lease 100%
+RENEWAL_TI_PSF = 1.50             # Renewal economics (v4.33): renewal TI [EST]; new-lease TI is LEASE_UP_TI_PSF
+LEASE_UP_DOWNTIME_MONTHS = 9      # Lease-Up Assumption Block standing downtime [EST] (free rent on top)
+MGMT_FEE_EGI = 0.04               # management fee, % of EGI (NOI input basis)
+CREDIT_LOSS_EGI = 0.0125          # Rollover Block (d) base credit loss, % of EGI (2.0% weak-credit case is per-deal)
 LEASE_UP_TI_PSF = 8.00            # Lease-Up Assumption Block standing TI default, [EST] until a broker quote
 REFI_SPREAD = 0.02                # refi rate = 10-yr UST + 200 bps (v4.37)
 REFI_AMORT_YEARS = 25
