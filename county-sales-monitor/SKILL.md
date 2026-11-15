@@ -1,18 +1,9 @@
 ---
-name: county-sales-monitor
-description: >
-  Use when Gabriel wants a recurring digest of recently RECORDED industrial
-  sales and transfers (bldg SF under 150,000) across ORA target-market counties,
-  or new comps for the Notion comps database. Trigger on: recent industrial
-  sales, county sales tracker, sales digest, recent county transfers, what
-  traded, who's buying or selling industrial in a market, new comps since
-  [date], set up a sales feed. MARKET INTELLIGENCE, not sourcing: does NOT
-  replace county-parcel-screen (off-market owner call lists, motivated sellers,
-  delinquent-tax/estate leads). Single-property comp grids route to
-  acquisition-underwriting COMPS mode.
+name: "county-sales-monitor"
+description: "Use when Gabriel wants a recurring digest of recently RECORDED industrial sales and transfers (bldg SF under 150,000) across ORA target-market counties, or new comps for the Notion comps database. Trigger on: recent industrial sales, county sales tracker, sales digest, recent county transfers, what traded, who's buying or selling industrial in a market, new comps since [date], set up a sales feed. MARKET INTELLIGENCE, not sourcing: does NOT replace county-parcel-screen (off-market owner call lists, motivated sellers, delinquent-tax/estate leads). Single-property comp grids route to acquisition-underwriting COMPS mode."
 ---
 
-# county-sales-monitor (v0.12.1)
+# county-sales-monitor (v0.13.1)
 
 Produce a recurring digest of recently recorded industrial sales and transfers
 across ORA's target-market counties, so Gabriel sees what actually traded — at
@@ -48,7 +39,7 @@ Three tiers; the digest prints a per-county line for every county in every run,
 including the ones that produced nothing and the ones that structurally cannot.
 
 **Launch scope, ratified 2026-08-15: Tier A only.** Franklin OH, Baltimore Co
-MD, and Polk IA were the entire pilot; Cook IL joined Tier A in v0.10. Tier B and Tier C are documented below
+MD, and Polk IA were the entire pilot; Cook IL joined Tier A in v0.10, the Indianapolis cluster in v0.11, and Hamilton OH in v0.13. Tier B and Tier C are documented below
 so the expansion path is clear, but nothing outside Tier A is built, verified,
 or scheduled in v0.2 — expanding to Tier B is a distinct future pass, each
 county verified individually before it's trusted in a real digest.
@@ -125,6 +116,22 @@ county verified individually before it's trusted in a real digest.
   in price, portfolio sale, and special relationship/foreclosure/auction/trade/
   partial. A land contract is CONTRACT-SALE.
 
+- **Hamilton OH** (Cincinnati; added v0.13, 2026-11-14) — CAGIS countywide
+  parcel MapServer mirror (`cagisonline.hamilton-co.org/arcgis/rest/services/
+  Countywide_Layers/QueryLayers/MapServer/1`). The AGOL FeatureServer/51 URL in
+  `county-endpoints.md` is dead; patch the registry. Industrial classes are Ohio
+  DTE 3xx (300-399; includes 300 land, as in Franklin). `SALDAT` is an Excel date
+  serial (days since 1899-12-30), NOT epoch ms, so the window filter is on the
+  serial; about 12 legacy USD 0 rows decode to 2088-2098 and are dropped (WARN only
+  if a priced sale is lost). Deeds group on `CONVEY_NO` / `NUMPCL`. Seller is the
+  INFERRED prior owner (`PREVOWN1`, trailing `@n` stripped), never a published
+  grantor, so it never drives NONARMS or ORA-AFFILIATED. Assessed value =
+  `MKTLND` + `MKTIMP`. **No building SF** in the layer: every row is
+  SF-UNPUBLISHED and there is no clean $/SF until a footprint join exists.
+  First live preview 2026-11-14: 242 raw, 194 transactions, 118 NONARMS (re-titling
+  share is high, as in Franklin), newest sale 2026-11-03. Worker adapter:
+  `src/counties/hamilton.ts`.
+
 **Tier C — CONFIRMED no usable public sale price (say so, every run):**
 - **Warren OH** (Cincinnati) — no public values, SF, or sales anywhere.
 - **Johnson Co KS + Platte Co MO** (Kansas City) — Missouri and Kansas are
@@ -139,12 +146,11 @@ county verified individually before it's trusted in a real digest.
 **Tier B — PROVISIONAL, needs a Step 0 verification pass before first use:**
 Every other county. `county-endpoints.md` documents sale-bearing fields for
 several of them (Butler OH's `Property Sale.CSV` with direct Grantor1/2 +
-NEW OWN1/2; Hamilton OH's `HistoricSalesExport.xlsx`; Clermont OH's
+NEW OWN1/2; Clermont OH's
 `Sales/ParSales/MapServer/12`; Anne Arundel + Howard MD `CONSIDR1`/`TRADATE`
 with SDAT-scrubbed owner names; Henrico VA's
 `AssessorProValGPINRecTransPublish` with `val_code_1` arm's-length codes;
-Chesterfield VA `SaleDate`/`SalePrice`; Richmond City `LAST_SALE_DATE`/
-`LAST_SALE_PRICE`; other Indiana counties through the same statewide SDF file
+Chesterfield VA `SaleDate`/`SalePrice`; other Indiana counties through the same statewide SDF file
 as the Indianapolis cluster (Tier A above; filter by the `County_ID` / SDF_ID
 prefix, because county names come in two formats, "Marion" vs "MARION
 COUNTY"); Dane WI only via the
@@ -153,6 +159,13 @@ mid-2023 forward; Dallas IA sales layers that carry price but **no sale date
 and no parties**). None of that has been exercised as a *windowed recent-sales*
 pull. Verify field-by-field on first run and record the result — a field that
 exists is not the same as a field that updates weekly.
+
+**Probed and rejected 2026-11-14 (do not re-probe without new evidence):**
+- **Jackson Co MO** Certificate-of-Value search: scriptable ASP.NET form, but none
+  of the 2026 sales tested appear and the newest records seen are 2025. Missouri
+  is a non-disclosure state, so this is not a viable recent-sales feed.
+- **Richmond City VA** transfers layer: newest sale 2024-10-16, and the parcel
+  layer carries no sale fields. Not a live feed; do not build an adapter.
 
 **Louisville / Jefferson Co KY** was added to ORA market coverage in 2026-08
 (`market-monitor`, `acquisition-underwriting`, `daily-brief`) and is the likely
@@ -500,6 +513,13 @@ valuation input); Baltimore Co assessments run ~64% below recent industrial
 sales, so ratio-based arm's-length tests must be per-county, never global.
 
 ## Changelog
+- **v0.13.1 (2026-11-15):** Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit (the main-branch v0.12.1 rewrite, re-applied to the v0.13 cache capture, PR #268). No value changed.
+- **v0.13 (2026-11-14):** Hamilton OH promoted from Tier B to Tier A (no building
+  SF; inferred seller; CAGIS MapServer mirror; Excel-serial `SALDAT`). Jackson
+  Co MO Certificate-of-Value search and Richmond City VA transfers layer probed
+  and rejected (see Tier B). Worker also gained a stale-feed alert: Franklin
+  coverage goes WARN when newer Tax Accounting folders hold no Transfer files and
+  the Transfer drop in use is older than 45 days. No doctrine constant changed.
 - **v0.12.1 (2026-11-14):** Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - **v0.12 (2026-11-05):** The Geography line said "the other eight ORA clusters
   are Tier B/C". That was true while Tier A held three clusters; with Cook IL
