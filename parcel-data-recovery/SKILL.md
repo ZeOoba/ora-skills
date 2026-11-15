@@ -3,7 +3,7 @@ name: "parcel-data-recovery"
 description: "Use when an Oxford Realty Advisors off-market screen workbook has rows lacking Bldg SF or auditor values and county-level building SF, market value, year-built, or tax-delinquency data must be recovered from county GIS/CAMA sources (Jackson MO, Wyandotte KS, Clay MO, Hamilton/Butler/Clermont/Warren OH; endpoints and their last-verified status in references/endpoints.md). Trigger on: recover SF, missing building SF, parcel data gap, UNSCREENABLE rows, DATA-GAP rows, county GIS pull, footprint SF, assessor values, CAMA extract, recover year built, recover market value, tax delinquency flags, refresh parcel data, re-run P1 on recovered data, off-market master rebuild. Companion to county-parcel-screen; patches an existing master."
 ---
 
-# Parcel Data Recovery — ORA Off-Market Screens (v1.12.1)
+# Parcel Data Recovery — ORA Off-Market Screens (v1.13)
 
 Recovers the inputs that block P1 Buy Box economics (building SF, market value, year built, delinquency) from county GIS/CAMA sources, then recomputes P1 and rebuilds the off-market master workbook.
 
@@ -34,6 +34,7 @@ Recovers the inputs that block P1 Buy Box economics (building SF, market value, 
    - Walk = NOI / 0.08 · YoC = NOI / modeled
    - Vintage floor = **linear ramp, 65% at ≤1995 → 60% at ≥2005** (−0.5%/yr; ratified 2026-07-14 — supersedes the old "0.25 if yr ≥ 2000 else 0.30" step function, which was calibrated against RCT v02's understated denominator and is no longer valid against v03). Unknown Yr Built defaults to 1995 (conservative, 65% required).
    - Disc = 1 − (modeled/SF)/RCT_LOW
+   - **Land at market (acquisition-underwriting v4.53):** the basis test credits land only at market value from ≥3 executed land comps (same zoning class and submarket, ≤36 months), capped at 60% of all-in, and the discount is measured on the improvements only: `1 − (all-in − credited land) ÷ (RCT_LOW × SF)`. County land fields recovered here (assessed land, `total_sqft`-style land areas, land value splits) are NEVER a market land value. P1 has no land comp grid, so it credits land at **USD 0** and tags every row `[DATA-GAP: land comps]`; the Disc line above is therefore the v4.53 improvements-only discount with USD 0 land, and it is unchanged. A row that advances to SCREEN re-derives it with the grid.
    - **Construction type (acquisition-underwriting v4.37):** RCT_LOW is the construction-type-adjusted LOW (RCT POINT × multiplier + adders, LOW = 0.9 × result). County CAMA recovery rarely returns construction type, so this skill applies multiplier **1.00** (tilt-up baseline) and tags every P1 row `[DATA-GAP: construction type]` (P1 is a ranking, not a price; the SCREEN re-derives an unknown type at the strictest applicable multiplier, the PEMB value for its SF capped at 0.90); re-derive any PEMB, masonry or brick candidate at SCREEN time per the Construction-Type Multiplier Schedule. Do not hardcode multipliers here (Iron rule 11).
    - Basis/25 = clip((Disc − floor)/(0.76 − floor) × 25) — top-of-scale recalibrated 2026-07-14 from ≥55% to ≥76% alongside the RCT v03 denominator; do not use 0.55, it predates the correction.
    - Yield/20 = clip((YoC − 0.08)/0.03 × 20)
@@ -67,6 +68,7 @@ Recovers the inputs that block P1 Buy Box economics (building SF, market value, 
 
 ## Changelog
 
+- **v1.13 (2026-11-14):** Consumer sweep for acquisition-underwriting v4.53 (Gabriel in-turn 2026-11-14; RE-4.53-1): step 5 states that P1 credits land at USD 0 with `[DATA-GAP: land comps]` (county land fields are never a market land value), so the P1 discount is the v4.53 improvements-only discount and does not move. No figure, formula, QC gate or governor changed.
 - **v1.12.1 (2026-11-14):** Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - **v1.12 (2026-11-13):** The RCT v03 LOW figures left this public text (Gabriel's decision to keep ora-skills public and move the table to runtime config). They ship privately as `rct-table.local.json` in this skill's folder, the same file `acquisition-underwriting` reads; Iron rule 11 and step 5 now read it and stop without it. No figure, formula, QC gate or governor changed.
 - **v1.11 (2026-11-05):** The description no longer says the endpoints are "live-monitored quarterly by ora-gis-endpoint-liveping". That task is on the LAMS fleet, dark since 2026-10-30, so the claim was false. Added a body note that endpoint statuses are last-verified and must be live-tested before use. Wording only; no endpoint, formula, QC gate, scored or governor constant changed.
