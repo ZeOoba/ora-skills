@@ -106,3 +106,7 @@ In a portfolio, each building is re-tested at its walk plus its pro-rata share o
 - `doctrine.py` is a read-only mirror of SKILL.md. If the two disagree, SKILL.md wins.
 - `DoctrinePins` tests fail if a governor constant moves (Hard Invariant 4).
 - Re-confirm the exit caps and the refi spread at the annual December back-test.
+
+## Migrating saved deal files
+
+`scripts/migrate_deal_json.py <file-or-folder> [--dry-run]` updates saved deal JSON files for input changes the solver now refuses. v4.53: `land_value` becomes `market_land_value` with `land_flood_cleared`; `land_comp_count` is left unset, so the land credit stays at zero until at least 3 land comps are recorded. v4.54: a rollover deal with no `gpr` is reported, never guessed. Each changed file keeps a `.pre-v453.json` backup beside it.
