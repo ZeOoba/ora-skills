@@ -3,7 +3,7 @@ name: "county-parcel-screen"
 description: "Use when the user mentions: parcel screen, county screen, ring screen, off-market sourcing, owner outreach list, cold call list, delinquent tax leads, motivated sellers, estate owners, long-hold owners, assessor or auditor parcel data, or off-market industrial candidates in ANY target market or new county. Also \"next market\", \"run the screen on X\", or owner-level lead lists from public property records. Recorded-sales tracking routes to county-sales-monitor; a single already-identified target routes to verified-deal-recon (deal-recon agent for a first look only); an inbound broker batch routes to deal-flow-triage.\n"
 ---
 
-# county-parcel-screen (v1.7.1)
+# county-parcel-screen (v1.8)
 
 Generate off-market industrial acquisition leads for Oxford Realty Advisors from
 public county property data. The screen finds owners with the CAPACITY to sell at
@@ -18,7 +18,7 @@ SF building (sweet spot 15-50K). Deal USD 1-10M; equity sleeve USD 0.75-5M at 65
 Hard floors: >=25% discount to replacement (~USD 150/SF benchmark) AND >8% stabilized
 YoC. (Legacy off-market screen frame; the USD 150 benchmark was retired 2026-07-14. Any deal
 that advances to SCREEN is tested on the acquisition-underwriting Stage 1 vintage-ramp
-floor against the construction-type-adjusted RCT LOW; the figures ship privately as `rct-table.local.json` in this skill's folder (public repo); missing or not `RCT v03` → report `RCT TABLE UNAVAILABLE` and skip the basis test, never substitute a figure.) Instant disqualifiers: retail/office/multifamily, auto-use tenancy,
+floor against the construction-type-adjusted RCT LOW, with land credited only at market value from ≥3 executed land comps, capped at 60% of all-in, and the discount measured on the improvements only (acquisition-underwriting v4.53); assessor/auditor land fields are never a market land value, so the P1 basis band credits land at USD 0 and stays a ranking on total modeled value; the figures ship privately as `rct-table.local.json` in this skill's folder (public repo); missing or not `RCT v03` → report `RCT TABLE UNAVAILABLE` and skip the basis test, never substitute a figure.) Instant disqualifiers: retail/office/multifamily, auto-use tenancy,
 institutional Class A pricing, outside ORA's eleven clusters.
 
 ## Workflow
@@ -397,6 +397,7 @@ volume + quarterly re-runs + signal-led call order is the strategy.
 - versions/CHANGELOG-v1.0-v1.3.md - full changelog text.
 
 ## Changelog
+- **v1.8 (2026-11-14):** Consumer sweep for acquisition-underwriting v4.53 (Gabriel in-turn 2026-11-14; RE-4.53-1): the buy-box note states that a SCREEN credits land at market (≥3 land comps, capped at 60% of all-in, improvements-only discount) and that auditor land fields never count, so the P1 basis band credits USD 0 land. No score, band or weight changed.
 - **v1.7.1 (2026-11-14):** Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - **v1.7 (2026-11-05):** `references/hold-data-availability.md`'s Louisville row said the market was "not among the nine ratified clusters"; Louisville was ratified as an entry-phase cluster on 2026-08-05, before that table was written. The row now says so and that its county endpoints were never built. Found by `tools/doctrine_consistency.py`. Wording only; no scan cycle, scoring rule or market list changed.
 - **v1.6 (2026-10-27):** Added `lebanon_pa` (VERIFIED after a paged `where=1=1` pull the same day; non-canonical) to county-endpoints.v1.json and county-endpoints.md for single-target screens and the acquisition-underwriting v4.37 recent-acquisition check. No scan cycle, scoring rule or market list changed (the 25% / USD 150 text is annotated as a legacy frame, thresholds untouched).
