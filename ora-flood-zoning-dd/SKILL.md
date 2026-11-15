@@ -5,15 +5,17 @@ description: "Use whenever the user mentions: flood zone, FEMA, SFHA, NFHL, floo
 
 ## Changelog (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
 
+v1.7.1 (2026-11-14): Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
+
 v1.7 (2026-11-05: building-pad SFHA aligned to Ruling 5 — gate FLAG, not kill; Buy Box citation updated to v1.1) · v1.6 (2026-10-27: Step 5A ordinance-PDF fallback, Step 6 special-exception RE-LEASING FRICTION, Lebanon County / South Londonderry endpoints) · v1.5 (2026-08-24: added Jefferson County KY / Louisville block to references/endpoints.md — LOJIC ArcGIS REST services, verified live against both Knopp Ave and Cane Run Rd) · v1.4 (2026-08-24: Step 6A added - Planned Development (PD/PUD) parcels carry no by-right use table; run the minor-vs-major amendment tier test and capture the post-closing change-of-use trigger) · v1.3 (2026-07-24: mandatory geocode-vs-parcel validation added after a confirmed off-parcel geocode/empty-zoning-result incident; endpoints verified 2026-06-09; batch-write safety rule added 2026-07-12; cross-linked county-parcel-screen's endpoint registry for parcel-geometry lookups 2026-07-20)
 
-# ORA Flood & Zoning DD-Critical Resolution (v1.7)
+# ORA Flood & Zoning DD-Critical Resolution (v1.7.1)
 
 Purpose: convert "FEMA UNK" and "zoning UNK" into sourced determinations at SCREEN stage. Under the Buy Box (acquisition-underwriting STAGE 2.5), any unresolved DD-Critical item caps a deal at T2 WATCH — resolving these two is usually the cheapest score unlock.
 
 ## Decision rules (Buy Box v1.1 — acquisition-underwriting STAGE 0 item 5 and STAGE 2.5 govern; this section restates them)
 - SFHA (Zone A/AE/AH/AO/VE) on the **building pad** = **GATE FLAG** (verdict label GATE-FLAGGED). Ruling 5: no hard kills — the deal is still screened as an exception, and only Gabriel kills a deal.
-- SFHA on **excess land only** = proceed; land valued at **$0 in the basis test until FEMA determination is verified** (then re-credit and re-score — report both as a band, e.g., "58 → 71 if dry").
+- SFHA on **excess land only** = proceed; land valued at **USD 0 in the basis test until FEMA determination is verified** (then re-credit and re-score — report both as a band, e.g., "58 → 71 if dry").
 - Zone X (shaded/unshaded) = no flood constraint; record panel + effective date anyway.
 - Zoning at screen = GIS designation + permitted-use check vs the municipal code. A **formal municipal zoning letter remains mandatory pre-LOI** — this skill does not substitute for it.
 - **PD/PUD is not a use answer (added v1.4).** Where the GIS returns a planned-development designation, the code carries no by-right use table and an empty permitted-use lookup is a **FALSE NEGATIVE, not an UNK** — the governing instrument is the approved PD plan and its agreement, held by the planning department. Run **Step 6A**: obtain the plan, and get the minor-vs-major amendment tier for any intended site change in writing from a named official.

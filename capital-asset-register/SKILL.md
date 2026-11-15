@@ -3,7 +3,7 @@ name: capital-asset-register
 description: "Use when maintaining ORA's per-property building asset register — nameplate capture, remaining useful life, and the replacement pipeline that feeds the annual capital plan. Trigger on: asset register, equipment register, how old is this unit, what model is it, nameplate, serial number, remaining useful life, EUL, when does this need replacing, replacement pipeline, building systems inventory, walk the roof, capital plan inputs."
 ---
 
-# Capital Asset Register (v1.0)
+# Capital Asset Register (v1.0.1)
 
 One row per physical building-system asset across the portfolio, permanent for that
 asset's life. The register answers three questions that ORA could not previously answer
@@ -120,8 +120,8 @@ replacement pipeline. For each, carry `Est. Replacement Cost` and `Lease Recover
 
 `Lease Recovery` defaults to **Unreviewed** and may only be set after reading the governing
 lease. Landlord capital not recoverable, landlord capital amortizable into CAM, and tenant
-obligation are three different answers with materially different economics — on a ~$28K
-rooftop unit, CAM amortization over a 15-year life is roughly $2,500–3,300/yr recoverable
+obligation are three different answers with materially different economics — on a ~USD 28K
+rooftop unit, CAM amortization over a 15-year life is roughly USD 2,500–3,300/yr recoverable
 `[FORECAST, rate-dependent]`. Guessing this field is worse than leaving it blank.
 
 Hand the pipeline to `annual-cycle`, which owns the annual budget and powers the
@@ -134,7 +134,7 @@ inputs; it does not set reserve levels or approve spend.
   onto that roof, not only roofing work. A crane set, a curb adapter or a new penetration
   all qualify. Membrane patching and roof-warranty survival must be assigned in writing
   before work starts. Enforced in `capital-bid-comparison` Step 5 and `vendor-management`.
-- **`Rebate Status`** must move off *Not Checked* before any replacement over $10,000 is
+- **`Rebate Status`** must move off *Not Checked* before any replacement over USD 10,000 is
   awarded, because the eligible specification has to be inside the awarded scope. *Not
   Checked* on a completed replacement is a process failure to report.
 
@@ -176,6 +176,7 @@ Deliver as XLSX per the ORA Institutional Style Guide, named
 
 ## Changelog
 
+- **v1.0.1 (2026-11-14):** Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - **v1.0 (2026-09-17) — initial.** Created after the 9050 Red Branch Rd Unit K rooftop
   replacement, where the outgoing unit's age and manufacturer were unknown to ORA until a
   bidding contractor read the nameplate, and its model and serial were never captured.

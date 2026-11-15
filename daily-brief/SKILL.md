@@ -3,7 +3,7 @@ name: daily-brief
 description: "Use when the user says: daily brief, news, morning brief, CRE news, what's happening today, what should I know — or asks for the Oxford Realty Advisors daily morning intelligence brief covering CRE news, industrial transactions, market rates, portfolio watch, ops tip, reading list, CRE law/regulatory watch, shallow bay case study, and competitive intelligence."
 ---
 
-# Daily Brief (v2.17)
+# Daily Brief (v2.17.1)
 
 You are generating the Oxford Realty Advisors daily intelligence brief. Execute all 9 sections in sequence and present as a structured report. Target length: concise but complete.
 
@@ -149,7 +149,7 @@ If fewer than 2 dated items exist, print those and `No further dated items in fe
 
 Search for industrial sale transactions matching ORA criteria:
 
-- Sub-$10M total consideration
+- Sub-USD 10M total consideration
 - Shallow-bay, flex, office-warehouse product type
 - Target markets: OH, MD, IN, MO, KS, WI (Columbus, Cincinnati, Baltimore/DC, Indianapolis, Kansas City, Madison) + entry-phase MI (Grand Rapids), VA (Richmond), IA (Des Moines), KY (Louisville), IL (Chicago–Greater Cook County); TN watch
 - Multi-tenant preferred; sub-50,000 SF per building preferred
@@ -206,7 +206,7 @@ Execute Notion/HubSpot checks:
 
 4c — Delinquency (last Delinquency Tracker output in Notion):
 
-- Any AR balance &gt; $0? Flag anyone &gt;30 days. Format: \[Tenant\] | \[Property\] | $\[Amount\] | \[Days Outstanding\]
+- Any AR balance &gt; USD 0? Flag anyone &gt;30 days. Format: \[Tenant\] | \[Property\] | $\[Amount\] | \[Days Outstanding\]
 
 4d — Active Deal Actions (Notion Acquisition Pipeline Tracker):
 
@@ -403,6 +403,7 @@ Minimum 3 items; maximum 6. Prioritize items requiring action within 72 hours. I
 
 **Per-entry length cap (same pass):** cap each full inline entry at **~2,000 characters** — the count cap alone bounds how many entries are inline, never how large each is. Measured 2026-09-11: this skill's three entries run 290–944 chars, so the cap fits with headroom. An entry that would exceed it states its finding and verdict inline and cites `versions/` for the detail. This skill was flagged (R25-7) as the #3 realized-cost skill in the environment (146,039 word-loads) with no growth-bound mechanism at all — documentation discipline only, no news-filter, transaction-screen, or workflow logic changed.
 
+- **v2.17.1 (2026-11-14):** Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - **v2.17 (2026-09-29):** Parity — Chicago–Greater Cook County IL added to Sections 1-2 geographic scope (target-markets.json v1.11; acquisition-underwriting v4.25). No source list, filter, screening or delivery logic changed. (Numbered v2.17 on merge: v2.16 was taken by the 2026-09-30 token pass.)
 - **v2.16 (2026-09-30, ora-setup-audit token pass, Gabriel-directed):** Doc-only. Compressed inline changelog entries v2.9–v2.13 to one-liners (full text in `versions/`), about 600 words of history no run executes. Procedure text unchanged byte for byte. The outage-only mirror fallbacks were deliberately left inline: this skill runs unattended daily and a conditional reference read is a risk the ~7% saving does not justify.
 - **v2.15 (2026-09-22, /insights sweep item 5):** Three output rules. Run date + weekday computed once at run start and reused everywhere (a brief mixed Tuesday/Wednesday). Section 3 FRED CSVs are downloaded with curl and parsed locally, including when the FRED MCP is rate-limited — never a WebFetch summary (mis-summarized values observed); complements v2.13's staleness disclosure. Notion create-pages with no page ID in the response → title search before any retry, never a blind retry (produced a duplicate page). No section content or delivery routing changed.

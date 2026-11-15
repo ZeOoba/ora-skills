@@ -3,7 +3,7 @@ name: deal-comparison
 description: "Use when comparing 2+ acquisition candidates side by side, scoring deals against Oxford Realty Advisors portfolio fit, or benchmarking against historical Oxford deals. Triggers: compare deals, side by side, which deal is better, deal comparison, portfolio fit, score deal, rank acquisitions, compare to historical, deal matrix."
 ---
 
-# Deal Comparison (v1.8)
+# Deal Comparison (v1.8.1)
 
 You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side-by-side analysis of 2+ acquisition candidates scored on financial merit and portfolio fit. Pull deal data from Notion Acquisition Pipeline Tracker when available. For deals not in Notion, ask Gabriel to provide key inputs.
 
@@ -43,7 +43,7 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 > **Construction type (acquisition-underwriting v4.37):** the LOW above is the construction-type-adjusted LOW (RCT POINT × multiplier + adders, LOW re-derived at 0.9). Take it from the `acquisition-underwriting` screen; never recompute from the bare table for a non-tilt-up building (PEMB, masonry, brick or hybrid; precast is ×1.00). An unknown type takes the strictest applicable multiplier (the PEMB value for its SF, capped at 0.90), tagged `[DATA-GAP: construction type]`, so not checking never outscores a checked metal building (any renovation R% is computed at ×1.00 for an unknown type, and its Yield (only) is scored at the ×1.00 walk; Basis stays strict). A screen that predates v4.37 carries no construction-type adjustment: note "pre-v4.37 screen" and re-derive from the current schedule.
 >
 > ⚠️ Do NOT use: the retired RCT v02 constants, the retired C&W-hard "operative
-> benchmark" briefly in `target-markets.json`, or the old $140/$170/$150/$130 scan
+> benchmark" briefly in `target-markets.json`, or the old USD 140/USD 170/USD 150/USD 130 scan
 > constants. **If you find a second denominator, it is a bug.**
 
 ### Category 2 — Physical & Market (30 pts)
@@ -92,7 +92,7 @@ You are the Oxford Realty Advisors deal comparison engine. Perform rigorous side
 |--------|-----|---------|
 | Market Cluster Fit | 6 | Strengthens existing cluster=6; New target market=4; Isolated=1 |
 | Operational Leverage | 5 | Same PM platform=5; Known platform=3; New platform=1 |
-| Capital Efficiency | 4 | <$7M=4; $7-10M=3; >$10M=1 |
+| Capital Efficiency | 4 | <USD 7M=4; USD 7-10M=3; >USD 10M=1 |
 
 **Market Cluster Fit — designated target markets (canonical source: `target-markets.json` v1.0+ (bundled into this skill's own package as of 2026-07-09 — master copy at repo root `ora-skills/target-markets.json`); narrative twin: memory "ORA Target Markets / Primary Clusters", updated 2026-05-30):**
 - Established clusters (score 6) = Columbus OH, Kansas City MO/KS, Indianapolis IN, Maryland, Cincinnati OH, Madison WI.
@@ -106,7 +106,7 @@ Rate 1-5 on each criterion:
 1. Geographic diversification improvement
 2. Lease term diversification improvement
 3. Tenant type mix improvement
-4. AUM compounding velocity ($60M → $700-800M trajectory)
+4. AUM compounding velocity (USD 60M → USD 700-800M trajectory)
 5. Operational absorption capacity (2-person team)
 6. Forever-hold compounding quality (35-year thesis)
 
@@ -157,6 +157,7 @@ Save output as `ORA_DealComparison_[Deal1]_vs_[Deal2]_[YYYY-MM-DD].xlsx` or HTML
 
 ## Changelog
 
+- v1.8.1 (2026-11-14): Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - v1.8 (2026-11-08): Floor DSCR NOI basis stated (Gabriel in-turn ruling 2026-11-08, acquisition-underwriting v4.45): the FLOOR FLAG line, the 10-pt DSCR scoring row and the output template use DSCR on stabilized NOI, the NOI the refi is sized on; Year-1 DSCR is a reported coverage line, not the floor. Scoring bands, point values and governor constants unchanged (DSCR 1.25x; 65% per-property; 40% aggregate). A rescale of the DSCR bands to the 65%-LTV distribution (triage row X2) is pending Gabriel's ratification of the values in a later session; the bands above are the current ratified ones.
 - v1.7 (2026-11-08): DSCR floor basis restated (Gabriel in-turn ratification 2026-11-08, acquisition-underwriting v4.44; audit finding dscr-floor-unbreachable-at-lesser-of-sizing). The FLOOR FLAG line, the 10-pt DSCR scoring row, the recommendation-threshold row and the output template now test DSCR at a loan sized to 65% LTV at the refi terms. The old basis, the lesser-of loan, is sized to 1.25x DSCR whenever DSCR binds, so it could never score below 1.25x and every deal took at least 5 of 10 points. Lesser-of sizing still sets refi proceeds. Scoring bands, point values and governor constants unchanged (DSCR 1.25x; 65% per-property; 40% aggregate).
 - v1.6 (2026-10-27; unknown-type, Yield and Hybrid wording 2026-10-28): Consumer sweep for acquisition-underwriting v4.37: Price vs. Replacement divides by the construction-type-adjusted RCT LOW (pointer); the PEMB <15% SUSPECT flag is withdrawn; an unknown type takes the strictest applicable multiplier with its Yield (only) scored at the ×1.00 walk; Hybrid is classified only as block wainscot + metal panel on PEMB. No band, weight or constant changed.

@@ -3,7 +3,7 @@ name: monthly-close
 description: 'Use when the user mentions: monthly close, month-end, monthly checklist, payment dashboard, QB journal entries, bank reconciliation, lender payments, borrower payments, asset management fees, CAM reconciliation, month-end close, 1st of the month, internal lender receipts, HubSpot month-end updates, tenant communication, insurance or taxes for the month — the Oxford Realty Advisors monthly accounting and operations close.'
 ---
 
-# Monthly Close (v2.2)
+# Monthly Close (v2.2.1)
 
 You are executing the Oxford Realty Advisors monthly close process. This skill encodes the complete 59-item Monthly Checklist from the Master Excel Template (Monthly Checklist sheet), covering 10 categories with real loan numbers, servicers, counterparties, payment amounts, and property-level schedules.
 
@@ -13,7 +13,7 @@ You are executing the Oxford Realty Advisors monthly close process. This skill e
 
 **Frequency:** Monthly (all items due on the 1st unless otherwise noted) **Quarterly items:** Asset Management Fees — January, April, July, October only **Semi-annual items:** Most property taxes — see Tax schedule below **Annual items:** See Tax schedule below **Systems involved:** QuickBooks Desktop (\~20 LLC entities), Rent Manager (Columbus/KC/Toledo), Yardi CRC (2 MD properties), Yardi standalone (1 property), AppFolio (Northwood/MD) **RowID scheme:** Each checklist row has a stable RowID (columns S–T in the workbook) for Notion/query references.
 
-**⚠ ACTIVE BALLOON WATCH:** Restoration Church Trust — \~$982,753 balloon due **February 20, 2027**. Oxford is the **lender** on this note (Category 2) — confirm the borrower's repayment or extension terms are on track; this is not an Oxford refinance/payoff obligation. Flag this at the top of every monthly close checklist until resolved, capped at WARNING severity (never CRITICAL — direction fixed per conditions.ts #217).
+**⚠ ACTIVE BALLOON WATCH:** Restoration Church Trust — \~USD 982,753 balloon due **February 20, 2027**. Oxford is the **lender** on this note (Category 2) — confirm the borrower's repayment or extension terms are on track; this is not an Oxford refinance/payoff obligation. Flag this at the top of every monthly close checklist until resolved, capped at WARNING severity (never CRITICAL — direction fixed per conditions.ts #217).
 
 ---
 
@@ -21,9 +21,9 @@ You are executing the Oxford Realty Advisors monthly close process. This skill e
 
 ### Oxford IS the borrower — We Make These Payments
 
-RowIDPropertyCounterparty / ServicerTypeMonthly PmtNotesEXT-BOR-3540FIFTH3540 E. Fifth AvePark National Bank — Loan #4101128158004Amortizing$16,304.466.04% → 6.5% yr 6; due 1stEXT-BOR-9050REDBRANCH9050 Red Branch RdNorthMarq Capital (Symetra) — Loan #410374Amortizing$12,189.114.25%; 50% share; due 1stEXT-BOR-29000INFO29000 Information LaneSymetra Life Insurance — Loan #10258Amortizing$17,362.065.60%; balloon; due 1stEXT-BOR-BANWICKBanwick / MorrisonSymetra Life Insurance — Loan #11153Amortizing$22,919.275.52%; first payment 5/1/2026; due 1stEXT-BOR-3883OXFORD3883 from Oxford (50%)Oxford Capital / LAST NonInt Only$1,955.256.00%; $20K/yr principal; 50% share; due 1st
+RowIDPropertyCounterparty / ServicerTypeMonthly PmtNotesEXT-BOR-3540FIFTH3540 E. Fifth AvePark National Bank — Loan #4101128158004Amortizing USD 16,304.466.04% → 6.5% yr 6; due 1stEXT-BOR-9050REDBRANCH9050 Red Branch RdNorthMarq Capital (Symetra) — Loan #410374Amortizing USD 12,189.114.25%; 50% share; due 1stEXT-BOR-29000INFO29000 Information LaneSymetra Life Insurance — Loan #10258Amortizing USD 17,362.065.60%; balloon; due 1stEXT-BOR-BANWICKBanwick / MorrisonSymetra Life Insurance — Loan #11153Amortizing USD 22,919.275.52%; first payment 5/1/2026; due 1stEXT-BOR-3883OXFORD3883 from Oxford (50%)Oxford Capital / LAST NonInt Only USD 1,955.256.00%; USD 20K/yr principal; 50% share; due 1st
 
-**Aggregate external monthly outflow: \~$70,730**
+**Aggregate external monthly outflow: \~USD 70,730**
 
 **Verification:** Pull bank statement for each entity; confirm auto-pay or wire executed; confirm QB posting matches amortization schedule. Flag any payment not confirmed within 2 business days of the 1st.
 
@@ -33,9 +33,9 @@ RowIDPropertyCounterparty / ServicerTypeMonthly PmtNotesEXT-BOR-3540FIFTH3540 E.
 
 ### Oxford IS the lender — We Receive These Payments (Cash Basis)
 
-RowIDBorrowerCounterpartyTypeMonthly PmtNotesEXT-LEN-1100RARIG1100 Rarig (Fenton)1100 Rarig Ave, LLCInt Only$2,812.18Oxford Capital servicer; 6.00%; demand loan; $45K/yr principal assumed; 50% shareEXT-LEN-RESTORATIONRestoration Church TrustRestoration Church TrustAmortizing$8,356.83Oxford Capital servicer; 9.00%; 50% share; **BALLOON \~$982,753 due 2/20/2027**EXT-LEN-485WALNUT485 S. Walnut St.610 Northampton St. LLCInt Only$1,365.00Oxford Capital Partners servicer; 6.50%; IO balloon; Slatington PA; matures Jul-28
+RowIDBorrowerCounterpartyTypeMonthly PmtNotesEXT-LEN-1100RARIG1100 Rarig (Fenton)1100 Rarig Ave, LLCInt Only USD 2,812.18Oxford Capital servicer; 6.00%; demand loan; USD 45K/yr principal assumed; 50% shareEXT-LEN-RESTORATIONRestoration Church TrustRestoration Church TrustAmortizing USD 8,356.83Oxford Capital servicer; 9.00%; 50% share; **BALLOON \~USD 982,753 due 2/20/2027**EXT-LEN-485WALNUT485 S. Walnut St.610 Northampton St. LLCInt Only USD 1,365.00Oxford Capital Partners servicer; 6.50%; IO balloon; Slatington PA; matures Jul-28
 
-**Aggregate external monthly inflow: \~$12,534**
+**Aggregate external monthly inflow: \~USD 12,534**
 
 **Verification:** Confirm receipt by the 5th. Post to QB entity. Flag any payment &gt;5 days late for Gabriel review. **Monthly: confirm Restoration Church Trust borrower's repayment/extension-term status (Oxford is the lender — not a refinance/payoff item for Oxford).**
 
@@ -45,9 +45,9 @@ RowIDBorrowerCounterpartyTypeMonthly PmtNotesEXT-LEN-1100RARIG1100 Rarig (Fenton
 
 ### Oxford IS the lender — Accrual Basis (Intercompany)
 
-RowIDLoanBorrowing EntityTypeMonthly AccrualNotesINT-LEN-MUIRKIRKMuirkirk → EG(Oxford)EG(Oxford) / LASTNONInt Only$1,569.284.088%; balance \~$504K; interest settled monthly; due 1stINT-LEN-2203EGFLLC2203 FROM EGFLLC2203 Property LLCInt Only$13,523.20Oxford/EGFLLC servicer; 6.00%; 2203 borrows from EGFLLC; balance \~$2.73MINT-LEN-EGFLLCEGFLLC FROM OXFORDEG Florida LLCInt Only$125.23Oxford Capital servicer; 4.00%; balance \~$187K; demand loan
+RowIDLoanBorrowing EntityTypeMonthly AccrualNotesINT-LEN-MUIRKIRKMuirkirk → EG(Oxford)EG(Oxford) / LASTNONInt Only USD 1,569.284.088%; balance \~USD 504K; interest settled monthly; due 1stINT-LEN-2203EGFLLC2203 FROM EGFLLC2203 Property LLCInt Only USD 13,523.20Oxford/EGFLLC servicer; 6.00%; 2203 borrows from EGFLLC; balance \~USD 2.73MINT-LEN-EGFLLCEGFLLC FROM OXFORDEG Florida LLCInt Only USD 125.23Oxford Capital servicer; 4.00%; balance \~USD 187K; demand loan
 
-**Aggregate internal monthly accrual: \~$15,218**
+**Aggregate internal monthly accrual: \~USD 15,218**
 
 **Verification:** Post accrual JEs in QB for each intercompany loan. Confirm intercompany eliminations are set up. Match ending balances to loan schedule.
 
@@ -126,7 +126,7 @@ RowIDPropertyFrequencyDue MonthsTAX-3540FIFTH3540 E 5th AveSemi-annualJan, JunTA
 
 ## MONTHLY CASH FLOW SUMMARY (Reference)
 
-LineAverage/MonthExternal payments we make (borrower)\~$70,730External interest we receive (lender)\~$10,291Internal interest we receive (accrual)\~$15,218**Net (all receive − all pay)\~($45,221) net outflow before rental income**
+LineAverage/MonthExternal payments we make (borrower)\~USD 70,730External interest we receive (lender)\~USD 10,291Internal interest we receive (accrual)\~USD 15,218**Net (all receive − all pay)\~(USD 45,221) net outflow before rental income**
 
 *Source: Master Excel Template → Monthly Checklist → Cash Flow Summary (rows 83–86)*
 
@@ -195,5 +195,6 @@ Create **"Monthly Close — [MONTH YEAR]"** page in Notion Operations Hub (DB: 3
 ## Changelog
 (moved from description 2026-07-29 — Phase-4 description token-budget lint; trigger vocabulary unchanged)
 
+- **v2.2.1 (2026-11-14):** Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - **v2.2 (2026-07-24):** fixed Restoration Church Trust balloon direction-trap — Oxford is the LENDER, not borrower; capped at WARNING, matches conditions.ts #217.
 - **v2.1:** routing corrected to ggoldberg-only.

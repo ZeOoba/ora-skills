@@ -3,7 +3,7 @@ name: lease-addendum
 description: "Use when the user says: draft addendum, lease addendum, amend/amendment, extend the lease, rent change, tenant substitution, name change, novation, add/remove tenant, premises change, add a unit, guaranty exhibit, or uploads a draft addendum to an ORA lease. SOLE path for amending, extending, or modifying a lease already in effect. NOT new leases (lease-generation), NOT counterparty paper (legal-intelligence), NOT LOIs (loi-generation), NOT renewal letters (document-assembly). DRAFT ONLY -- outbound send needs Gabriel's confirmation."
 ---
 
-# Lease Addendum — Oxford Realty Advisors (v1.2)
+# Lease Addendum — Oxford Realty Advisors (v1.2.1)
 
 Drafts amendments and addenda to leases **already in effect**. This is the sole path for that
 document type — see Scope below for the four adjacent skills it is not.
@@ -264,10 +264,11 @@ paragraph the correct numbering/style rather than defaulting to Normal).
 
 ## Changelog
 
+- **v1.2.1 (2026-11-14):** Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - **v1.2** (2026-11-08) — QC item 3 (rent arithmetic) escalation tolerance tightened (audit
   row `addendum-escalation-tolerance-50bp`). `check_rent_arithmetic` allowed
-  max($1.00, 0.5% of the expected annual), so a 3.5% step under a stated 3% passed. Each row
-  must now reproduce from the prior row, within $0.01 x 12 months, under one recognised
+  max(USD 1.00, 0.5% of the expected annual), so a 3.5% step under a stated 3% passed. Each row
+  must now reproduce from the prior row, within USD 0.01 x 12 months, under one recognised
   rounding convention: (i) annual compounded or (ii) monthly compounded and rounded each year
   (the two `lease-form-qc` D2 methods), (iii) monthly or (iv) annual rounded to the whole
   dollar, or (v) a per-SF rate rounded to the cent, only when ONE sentence states, after a
