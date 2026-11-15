@@ -887,6 +887,10 @@ def is_bundled(rel_posix: str) -> bool:
         return False
     if parts[-1].endswith(('.pyc', '.pyo')):
         return False
+    # In-flight temp file of tools/lint_skill_dollar_args.py --fix (written beside the SKILL.md so the
+    # final os.replace is atomic); a package built at that moment must not ship it (2026-11-15 gate).
+    if parts[-1].startswith('.lintfix-') and parts[-1].endswith('.tmp'):
+        return False
     return True
 
 

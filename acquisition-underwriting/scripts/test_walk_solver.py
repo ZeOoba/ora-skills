@@ -489,6 +489,9 @@ class LandAtMarket(unittest.TestCase):
         self.assertAlmostEqual(r.floors["land_credit_at_basis_leg"], 0.60 * (0.35 * B / 0.4), places=4)
         ask_allin = 3_000_000 * 1.02 + capex + carry
         self.assertAlmostEqual(r.ask["ask_land_credit"], 0.60 * ask_allin, places=4)
+        # the improvements-only discount uses the CAPPED credit, never the full market land value
+        self.assertAlmostEqual(r.ask["ask_discount_to_replacement"], 1 - (ask_allin - 0.60 * ask_allin) / B,
+                               places=6)
 
     def test_cap_binds_on_land_heavy_rows(self):
         B = 0.9 * P_COL * 30_000
@@ -590,9 +593,30 @@ class RiskTieredIrr(unittest.TestCase):
     def test_bad_types_on_addon_inputs_rejected(self):
         # review C4: a string must never lift or skip an add-on silently
         for kw in (dict(clean_phase_ii="false"), dict(environmental_heavy_use=""), dict(satellite=0),
-                   dict(new_operating_competency="yes"), dict(single_tenant=1), dict(land_flood_cleared=None)):
+                   dict(new_operating_competency="yes"), dict(single_tenant=1), dict(land_flood_cleared=None),
+                   dict(land_comp_count=True)):
             with self.assertRaises(ValueError, msg=kw):
                 solve(base(**kw), UST)
+
+    def test_satellite_is_exempt_from_off_cluster_flag(self):
+        self.assertTrue(any(f.startswith("Off-cluster") for f in solve(base(market="Nowhere"), UST).flags))
+        self.assertFalse(any(f.startswith("Off-cluster")
+                             for f in solve(base(market="Nowhere", satellite=True), UST).flags))
+
+    def test_cli_names_each_irr_floor_addon(self):
+        import io
+        import json
+        import tempfile
+        from contextlib import redirect_stdout
+        from ora_walk.cli import main
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+            json.dump(dict(name="Z", sf=30_000, stabilized_noi=300_000, market="Columbus OH", year_built=2000,
+                           construction_type="tilt-up", single_tenant=True), fh)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.assertEqual(main([fh.name, "--ust", "0.045"]), 0)
+        os.unlink(fh.name)
+        self.assertIn("+ 100 bps single tenant", buf.getvalue())
 
     def test_portfolio_floor_is_highest_building_floor(self):
         p = solve_portfolio([base(name="A", single_tenant=False),

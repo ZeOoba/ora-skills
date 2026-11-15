@@ -140,3 +140,6 @@ personal-portfolio/
 # that reads RCT values (PRIVATE_LOCAL_DEPS). Format and steps: tools/RCT_TABLE.md.
 rct-table.local.json
 rct-table.local.json.*
+
+# In-flight temp file of tools/lint_skill_dollar_args.py --fix (2026-11-15 merge-gate finding)
+.lintfix-*.tmp

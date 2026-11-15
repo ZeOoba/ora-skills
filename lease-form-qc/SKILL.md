@@ -3,7 +3,7 @@ name: "lease-form-qc"
 description: "Pre-execution QC gate for leases on Oxford Realty Advisors' own landlord form. Use when the user says: QC this lease, check this lease before signing, lease form check, run the lease QC, review our lease draft, or uploads an ORA-form lease DOCX. Run before ANY outbound lease goes to a tenant or broker: 60-73 checks by form line (v2.x NNN long form or v3.x MG short form, auto-detected; --form to force), incl. cross-refs, undefined terms, OpEx, statutory cites, rent arithmetic and the roof/energy/EV power-rights checks, PASS/FAIL. ALSO the sole path for grading an existing lease against its LOI: does the lease match the LOI, LOI vs lease, LOI conformance (LOI-Lease Audit mode; no lease yet = lease-generation). Not legal-intelligence (counterparty paper) or deal-execution 2A (PSA vs LOI)."
 ---
 
-# Lease Form QC — Oxford Realty Advisors own paper (v2.11.1; v2.11: mutation suite — every check must be able to fail; v2.10: v3.0 short-form mode + `--form` + power-rights standard FP1–FP8; v2.9 F19–F21; v2.8 LOI-Lease Audit + --loi-audit)
+# Lease Form QC — Oxford Realty Advisors own paper (v2.11.2; v2.11: mutation suite — every check must be able to fail; v2.10: v3.0 short-form mode + `--form` + power-rights standard FP1–FP8; v2.9 F19–F21; v2.8 LOI-Lease Audit + --loi-audit)
 
 Pre-execution gate for leases drafted on the ORA landlord form. Run BEFORE a draft
 goes to a tenant, broker, or counsel. This is a defect scan of **our** paper — for
@@ -669,7 +669,7 @@ Section 24 defect was born.
 
 **Retention rule:** keep the 6 most recent versions as full inline entries, each capped at ~2,000 characters. Adding a 7th compresses the oldest to a one-line pointer here and moves its full text, newest first, into a `versions/CHANGELOG-vA-vB.md` file named for the range it holds (open a new range file once the latest is closed out; repo-only, excluded from packaging), in the same edit that adds the new entry.
 
-### v2.11.1 (2026-11-14) — wording only
+### v2.11.2 (2026-11-14) — wording only (v2.11.1 is the 2026-10-17 FP8 resolution recorded in the body)
 
 Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 
