@@ -28,7 +28,7 @@ Run BEFORE a listing is scored or logged as T1. Output is a PROVISIONAL or CERTI
 9. **Certification.** CERTIFIED only if year built, construction, SF, zoning, tax AND use class (step 5 INDUSTRIAL/FLEX VERIFIED) are ALL verified; else PROVISIONAL. Record score as [floor-ceiling]. Note: this PROVISIONAL is a data-certification state, distinct from the deal-sourcing scan's index-only PROVISIONAL listing rule.
 10. **Write** Enrichment Findings, Year Built Source, Construction Source, Enrichment Date, Data Certification, Power Status to Notion.
 
-## Chrome detail pull (v1.5; RE-SCAN-2.10-1) — for the scan's STEP 3D
+## Chrome detail pull (v1.5; RE-LEG-1.5-1) — for the scan's STEP 3D
 Applies to T1/T2 candidates whose Crexi or LoopNet detail page failed through WebFetch (blocked, robots-disallowed or empty). Index-only rows stay PROVISIONAL until a detail page is read.
 1. **Find the listing ID by web search** (`site:crexi.com <address>` / `site:loopnet.com <address>`). The Crexi URL search does not resolve, so never build a Crexi search URL.
 2. **Read the page in Claude in Chrome**, batched per site: `tabs_context_mcp` → `navigate` to each detail URL in a new tab → `get_page_text`. Close every tab this pass opened when the site batch is done.

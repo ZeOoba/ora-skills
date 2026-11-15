@@ -14,7 +14,9 @@ Usage:
 
 --fix never rewrites a SKILL.md with uncommitted changes (another session's work in progress) unless
 --include-dirty is given; it prints every file it rewrites or skips, and it refuses to write a file that
-changed while it was being fixed.
+changed while it was being fixed. That re-check narrows but cannot close the window between the final
+read and the atomic replace (no lock-free compare-and-swap exists on a plain file), so run --fix only on
+files no other session is editing at that moment.
 
 Fix rule: a dollar sign followed by a digit becomes "USD " + the number ("USD 4.00/SF", "USD 2,450,000",
 "USD 1.25M"). Fenced code blocks (``` ... ```) and inline code spans are left alone: they are reported
@@ -22,7 +24,7 @@ separately as WARN(code-only) because the loader still substitutes inside them, 
 references such as $B$5.
 """
 from __future__ import annotations
-import argparse, difflib, os, re, subprocess, sys, tempfile
+import argparse, difflib, os, re, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
 PAT = re.compile(r"\$(\d)")
@@ -40,7 +42,7 @@ ROW_RANGE = re.compile(r"\d+:\$\d")               # "$5:$9", an absolute whole-r
 CURRENCY_CODE = {"A": "AUD", "C": "CAD", "NZ": "NZD", "HK": "HKD", "S": "SGD"}
 US_DOLLAR = re.compile(r"(?<![A-Za-z0-9_])US\$(?=\d)")
 FENCE = re.compile(r"\s*(```|~~~)")
-INLINE = re.compile(r"(`+)[^\n]*?(?<!`)\1(?!`)")   # inline code span, any number of backticks
+INLINE = re.compile(r"(?<!`)(`+)(?!`)[^\n]*?(?<!`)\1(?!`)")   # inline code span: a whole backtick run opens it
 VENDOR_SKILLS = {"xlsx", "docx", "pdf", "pptx", "skill-creator", "mcp-builder", "frontend-design", "file-reading",
                  "pdf-reading", "product-self-knowledge", "deep-research", "docs", "google-workspace"}
 
@@ -121,7 +123,8 @@ def _dirty(p: Path) -> bool:
     """True when git reports uncommitted changes to p (another session's work in progress). Outside a git
     checkout nothing is dirty."""
     try:
-        r = subprocess.run(["git", "status", "--porcelain", "--", p.name], cwd=p.parent,
+        # --no-optional-locks: a status here must never hold .git/index.lock and fail a concurrent `git add`.
+        r = subprocess.run(["git", "--no-optional-locks", "status", "--porcelain", "--", p.name], cwd=p.parent,
                            capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError):
         return False
@@ -134,6 +137,7 @@ def _write_if_unchanged(p: Path, raw: str, new: str) -> bool:
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(new.encode("utf-8"))
+        shutil.copymode(p, tmp)                    # keep the file's mode (mkstemp creates 0600)
         if _read(p) != raw:
             os.unlink(tmp)
             return False
