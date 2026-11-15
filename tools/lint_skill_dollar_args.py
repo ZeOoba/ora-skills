@@ -10,6 +10,11 @@ Usage:
   python tools/lint_skill_dollar_args.py <skills_root>            # report, exit 1 if any hit
   python tools/lint_skill_dollar_args.py <skills_root> --fix      # rewrite in place, then re-lint
   python tools/lint_skill_dollar_args.py <skills_root> --fix --dry-run   # print the diff only
+  python tools/lint_skill_dollar_args.py <skills_root> --fix --include-dirty  # also rewrite uncommitted files
+
+--fix never rewrites a SKILL.md with uncommitted changes (another session's work in progress) unless
+--include-dirty is given; it prints every file it rewrites or skips, and it refuses to write a file that
+changed while it was being fixed.
 
 Fix rule: a dollar sign followed by a digit becomes "USD " + the number ("USD 4.00/SF", "USD 2,450,000",
 "USD 1.25M"). Fenced code blocks (``` ... ```) and inline code spans are left alone: they are reported
@@ -17,7 +22,7 @@ separately as WARN(code-only) because the loader still substitutes inside them, 
 references such as $B$5.
 """
 from __future__ import annotations
-import argparse, difflib, re, sys
+import argparse, difflib, os, re, subprocess, sys, tempfile
 from pathlib import Path
 
 PAT = re.compile(r"\$(\d)")
@@ -26,12 +31,16 @@ PAT = re.compile(r"\$(\d)")
 # EITHER carry an absolute "$" of their own ($B$5, Inputs!$B$38), OR sit in formula context (=C$3,
 # SUM(A$1, :B$9), OR start a range (B$2:B$9). Capitals in prose are money: "US$5M", "TI$4/SF",
 # "NNN$8.08"; so is a figure glued to a word ("Amortizing$16,304.46", a collapsed table cell).
-MONEY = re.compile(r"\$(\d)")
+MONEY = re.compile(r"(?:(?<![A-Za-z0-9_])(A|C|NZ|HK|S)(?=\$))?\$(\d)")  # optional non-US prefix, group 1
 CELL_COL_TAIL = re.compile(r"(?:^|(?P<ctx>[$=(:!,+*/^<>&-])|[^A-Za-z0-9_])[A-Z]{1,3}$")
 RANGE_AFTER = re.compile(r"\d*:\$?[A-Z]{1,3}\$?\d")
+ROW_RANGE = re.compile(r"\d+:\$\d")               # "$5:$9", an absolute whole-row range
+# Non-US dollar prefixes glued to a figure ("A$5M") keep their own currency, never USD, unless the
+# letters read as a spreadsheet column ("=SUM(A$1:A$9)").
+CURRENCY_CODE = {"A": "AUD", "C": "CAD", "NZ": "NZD", "HK": "HKD", "S": "SGD"}
 US_DOLLAR = re.compile(r"(?<![A-Za-z0-9_])US\$(?=\d)")
 FENCE = re.compile(r"\s*(```|~~~)")
-INLINE = re.compile(r"(`[^`\n]*`)")
+INLINE = re.compile(r"(`+)[^\n]*?(?<!`)\1(?!`)")   # inline code span, any number of backticks
 VENDOR_SKILLS = {"xlsx", "docx", "pdf", "pptx", "skill-creator", "mcp-builder", "frontend-design", "file-reading",
                  "pdf-reading", "product-self-knowledge", "deep-research", "docs", "google-workspace"}
 
@@ -49,16 +58,24 @@ def _fix_prose(text: str) -> str:
     text = US_DOLLAR.sub("USD ", text)              # "US$5M" -> "USD 5M"
 
     def repl(m: re.Match) -> str:
-        before = text[max(0, m.start() - 5):m.start()]
+        d = m.start(2) - 1                         # index of the "$"
+        before = text[max(0, d - 5):d]
+        if before.endswith("\\"):
+            return m.group(0)                      # "\$5": an escaped dollar sign, left as written (WARN)
+        if ROW_RANGE.match(text, d + 1) or (d >= 2 and text[d - 1] == ":"
+                                           and re.search(r"\$\d+$", text[:d - 1])):
+            return m.group(0)                      # "$5:$9" row range: a spreadsheet reference (WARN)
         col = CELL_COL_TAIL.search(before)
         ctx = col.group("ctx") if col else None
         # "$ = ! :" always mark a reference; "( , + - / ..." only inside a formula (an "=" earlier on the
         # line), since in prose they wrap money: "(TI$4/SF)", "LC/TI$4", "NNN-CAM$1.25".
-        formula = ctx is not None and (ctx in "$=!:" or "=" in text[:m.start()])
-        if col and (formula or RANGE_AFTER.match(text, m.start() + 1)):
+        formula = ctx is not None and (ctx in "$=!:" or "=" in text[:d])
+        if col and (formula or RANGE_AFTER.match(text, d + 1)):
             return m.group(0)                      # spreadsheet reference: leave it (WARN)
+        if m.group(1):
+            return f"{CURRENCY_CODE[m.group(1)]} {m.group(2)}"   # "A$5M" -> "AUD 5M"
         sep = " " if before[-1:].isalnum() else ""  # "Only$125" -> "Only USD 125"
-        return f"{sep}USD {m.group(1)}"
+        return f"{sep}USD {m.group(2)}"
     return MONEY.sub(repl, text)
 
 
@@ -74,8 +91,12 @@ def fix_body(body: str) -> str:
         if in_fence:
             out.append(line)
             continue
-        parts = INLINE.split(line)  # odd indexes are inline code spans: left alone (WARN)
-        out.append("".join(pt if i % 2 else _fix_prose(pt) for i, pt in enumerate(parts)))
+        pos, buf = 0, []                           # inline code spans are left alone (WARN)
+        for m in INLINE.finditer(line):
+            buf += [_fix_prose(line[pos:m.start()]), m.group(0)]
+            pos = m.end()
+        buf.append(_fix_prose(line[pos:]))
+        out.append("".join(buf))
     return "".join(out)
 
 
@@ -96,11 +117,41 @@ def scan(root: Path):
     return hits
 
 
+def _dirty(p: Path) -> bool:
+    """True when git reports uncommitted changes to p (another session's work in progress). Outside a git
+    checkout nothing is dirty."""
+    try:
+        r = subprocess.run(["git", "status", "--porcelain", "--", p.name], cwd=p.parent,
+                           capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return r.returncode == 0 and bool(r.stdout.strip())
+
+
+def _write_if_unchanged(p: Path, raw: str, new: str) -> bool:
+    """Write new only if p still holds raw (no concurrent writer); atomic replace. False when it changed."""
+    fd, tmp = tempfile.mkstemp(dir=p.parent, prefix=".lintfix-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(new.encode("utf-8"))
+        if _read(p) != raw:
+            os.unlink(tmp)
+            return False
+        os.replace(tmp, p)
+        return True
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("root")
     ap.add_argument("--fix", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--include-dirty", action="store_true",
+                    help="with --fix, also rewrite SKILL.md files that have uncommitted changes")
     a = ap.parse_args(argv)
     root = Path(a.root)
     if not root.is_dir():
@@ -114,11 +165,16 @@ def main(argv=None) -> int:
             new = fm + fix_body(body)
             if new == raw:
                 continue
+            if not a.include_dirty and _dirty(p):
+                print(f"SKIPPED(uncommitted changes) {p}: commit it, or rerun with --include-dirty")
+                continue
             if a.dry_run:
                 sys.stdout.writelines(difflib.unified_diff(raw.splitlines(True), new.splitlines(True),
                                                            str(p), str(p), n=0))
+            elif _write_if_unchanged(p, raw, new):
+                print(f"FIXED {p}")
             else:
-                p.write_bytes(new.encode("utf-8"))
+                print(f"SKIPPED(changed during fix) {p}: rerun --fix")
         if not a.dry_run:
             hits = scan(root)
     total = sum(b for b, _ in hits.values())
@@ -132,7 +188,7 @@ def main(argv=None) -> int:
         tag = "FAIL" if rewritable else "WARN(code-only)"
         print(f"{tag} {p}: {b} in body, {f} in frontmatter")
     print(f"{len(hits)} files, {total} body occurrences, {money_left} files with rewritable money figures")
-    return 1 if money_left else 0
+    return 1 if money_left else 0  # a skipped file still holds its rewritable figure, so it FAILs
 
 
 if __name__ == "__main__":

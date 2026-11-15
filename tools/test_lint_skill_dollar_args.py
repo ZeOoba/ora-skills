@@ -1,6 +1,8 @@
 """Tests for tools/lint_skill_dollar_args.py (stdlib unittest; synthetic fixtures only)."""
 import contextlib
 import io
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -56,6 +58,33 @@ class FixBody(unittest.TestCase):
         self.assertEqual(L.fix_body("a $1\r\nb\r\n"), "a USD 1\r\nb\r\n")
 
 
+    def test_edge_inputs_not_mangled(self):  # merge-gate F-013 / F-020
+        D = "$"
+        cases = {
+            "\\" + D + "5 literal": "\\" + D + "5 literal",                 # escaped dollar sign: left
+            "fee A" + D + "5M": "fee AUD 5M",                               # non-US currency keeps its code
+            "NZ" + D + "2 and HK" + D + "3": "NZD 2 and HKD 3",
+            "x ``a " + D + "5 b`` y": "x ``a " + D + "5 b`` y",             # double-backtick code span
+            "rows " + D + "5:" + D + "9": "rows " + D + "5:" + D + "9",     # whole-row range
+            "=A1+B" + D + "2": "=A1+B" + D + "2",                           # formula context via '+'
+            "=SUM(A1,B" + D + "2)": "=SUM(A1,B" + D + "2)",                 # via ','
+            "=A1-B" + D + "2": "=A1-B" + D + "2",                           # via '-'
+            "=ABCD" + D + "5": "=ABCD USD 5",                               # 4 capitals: not a column
+            "Sheet!B" + D + "5": "Sheet!B" + D + "5",                       # via '!'
+            "(TI" + D + "4/SF)": "(TI USD 4/SF)",                           # prose: rewritten
+            "prose " + D + "0 fee": "prose USD 0 fee",
+        }
+        for src, want in cases.items():
+            self.assertEqual(L.fix_body(src + "\n"), want + "\n", src)
+
+    def test_mismatched_fence_marker_does_not_close(self):
+        D = "$"
+        body = "```\n~~~\nx " + D + "4\n```\nafter " + D + "4\n"
+        self.assertEqual(L.fix_body(body), "```\n~~~\nx " + D + "4\n```\nafter USD 4\n")
+        body = "  ~~~\nx " + D + "4\n  ~~~\n"                     # indented fence is still a fence
+        self.assertEqual(L.fix_body(body), body)
+
+
 class Frontmatter(unittest.TestCase):
     def test_split(self):
         fm, body = L.split_frontmatter(FM + "# T\n$5\n")
@@ -82,6 +111,9 @@ class Cli(unittest.TestCase):
         self.assertIn("FAIL", out)
         code, out = _run(d, "--fix")
         self.assertEqual(code, 0, out)
+        self.assertIn("FIXED", out)
+        self.assertIn("0 files, 0 body occurrences", out)      # the post-fix rescan, not the pre-fix scan
+        self.assertNotIn("WARN", out)
         self.assertEqual((d / "a/SKILL.md").read_bytes().decode(), FM + "# A\nTI USD 8.00/SF\r\n")
         before = (d / "a/SKILL.md").read_bytes()
         _run(d, "--fix")
@@ -117,8 +149,53 @@ class Cli(unittest.TestCase):
         self.assertEqual((d / "a/SKILL.md").read_text(encoding="utf-8"), fm + "# A\n")
         self.assertIn("1 in frontmatter", out)
 
+    def _git(self, d, *args):
+        env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
+                   GIT_COMMITTER_EMAIL="t@t")
+        subprocess.run(["git", *args], cwd=d, check=True, capture_output=True, env=env)
+
+    def test_fix_skips_uncommitted_files_unless_asked(self):  # merge-gate F-011
+        d = self._tree({"a/SKILL.md": FM + "# A\nok\n", "b/SKILL.md": FM + "# B\nTI $8/SF\n"})
+        self._git(d, "init", "-q")
+        self._git(d, "add", "a/SKILL.md", "b/SKILL.md")
+        self._git(d, "commit", "-qm", "base")
+        (d / "a/SKILL.md").write_text(FM + "# A\nWIP from another session: budget $750K\n", encoding="utf-8")
+        code, out = _run(d, "--fix")
+        self.assertEqual(code, 1, out)
+        self.assertIn("SKIPPED(uncommitted changes)", out)
+        self.assertIn("budget $750K", (d / "a/SKILL.md").read_text(encoding="utf-8"))   # untouched
+        self.assertIn("TI USD 8/SF", (d / "b/SKILL.md").read_text(encoding="utf-8"))   # committed: fixed
+        code, out = _run(d, "--fix", "--include-dirty")
+        self.assertEqual(code, 0, out)
+        self.assertIn("budget USD 750K", (d / "a/SKILL.md").read_text(encoding="utf-8"))
+
+    def test_fix_refuses_a_file_changed_during_the_fix(self):  # merge-gate F-012
+        d = self._tree({"a/SKILL.md": FM + "# A\nTI $8/SF\n"})
+        real = L.fix_body
+
+        def racing(body):
+            (d / "a/SKILL.md").write_text(FM + "# A\nTI $8/SF\nB's line\n", encoding="utf-8")
+            return real(body)
+        L.fix_body = racing
+        try:
+            code, out = _run(d, "--fix")
+        finally:
+            L.fix_body = real
+        self.assertEqual(code, 1, out)
+        self.assertIn("SKIPPED(changed during fix)", out)
+        self.assertIn("B's line", (d / "a/SKILL.md").read_text(encoding="utf-8"))
+        self.assertEqual([p.name for p in (d / "a").iterdir()], ["SKILL.md"])   # no temp file left
+
+
     def test_missing_root(self):
         self.assertEqual(L.main([str(Path(tempfile.mkdtemp()) / "nope")]), 2)
+
+
+class RepoTree(unittest.TestCase):
+    def test_repo_skill_bodies_have_no_rewritable_dollar_figures(self):  # the lint, in the local gate (F-015)
+        root = Path(__file__).resolve().parent.parent
+        code, out = _run(root)
+        self.assertEqual(code, 0, out)
 
 
 if __name__ == "__main__":
