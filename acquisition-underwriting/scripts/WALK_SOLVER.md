@@ -1,6 +1,6 @@
 # ORA Walk-Price Solver
 
-Takes an offering memorandum (OM) to ORA's walk price in under a second, the same way every time. The solver inverts the acquisition-underwriting STAGE 1 floors (v4.49 / RCT v03) in closed form and reports which floor binds.
+Takes an offering memorandum (OM) to ORA's walk price in under a second, the same way every time. The solver inverts the acquisition-underwriting STAGE 1 floors (v4.53 / RCT v03) in closed form and reports which floor binds.
 
 ## Why it exists
 
@@ -10,9 +10,9 @@ Every walk price used to be re-derived by hand or by an LLM from a 395-line doct
 
 | Leg | Max price such that… |
 |---|---|
-| Basis | all-in ≤ (1 − vintage floor 65%→60%) × (RCT LOW × construction multiplier × SF + land) |
+| Basis | all-in − credited land ≤ (1 − vintage floor 65%→60%) × (RCT LOW × construction multiplier × SF); credited land = MIN(market land value, 60% × all-in) (v4.53) |
 | Yield | stabilized NOI (net of reserves) ÷ all-in ≥ 8.0% |
-| IRR | 10-yr **unlevered** IRR ≥ max(10%, UST + 550 bps), +100 bps if majority-vacant |
+| IRR | 10-yr **unlevered** IRR ≥ max(10%, UST + 550 bps) + stacked add-ons (v4.53): +100 majority-vacant, +100 single tenant / tenant >50% of rent, +50 tertiary market (Grand Rapids, Richmond, Des Moines) or satellite, +50 environmental-heavy use without a clean Phase II, +100 new operating competency |
 
 `all-in = price × 1.02 + CapEx + lease-up carry`. **Walk = the lowest leg.** All floors are flags, not kills (Ruling 5).
 
@@ -31,10 +31,10 @@ Run from `acquisition-underwriting/scripts/`:
 python -m ora_walk deal.json --fetch-ust          # live FRED DGS10 30-day avg (no key, no user data sent)
 python -m ora_walk deal.json --ust 0.0452         # supplied UST (cite source/date)
 python -m ora_walk walk_examples/example_portfolio.json --ust 0.0452 --json
-python test_walk_solver.py                        # 60 tests; every doctrine constant pinned
+python test_walk_solver.py                        # 92 tests; every doctrine constant pinned
 ```
 
-`ora_walk/doctrine.py` pins SKILL.md v4.52 (v4.46 through v4.52 changed no governor or scored constant; v4.51 was wording only; v4.52 mirrors the Rollover Block tables; v4.49 moved the RCT figures to the private `rct-table.local.json`; the values date from v4.45). Any SKILL.md version that changes a constant mirrored there must update `doctrine.py` and the `DoctrinePins` tests in the same PR.
+`ora_walk/doctrine.py` pins SKILL.md v4.53 (v4.53 added the 60% land-credit cap, the 3-comp minimum and the IRR add-ons; v4.46 through v4.52 changed no governor or scored constant; v4.51 was wording only; v4.52 mirrors the Rollover Block tables; v4.49 moved the RCT figures to the private `rct-table.local.json`). Any SKILL.md version that changes a constant mirrored there must update `doctrine.py` and the `DoctrinePins` tests in the same PR.
 
 Deal fields (see `ora_walk/solver.py: Deal`): `name, sf, stabilized_noi` (pre-reserves, stabilization-year $), plus optional:
 - Location and building:
@@ -42,7 +42,8 @@ Deal fields (see `ora_walk/solver.py: Deal`): `name, sf, stabilized_noi` (pre-re
   - `year_built`, `renovation_spend`, `renovation_year`: drive the R% effective vintage. An asserted `effective_vintage` can only tighten it.
   - `construction_type`: tilt-up, precast, cmu, brick, hybrid or pemb. Null means unknown and gets the strictest PEMB multiplier. There is no numeric override.
   - `adders`: named entries from the SKILL.md schedule. site_work and paving_lighting never stack.
-  - `land_value`: Ruling 4, $0 until the FEMA determination lands.
+  - `market_land_value`, `land_comp_count`, `land_flood_cleared` (v4.53): land is credited only with ≥3 executed land comps and a flood determination that clears it (Ruling 4), capped at 60% of all-in. Never an assessor land field. Missing → `[DATA-GAP: land]`, USD 0.
+  - IRR add-ons (v4.53): `single_tenant`, `satellite`, `environmental_heavy_use` (lifted by `clean_phase_ii`), `new_operating_competency`. Each is true / false / null; null = not established, flagged DATA-GAP, add-on not applied (Gabriel ruling 2026-11-14). The tertiary add-on is derived from `market`.
   - `vacant_sf_at_close`: drives the majority-vacant premium.
 - Cost and lease-up: `capex, lease_up_carry, in_place_noi, stabilization_year`.
 - Pricing and exit: `ask_price, majority_vacant, exit_cap, sale_cost_pct, reserves_psf`.
@@ -110,7 +111,7 @@ In a portfolio, each building is re-tested at its walk plus its pro-rata share o
 | Market without an exit cap | Uses 7.75% and flags it. |
 | Reserves | Deducts $0.15/SF before both YoC and IRR. |
 | Lease-up carry | Taken at t0. |
-| Land | $0 unless supplied. |
+| Land | USD 0 unless ≥3 land comps and a cleared flood determination are supplied; flagged `[DATA-GAP: land]` / `[DATA-GAP: land comps]` / Ruling 4. |
 
 ## Governance
 
