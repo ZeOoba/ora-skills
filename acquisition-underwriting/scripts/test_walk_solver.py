@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ora_walk import doctrine as D  # noqa: E402
 from ora_walk import rct_table  # noqa: E402
 from ora_walk.solver import (  # noqa: E402
-    Deal, annual_debt_constant, irr, irr_floor, loan_balance, noi_path, npv, solve,
+    Deal, annual_debt_constant, credited_land, irr, irr_floor, loan_balance, max_allin_basis, noi_path, npv, solve,
     solve_portfolio, vintage_floor,
 )
 
@@ -40,7 +40,7 @@ def base(**kw):
 
 
 class DoctrinePins(unittest.TestCase):
-    """Literal values from SKILL.md v4.49 (constants unchanged since v4.45) — any drift fails (Hard Invariant 4 for governors)."""
+    """Literal values from SKILL.md v4.53 (v4.53 adds the land-credit cap and the IRR add-ons; governor constants unchanged since v4.45) — any drift fails (Hard Invariant 4 for governors)."""
     def test_governors(self):
         self.assertEqual((D.DSCR_FLOOR, D.PER_PROPERTY_LTV_CEILING, D.AGGREGATE_LTV_CEILING), (1.25, 0.65, 0.40))
         self.assertEqual((D.YOC_FLOOR, D.IRR_FLOOR_MIN, D.IRR_FLOOR_UST_SPREAD, D.MAJORITY_VACANT_PREMIUM),
@@ -50,6 +50,18 @@ class DoctrinePins(unittest.TestCase):
         self.assertEqual((D.RESERVES_PSF, D.EXPENSE_GROWTH, D.MARKET_RENT_GROWTH), (0.15, 0.03, 0.025))
         self.assertEqual(D.LEASE_UP_TI_PSF, 8.00)  # Lease-Up Assumption Block TI default
         self.assertEqual(D.STRUCTURAL_VACANCY, 0.05)  # Suite-Level Block vacancy-line floor
+
+    def test_rollover_block(self):  # SKILL.md Suite-Level Rollover & Credit Block (a)/(b); Lease-Up Block free rent
+        inf = float("inf")
+        self.assertEqual(D.RENEWAL_PROB_BY_SF, ((5_000, 0.65), (10_000, 0.70), (25_000, 0.72), (inf, 0.75)))
+        self.assertEqual(D.ROLLOVER_DOWNTIME_BY_SF, ((10_000, 5), (25_000, 9), (inf, 12)))
+        self.assertEqual(D.LEASE_UP_FREE_MONTHS, 2)
+
+    def test_v453_land_and_irr_addons(self):  # SKILL.md v4.53 STAGE 1 Basis + IRR floors (RE-4.53-1, RE-4.53-2)
+        self.assertEqual((D.LAND_CREDIT_CAP, D.LAND_COMP_MIN), (0.60, 3))
+        self.assertEqual((D.SINGLE_TENANT_PREMIUM, D.TERTIARY_MARKET_PREMIUM, D.ENVIRONMENTAL_PREMIUM,
+                          D.NEW_COMPETENCY_PREMIUM), (0.01, 0.005, 0.005, 0.01))
+        self.assertEqual(D.TERTIARY_MARKETS, {"Grand Rapids MI", "Richmond VA", "Des Moines IA"})
 
     def test_exit_caps(self):  # SKILL.md UNDERWRITING CONVENTIONS exit cap
         self.assertEqual(D.EXIT_CAPS, {
@@ -217,7 +229,7 @@ class Vintage(unittest.TestCase):
 class LooserThanDoctrineGuards(unittest.TestCase):
     def test_non_finite_inputs_rejected(self):
         nan, inf = float("nan"), float("inf")
-        for f in ("sf", "stabilized_noi", "capex", "lease_up_carry", "land_value", "reserves_psf",
+        for f in ("sf", "stabilized_noi", "capex", "lease_up_carry", "market_land_value", "reserves_psf",
                   "sale_cost_pct", "noi_growth", "ask_price", "exit_cap"):
             for bad in (nan, inf):
                 with self.assertRaises(ValueError, msg=(f, bad)):
@@ -265,12 +277,32 @@ class LooserThanDoctrineGuards(unittest.TestCase):
         os.unlink(fh.name)
         self.assertIn("DSCR @65% LTV —", buf.getvalue())
 
-    def test_land_credit_flagged(self):
-        self.assertTrue(any("Ruling 4" in f for f in solve(base(land_value=500_000), UST).flags))
-        self.assertFalse(any("Ruling 4" in f for f in solve(base(), UST).flags))
+    def test_land_credit_gates(self):
+        # v4.53: missing value -> DATA-GAP land; < 3 comps -> DATA-GAP land comps; no flood clearance -> Ruling 4.
+        # Every one of them credits $0, so the basis leg equals the no-land leg.
+        no_land = solve(base(), UST)
+        self.assertTrue(any(f.startswith("[DATA-GAP: land]") for f in no_land.flags))
+        for kw, tag in ((dict(market_land_value=500_000, land_comp_count=2, land_flood_cleared=True),
+                         "[DATA-GAP: land comps]"),
+                        (dict(market_land_value=500_000, land_comp_count=3), "Ruling 4"),
+                        (dict(market_land_value=500_000, land_flood_cleared=True), "[DATA-GAP: land comps]")):
+            r = solve(base(**kw), UST)
+            self.assertTrue(any(f.startswith(tag) for f in r.flags), kw)
+            self.assertAlmostEqual(r.legs["basis"], no_land.legs["basis"], msg=kw)
+        ok = solve(base(market_land_value=500_000, land_comp_count=3, land_flood_cleared=True), UST)
+        self.assertAlmostEqual(ok.legs["basis"] - no_land.legs["basis"], 500_000 / 1.02, places=4)
+        # review C4: the reported credits tie to the legs
+        self.assertAlmostEqual(ok.floors["land_credit_at_basis_leg"], 500_000)
+        walk_allin = ok.walk_price * 1.02
+        self.assertAlmostEqual(ok.floors["land_credit_at_walk"], min(500_000, 0.60 * walk_allin))
+        self.assertFalse(any("DATA-GAP: land" in f or "Ruling 4" in f for f in ok.flags))
+        with self.assertRaises(ValueError):
+            solve(base(land_comp_count=-1), UST)
+        with self.assertRaises(ValueError):
+            solve(base(land_flood_cleared="yes"), UST)
 
     def test_negative_inputs_rejected(self):
-        for f in ("capex", "lease_up_carry", "land_value", "reserves_psf", "sale_cost_pct", "renovation_spend"):
+        for f in ("capex", "lease_up_carry", "market_land_value", "reserves_psf", "sale_cost_pct", "renovation_spend"):
             with self.assertRaises(ValueError, msg=f):
                 solve(base(**{f: -1}), UST)
 
@@ -298,7 +330,8 @@ class LooserThanDoctrineGuards(unittest.TestCase):
         r = solve(base(vacant_sf_at_close=30_000), UST)
         looser = [f for f in r.flags if f.startswith("LOOSER THAN DOCTRINE")]
         self.assertEqual(len(looser), 2)
-        r = solve(base(vacant_sf_at_close=30_000, in_place_noi=0, stabilization_year=2, lease_up_carry=245_000), UST)
+        r = solve(base(vacant_sf_at_close=30_000, in_place_noi=0, stabilization_year=2, lease_up_carry=245_000,
+                       lease_expiry_month=200), UST)  # v4.52: lease runs past the hold -> no rollover flag
         self.assertFalse(any(f.startswith("LOOSER THAN DOCTRINE") for f in r.flags))
         # majority (not fully) vacant, stabilized at close -> only the stabilization flag
         r = solve(base(vacant_sf_at_close=20_000), UST)
@@ -426,6 +459,144 @@ class LooserThanDoctrineGuards(unittest.TestCase):
             solve(base(stabilization_year=10, in_place_noi=0), UST)
 
 
+class LandAtMarket(unittest.TestCase):
+    """v4.53 RE-4.53-1: all-in - MIN(L, 60% x all-in) <= (1 - floor) x improvements LOW."""
+    def test_cap_and_inequality_tight_at_walk(self):
+        B = 0.9 * P_COL * 30_000
+        for L in (0, 100_000, 1_000_000, 2_000_000, 10_000_000):
+            a = max_allin_basis(B, 0.65, L)
+            self.assertAlmostEqual(a - credited_land(a, L), 0.35 * B, places=4)
+            self.assertLessEqual(credited_land(a, L), 0.60 * a + 1e-9)
+            # one dollar more all-in breaks the inequality
+            self.assertGreater(a + 1 - credited_land(a + 1, L), 0.35 * B)
+
+    def test_reported_credits_tie_when_cap_binds(self):
+        # Round-3 review: every reported land-credit field must equal 60% x its own all-in once the cap binds,
+        # all-in including the 2% closing, CapEx and carry.
+        capex, carry, land = 100_000, 20_000, 5_000_000
+        r = solve(base(capex=capex, lease_up_carry=carry, ask_price=3_000_000, market_land_value=land,
+                       land_comp_count=3, land_flood_cleared=True), UST)
+        B = 0.9 * P_COL * 30_000
+        walk_allin = r.walk_price * 1.02 + capex + carry
+        self.assertLess(0.60 * walk_allin, land)                      # the cap binds at walk
+        self.assertAlmostEqual(r.floors["land_credit_at_walk"], 0.60 * walk_allin, places=4)
+        self.assertAlmostEqual(r.floors["land_credit_at_basis_leg"], 0.60 * (0.35 * B / 0.4), places=4)
+        ask_allin = 3_000_000 * 1.02 + capex + carry
+        self.assertAlmostEqual(r.ask["ask_land_credit"], 0.60 * ask_allin, places=4)
+
+    def test_cap_binds_on_land_heavy_rows(self):
+        B = 0.9 * P_COL * 30_000
+        self.assertAlmostEqual(max_allin_basis(B, 0.65, 5 * B), 0.35 * B / 0.4)
+
+    def test_discount_measured_on_improvements_only(self):
+        r = solve(base(ask_price=2_000_000, market_land_value=400_000, land_comp_count=4,
+                       land_flood_cleared=True), UST)
+        allin = 2_000_000 * 1.02
+        self.assertAlmostEqual(r.ask["ask_land_credit"], 400_000)
+        self.assertAlmostEqual(r.ask["ask_discount_to_replacement"], 1 - (allin - 400_000) / (0.9 * P_COL * 30_000))
+        self.assertAlmostEqual(r.floors["replacement_total"], 0.9 * P_COL * 30_000)
+
+    def test_denominator_sensitive_uses_improvements_discount(self):
+        # Review C3: a land-credited ask that is "near" on the improvements-only discount but far on the old
+        # all-in / replacement discount must flag; the old formula would miss it.
+        B = 0.9 * P_COL * 30_000
+        land = 1_200_000                   # below the 60% cap at this all-in
+        allin = 0.35 * B + land            # exactly on the floor once land is credited
+        price = allin / 1.02
+        r = solve(base(stabilized_noi=150_000, ask_price=price, market_land_value=land, land_comp_count=3,
+                       land_flood_cleared=True), UST)
+        self.assertLess(land, 0.60 * allin)
+        for denom in (B, P_COL * 30_000):                 # old formula, at LOW and at POINT: not "near", no flip
+            self.assertGreater(abs((1 - allin / denom) - 0.65), 0.05)
+            self.assertLess(1 - allin / denom, 0.65)
+        self.assertTrue(any(f.startswith("DENOMINATOR-SENSITIVE at ask") for f in r.flags))
+        # both the LOW and the POINT discount in the flag are improvements-only
+        d_point = 1 - (allin - land) / (P_COL * 30_000)
+        flag = next(f for f in r.flags if f.startswith("DENOMINATOR-SENSITIVE at ask"))
+        self.assertIn(f"{0.65:.1%} (LOW) / {d_point:.1%} (POINT)", flag)
+
+    def test_golden_kc_pemb_1974_land_comps_tbd(self):
+        # RE-4.53-1 incident row (2026-11-14): KC, 7,000 SF PEMB (x0.88), built 1974, $1.3M ask, land comps TBD.
+        # Synthetic RCT figures only (public repo). No NOI disclosed -> Yield = 0 by convention.
+        p_kc = P["Kansas City MO"]
+        d = Deal(name="KC PEMB 1974 (RE-4.53-1)", sf=7_000, stabilized_noi=0, market="Kansas City MO",
+                 year_built=1974, construction_type="pemb", ask_price=1_300_000, single_tenant=False)
+        r = solve(d, UST)
+        low = 0.9 * p_kc * 0.88 * 7_000
+        self.assertAlmostEqual(r.floors["construction_multiplier"], 0.88)
+        self.assertAlmostEqual(r.floors["basis_floor_pct"], 0.65)
+        self.assertAlmostEqual(r.legs["basis"], 0.35 * low / 1.02, places=4)
+        self.assertTrue(any(f.startswith("[DATA-GAP: land]") for f in r.flags))
+        self.assertAlmostEqual(r.ask["ask_discount_to_replacement"], 1 - 1_300_000 * 1.02 / low)
+        self.assertIn("basis", r.ask["floors_flagged_at_ask"])
+        # Once >= 3 cleared comps land, the credit is capped at 60% of all-in.
+        big = solve(Deal(**{**d.__dict__, "market_land_value": 5_000_000, "land_comp_count": 3,
+                            "land_flood_cleared": True}), UST)
+        self.assertAlmostEqual(big.legs["basis"], 0.35 * low / 0.4 / 1.02, places=4)
+
+
+class RiskTieredIrr(unittest.TestCase):
+    """v4.53 RE-4.53-2: MAX(10%, UST + 550) + stacked add-ons."""
+    def test_primitive_stacks(self):
+        self.assertAlmostEqual(irr_floor(0.04, False, single_tenant=True), 0.11)
+        self.assertAlmostEqual(irr_floor(0.05, True, single_tenant=True, tertiary=True, environmental=True,
+                                         new_competency=True), 0.105 + 0.04)
+
+    def test_deal_fields_drive_addons(self):
+        f = lambda **kw: solve(base(**{"single_tenant": False, **kw}), UST).floors["irr_floor"]  # noqa: E731
+        self.assertAlmostEqual(f(single_tenant=True), 0.11)
+        self.assertAlmostEqual(f(market="Grand Rapids MI"), 0.105)
+        self.assertAlmostEqual(f(market="Louisville KY"), 0.10)   # entry, not tertiary under RE-4.53-2
+        self.assertAlmostEqual(f(satellite=True), 0.105)
+        self.assertAlmostEqual(f(environmental_heavy_use=True), 0.105)
+        self.assertAlmostEqual(f(environmental_heavy_use=True, clean_phase_ii=True), 0.10)
+        self.assertAlmostEqual(f(new_operating_competency=True), 0.11)
+        r = solve(base(single_tenant=True, market="Des Moines IA"), UST)
+        self.assertAlmostEqual(r.floors["irr_floor"], 0.115)
+        self.assertEqual([k for k, _ in r.floors["irr_floor_addons"]],
+                         ["single tenant / tenant >50% of rent", "tertiary market"])
+        self.assertAlmostEqual(r.floors["irr_floor_base"], 0.10)       # base excludes the add-ons
+
+    def test_unstated_addon_inputs_flagged_not_applied(self):
+        # Gabriel ruling 2026-11-14: satellite / environmental use / new competency unstated -> DATA-GAP, no add-on.
+        r = solve(base(single_tenant=False), UST)
+        for tag in ("DATA-GAP: satellite", "DATA-GAP: environmental use", "DATA-GAP: operating competency"):
+            self.assertTrue(any(tag in f for f in r.flags), tag)
+        self.assertAlmostEqual(r.floors["irr_floor"], 0.10)
+        r = solve(base(single_tenant=False, satellite=False, environmental_heavy_use=False,
+                       new_operating_competency=False), UST)
+        self.assertFalse(any("DATA-GAP: satellite" in f or "DATA-GAP: environmental" in f
+                             or "DATA-GAP: operating" in f for f in r.flags))
+        # a tertiary market needs no satellite answer
+        r = solve(base(market="Des Moines IA", single_tenant=False), UST)
+        self.assertFalse(any("DATA-GAP: satellite" in f for f in r.flags))
+        with self.assertRaises(ValueError):
+            solve(base(satellite="no"), UST)
+
+    def test_unknown_tenancy_flagged_not_applied(self):
+        r = solve(base(), UST)
+        self.assertTrue(any("DATA-GAP: tenant concentration" in f for f in r.flags))
+        self.assertAlmostEqual(r.floors["irr_floor"], 0.10)
+        # no vacancy exemption (ruling 2026-11-14): a fully vacant building still has to answer it
+        r = solve(base(in_place_noi=0, stabilization_year=2, vacant_sf_at_close=30_000, lease_up_carry=400_000), UST)
+        self.assertTrue(any("DATA-GAP: tenant concentration" in f for f in r.flags))
+
+    def test_bad_types_on_addon_inputs_rejected(self):
+        # review C4: a string must never lift or skip an add-on silently
+        for kw in (dict(clean_phase_ii="false"), dict(environmental_heavy_use=""), dict(satellite=0),
+                   dict(new_operating_competency="yes"), dict(single_tenant=1), dict(land_flood_cleared=None)):
+            with self.assertRaises(ValueError, msg=kw):
+                solve(base(**kw), UST)
+
+    def test_portfolio_floor_is_highest_building_floor(self):
+        p = solve_portfolio([base(name="A", single_tenant=False),
+                             base(name="B", single_tenant=True, market="Richmond VA")], UST)
+        self.assertAlmostEqual(p["portfolio_irr_floor"], 0.115)
+
+    def test_off_cluster_flagged(self):
+        self.assertTrue(any(f.startswith("Off-cluster") for f in solve(base(market="Nowhere"), UST).flags))
+
+
 class Refi(unittest.TestCase):
     def test_dscr_floor_and_breakeven(self):
         r = solve(base(), 0.052)
@@ -511,6 +682,146 @@ class AskAndPortfolio(unittest.TestCase):
         self.assertTrue(any(f.startswith("B: [DATA-GAP: construction type]") for f in p["flags"]))
         p = solve_portfolio([base(name="A"), base(name="B", majority_vacant=True)], UST)
         self.assertAlmostEqual(p["portfolio_irr_floor"], 0.11)
+
+
+class RolloverAndLeaseUpTiming(unittest.TestCase):
+    """v4.52: partial-year lease-up and one expected-value rollover (Rollover Block)."""
+
+    def _lease_up(self, **kw):
+        d = dict(vacant_sf_at_close=30_000, in_place_noi=0, stabilization_year=3, lease_up_carry=300_000)
+        d.update(kw)
+        return base(**d)
+
+    def test_lease_up_without_rollover_flagged(self):
+        r = solve(self._lease_up(), UST)
+        self.assertTrue(any("no modeled rollover" in f for f in r.flags))
+
+    def test_partial_year_cash_start_lowers_irr_leg_vs_linear_ramp(self):
+        lin = solve(self._lease_up(lease_expiry_month=200), UST)
+        part = solve(self._lease_up(lease_expiry_month=200, cash_rent_start_month=24), UST)
+        self.assertLess(part.legs["irr"], lin.legs["irr"])
+        self.assertAlmostEqual(part.legs["yield"], lin.legs["yield"], places=2)  # stabilized year unchanged
+
+    def test_rollover_lowers_irr_leg_and_flags_zero_cost(self):
+        no = solve(self._lease_up(lease_expiry_month=200), UST)
+        r0 = solve(self._lease_up(lease_expiry_month=81), UST)
+        self.assertTrue(any("rollover_cost $0" in f for f in r0.flags))
+        r = solve(self._lease_up(lease_expiry_month=81, rollover_cost=150_000), UST)
+        self.assertLess(r0.legs["irr"], no.legs["irr"])
+        self.assertLess(r.legs["irr"], r0.legs["irr"])
+
+    def test_rollover_defaults_by_sf_band(self):
+        from ora_walk.solver import _renewal_defaults
+        self.assertEqual(_renewal_defaults(base(sf=30_000)), (0.75, 14))
+        self.assertEqual(_renewal_defaults(base(sf=4_000)), (0.65, 7))
+
+    def test_rollover_max_rule_not_additive(self):
+        from ora_walk.solver import noi_path
+        d = self._lease_up(lease_expiry_month=81, renewal_prob=0.95, rollover_downtime_months=12)
+        p, q = noi_path(d), noi_path(self._lease_up(lease_expiry_month=200))
+        # 5% x 3/12 and 5% x 9/12 expected downtime both sit under the 5% structural floor -> no haircut
+        self.assertAlmostEqual(p[6], q[6]); self.assertAlmostEqual(p[7], q[7])
+
+    def test_rollover_band_boundaries(self):
+        from ora_walk.solver import _renewal_defaults
+        expect = {4_999: (0.65, 7), 5_000: (0.70, 7), 9_999: (0.70, 7), 10_000: (0.72, 11),
+                  24_999: (0.72, 11), 25_000: (0.75, 14)}
+        for sf, want in expect.items():
+            self.assertEqual(_renewal_defaults(base(sf=sf)), want, msg=sf)
+
+    def test_rollover_year_and_cost_pinned(self):
+        from ora_walk.solver import cash_path
+        d = self._lease_up(lease_expiry_month=81, rollover_cost=150_000)   # month 81 -> year 7
+        n, c = noi_path(d), cash_path(d)
+        for t in range(11):
+            self.assertAlmostEqual(c[t], n[t] - (150_000 if t == 6 else 0), msg=t)
+        # The cost lands in the year downtime starts (month expiry + 1): expiry 83 -> month 84 (year 7),
+        # expiry 84 -> month 85 (year 8).
+        d = self._lease_up(lease_expiry_month=83, rollover_cost=1)
+        self.assertAlmostEqual(cash_path(d)[6], noi_path(d)[6] - 1)
+        d = self._lease_up(lease_expiry_month=84, rollover_cost=1)
+        self.assertAlmostEqual(cash_path(d)[6], noi_path(d)[6])
+        self.assertAlmostEqual(cash_path(d)[7], noi_path(d)[7] - 1)
+
+    def test_rollover_haircut_exact_above_floor(self):
+        # 30,000 SF defaults: renewal 75%, downtime 12 + 2 free = 14 months. Expiry month 72 -> months 73-84
+        # (12 in year 7) and 85-86 (2 in year 8). f7 = 0.25 x 12/12, f8 = 0.25 x 2/12 (under the 5% floor).
+        d = self._lease_up(lease_expiry_month=72)
+        roll, flat = noi_path(d), noi_path(d, rollover=False)
+        f7 = 0.25
+        self.assertAlmostEqual(roll[6], flat[6] * (1 - (f7 - 0.05) / 0.95))
+        self.assertAlmostEqual(roll[7], flat[7])          # 0.25 x 2/12 = 4.2% < 5% -> no haircut
+        self.assertAlmostEqual(roll[5], flat[5])
+        d = self._lease_up(lease_expiry_month=66)         # months 67-72 (6 in y6) and 73-80 (8 in y7)
+        roll, flat = noi_path(d), noi_path(d, rollover=False)
+        self.assertAlmostEqual(roll[5], flat[5] * (1 - (0.25 * 6 / 12 - 0.05) / 0.95))
+        self.assertAlmostEqual(roll[6], flat[6] * (1 - (0.25 * 8 / 12 - 0.05) / 0.95))
+
+    def test_partial_year_cash_share_exact(self):
+        d = self._lease_up(lease_expiry_month=200, cash_rent_start_month=18)   # year 2: months 18-24 paid
+        self.assertAlmostEqual(noi_path(d)[1], 300_000 * 7 / 12)
+        self.assertAlmostEqual(noi_path(d)[0], 0.0)
+
+    def test_cash_start_with_stabilized_close_rejected(self):
+        with self.assertRaises(ValueError):
+            solve(base(cash_rent_start_month=7), UST)
+        solve(base(cash_rent_start_month=1), UST)  # month 1 is consistent with stabilized at close
+
+    def test_yield_leg_and_refi_ignore_one_time_rollover(self):
+        no = solve(self._lease_up(lease_expiry_month=200), UST)
+        early = solve(self._lease_up(lease_expiry_month=26, renewal_prob=0.0, rollover_cost=100_000), UST)
+        self.assertAlmostEqual(early.legs["yield"], no.legs["yield"], places=2)
+        self.assertAlmostEqual(early.refi["loan"], no.refi["loan"], places=2)
+        self.assertLess(early.legs["irr"], no.legs["irr"])
+
+    def test_exit_year_rollover_is_a_credit_not_capitalized(self):
+        no = solve(self._lease_up(lease_expiry_month=200), UST)
+        y9 = solve(self._lease_up(lease_expiry_month=96, rollover_cost=1), UST)    # year 9, inside the hold
+        y11 = solve(self._lease_up(lease_expiry_month=120), UST)                   # forward (exit) year, no cost
+        loss9, loss11 = no.legs["irr"] - y9.legs["irr"], no.legs["irr"] - y11.legs["irr"]
+        self.assertGreater(loss11, 0.5 * loss9)  # the forward-year rent loss is credited at sale on its own
+        self.assertLess(loss11, 2 * loss9)   # capitalizing it at the exit cap would be ~1/cap (13x) larger
+        c0 = solve(self._lease_up(lease_expiry_month=120), UST)
+        c5 = solve(self._lease_up(lease_expiry_month=120, rollover_cost=500_000), UST)
+        self.assertLess(c5.legs["irr"], c0.legs["irr"])  # forward-year re-leasing cost is credited at sale
+        past = solve(self._lease_up(lease_expiry_month=140, rollover_cost=500_000), UST)
+        self.assertAlmostEqual(past.legs["irr"], no.legs["irr"], places=2)
+        self.assertFalse(any("rollover_cost $0" in f
+                             for f in solve(self._lease_up(lease_expiry_month=140), UST).flags))
+        self.assertTrue(any("rollover_cost $0" in f for f in y11.flags))  # forward year: cost matters, so flag
+
+    def test_exit_credit_equals_forward_year_rent_loss(self):
+        from ora_walk.solver import _reversion
+        d0 = self._lease_up(lease_expiry_month=200)
+        d = self._lease_up(lease_expiry_month=120, rollover_cost=50_000)
+        cap = D.EXIT_CAPS["Columbus OH"]
+        loss = noi_path(d, rollover=False)[10] - noi_path(d)[10]
+        self.assertGreater(loss, 0)
+        self.assertAlmostEqual(_reversion(d0, cap) - _reversion(d, cap), loss + 50_000)
+
+    def test_non_finite_leg_is_an_error_even_past_validation(self):
+        from unittest import mock
+        from ora_walk import solver as S
+        with mock.patch.object(S, "validate", lambda deal: None):  # backstop behind validate()
+            with self.assertRaises(ValueError):
+                solve(self._lease_up(lease_expiry_month=81, rollover_cost=float("nan")), UST)
+
+    def test_non_finite_and_bool_rollover_inputs_rejected(self):
+        for kw in (dict(rollover_cost=float("nan")), dict(rollover_cost=float("inf")), dict(rollover_cost=True),
+                   dict(renewal_prob=float("nan")), dict(renewal_prob=True), dict(rollover_cost="40000")):
+            with self.assertRaises(ValueError, msg=str(kw)):
+                solve(self._lease_up(lease_expiry_month=81, **kw), UST)
+
+    def test_levered_irr_reflects_rollover_cost(self):
+        r0 = solve(self._lease_up(lease_expiry_month=81), UST)
+        r1 = solve(self._lease_up(lease_expiry_month=81, rollover_cost=400_000), UST)
+        self.assertLess(r1.refi["levered_irr_reported"], r0.refi["levered_irr_reported"])
+
+    def test_bad_rollover_inputs_rejected(self):
+        for kw in (dict(renewal_prob=1.5), dict(lease_expiry_month=0), dict(rollover_cost=-1),
+                   dict(cash_rent_start_month=40)):
+            with self.assertRaises(ValueError, msg=str(kw)):
+                solve(self._lease_up(**kw), UST)
 
 
 if __name__ == "__main__":

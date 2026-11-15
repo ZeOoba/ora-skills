@@ -53,9 +53,11 @@ def render(res: dict, ust_note: str) -> str:
         "",
         "| Leg | Max price | Floor |",
         "|---|---:|---|",
-        f"| Basis | {_usd(L['basis'])} | {_pct(F['basis_floor_pct'])} discount to RCT LOW ${F['rct_low_psf_adjusted']:,.2f}/SF (vintage {F['vintage_used'] or 'unknown'}; construction ×{F['construction_multiplier']:.2f}, adders ${F['adders_psf']:.0f}/SF) |",
+        f"| Basis | {_usd(L['basis'])} | {_pct(F['basis_floor_pct'])} discount to RCT LOW ${F['rct_low_psf_adjusted']:,.2f}/SF (vintage {F['vintage_used'] or 'unknown'}; construction ×{F['construction_multiplier']:.2f}, adders ${F['adders_psf']:.0f}/SF); improvements only, land credit {_usd(F['land_credit_at_basis_leg'])} at this leg, {_usd(F['land_credit_at_walk'])} at walk (cap 60% of all-in) |",
         f"| Yield | {_usd(L['yield'])} | stabilized YoC {_pct(F['yoc_floor'])} on NOI {_usd(F['stabilized_noi_net'])} (net of reserves) |",
-        f"| IRR (10-yr unlevered) | {_usd(L['irr'])} | {_pct(F['irr_floor'])} · exit cap {_pct(F['exit_cap'])} |",
+        f"| IRR (10-yr unlevered) | {_usd(L['irr'])} | {_pct(F['irr_floor'])} = {_pct(F['irr_floor_base'])} base"
+        + "".join(f" + {v * 1e4:.0f} bps {k}" for k, v in F['irr_floor_addons'])
+        + f" · exit cap {_pct(F['exit_cap'])} |",
         "",
         f"**Refi governor (reported at walk):** rate {_pct(R['refi_rate'])}, constant {_pct(R['debt_constant'])}, "
         f"loan {_usd(R['loan'])} — **{R['binding_constraint']} binds**; DSCR @65% LTV "
