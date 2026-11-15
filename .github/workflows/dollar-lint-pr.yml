@@ -1,0 +1,27 @@
+name: dollar-digit lint (PR merge ref)
+
+# The skill-gates workflow runs on push, so a pull request branched before the dollar-digit rule landed
+# runs its own, older copy of that workflow and never lints its SKILL.md files. This job lints the PR's
+# MERGE ref (the PR as it would land on its base), so a prose "$4.00"-style figure cannot merge with
+# green CI. Adversarial merge gate finding F-019, 2026-11-14.
+#
+# Deliberately hosted-only: pull_request code can come from a fork, and this public repo's self-hosted
+# runner is Gabriel's laptop, so this job never honours the CI_RUNNER toggle. Read-only token, no secrets,
+# and it runs one stdlib script.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  dollar-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: No dollar-digit figures in SKILL.md bodies
+        run: python tools/lint_skill_dollar_args.py .

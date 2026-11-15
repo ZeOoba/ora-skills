@@ -9,7 +9,7 @@ v1.7.1 (2026-11-14): Wording only: dollar figures in the body now read "USD n" w
 
 v1.7 (2026-11-05: building-pad SFHA aligned to Ruling 5 — gate FLAG, not kill; Buy Box citation updated to v1.1) · v1.6 (2026-10-27: Step 5A ordinance-PDF fallback, Step 6 special-exception RE-LEASING FRICTION, Lebanon County / South Londonderry endpoints) · v1.5 (2026-08-24: added Jefferson County KY / Louisville block to references/endpoints.md — LOJIC ArcGIS REST services, verified live against both Knopp Ave and Cane Run Rd) · v1.4 (2026-08-24: Step 6A added - Planned Development (PD/PUD) parcels carry no by-right use table; run the minor-vs-major amendment tier test and capture the post-closing change-of-use trigger) · v1.3 (2026-07-24: mandatory geocode-vs-parcel validation added after a confirmed off-parcel geocode/empty-zoning-result incident; endpoints verified 2026-06-09; batch-write safety rule added 2026-07-12; cross-linked county-parcel-screen's endpoint registry for parcel-geometry lookups 2026-07-20)
 
-# ORA Flood & Zoning DD-Critical Resolution (v1.7)
+# ORA Flood & Zoning DD-Critical Resolution (v1.7.1)
 
 Purpose: convert "FEMA UNK" and "zoning UNK" into sourced determinations at SCREEN stage. Under the Buy Box (acquisition-underwriting STAGE 2.5), any unresolved DD-Critical item caps a deal at T2 WATCH — resolving these two is usually the cheapest score unlock.
 
