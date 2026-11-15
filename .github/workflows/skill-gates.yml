@@ -68,6 +68,12 @@ jobs:
       - name: No tracked Claude memory files (node_type memory / event_log frontmatter)
         run: python tools/skill_ci_gates.py memory-files
 
+      # A skill invoked WITH arguments has every dollar sign followed by digits in its SKILL.md body
+      # replaced by an argument token (constants read as "<word>.00/SF"). Fails on any rewritable money
+      # figure; code spans, fences and $B$5-style references are reported as WARN. Fix with --fix.
+      - name: No dollar-digit money figures in SKILL.md bodies
+        run: python tools/lint_skill_dollar_args.py .
+
       - name: target-markets.json version bump vs base
         env:
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}

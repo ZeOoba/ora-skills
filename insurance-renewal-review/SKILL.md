@@ -3,7 +3,7 @@ name: insurance-renewal-review
 description: "Use when the user says: review insurance policies, insurance renewal review, how has insurance changed, premium history, shop our insurance, self-insure, insurance declarations, coverage changes, deductible options, insurance dashboard — or points at a folder of insurance PDFs/declarations. Also trigger when a folder holds scanned carrier declarations (Erie, Selective, Westchester/Chubb, Mesa, Hartford) and the user asks for trends, comparisons, or a renewal decision, or asks whether the trackers and named insureds match the declarations. Oxford Realty Advisors property insurance renewal review."
 ---
 
-# Insurance Renewal Review — ORA (v2.0.1)
+# Insurance Renewal Review — ORA (v2.0.2)
 
 Codifies the extraction/compare/flag pass built 2026-08-13 and materially extended 2026-08-17 (adding a 7th property, correcting two analytical errors, and reconciling three source workbooks against the declarations).
 
@@ -49,7 +49,7 @@ Additions since v1.1:
 
 ## Step 4 — Build the premium history
 
-- One row per property per policy year: package premium, umbrella premium, combined, YoY %, building limit/TIV, YoY TIV %, rate-per-$100-of-TIV (`=combined/TIV*100`), AOP deductible, basis note. **This decomposition is the whole point** — it separates genuine rate action from exposure growth. Inflation-guard-driven limit increases are NOT rate increases.
+- One row per property per policy year: package premium, umbrella premium, combined, YoY %, building limit/TIV, YoY TIV %, rate-per-USD 100-of-TIV (`=combined/TIV*100`), AOP deductible, basis note. **This decomposition is the whole point** — it separates genuine rate action from exposure growth. Inflation-guard-driven limit increases are NOT rate increases.
 - **Report the like-for-like set separately from the portfolio total.** Only properties with a complete series across every year belong in the CAGR figures. Say which properties those are, in the chart subtitle, every time. A portfolio total that gains or loses a property between years is not a trend.
 - Flag any YoY combined increase that outpaces the TIV increase by a wide margin — that is the push-back signal, not the raw dollar delta.
 - Umbrella premiums moving independently of umbrella limits (limits flat, premium up double digits) is the highest-value anomaly to surface — it recurs across this book.
@@ -93,10 +93,10 @@ Patterns worth naming when found:
 
 If a "Deductible Options" or similar quote tab exists in any tracker workbook, extract it verbatim into its own sheet and compute subtotals by line type using `SUMIFS`.
 
-**Before computing anything, read the header row above the quote columns.** In this book it reads `Option 1 - GL limits $2m/4m` — meaning **every quoted tier is priced with general liability rebased to $2M/$4M**, not held at each policy's current limits. Consequences:
+**Before computing anything, read the header row above the quote columns.** In this book it reads `Option 1 - GL limits $2m/4m` — meaning **every quoted tier is priced with general liability rebased to USD 2M/USD 4M**, not held at each policy's current limits. Consequences:
 
 - For policies currently below that, the credit bundles a limits **upgrade** — the saving is real but is not a pure retention trade.
-- For policies currently **above** it (this book had four labelled $5m/5m and $3m/3m), taking the credit could **cut** liability limits — at one property that would have unwound a $5M/$5M increase bought four months earlier.
+- For policies currently **above** it (this book had four labelled USD 5m/5m and USD 3m/3m), taking the credit could **cut** liability limits — at one property that would have unwound a USD 5M/USD 5M increase bought four months earlier.
 
 Presenting the ladder without this header is the difference between a decision memo and a misleading one. **Get the assumed limits per policy per tier in writing before presenting any saving as achievable.**
 
@@ -116,7 +116,7 @@ Do it on a **like-for-like basis** or not at all:
 - Adjust for **exposure growth between quote and bind.** A quote struck against one term and bound a year later sits on a building limit that has stepped up 4–7%. Step the quoted premium by the TIV change before declaring a variance, and mark the adjustment `[computed]`.
 - State the comparison base explicitly. Two different "current premium" figures for the same policy (a stale tracker figure and the issued figure) produce two different credits and one of them is wrong.
 
-Worked example (2026-08-17): quoted $7,237 at a $25K deductible with GL rebased to $2M/$4M; bound a year later at $7,522 on exactly those terms with the building limit 5.02% higher. Stepping the quote by 5.02% implies ~$7,600 — the policy came in **under** the exposure-adjusted quote. **The carrier's quote held.** An earlier draft of this analysis compared the raw numbers, concluded the credit "came in 47% short," and attributed it to a bundled limits charge. That was wrong in both the arithmetic base and the causal claim. Match limits, adjust exposure, then compare.
+Worked example (2026-08-17): quoted USD 7,237 at a USD 25K deductible with GL rebased to USD 2M/USD 4M; bound a year later at USD 7,522 on exactly those terms with the building limit 5.02% higher. Stepping the quote by 5.02% implies ~USD 7,600 — the policy came in **under** the exposure-adjusted quote. **The carrier's quote held.** An earlier draft of this analysis compared the raw numbers, concluded the credit "came in 47% short," and attributed it to a bundled limits charge. That was wrong in both the arithmetic base and the causal claim. Match limits, adjust exposure, then compare.
 
 ## Step 9 — Reconcile the trackers AND the named-insured schedule
 
@@ -144,7 +144,7 @@ Standard output set for a full review — **both artifacts, every cycle**:
 1. **Premium-history XLSX** — Summary, Coverage Changes, Deductible Options, Data Gaps & Actions, Source Index tabs. Session-output naming (`YYYY-MM-DD_Topic_DocType_v##.xlsx`) in the project's `/outputs/`. Master workbook updated in place; prior version copied to `/outputs/archive/` first (never deleted).
 2. **Interactive HTML dashboard** — self-contained single file, delivered with `SendUserFile` and persisted with `create_artifact` so it survives the session and can be updated in place next cycle. Read the `dataviz` skill before writing any chart code. What this book needs, in order:
    - hero KPI tiles (all-in spend, like-for-like rate change, worst-priced asset, retention already taken, % of book unreviewed, open-item count);
-   - **rate per $100 TIV by property, latest bound term**, with the book-blended rate as a reference line — the chart that makes a $1.4M and a $12.7M building comparable;
+   - **rate per USD 100 TIV by property, latest bound term**, with the book-blended rate as a reference line — the chart that makes a USD 1.4M and a USD 12.7M building comparable;
    - **indexed premium vs. TIV vs. rate** for the like-for-like set — the chart that proves rate from exposure;
    - **small multiples** for per-property premium history. Past ~5 properties a single multi-series line chart fails: with 7 series the categorical palette runs into reserved status colors, and the label stack collides. Facet instead, one panel per property on a shared vertical scale;
    - concentration (premium share vs. value share), umbrella YoY (diverging), the retention ladder, and coverage-change polarity.
@@ -166,6 +166,7 @@ Standard output set for a full review — **both artifacts, every cycle**:
 
 ## Changelog
 
+- v2.0.2 (2026-11-14): Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - v2.0.1 (2026-10-29): Marked `validate_palette.js` as belonging to the external `dataviz` skill. This was a reference-path clarification only (wording; no change to procedures, scored or governor constants): NO change to scored or governor constants.
 - **v2.0 (2026-08-17):** Text-layer test promoted to Step 1 with a producer-string table (assuming OCR wasted a full render pass on a natively-searchable file). Step 7 rewritten around the `Option 1 - GL limits $2m/4m` header trap plus duplicate-row / partial-subtotal / cross-workbook-disagreement checks. New Step 8 (quoted vs. realized, like-for-like) documenting a corrected analytical error. Step 9 split into premium reconciliation and named-insured-by-location reconciliation, with the uninsured-asset check. Step 11 makes the HTML dashboard a standard deliverable and specifies its chart set, the small-multiples threshold, and the palette rule. Added openpyxl traps to Step 4 and an adversarial-verification requirement to QC. Book-coverage metric added to Step 4.
 - v1.1 (2026-08-15): size refactor — Steps 2–3 moved verbatim to `references/ocr-and-extraction-checklist.md`. Fixed a duplicate stacked YAML frontmatter block from v1.0.

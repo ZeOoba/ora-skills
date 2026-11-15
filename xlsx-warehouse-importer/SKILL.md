@@ -4,7 +4,7 @@ description: "Use when a spreadsheet or JSON extract (broker loss runs, PCA/cape
 license: ORA Internal
 ---
 
-# xlsx-to-warehouse importer (v1.0.1)
+# xlsx-to-warehouse importer (v1.0.2)
 
 The importer pattern has been built for assessments, insurance loss runs and dec pages, and is next needed for the PCA register. Reuse it; do not reinvent it. Reference implementation: `oxford-command-center/scripts/import-insurance-data.ts` (read it first, it is the spec). Sibling: `oxford-command-center/scripts/import-assessments.ts`.
 
@@ -35,7 +35,7 @@ scripts/import-<thing>.ts
 
 - **Format failures are rejected and reported, never persisted and never auto-fixed.** Missing required field, wrong type, negative or non-finite money, non-ISO date. A human fixes the source file.
 - **Dates are strict ISO `YYYY-MM-DD`** via `isIsoCalendarDate` (`server/warehouse/placeholder-data.ts`). A US `MM/DD/YYYY` or an Excel serial silently corrupts downstream year extraction. Convert Excel serials in the xlsx reader, then validate; reject anything that is not a real calendar day.
-- Money ceilings share the loader's constant (`MAX_LOSS_EVENT_USD` pattern) so an accepted row is never coerced to $0 on read.
+- Money ceilings share the loader's constant (`MAX_LOSS_EVENT_USD` pattern) so an accepted row is never coerced to USD 0 on read.
 - Cross-field invariants are checked at the boundary (example: `deductible <= coverageLimit`). Do not patch the engine to mask bad input.
 - Source flags travel with the row: `[OCR-UNVERIFIED]`, `[DERIVED]`, Verified = No, Confidence. Import carries flags; it does not fix or drop them.
 - Blank beats inferred. Leave Funding Class `Unknown` and Lease Recovery `Unreviewed`; those are human tags.
@@ -81,4 +81,5 @@ Confidential check before any row naming a deal: roster of record is `hooks/conf
 | `import-pca-register.ts` (planned) | `PCA-Extraction_Register` xlsx | plan: `docs/capital/2026-10-07-pca-capex-ledger-integration-plan.md`; source of record is the xlsx now, Notion later |
 
 ## Changelog
+- v1.0.2 (2026-11-14): Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - v1.0.1 (2026-10-29): Marked importer scripts as living in the oxford-command-center repo. This was a reference-path clarification only (wording; no change to procedures, scored or governor constants): NO change to scored or governor constants.
