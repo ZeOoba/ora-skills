@@ -1,9 +1,12 @@
 """ORA Walk-Price Solver — deterministic inversion of the STAGE 1 floors.
 
 For one building it solves, in closed form, the highest price that still clears each floor:
-  * Basis leg  — all-in <= (1 - vintage floor) x (construction-adjusted RCT LOW x SF + land)
+  * Basis leg  — all-in - credited land <= (1 - vintage floor) x (construction-adjusted RCT LOW x SF),
+                 credited land = MIN(market land value, 60% x all-in)  (v4.53, land at market)
   * Yield leg  — stabilized NOI (net of reserves) / all-in >= 8%
-  * IRR leg    — 10-yr unlevered IRR >= max(10%, UST + 550 bps) [+100 bps majority-vacant]
+  * IRR leg    — 10-yr unlevered IRR >= max(10%, UST + 550 bps) + stacked risk add-ons (v4.53):
+                 +100 majority-vacant, +100 single-tenant/>50% rent, +50 tertiary market or satellite,
+                 +50 environmental-heavy use without a clean Phase II, +100 new operating competency
                  (unlevered cash flows do not depend on price, so NPV(r_floor) = 0 solves exactly)
 where all-in = price x 1.02 + CapEx + lease-up carry. The walk is the lowest leg; that leg binds.
 
@@ -52,7 +55,11 @@ class Deal:
     effective_vintage: Optional[int] = None      # asserted; can only TIGHTEN (capped at the R%-computed vintage)
     construction_type: Optional[str] = None      # tilt-up|precast|cmu|brick|hybrid|pemb; None = unknown (strictest)
     adders: tuple = ()                    # names from doctrine.ADDERS; only features the subject carries
-    land_value: float = 0.0               # Ruling 4: $0 until FEMA determination lands
+    # Land at market (v4.53): from >= 3 executed land comps (same zoning class and submarket, <= 36 months,
+    # $/SF of land), never assessor land fields. None = no grid -> credit $0, [DATA-GAP: land].
+    market_land_value: Optional[float] = None
+    land_comp_count: Optional[int] = None
+    land_flood_cleared: bool = False      # Ruling 4: no land credit until a FEMA/flood determination clears it
     capex: float = 0.0
     lease_up_carry: float = 0.0
     ask_price: Optional[float] = None
@@ -67,6 +74,12 @@ class Deal:
     renewal_prob: Optional[float] = None          # None -> Rollover Block (a) default for the SF band
     rollover_downtime_months: Optional[int] = None  # non-renewal downtime incl. free rent; None -> (b) default + 2 mo free
     rollover_cost: float = 0.0                    # EXPECTED re-leasing TI + LC $ at expiry (renewal/new weighted)
+    # Risk-tiered IRR add-ons (v4.53). None = not established -> flagged, add-on not applied.
+    single_tenant: Optional[bool] = None  # single tenant, or any tenant > 50% of in-place rent
+    satellite: Optional[bool] = None      # satellite of an established cluster (+50 bps, tertiary)
+    environmental_heavy_use: Optional[bool] = None  # IOS, automotive, legacy manufacturing, dry cleaner, UST
+    clean_phase_ii: bool = False          # a clean Phase II in hand lifts the environmental add-on
+    new_operating_competency: Optional[bool] = None  # MHC, multifamily until ORA reaches management scale
 
 
 @dataclass
@@ -96,9 +109,42 @@ def vintage_floor(vintage: Optional[int]) -> float:
     return D.BASIS_FLOOR_OLD - frac * (D.BASIS_FLOOR_OLD - D.BASIS_FLOOR_NEW)
 
 
-def irr_floor(ust: float, majority_vacant: bool) -> float:
+def irr_addons(majority_vacant: bool = False, single_tenant: bool = False, tertiary: bool = False,
+               environmental: bool = False, new_competency: bool = False) -> list:
+    """Risk-tiered add-ons (SKILL.md STAGE 1 IRR floor, v4.53). They stack. Returns [(label, decimal)]."""
+    out = []
+    if majority_vacant:
+        out.append((">50% SF vacant at close", D.MAJORITY_VACANT_PREMIUM))
+    if single_tenant:
+        out.append(("single tenant / tenant >50% of rent", D.SINGLE_TENANT_PREMIUM))
+    if tertiary:
+        out.append(("tertiary market", D.TERTIARY_MARKET_PREMIUM))
+    if environmental:
+        out.append(("environmental-heavy use, no clean Phase II", D.ENVIRONMENTAL_PREMIUM))
+    if new_competency:
+        out.append(("new operating competency", D.NEW_COMPETENCY_PREMIUM))
+    return out
+
+
+def irr_floor(ust: float, majority_vacant: bool, **addons) -> float:
     base = max(D.IRR_FLOOR_MIN, ust + D.IRR_FLOOR_UST_SPREAD)
-    return base + (D.MAJORITY_VACANT_PREMIUM if majority_vacant else 0.0)
+    return base + sum(v for _, v in irr_addons(majority_vacant, **addons))
+
+
+def credited_land(allin: float, market_land: float) -> float:
+    """v4.53: credited land = MIN(market land value, 60% x all-in)."""
+    return min(market_land, D.LAND_CREDIT_CAP * max(allin, 0.0))
+
+
+def max_allin_basis(improvements_low: float, v_floor: float, market_land: float) -> float:
+    """Largest all-in with all-in - MIN(L, 0.6 x all-in) <= (1 - floor) x improvements_low.
+
+    The left side is strictly increasing in all-in, so the answer is unique: the fixed point of the
+    iteration A <- (1 - floor) x B + MIN(L, 0.6 x A), which in closed form is
+    MIN((1 - floor) x B + L, (1 - floor) x B / 0.4). The first term holds while the 60% cap does not
+    bind (L <= 1.5 x (1 - floor) x B)."""
+    allowed = (1 - v_floor) * improvements_low
+    return min(allowed + market_land, allowed / (1 - D.LAND_CREDIT_CAP))
 
 
 def annual_debt_constant(rate: float, years: int = D.REFI_AMORT_YEARS) -> float:
@@ -147,7 +193,7 @@ def normalize_market(market: Optional[str]) -> Optional[str]:
 
 def validate(deal: Deal) -> None:
     """Reject inputs that would price a deal looser than doctrine."""
-    for f in ("sf", "stabilized_noi", "in_place_noi", "vacant_sf_at_close", "renovation_spend", "land_value",
+    for f in ("sf", "stabilized_noi", "in_place_noi", "vacant_sf_at_close", "renovation_spend", "market_land_value",
               "capex", "lease_up_carry", "ask_price", "exit_cap", "sale_cost_pct", "reserves_psf", "noi_growth",
               "rollover_cost", "renewal_prob"):
         v = getattr(deal, f)
@@ -164,9 +210,20 @@ def validate(deal: Deal) -> None:
         raise ValueError("in_place_noi given but stabilization_year=1 — set the lease-up year or drop in_place_noi")
     if not isinstance(deal.stabilization_year, int) or isinstance(deal.stabilization_year, bool):
         raise ValueError("stabilization_year must be an integer")
-    for f in ("capex", "lease_up_carry", "land_value", "reserves_psf", "sale_cost_pct", "renovation_spend"):
-        if getattr(deal, f) < 0:
+    for f in ("capex", "lease_up_carry", "market_land_value", "reserves_psf", "sale_cost_pct", "renovation_spend"):
+        v = getattr(deal, f)
+        if v is not None and v < 0:
             raise ValueError(f"{f} cannot be negative")
+    if deal.land_comp_count is not None and (isinstance(deal.land_comp_count, bool)
+                                             or not isinstance(deal.land_comp_count, int) or deal.land_comp_count < 0):
+        raise ValueError("land_comp_count must be a non-negative integer")
+    for f in ("land_flood_cleared", "clean_phase_ii"):
+        if not isinstance(getattr(deal, f), bool):
+            raise ValueError(f"{f} must be true or false")
+    for f in ("single_tenant", "satellite", "environmental_heavy_use", "new_operating_competency"):
+        v = getattr(deal, f)
+        if v is not None and not isinstance(v, bool):
+            raise ValueError(f"{f} must be true, false or null")
     if deal.sale_cost_pct >= 1:
         raise ValueError("sale_cost_pct must be a decimal < 1")
     if deal.vacant_sf_at_close is not None and not 0 <= deal.vacant_sf_at_close <= deal.sf:
@@ -384,6 +441,56 @@ def _refi(deal: Deal, price: float, ust: float, cap: float) -> dict:
     }
 
 
+def _improvements_discount(allin: float, land: float, improvements: float) -> float:
+    """v4.53 Basis discount: measured on the improvements only, after the land credit."""
+    return 1 - (allin - credited_land(allin, land)) / improvements
+
+
+def _market_land(deal: Deal, flags: list) -> float:
+    """Market land value admitted to the basis test (v4.53 + Ruling 4). Anything short of a cleared,
+    >= 3-comp market value credits $0 and says why."""
+    if deal.market_land_value is None:
+        flags.append("[DATA-GAP: land] no market land value — land credit $0 (needs >= 3 executed land comps, "
+                     "same zoning class and submarket, <= 36 months; never assessor land fields)")
+        return 0.0
+    if deal.market_land_value == 0:
+        return 0.0
+    if deal.land_comp_count is None or deal.land_comp_count < D.LAND_COMP_MIN:
+        flags.append(f"[DATA-GAP: land comps] market land value rests on {deal.land_comp_count or 0} executed "
+                     f"comp(s), needs >= {D.LAND_COMP_MIN} — land credit $0")
+        return 0.0
+    if not deal.land_flood_cleared:
+        flags.append("Ruling 4: no FEMA/flood determination clearing the land — land credit $0 "
+                     "(report the verified-dry figure as an upside band)")
+        return 0.0
+    flags.append(f"Land at market [est]: ${deal.market_land_value:,.0f} from {deal.land_comp_count} executed land "
+                 f"comps — credit capped at {D.LAND_CREDIT_CAP:.0%} of all-in; cite the grid and the flood determination")
+    return float(deal.market_land_value)
+
+
+def _irr_addons(deal: Deal, market: Optional[str], flags: list) -> dict:
+    """v4.53 risk-tiered add-ons other than majority-vacant (that one is derived in _is_majority_vacant)."""
+    # Gabriel ruling 2026-11-14: every add-on input that is not stated is flagged, never a silent "no".
+    # No vacancy exemption: a vacant building leasing to one tenant is exactly the single-tenant risk.
+    if deal.single_tenant is None:
+        flags.append("[DATA-GAP: tenant concentration] single-tenant / >50%-of-rent IRR add-on (+100 bps) not "
+                     "tested — set single_tenant (for a vacant building: the expected lease-up tenancy)")
+    if deal.satellite is None and market not in D.TERTIARY_MARKETS:
+        flags.append("[DATA-GAP: satellite] tertiary/satellite IRR add-on (+50 bps) not tested — set satellite")
+    if deal.environmental_heavy_use is None:
+        flags.append("[DATA-GAP: environmental use] environmental-heavy-use IRR add-on (+50 bps) not tested — "
+                     "set environmental_heavy_use")
+    if deal.new_operating_competency is None:
+        flags.append("[DATA-GAP: operating competency] new-competency IRR add-on (+100 bps) not tested — "
+                     "set new_operating_competency")
+    if market not in D.EXIT_CAPS and not deal.satellite:
+        flags.append("Off-cluster market: any IRR premium is per-deal judgment (SKILL.md STAGE 1) — state it")
+    return {"single_tenant": bool(deal.single_tenant),
+            "tertiary": market in D.TERTIARY_MARKETS or bool(deal.satellite),
+            "environmental": bool(deal.environmental_heavy_use) and not deal.clean_phase_ii,
+            "new_competency": bool(deal.new_operating_competency)}
+
+
 def _is_majority_vacant(deal: Deal, flags: list) -> bool:
     derived = None
     if deal.vacant_sf_at_close is not None:
@@ -467,13 +574,14 @@ def solve(deal: Deal, ust: float, portfolio_mode: bool = False) -> Result:
     if vintage is None:
         flags.append("[DATA-GAP: vintage] strictest 65% basis floor applied")
     v_floor = vintage_floor(vintage)
-    replacement = low_psf * deal.sf + deal.land_value
-    replacement_point = (point * mult + adders_psf) * deal.sf + deal.land_value
-    if deal.land_value > 0:
-        flags.append("Ruling 4: land credited in the basis test — cite the FEMA determination; "
-                     "land is $0 until it lands")
+    # v4.53: the replacement denominator is the improvements only; land is credited at market against
+    # all-in, capped at 60% of all-in (RE-4.53-1).
+    replacement = low_psf * deal.sf
+    replacement_point = (point * mult + adders_psf) * deal.sf
+    land = _market_land(deal, flags)
     mv = _is_majority_vacant(deal, flags)
-    r_floor = irr_floor(ust, mv)
+    addons = _irr_addons(deal, market, flags)
+    r_floor = irr_floor(ust, mv, **addons)
     if deal.reserves_psf < D.RESERVES_PSF:
         flags.append(f"Reserves ${deal.reserves_psf:.2f}/SF below ORA convention ${D.RESERVES_PSF:.2f}/SF — looser than doctrine")
     if deal.noi_growth > D.MARKET_RENT_GROWTH:
@@ -489,7 +597,7 @@ def solve(deal: Deal, ust: float, portfolio_mode: bool = False) -> Result:
                      "re-leasing TI/LC (renewal-weighted)")
     stab_noi_net = noi_path(deal, rollover=False)[deal.stabilization_year - 1]  # YoC on stabilized NOI
     legs = {
-        "basis": _price_from_allin((1 - v_floor) * replacement, deal),
+        "basis": _price_from_allin(max_allin_basis(replacement, v_floor, land), deal),
         "yield": _price_from_allin(stab_noi_net / D.YOC_FLOOR, deal),
         "irr": _price_from_allin(_unlevered_pv(deal, r_floor, cap), deal),
     }
@@ -508,7 +616,8 @@ def solve(deal: Deal, ust: float, portfolio_mode: bool = False) -> Result:
             "gap_to_ask": deal.ask_price - walk,
             "gap_pct_of_ask": (deal.ask_price - walk) / deal.ask_price,
             "ask_yoc": stab_noi_net / _allin(deal.ask_price, deal),
-            "ask_discount_to_replacement": 1 - _allin(deal.ask_price, deal) / replacement,
+            "ask_discount_to_replacement": _improvements_discount(_allin(deal.ask_price, deal), land, replacement),
+            "ask_land_credit": credited_land(_allin(deal.ask_price, deal), land),
             "floors_flagged_at_ask": [k for k, v in legs.items() if deal.ask_price > v],
         }
         if not portfolio_mode and not D.SINGLE_PRICE_MIN <= deal.ask_price <= D.SINGLE_PRICE_MAX:
@@ -520,8 +629,8 @@ def solve(deal: Deal, ust: float, portfolio_mode: bool = False) -> Result:
     for label, price in (("walk", walk), ("ask", deal.ask_price)):
         if not price or price <= 0:
             continue
-        d_low = 1 - _allin(price, deal) / replacement
-        d_point = 1 - _allin(price, deal) / replacement_point
+        d_low = _improvements_discount(_allin(price, deal), land, replacement)
+        d_point = _improvements_discount(_allin(price, deal), land, replacement_point)
         near = min(abs(d_low - v_floor), abs(d_point - v_floor)) <= D.DENOM_SENSITIVE_BAND
         # Kept because doctrine states it. With LOW = 0.90 x POINT the two discounts differ by
         # 0.111 x (1 - d_point), about 3.3 pts near a 60-65% floor, so any flip is already "near".
@@ -542,7 +651,13 @@ def solve(deal: Deal, ust: float, portfolio_mode: bool = False) -> Result:
             "market": market, "vintage_used": vintage, "basis_floor_pct": v_floor,
             "construction_multiplier": mult, "adders_psf": adders_psf, "rct_point_psf": point,
             "rct_low_psf_adjusted": low_psf,
-            "replacement_total": replacement, "yoc_floor": D.YOC_FLOOR, "irr_floor": r_floor,
+            "replacement_total": replacement, "market_land_value": land,
+            "land_comp_count": deal.land_comp_count,
+            "land_credit_at_walk": credited_land(_allin(max(walk, 0.0), deal), land),
+            "land_credit_at_basis_leg": credited_land(max_allin_basis(replacement, v_floor, land), land),
+            "yoc_floor": D.YOC_FLOOR, "irr_floor": r_floor,
+            "irr_floor_base": max(D.IRR_FLOOR_MIN, ust + D.IRR_FLOOR_UST_SPREAD),
+            "irr_floor_addons": [[k, v] for k, v in irr_addons(mv, **addons)],
             "majority_vacant": mv, "ust": ust, "exit_cap": cap, "noi_growth": deal.noi_growth,
             "stabilized_noi_net": stab_noi_net, "doctrine": D.DOCTRINE_VERSION,
         },

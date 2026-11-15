@@ -1,15 +1,15 @@
 """ORA acquisition doctrine constants — READ-ONLY mirror of acquisition-underwriting SKILL.md.
 
-Source of record: ora-skills/acquisition-underwriting/SKILL.md (v4.52, 2026-11-14; governor and
-scored constants unchanged since v4.45, 2026-11-08; v4.52 mirrors the Lease-Up free months and the
-Rollover Block tables already in SKILL.md) and
+Source of record: ora-skills/acquisition-underwriting/SKILL.md (v4.53, 2026-11-14: land at market
+in the basis test, risk-tiered IRR add-ons; v4.52 mirrors the Lease-Up free months and Rollover Block
+tables; governor constants unchanged since v4.45) and
 the private RCT v03 table (ratified 2026-07-14), loaded by rct_table.py from rct-table.local.json.
 If these values and SKILL.md disagree, SKILL.md wins and this file is the bug.
 Governor constants (DSCR 1.25 / LTV 65 per-property / LTV 40 aggregate) change only by
 Gabriel's in-turn ratification (Hard Invariant 4) — never edit them to make a deal work.
 """
 
-DOCTRINE_VERSION = "acquisition-underwriting v4.52 / RCT v03 (replacement-cost.v3.1)"
+DOCTRINE_VERSION = "acquisition-underwriting v4.53 / RCT v03 (replacement-cost.v3.1)"
 
 # --- Governors (Hard Invariant 4) ---
 DSCR_FLOOR = 1.25                 # the 1.25x floor DSCR is tested at a 65%-LTV loan on stabilized NOI (v4.44/v4.45)
@@ -21,6 +21,17 @@ YOC_FLOOR = 0.08
 IRR_FLOOR_MIN = 0.10              # 10-yr unlevered IRR >= max(10%, UST + 550 bps)
 IRR_FLOOR_UST_SPREAD = 0.055
 MAJORITY_VACANT_PREMIUM = 0.01    # +100 bps when >50% of SF vacant at close (v4.40)
+# Risk-tiered IRR add-ons (v4.53, RE-4.53-2). They stack on MAX(10%, UST + 550 bps).
+SINGLE_TENANT_PREMIUM = 0.01      # single tenant, or any tenant > 50% of in-place rent
+TERTIARY_MARKET_PREMIUM = 0.005   # entry clusters in TERTIARY_MARKETS, and any satellite
+ENVIRONMENTAL_PREMIUM = 0.005     # IOS / automotive / legacy mfg / dry cleaner / UST use until a clean Phase II
+NEW_COMPETENCY_PREMIUM = 0.01     # new operating competency (MHC, multifamily) until management scale
+TERTIARY_MARKETS = frozenset({"Grand Rapids MI", "Richmond VA", "Des Moines IA"})
+# Land at market in the basis test (v4.53, RE-4.53-1):
+#   all-in - credited land <= (1 - vintage floor) x (construction-adjusted RCT LOW x SF)
+#   credited land = MIN(market land value, 60% x all-in); market land from >= 3 executed land comps.
+LAND_CREDIT_CAP = 0.60
+LAND_COMP_MIN = 3
 BASIS_FLOOR_OLD = 0.65            # discount-to-replacement floor at/below 1995
 BASIS_FLOOR_NEW = 0.60            # at/above 2005; linear -0.5%/yr between
 BASIS_RAMP_START, BASIS_RAMP_END = 1995, 2005
