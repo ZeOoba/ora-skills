@@ -73,6 +73,10 @@ class FixBody(unittest.TestCase):
             "Sheet!B" + D + "5": "Sheet!B" + D + "5",                       # via '!'
             "(TI" + D + "4/SF)": "(TI USD 4/SF)",                           # prose: rewritten
             "prose " + D + "0 fee": "prose USD 0 fee",
+            "C" + D + "5 and S" + D + "5": "CAD 5 and SGD 5",
+            "EPIC" + D + "5M": "EPIC USD 5M",                               # glued capitals: not a currency
+            "MOS" + D + "3": "MOS USD 3",
+            "x ``a " + D + "5 b `c` y": "x ``a USD 5 b `c` y",              # unmatched `` is literal text
         }
         for src, want in cases.items():
             self.assertEqual(L.fix_body(src + "\n"), want + "\n", src)
@@ -185,6 +189,32 @@ class Cli(unittest.TestCase):
         self.assertIn("SKIPPED(changed during fix)", out)
         self.assertIn("B's line", (d / "a/SKILL.md").read_text(encoding="utf-8"))
         self.assertEqual([p.name for p in (d / "a").iterdir()], ["SKILL.md"])   # no temp file left
+
+    def test_fix_keeps_file_mode(self):  # mkstemp creates 0600; the rewritten SKILL.md must keep its mode
+        d = self._tree({"a/SKILL.md": FM + "# A\nTI $8/SF\n"})
+        os.chmod(d / "a/SKILL.md", 0o644)
+        code, out = _run(d, "--fix")
+        self.assertEqual(code, 0, out)
+        self.assertEqual((d / "a/SKILL.md").stat().st_mode & 0o777, 0o644)
+
+    def test_dirty_check_takes_no_index_lock(self):
+        from unittest import mock
+        seen = []
+
+        def fake_run(argv, **kw):
+            seen.append(argv)
+            return subprocess.CompletedProcess(argv, 0, "", "")
+        with mock.patch.object(L.subprocess, "run", fake_run):
+            L._dirty(Path(__file__))
+        self.assertEqual(seen[0][:3], ["git", "--no-optional-locks", "status"])
+
+    def test_temp_file_is_ignored_and_never_packaged(self):
+        root = Path(__file__).resolve().parent.parent
+        self.assertIn(".lintfix-*.tmp", (root / ".gitignore").read_text(encoding="utf-8").splitlines())
+        sys.path.insert(0, str(root / "tools"))
+        import package_skills
+        self.assertFalse(package_skills.is_bundled(".lintfix-abc123.tmp"))
+        self.assertTrue(package_skills.is_bundled("SKILL.md"))
 
 
     def test_missing_root(self):
