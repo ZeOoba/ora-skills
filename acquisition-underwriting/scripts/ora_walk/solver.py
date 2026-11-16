@@ -626,7 +626,7 @@ def _irr_addons(deal: Deal, market: Optional[str], flags: list) -> dict:
     if deal.new_operating_competency is None:
         flags.append("[DATA-GAP: operating competency] new-competency IRR add-on (+100 bps) not tested — "
                      "set new_operating_competency")
-    if market not in D.EXIT_CAPS and not deal.satellite:
+    if (market not in D.EXIT_CAPS or market in D.NON_CANONICAL_EXIT_ROWS) and not deal.satellite:
         flags.append("Off-cluster market: any IRR premium is per-deal judgment (SKILL.md STAGE 1) — state it")
     return {"single_tenant": bool(deal.single_tenant),
             "tertiary": market in D.TERTIARY_MARKETS or bool(deal.satellite),
@@ -875,9 +875,12 @@ def solve(deal: Deal, ust: float, portfolio_mode: bool = False) -> Result:
 
 
 def solve_portfolio(deals: list, ust: float, portfolio_ask: Optional[float] = None) -> dict:
-    """Amendment H: 2-5 buildings, <= $15M. Base price = sum of walks; premium only if blended
-    YoC >= 8% AND portfolio unlevered IRR >= the highest building floor still clear. Each building
-    is then floor-tested at its allocated price (walk + pro-rata premium share); breaches flag."""
+    """Amendment H: 2-5 buildings, <= $15M. Base price = sum of walks. A candidate premium is the
+    largest price at which blended YoC >= 8% AND portfolio unlevered IRR >= the highest building floor
+    still clear (v4.41). v4.55 (RE-4.55-2): the premium is admissible only if every building, at its
+    allocated price (walk + pro-rata premium share), still clears its own floors; otherwise it is
+    rejected and the portfolio walk is the sum of walks. Each building's walk already sits on its
+    binding leg, so any positive share breaches it: in practice the walk is always the sum of walks."""
     results = [solve(d, ust, portfolio_mode=True) for d in deals]
     base = sum(r.walk_price for r in results)
     hi_floor = max(r.floors["irr_floor"] for r in results)
@@ -886,8 +889,8 @@ def solve_portfolio(deals: list, ust: float, portfolio_ask: Optional[float] = No
     pv = sum(_unlevered_pv(d, hi_floor, r.floors["exit_cap"]) for d, r in zip(deals, results))
     cap_yield = (noi / D.YOC_FLOOR - fixed) / (1 + D.CLOSING_COST)
     cap_irr = (pv - fixed) / (1 + D.CLOSING_COST)
-    walk = max(base, min(cap_yield, cap_irr))
-    premium = walk - base
+    candidate_walk = max(base, min(cap_yield, cap_irr))
+    premium = candidate_walk - base
 
     flags = [f"{r.name}: {f}" for r in results for f in r.flags]
     # SKILL.md STAGE 1 Portfolios allocation priority: (1) stabilized NOI share when every building has credible positive NOI and none is
@@ -906,8 +909,6 @@ def solve_portfolio(deals: list, ust: float, portfolio_ask: Optional[float] = No
         weights = [d.sf * (r.floors["rct_point_psf"] * r.floors["construction_multiplier"] + r.floors["adders_psf"])
                    for d, r in zip(deals, results)]
     total_w = sum(weights)
-    if base <= 0 and premium > 0:
-        flags.append("Sum of walks <= 0: premium is most of the price; each building tested at its allocated share")
     allocation = []
     for r, w in zip(results, weights):
         share = premium * w / total_w
@@ -915,8 +916,22 @@ def solve_portfolio(deals: list, ust: float, portfolio_ask: Optional[float] = No
         breached = [k for k, v in r.legs.items() if price > v + 1e-6]
         allocation.append({"name": r.name, "walk": r.walk_price, "premium_share": share,
                            "allocated_price": price, "floors_breached": breached})
-        if breached:
-            flags.append(f"FLOOR-FLAGGED: {r.name} breaches {', '.join(breached)} at allocated price ${price:,.0f}")
+    premium_admissible = not any(al["floors_breached"] for al in allocation)
+    walk = candidate_walk if premium_admissible else base
+    if premium_admissible:
+        if base <= 0 and premium > 0:
+            flags.append("Sum of walks <= 0: premium is most of the price; each building tested at its allocated share")
+    else:
+        # v4.55 (RE-4.55-2): the breaches below are the premium test, not floor results at the walk. At the
+        # returned walk (sum of walks) every building sits at its own walk, so none is FLOOR-FLAGGED by this test.
+        for al in allocation:
+            if al["floors_breached"]:
+                flags.append(f"PREMIUM-TEST: {al['name']} would breach {', '.join(al['floors_breached'])} at walk + "
+                             f"premium share ${al['allocated_price']:,.0f} (premium rejected)")
+        flags.append(f"PREMIUM REJECTED (v4.55, RE-4.55-2): a building breaches its own floor at its allocated "
+                     f"price, so the portfolio walk is the sum of walks ${base:,.0f}, not ${candidate_walk:,.0f}")
+        if base <= 0:
+            flags.append("Sum of walks <= 0: no positive portfolio walk at ORA's floors")
     if not D.PORTFOLIO_MIN_BLDGS <= len(deals) <= D.PORTFOLIO_MAX_BLDGS:
         flags.append("GATE: Amendment H scope is 2–5 buildings")
     if walk > D.PORTFOLIO_PRICE_MAX:
@@ -928,6 +943,8 @@ def solve_portfolio(deals: list, ust: float, portfolio_ask: Optional[float] = No
         "max_price_blended_yoc": cap_yield,
         "max_price_portfolio_irr": cap_irr,
         "max_premium_over_sum": premium,
+        "premium_admissible": premium_admissible,
+        "rejected_premium": 0.0 if premium_admissible else premium,
         "portfolio_walk_price": walk,
         "allocation_method": method,
         "allocation": allocation,
