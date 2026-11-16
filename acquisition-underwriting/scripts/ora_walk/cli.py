@@ -108,8 +108,10 @@ def main(argv=None) -> int:
         if a.json:
             print(json.dumps(res, indent=2)); return 0
         print("\n\n".join(render(b, note) for b in res["buildings"]))
-        print(f"\n## Portfolio (Amendment H)\nSum of walks {_usd(res['sum_of_walks'])} · max premium "
-              f"{_usd(res['max_premium_over_sum'])} · **Portfolio walk {_usd(res['portfolio_walk_price'])}** "
+        prem = (f"premium {_usd(res['max_premium_over_sum'])} admissible" if res["premium_admissible"] else
+                f"premium {_usd(res['rejected_premium'])} REJECTED (a building breaches its own floor, v4.55)")
+        print(f"\n## Portfolio (Amendment H)\nSum of walks {_usd(res['sum_of_walks'])} · {prem} · "
+              f"**Portfolio walk {_usd(res['portfolio_walk_price'])}** "
               f"(IRR floor {_pct(res['portfolio_irr_floor'])}; blended-YoC cap {_usd(res['max_price_blended_yoc'])}, "
               f"IRR cap {_usd(res['max_price_portfolio_irr'])})")
         print(f"\nPremium allocation: {res['allocation_method']} (SKILL.md STAGE 1 Portfolios)")
