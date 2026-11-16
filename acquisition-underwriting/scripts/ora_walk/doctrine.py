@@ -1,7 +1,7 @@
 """ORA acquisition doctrine constants — READ-ONLY mirror of acquisition-underwriting SKILL.md.
 
-Source of record: ora-skills/acquisition-underwriting/SKILL.md (v4.54, 2026-11-14: the vetted rollover model
-replaces the v4.52 pro-rata one; v4.53 land at market in the basis test and risk-tiered IRR add-ons; Rollover
+Source of record: ora-skills/acquisition-underwriting/SKILL.md (v4.55, 2026-11-16: Milwaukee exit cap row and
+the Amendment H per-building premium test; v4.54, 2026-11-14: the vetted rollover model replaces the v4.52 pro-rata one; v4.53 land at market in the basis test and risk-tiered IRR add-ons; Rollover
 Block, renewal-economics, management and credit-loss values mirrored; governor constants unchanged since v4.45) and
 the private RCT v03 table (ratified 2026-07-14), loaded by rct_table.py from rct-table.local.json.
 If these values and SKILL.md disagree, SKILL.md wins and this file is the bug.
@@ -9,7 +9,7 @@ Governor constants (DSCR 1.25 / LTV 65 per-property / LTV 40 aggregate) change o
 Gabriel's in-turn ratification (Hard Invariant 4) — never edit them to make a deal work.
 """
 
-DOCTRINE_VERSION = "acquisition-underwriting v4.54 / RCT v03 (replacement-cost.v3.1)"
+DOCTRINE_VERSION = "acquisition-underwriting v4.55 / RCT v03 (replacement-cost.v3.1)"
 
 # --- Governors (Hard Invariant 4) ---
 DSCR_FLOOR = 1.25                 # the 1.25x floor DSCR is tested at a 65%-LTV loan on stabilized NOI (v4.44/v4.45)
@@ -83,8 +83,12 @@ EXIT_CAPS = {
     "Kansas City MO": 0.0775, "Madison WI": 0.0725, "Mid-Atlantic": 0.0725,
     "Grand Rapids MI": 0.08, "Richmond VA": 0.0775, "Des Moines IA": 0.0775,
     "Louisville KY": 0.0775, "Chicago-Cook IL": 0.08,
+    "Milwaukee WI": 0.0875,  # v4.55 (RE-4.55-1): non-canonical market row; the cluster freeze still flags Gate 3
 }
 DEFAULT_EXIT_CAP = 0.0775  # flag when used
+# Exit-cap rows for markets outside the canonical clusters: the row sets the exit cap only, so the
+# solver's off-cluster flag still fires for them (v4.55: Milwaukee under the cluster freeze).
+NON_CANONICAL_EXIT_ROWS = frozenset({"Milwaukee WI"})
 
 # RCT v03 POINT $/SF is NOT in source: this repo is public and the table is governor-level data. It is
 # loaded at solve time from the private rct-table.local.json (rct_table.py, tools/RCT_TABLE.md), which
@@ -103,4 +107,5 @@ MARKET_ALIASES = {
     "des moines": "Des Moines IA", "louisville": "Louisville KY", "chicago": "Chicago-Cook IL",
     "cook county": "Chicago-Cook IL", "chicago–greater cook county il": "Chicago-Cook IL",
     "chicago-greater cook county il": "Chicago-Cook IL",
+    "milwaukee": "Milwaukee WI", "waukesha": "Milwaukee WI",
 }

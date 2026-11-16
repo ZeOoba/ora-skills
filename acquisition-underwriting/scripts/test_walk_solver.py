@@ -40,7 +40,7 @@ def base(**kw):
 
 
 class DoctrinePins(unittest.TestCase):
-    """Literal values from SKILL.md v4.54 (v4.53 adds the land-credit cap and the IRR add-ons; v4.52/v4.54 mirror the Rollover Block; governor constants unchanged since v4.45) — any drift fails (Hard Invariant 4 for governors)."""
+    """Literal values from SKILL.md v4.55 (v4.55 adds the Milwaukee exit cap row; v4.53 adds the land-credit cap and the IRR add-ons; v4.52/v4.54 mirror the Rollover Block; governor constants unchanged since v4.45) — any drift fails (Hard Invariant 4 for governors)."""
     def test_governors(self):
         self.assertEqual((D.DSCR_FLOOR, D.PER_PROPERTY_LTV_CEILING, D.AGGREGATE_LTV_CEILING), (1.25, 0.65, 0.40))
         self.assertEqual((D.YOC_FLOOR, D.IRR_FLOOR_MIN, D.IRR_FLOOR_UST_SPREAD, D.MAJORITY_VACANT_PREMIUM),
@@ -73,7 +73,7 @@ class DoctrinePins(unittest.TestCase):
             "Columbus OH": 0.075, "Cincinnati OH": 0.075, "Indianapolis IN": 0.075,
             "Kansas City MO": 0.0775, "Madison WI": 0.0725, "Mid-Atlantic": 0.0725,
             "Grand Rapids MI": 0.08, "Richmond VA": 0.0775, "Des Moines IA": 0.0775,
-            "Louisville KY": 0.0775, "Chicago-Cook IL": 0.08})
+            "Louisville KY": 0.0775, "Chicago-Cook IL": 0.08, "Milwaukee WI": 0.0875})  # v4.55 Milwaukee row
         self.assertEqual(D.DEFAULT_EXIT_CAP, 0.0775)
 
     def test_rct_markets(self):  # SKILL.md RCT v03 market rows (names only; the figures are private)
@@ -626,6 +626,16 @@ class RiskTieredIrr(unittest.TestCase):
     def test_off_cluster_flagged(self):
         self.assertTrue(any(f.startswith("Off-cluster") for f in solve(base(market="Nowhere"), UST).flags))
 
+    def test_v455_milwaukee_row_sets_exit_cap_but_stays_off_cluster(self):
+        for m in ("Milwaukee WI", "milwaukee", "Waukesha"):
+            r = solve(base(market=m), UST)
+            self.assertAlmostEqual(r.floors["exit_cap"], 0.0875, msg=m)
+            self.assertTrue(any(f.startswith("Off-cluster") for f in r.flags), msg=m)
+        self.assertFalse(any(f.startswith("Off-cluster") for f in solve(base(market="Madison WI"), UST).flags))
+        self.assertEqual(D.NON_CANONICAL_EXIT_ROWS, {"Milwaukee WI"})
+        # every exit-cap row without a ratified RCT market must be declared non-canonical (no silent flag loss)
+        self.assertEqual(set(D.EXIT_CAPS) - set(D.RCT_MARKETS), set(D.NON_CANONICAL_EXIT_ROWS))
+
 
 class Refi(unittest.TestCase):
     def test_dscr_floor_and_breakeven(self):
@@ -657,11 +667,64 @@ class AskAndPortfolio(unittest.TestCase):
         b = base(name="B", stabilized_noi=200_000, sf=20_000)
         p = solve_portfolio([a, b], UST)
         self.assertAlmostEqual(p["sum_of_walks"], solve(a, UST).walk_price + solve(b, UST).walk_price)
-        self.assertAlmostEqual(p["portfolio_walk_price"],
-                               max(p["sum_of_walks"], min(p["max_price_blended_yoc"], p["max_price_portfolio_irr"])))
         self.assertGreater(p["max_premium_over_sum"], 0)
-        self.assertTrue(any(f.startswith("FLOOR-FLAGGED: A") for f in p["flags"]))
+        self.assertTrue(any(f.startswith("PREMIUM-TEST: A") for f in p["flags"]))
+        self.assertFalse(any(f.startswith("FLOOR-FLAGGED") for f in p["flags"]))  # walk = sum clears every floor
         self.assertFalse(any("single-asset band" in f for f in p["flags"]))
+        # v4.55 (RE-4.55-2): a building breaching at its allocated price rejects the premium -> walk = sum of walks
+        self.assertFalse(p["premium_admissible"])
+        self.assertAlmostEqual(p["rejected_premium"], p["max_premium_over_sum"])
+        self.assertAlmostEqual(p["portfolio_walk_price"], p["sum_of_walks"])
+        self.assertTrue(any(f.startswith("PREMIUM REJECTED") for f in p["flags"]))
+
+    def test_v455_premium_never_survives_any_positive_share(self):
+        # Each walk sits on its binding leg, so any positive premium share breaches that leg.
+        for kw in ({}, {"stabilized_noi": 200_000, "sf": 20_000}, {"single_tenant": True}):
+            p = solve_portfolio([base(name="A"), base(name="B", **kw)], UST)
+            self.assertAlmostEqual(p["portfolio_walk_price"], p["sum_of_walks"])
+            if p["max_premium_over_sum"] > 1e-6:
+                self.assertFalse(p["premium_admissible"])
+            self.assertLessEqual(p["portfolio_walk_price"], p["sum_of_walks"] + 1e-6)
+
+    def test_v455_cli_prints_rejected_premium_and_sum_walk(self):
+        import io
+        import json
+        import tempfile
+        from contextlib import redirect_stdout
+        from ora_walk.cli import main
+        spec = {"portfolio": [dict(name="A", sf=30_000, stabilized_noi=300_000, market="Columbus OH",
+                                   year_built=2000, construction_type="tilt-up"),
+                              dict(name="B", sf=20_000, stabilized_noi=200_000, market="Columbus OH",
+                                   year_built=2000, construction_type="tilt-up")]}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+            json.dump(spec, fh)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.assertEqual(main([fh.name, "--ust", "0.045"]), 0)
+        os.unlink(fh.name)
+        out = buf.getvalue()
+        from ora_walk.cli import _deal, _usd
+        p = solve_portfolio([_deal(d) for d in spec["portfolio"]], 0.045)  # the same deals the CLI ran
+        self.assertGreater(p["max_premium_over_sum"], 1e-6)  # non-vacuous: a premium exists and is rejected
+        self.assertIn("REJECTED (a building breaches its own floor, v4.55)", out)  # the summary line itself
+        self.assertNotIn("admissible ·", out)
+        self.assertIn(f"**Portfolio walk {_usd(p['sum_of_walks'])}**", out)
+        self.assertNotIn(f"**Portfolio walk {_usd(p['sum_of_walks'] + p['max_premium_over_sum'])}**", out)
+
+    def test_v455_gap_to_ask_and_15m_gate_read_the_sum_of_walks(self):
+        a = base(name="A", stabilized_noi=300_000, sf=30_000)
+        b = base(name="B", stabilized_noi=200_000, sf=20_000)
+        p = solve_portfolio([a, b], UST, portfolio_ask=9_000_000)
+        self.assertAlmostEqual(p["gap_to_ask"], 9_000_000 - p["sum_of_walks"])
+        # gate: scale NOI so the sum of walks sits under USD 15M while sum + rejected premium sits above it
+        k = 14_000_000 / p["sum_of_walks"]
+        q = solve_portfolio([base(name="A", stabilized_noi=300_000 * k, sf=30_000),
+                             base(name="B", stabilized_noi=200_000 * k, sf=20_000)], UST)
+        self.assertLess(q["sum_of_walks"], 15_000_000)
+        if q["sum_of_walks"] + q["max_premium_over_sum"] > 15_000_000:
+            self.assertFalse(any("walk > $15M" in f for f in q["flags"]))
+        else:
+            self.skipTest("premium too small at this scale to straddle the USD 15M gate")
 
     def test_allocation_method_noi_share(self):
         a = base(name="A", stabilized_noi=600_000, sf=40_000)
@@ -698,7 +761,8 @@ class AskAndPortfolio(unittest.TestCase):
         p = solve_portfolio([a, b], UST)
         self.assertLessEqual(p["sum_of_walks"], 0)
         self.assertGreater(p["max_premium_over_sum"], 0)
-        self.assertTrue(any(f.startswith("FLOOR-FLAGGED: A") for f in p["flags"]))
+        self.assertTrue(any(f.startswith("PREMIUM-TEST: A") for f in p["flags"]))  # v4.55: premium rejected
+        self.assertAlmostEqual(p["portfolio_walk_price"], p["sum_of_walks"])
         self.assertTrue(any("Sum of walks <= 0" in f for f in p["flags"]))
 
     def test_portfolio_gates(self):

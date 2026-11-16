@@ -1,6 +1,6 @@
 # ORA Walk-Price Solver
 
-Takes an offering memorandum (OM) to ORA's walk price in under a second, the same way every time. The solver inverts the acquisition-underwriting STAGE 1 floors (v4.54 / RCT v03) in closed form and reports which floor binds.
+Takes an offering memorandum (OM) to ORA's walk price in under a second, the same way every time. The solver inverts the acquisition-underwriting STAGE 1 floors (v4.55 / RCT v03) in closed form and reports which floor binds.
 
 ## Why it exists
 
@@ -21,7 +21,7 @@ It also reports, at the walk price:
 - The DSCR floor test: DSCR at a 65%-LTV loan on stabilized NOI must be at least 1.25x.
 - The breakeven exit cap below which DSCR binds.
 - Levered IRR, reported only and never used as a floor.
-- For Amendment H portfolios: per-building walks, their sum, and the largest premium that still clears blended YoC ≥ 8% and the portfolio IRR at the highest building floor.
+- For Amendment H portfolios: per-building walks, their sum, and the portfolio walk. The solver computes the largest premium that still clears blended YoC ≥ 8% and the portfolio IRR at the highest building floor. Since v4.55 that premium is admitted only if every building still clears its own floors at its allocated price. Each walk already sits on its binding floor, so in practice the premium is rejected and the portfolio walk is the sum of walks.
 
 ## Use
 
@@ -31,10 +31,10 @@ Run from `acquisition-underwriting/scripts/`:
 python -m ora_walk deal.json --fetch-ust          # live FRED DGS10 30-day avg (no key, no user data sent)
 python -m ora_walk deal.json --ust 0.0452         # supplied UST (cite source/date)
 python -m ora_walk walk_examples/example_portfolio.json --ust 0.0452 --json
-python test_walk_solver.py                        # 110 tests; every doctrine constant pinned
+python test_walk_solver.py                        # 116 tests; every doctrine constant pinned
 ```
 
-`ora_walk/doctrine.py` pins SKILL.md v4.54 (v4.54 replaces the v4.52 pro-rata rollover with the branch-by-branch model and mirrors the renewal-economics, management-fee and credit-loss values; v4.53 added the 60% land-credit cap, the 3-comp minimum and the IRR add-ons; v4.46 through v4.52 changed no governor or scored constant; v4.49 moved the RCT figures to the private `rct-table.local.json`). Any SKILL.md version that changes a constant mirrored there must update `doctrine.py` and the `DoctrinePins` tests in the same PR.
+`ora_walk/doctrine.py` pins SKILL.md v4.55 (v4.55 adds the Milwaukee exit cap row, `NON_CANONICAL_EXIT_ROWS` and the per-building premium test; v4.54 replaces the v4.52 pro-rata rollover with the branch-by-branch model and mirrors the renewal-economics, management-fee and credit-loss values; v4.53 added the 60% land-credit cap, the 3-comp minimum and the IRR add-ons; v4.46 through v4.52 changed no governor or scored constant; v4.49 moved the RCT figures to the private `rct-table.local.json`). Any SKILL.md version that changes a constant mirrored there must update `doctrine.py` and the `DoctrinePins` tests in the same PR.
 
 Deal fields (see `ora_walk/solver.py: Deal`): `name, sf, stabilized_noi` (pre-reserves, stabilization-year $), plus optional:
 - Location and building:
@@ -87,7 +87,9 @@ It flags, rather than rejects:
 
 The majority-vacant premium is derived from `vacant_sf_at_close`, and setting it to `False` cannot remove it.
 
-In a portfolio, each building is re-tested at its walk plus its pro-rata share of the premium. Any building that breaches a floor is flagged by name.
+In a portfolio, each building is re-tested at its walk plus its pro-rata share of the premium. Any building that breaches a floor is flagged by name. Any breach rejects the premium. When that happens, `premium_admissible` is false, `rejected_premium` is set and a PREMIUM REJECTED flag is raised. The breaches print as PREMIUM-TEST lines, not FLOOR-FLAGGED, because at the returned walk every building sits at its own walk. `portfolio_walk_price` falls back to the sum of walks, and `gap_to_ask` and the USD 15M gate read that figure (v4.55, RE-4.55-2).
+
+A market with an exit-cap row but outside the canonical clusters (`NON_CANONICAL_EXIT_ROWS`; v4.55: Milwaukee WI) still gets the Off-cluster flag. The row sets the exit cap only.
 
 ## Conservative-by-default choices
 
