@@ -33,7 +33,7 @@ git tooling that keeps the library itself honest.
 
 | | |
 |---|---|
-| Live skills | 89 top-level folders with a `SKILL.md` (recount: `ls */SKILL.md \| wc -l`) |
+| Live skills | 104 top-level folders with a `SKILL.md` (recount: `ls */SKILL.md \| wc -l`) |
 | Shared data | [`target-markets.json`](target-markets.json), the canonical buy-box market list, injected into 8 skills at package time |
 | Shared code | [`tools/ora_doc_qc.py`](tools/ora_doc_qc.py), the document-QC harness, injected into 5 QC skills as `scripts/ora_doc_qc.py` |
 | Tooling | [`tools/`](tools): packaging, CI gates, drift and mirror sync, hooks, 26 `tools/test_*.py` suites |
@@ -81,11 +81,11 @@ derived copies; Cowork only picks up a change when a packaged `.skill` is import
 
 ## Skill catalog
 
-89 skills, grouped by domain. One more, `personal-portfolio`, is kept local-only and gitignored because it holds personal (non-firm) financial data. Purposes are condensed from each skill's frontmatter `description`;
+104 skills, grouped by domain. One more, `personal-portfolio`, is kept local-only and gitignored because it holds personal (non-firm) financial data. Purposes are condensed from each skill's frontmatter `description`;
 the `SKILL.md` is authoritative. Expand a group to browse it.
 
 <details open>
-<summary><strong>Acquisitions: sourcing and markets</strong> (9)</summary>
+<summary><strong>Acquisitions: sourcing and markets</strong> (11)</summary>
 
 | Skill | Purpose |
 |---|---|
@@ -98,11 +98,13 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 | `market-monitor` | Industrial market conditions across target markets: vacancy, rent growth, supply, absorption, cap-rate trends |
 | `submarket-spatial-analysis` | Drive-time, demographic, access and locational scoring for a submarket or site |
 | `insurance-climate-risk-comparison` | Market-level insurance-cost and natural-hazard benchmarking for a target market; informs, never gates |
+| `street-listing-roster` | Verified roster of for-sale industrial listings on a named street or corridor, with a pricing-driver read; does not score |
+| `add-target-market` | Parity sweep when a new target market is ratified: `target-markets.json`, consumer skills, scan tasks, Notion selects and memory |
 
 </details>
 
 <details open>
-<summary><strong>Acquisitions: underwriting</strong> (8)</summary>
+<summary><strong>Acquisitions: underwriting</strong> (11)</summary>
 
 | Skill | Purpose |
 |---|---|
@@ -114,11 +116,14 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 | `ora-flood-zoning-dd` | FEMA flood determination and zoning/permitted-use verification for DD-critical screen items |
 | `deal-comparison` | Side-by-side comparison of two or more candidates and portfolio-fit scoring |
 | `model-bulk-edit` | Changes one input safely across many financial models and audits workbooks with no cached values |
+| `underwrite-research-ingest` | Folds new third-party material (CoStar, Phase I, market research, assessor record) into an existing model and IC memo as a new version |
+| `peer-underwrite-reconciliation` | Audits outside underwrites (other LLMs, broker pro formas) against source documents and ORA's model; adopted and rejected ledger |
+| `deal-log-refresh` | Refreshes the Notion Deal Sourcing Log entry after a model or IC memo version bump |
 
 </details>
 
 <details>
-<summary><strong>Acquisitions: offer through closing</strong> (11)</summary>
+<summary><strong>Acquisitions: offer through closing</strong> (13)</summary>
 
 | Skill | Purpose |
 |---|---|
@@ -133,11 +138,13 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 | `exhibit-package-builder` | Signature-ready combined PDF: front instrument plus stamped, page-verified exhibits |
 | `deal-folder-intake` | Archives a multi-file deal package into a permanent, hash-verified deal folder; does not underwrite |
 | `deal-retirement` | Retires a closed or killed deal's artifacts, scheduled tasks and staging records |
+| `municipal-record-recon` | Parcel lookup, deed chain and land-evidence sweep for PD agreements and use restrictions; drafts the public-records request |
+| `seller-ca-generation` | Locked seller-side confidentiality agreement for prospective buyers of ORA assets; counterparty block is the only variable |
 
 </details>
 
 <details>
-<summary><strong>Leasing and legal</strong> (10)</summary>
+<summary><strong>Leasing and legal</strong> (13)</summary>
 
 | Skill | Purpose |
 |---|---|
@@ -151,11 +158,14 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 | `legal-intelligence` | Counterparty-paper review: redlines, clause comparison, blacklines, loan and vendor documents |
 | `listing-agreement-qc` | Pre-execution QC gate for broker listing agreements where ORA is owner |
 | `pma-qc` | Pre-execution and pre-renewal QC gate for third-party property management agreements |
+| `deal-decision-log` | One running decision log per multi-round lease, amendment or PSA negotiation; read before every redline |
+| `external-review-premise-check` | Verifies the factual premises of an outside grade, critique or redline before weighing its recommendations |
+| `tenant-consent-request` | Lease-clause analysis and consent-request reply for sublet, assignment, added occupant, use or parking requests (draft only) |
 
 </details>
 
 <details>
-<summary><strong>Asset and property management</strong> (12)</summary>
+<summary><strong>Asset and property management</strong> (15)</summary>
 
 | Skill | Purpose |
 |---|---|
@@ -171,6 +181,9 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 | `insurance-renewal-review` | Premium history, rate-versus-exposure split and renewal decision from carrier declarations |
 | `tax-appeal` | Property-tax assessment analysis and appeal decision |
 | `solar-lease-underwriting` | Evaluates rooftop and community solar lease proposals and benchmarks roof rent |
+| `vacancy-status-gate` | Reconciles rent roll, lease expiry, AR and the tenant record before any unit is called available |
+| `tenant-prospect-qa` | Drafts replies to prospective-tenant unit questions from sourced property facts (draft only) |
+| `pm-portal-delinquency-export` | Bulk-pulls 15th-of-month delinquency snapshots for the trailing 24 months from property-manager portals |
 
 </details>
 
@@ -191,7 +204,7 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 </details>
 
 <details>
-<summary><strong>Communications and documents</strong> (7)</summary>
+<summary><strong>Communications and documents</strong> (8)</summary>
 
 | Skill | Purpose |
 |---|---|
@@ -202,6 +215,7 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 | `evidence-dossier-drafting` | Multi-agent drafting with a cited facts dossier and an adversarial refuter pass |
 | `daily-brief` | Daily CRE news, markets, portfolio watch and competitive intelligence brief |
 | `outlook-calendar-sync` | Adds or refreshes dated items on the Outlook calendar via desktop Outlook COM |
+| `ora-brand-fonts` | Installs the ORA brand fonts before any PDF render and verifies the embedded faces |
 
 </details>
 
@@ -220,7 +234,7 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 </details>
 
 <details>
-<summary><strong>Engineering, git and repo tooling</strong> (12)</summary>
+<summary><strong>Engineering, git and repo tooling</strong> (13)</summary>
 
 | Skill | Purpose |
 |---|---|
@@ -236,6 +250,7 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 | `xlsx-warehouse-importer` | Scaffold for loading a spreadsheet or JSON extract into the command-center SQLite warehouse |
 | `security-and-hardening` | Dedicated security review or hardening pass when security is the explicit ask |
 | `file-reconciliation` | Hash-diff dedupe of folder trees and resolution of conflicting document versions |
+| `ora-ci-status` | Read-only CI triage for oxford-command-center: runner, queue, failed jobs and logs |
 
 </details>
 
