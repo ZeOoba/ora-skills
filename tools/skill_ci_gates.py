@@ -158,6 +158,8 @@ TARGET_MARKETS_CITATION_EXEMPT = {
     'verified-deal-recon': 'cites the file only as the source its inlined recon-prompt cluster list '
                            'is checked against (tools/doctrine_consistency.py, run in CI on the repo '
                            'copy); the workflow reads nothing at run time',
+    'add-target-market': 'edits the repo-root target-markets.json from a Code checkout as step 1 of '
+                         'its parity sweep; it never reads a bundled copy at run time',
 }
 _SHARED_PY_IMPORT = re.compile(r'^\s*(?:from\s+ora_doc_qc\s+import|import\s+ora_doc_qc\b)', re.M)
 
