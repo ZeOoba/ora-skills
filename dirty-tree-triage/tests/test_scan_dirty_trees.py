@@ -224,6 +224,83 @@ class PrimaryIsNotFirstFound(GitFixture):
         self.assertEqual(roles["occ-1"]["role"], "stray")
 
 
+class WorktreeOwnerIsReported(GitFixture):
+    """The 2026-11-20 cleanup listed `ora-skills-wt-cs-v3-ci` under the live
+    `ora-skills` group, but its owning clone was an ARCHIVED pre-rewrite clone
+    (`archive/2026-11-13_prerewrite-checkouts/ora-skills`). `git -C ora-skills
+    worktree remove` then failed with "is not a working tree", and its merge state
+    had been computed against that archive's stale origin/main. A worktree must say
+    whether its owner is the group's primary and whether the owner sits in an
+    archive directory."""
+
+    def _archived_clone(self, name):
+        dest = self.root / "archive" / "2026-11-13_prerewrite-checkouts" / name
+        dest.parent.mkdir(parents=True)
+        self._git(self.tmp, "clone", "-q", str(self.remote), str(dest))
+        return dest
+
+    def test_worktree_of_primary_is_owned_by_primary_and_not_archived(self):
+        canon = self._clone("canon")
+        self._worktree(canon, "canon-wt-feature", "feat/x")
+
+        wt = self._roles()["canon-wt-feature"]
+
+        self.assertIs(wt["owned_by_primary"], True)
+        self.assertIs(wt["main_worktree_archived"], False)
+
+    def test_worktree_of_archived_clone_is_flagged(self):
+        self._clone("canon")
+        archived = self._archived_clone("canon")
+        self._worktree(archived, "canon-wt-old", "feat/old")
+
+        roles = self._roles()
+        wt = roles["canon-wt-old"]
+
+        self.assertEqual(roles["canon"]["role"], "primary")
+        self.assertEqual(wt["role"], "worktree")
+        self.assertEqual(Path(wt["main_worktree"]).resolve(), archived.resolve())
+        self.assertIs(wt["owned_by_primary"], False)
+        self.assertIs(wt["main_worktree_archived"], True)
+
+    def test_worktree_of_non_primary_live_clone_is_not_owned_by_primary(self):
+        self._clone("canon")
+        other = self.tmp / "elsewhere" / "canon"
+        other.parent.mkdir()
+        self._git(self.tmp, "clone", "-q", str(self.remote), str(other))
+        self._worktree(other, "canon-wt-elsewhere", "feat/e")
+
+        wt = self._roles()["canon-wt-elsewhere"]
+
+        self.assertIs(wt["owned_by_primary"], False)
+        self.assertIs(wt["main_worktree_archived"], False)
+
+    def test_archive_detection_matches_directory_names_not_substrings(self):
+        self.assertTrue(sdt._is_archived_path(r"C:\Users\Owner\archive\2026-11-13_x\ora-skills"))
+        self.assertTrue(sdt._is_archived_path("/home/u/.claude/scheduled-tasks/_archive_2026-11-14_x/repo"))
+        self.assertTrue(sdt._is_archived_path("/home/u/_archive/repo"))
+        self.assertFalse(sdt._is_archived_path("/home/u/ora-archive-tools"))
+        self.assertFalse(sdt._is_archived_path("/home/u/archived-notes/repo"))
+        self.assertFalse(sdt._is_archived_path(None))
+
+    def test_text_line_names_an_archived_owner(self):
+        self._clone("canon")
+        archived = self._archived_clone("canon")
+        self._worktree(archived, "canon-wt-old", "feat/old")
+
+        line = sdt.format_clone_line(self._roles()["canon-wt-old"])
+
+        self.assertIn("owner=ARCHIVED-CLONE", line)
+        self.assertIn("prerewrite-checkouts", line)
+
+    def test_text_line_is_quiet_for_a_primary_owned_worktree(self):
+        canon = self._clone("canon")
+        self._worktree(canon, "canon-wt-feature", "feat/x")
+
+        line = sdt.format_clone_line(self._roles()["canon-wt-feature"])
+
+        self.assertNotIn("owner=", line)
+
+
 class TrivialHintsMatchDirectoriesNotFilenames(unittest.TestCase):
     """The 2026-09-22 run bucketed a spec doc and a memory file as
     `untracked-trivial` because "scratch" appeared in their FILENAMES. The hints
