@@ -44,6 +44,24 @@ CLONE_ROOT = r"C:\Users\Owner"
 # to sit detached from a branch; never flagged.
 MANAGED_BUILD_ROOT_HINTS = ("-deploy-build",)
 
+# Directory names that mark a path as archived (Invariant 6 moves things to
+# archive/ rather than deleting them). Matched against whole path COMPONENTS, so
+# a repo named "ora-archive-tools" is not archived but ".../archive/x/repo" is.
+ARCHIVE_DIR_NAMES = ("archive", "_archive")
+ARCHIVE_DIR_PREFIXES = ("_archive_",)
+
+
+def _is_archived_path(path):
+    """True when any directory component of `path` is an archive directory."""
+    if not path:
+        return False
+    parts = Path(os.path.normpath(str(path))).parts
+    for part in parts:
+        name = part.lower()
+        if name in ARCHIVE_DIR_NAMES or name.startswith(ARCHIVE_DIR_PREFIXES):
+            return True
+    return False
+
 
 def _git_remote_origin(repo_path):
     proc = subprocess.run(
@@ -137,13 +155,18 @@ def _worktree_details(repo_path):
         if track is not None:
             upstream, _, state = track.partition("|")
             upstream_gone = (state == "[gone]") if upstream else None
+    main_worktree = _main_worktree(repo_path)
     return {
         "branch": branch,
         "dirty": dirty,
         "merged": merged,
         "merged_against": default_ref,
         "upstream_gone": upstream_gone,
-        "main_worktree": _main_worktree(repo_path),
+        "main_worktree": main_worktree,
+        # An archived owner's refs (origin/main included) are frozen, so
+        # `merged` above was judged against a stale default branch; and removal
+        # must run from that clone (`git -C <main_worktree> worktree remove`).
+        "main_worktree_archived": _is_archived_path(main_worktree),
     }
 
 
@@ -204,6 +227,12 @@ def discover_clones_by_remote(root=CLONE_ROOT, roster=None):
         )
         for e in full_clones:
             e["role"] = "primary" if e is primary else "stray"
+        primary_key = _path_key(primary["path"]) if primary else None
+        for e in entries:
+            if e.get("role") == "worktree":
+                e["owned_by_primary"] = (
+                    None if not e.get("main_worktree")
+                    else _path_key(e["main_worktree"]) == primary_key)
         classified = [{"path": e.pop("path"), "role": e.pop("role"), **e} for e in entries]
         groups.append({"remote": remote, "clones": classified})
 
@@ -212,6 +241,25 @@ def discover_clones_by_remote(root=CLONE_ROOT, roster=None):
         "remote_groups_with_duplicates": groups,
         "unreachable": unreachable,
     }
+
+
+def format_clone_line(c):
+    """One clone-discovery entry -> the text-report line."""
+    line = f"    [{c['role']}] {c['path']}"
+    if c["role"] != "worktree":
+        return line
+    merged = {True: "yes", False: "no", None: "unknown"}[c["merged"]]
+    dirty = {True: "yes", False: "no", None: "unknown"}[c["dirty"]]
+    line += (f"  branch={c['branch'] or '(detached)'}  dirty={dirty}"
+             f"  merged={merged} (vs {c['merged_against'] or '?'})")
+    if c["upstream_gone"]:
+        line += "  upstream=gone"
+    if c.get("main_worktree_archived"):
+        line += (f"  owner=ARCHIVED-CLONE {c['main_worktree']}"
+                 "  (merged judged vs that clone's frozen refs; remove from that clone)")
+    elif c.get("owned_by_primary") is False:
+        line += f"  owner={c['main_worktree']}"
+    return line
 
 
 def classify(porcelain_line):
@@ -318,15 +366,7 @@ def main():
             for g in groups:
                 print(f"  remote: {g['remote']}")
                 for c in g["clones"]:
-                    line = f"    [{c['role']}] {c['path']}"
-                    if c["role"] == "worktree":
-                        merged = {True: "yes", False: "no", None: "unknown"}[c["merged"]]
-                        dirty = {True: "yes", False: "no", None: "unknown"}[c["dirty"]]
-                        line += (f"  branch={c['branch'] or '(detached)'}  dirty={dirty}"
-                                 f"  merged={merged} (vs {c['merged_against'] or '?'})")
-                        if c["upstream_gone"]:
-                            line += "  upstream=gone"
-                    print(line)
+                    print(format_clone_line(c))
             if clone_discovery["unreachable"]:
                 print(f"  unreachable (no readable origin remote): {clone_discovery['unreachable']}")
 
