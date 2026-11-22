@@ -103,6 +103,10 @@ A market with an exit-cap row but outside the canonical clusters (`NON_CANONICAL
 | Lease-up carry | Taken at t0. |
 | Land | USD 0 unless ≥3 land comps and a cleared flood determination are supplied; flagged `[DATA-GAP: land]` / `[DATA-GAP: land comps]` / Ruling 4. |
 
+## TODO
+
+- Component mode: per-component cash flows + downside binding walk. The v4.57 Mixed-Use Component Lens is manual until then (`COMPONENT LENS — MANUAL`).
+
 ## Governance
 
 - `doctrine.py` is a read-only mirror of SKILL.md. If the two disagree, SKILL.md wins.
