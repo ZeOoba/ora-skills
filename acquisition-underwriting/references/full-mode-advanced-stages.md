@@ -79,6 +79,8 @@ Runs on every FULL evaluation; **recommended, not yet mandatory, on SCREEN** whe
 
 ## STAGE 2.9 — ALTERNATIVE ASSET CLASS TRACK: LAND / REDEVELOPMENT VALUE (v4.6 — PROPOSED, pilot before ratifying)
 
+**Mixed-Use Component Lens cross-reference (v4.57):** in that lens (SKILL.md, UNDERWRITING CONVENTIONS), the office component's exit cap comes from the office/alt-class cap annex or from this stage's comp-implied band; the Downside case adds 100 bps.
+
 **Trigger:** fires when STAGE 0 Gate 6 flags automotive use, retail-only, or office-only (or Gabriel directly requests it), and/or STAGE 2.8's LOS-1 (Land Value Share of Basis) scores ≥40% land share. Runs **in addition to, never instead of**, the standard STAGE 1 floors and STAGE 2 scorecard — Ruling 5's flag-not-kill discipline and the existing Basis/Yield floors remain the deal's binding governing test until this track is separately ratified. **Why this exists:** the Stage 1 Basis/Yield floors are calibrated to shallow-bay industrial replacement cost (RCT v03) — running a genuinely different asset class (auto dealership, retail pad, land-banked redevelopment site) through that ruler is informative but strained. Direct product of the 2026-07-27 Pike Plaza portfolio underwrite (three automotive-dealership parcels, Indianapolis IN; see IC memo §10, "measuring a different asset class" finding).
 
 **Sequencing — excluded from the FULL-mode parallel fan-out, same reason as Stage 2.8:** this stage imports STAGE 2.8's LOS-1 and LOS-2 directly, so it runs only after Stage 2.8 returns, and only when triggered.
