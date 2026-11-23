@@ -34,7 +34,7 @@ REVIEW_WORD = re.compile(
     r"\b(review\w*|refut\w*|mandates?|adversarial|critics?|critiqu\w*|second[- ]opinion|"
     r"verif\w*|audit\w*|gates?|QA|checks?|spot[- ]check\w*|pressure[- ]test\w*|"
     r"red[- ]team\w*|validat\w*|scrutini[sz]\w*|independent\s+pass|regressions?|"
-    r"findings?|correctness|judge\w*)\b", re.I)
+    r"findings?|correctness|judge\w*|bugs?|defects?|problems|flaws?)\b", re.I)
 # A lead-in clause ending in ':' or ',' ("Code review lane:", "After review,") may carry the
 # review word while the rest of the sentence dispatches a non-review job.
 LEAD_IN = re.compile(r"^([^:,]*[:,])(.*)$", re.S)
@@ -114,7 +114,10 @@ def downshift_findings(text):
                 continue
             if not DOWN_MODEL.search(MODEL_PROHIBITION.sub("", sentence)):
                 continue
-            if spared_as_non_review(sentence):
+            # A review word in the context (an earlier sentence, a heading, the lines above)
+            # voids the spare: a search sent to sonnet under "## Adversarial review" is still
+            # the review.
+            if not REVIEW_WORD.search(earlier) and spared_as_non_review(sentence):
                 continue
             if REVIEW_WORD.search(sentence) or REVIEW_WORD.search(earlier):
                 hits.append((n, line.strip()[:160]))
@@ -195,6 +198,13 @@ class ReviewDispatchTier(unittest.TestCase):
             "Red-team the guard on sonnet.",
             "Validate the claims with sonnet.",
             "Scrutinize the diff using haiku.",
+            # Round-2 review of the follow-up: caught at c689272, missed at e037350.
+            "Code review: dispatch a sonnet agent to search the diff and report problems.",
+            "Reviewer lane: Explore (haiku) searches the diff for bugs and reports them back.",
+            "Step 4 (review), use Explore on haiku to search for bugs in the change.",
+            "Code review lane: use Explore (haiku) to list callers, then flag any bug it sees.",
+            "## Adversarial review\n\nDispatch a sonnet agent to search the diff for bugs.",
+            "### REFUTE pass\nUse haiku to search every reader of the touched data.",
         ]
         for text in caught:
             with self.subTest(text=text):
