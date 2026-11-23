@@ -34,7 +34,11 @@ REVIEW_WORD = re.compile(
     r"\b(review\w*|refut\w*|mandates?|adversarial|critics?|critiqu\w*|second[- ]opinion|"
     r"verif\w*|audit\w*|gates?|QA|checks?|spot[- ]check\w*|pressure[- ]test\w*|"
     r"red[- ]team\w*|validat\w*|scrutini[sz]\w*|independent\s+pass|regressions?|"
-    r"findings?|correctness|judge\w*|bugs?|defects?|problems|flaws?)\b", re.I)
+    r"findings?|correctness|judge\w*|bugs?|defects?|problems|flaws?|break\w*|wrong|"
+    r"fail\w*|holes|safe\s+to\s+merge|signs?\s+off)\b", re.I)
+# Only two lead-in shapes are scene-setting rather than a dispatch: a "... lane:" label, and
+# "After (the) review,". Any other "X review:" lead-in IS the review being dispatched.
+SCENE_LEAD_IN = re.compile(r"(?:\blane\s*:|^\s*after\s+(?:the\s+)?review\s*,)\s*$", re.I)
 # A lead-in clause ending in ':' or ',' ("Code review lane:", "After review,") may carry the
 # review word while the rest of the sentence dispatches a non-review job.
 LEAD_IN = re.compile(r"^([^:,]*[:,])(.*)$", re.S)
@@ -88,7 +92,7 @@ def spared_as_non_review(sentence):
     if not REVIEW_WORD.search(sentence):
         return bool(NON_REVIEW_TASK.search(sentence))
     m = LEAD_IN.match(sentence)
-    if not m:
+    if not m or not SCENE_LEAD_IN.search(m.group(1)):
         return False
     rest = m.group(2)
     return (bool(DOWN_MODEL.search(rest)) and not DOWN_MODEL.search(m.group(1))
@@ -205,6 +209,18 @@ class ReviewDispatchTier(unittest.TestCase):
             "Code review lane: use Explore (haiku) to list callers, then flag any bug it sees.",
             "## Adversarial review\n\nDispatch a sonnet agent to search the diff for bugs.",
             "### REFUTE pass\nUse haiku to search every reader of the touched data.",
+            # Round-3 review: base caught these, the any-lead-in spare missed them.
+            "Adversarial review: run it on sonnet, searching each touched file for what breaks.",
+            "REFUTE pass: a sonnet agent searches the diff and reports what breaks.",
+            "Code review: sonnet searches the change and lists anything wrong.",
+            "For the review, dispatch sonnet to search the diff and say what fails.",
+            "Reviewer: haiku, searching the diff.",
+            "Adversarial review, sonnet agent: search the diff.",
+            # Round-3 review: missed by base and head alike (known limits, now caught).
+            "Have sonnet try to break the change.",
+            "Have haiku poke holes in the plan.",
+            "Ask a sonnet agent whether the diff is safe to merge.",
+            "Gate step: Explore on haiku looks up readers and signs off.",
         ]
         for text in caught:
             with self.subTest(text=text):
