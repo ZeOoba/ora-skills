@@ -26,9 +26,9 @@ Sister skill to pm-portal-pnl-export. Pulls a delinquency snapshot **as of the 1
 4. Native select dropdowns do not render in screenshots; cycle with Down key or type the first character of an option. Re-verify field coordinates with a screenshot each session; do not reuse P&L skill coordinates blindly (different form).
 5. Batch limit ~7 actions per call; wait ~3s after Excel click (button greys while downloading).
 
-## Rent Manager Owner Web Access (krg.owa.rentmanager.com)
-Path verified 2026-10-05: Reports > Delinquency. Backing call: krg.owaapi.rentmanager.com/ReportsView/viewreport?report=85.
-1. The header selector shows the logged-in property (e.g. 16623 - Fairground Village Center), but the report's "Properties to Include" multi-select lists every property on the login (observed: 2000 Zettler Rd, 2012 Zettler Rd, 2800 Banwick Rd, 384 Old Morrison Rd, 4595 E 5th Ave; all selected by default). With "Run Properties separately" checked, ONE export per as-of date covers all selected properties, so the Rent Manager matrix is 24 exports total. Map each property to its ORA entity from the Master Workbook before delivery; do not infer.
+## Rent Manager Owner Web Access (the manager's OWA subdomain)
+Path verified 2026-10-05: Reports > Delinquency. Backing call: the OWA API host, ReportsView/viewreport (Delinquency report).
+1. The header selector shows the logged-in property (property code and name), but the report's "Properties to Include" multi-select lists every property on the login (observed: 2000 Zettler Rd, 2012 Zettler Rd, 2800 Banwick Rd, 384 Old Morrison Rd, 4595 E 5th Ave; all selected by default). With "Run Properties separately" checked, ONE export per as-of date covers all selected properties, so the Rent Manager matrix is 24 exports total. Map each property to its ORA entity from the Master Workbook before delivery; do not infer.
 2. Form settings: As of Date = the 15th; Charges to Include = All selected; Detail or Summary = Detail; Tenants to Include = All (options All / Current / Past; the default Current drops past tenants with balances); Run Properties separately = checked; Keep Rent Charges Separate = checked; Include Prospects = default; balance and delinquent-days filters blank.
 3. Output dropdown (bottom right) defaults to PDF; options PDF / CSV / HTML / Text / Excel. Select Excel (it does not persist across page reloads; confirm before each session).
 4. Date entry: click the As of Date field, ctrl+a, BackSpace, type MM/DD/YYYY with slashes. Reset the date before every run.

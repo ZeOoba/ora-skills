@@ -11,7 +11,7 @@ Purpose: turn an inbound tenant request that touches the assignment/sublet, use,
 sublease, sublet, shared operations, share space, additional occupant, co-tenant, license to use, assign the lease, change of use, add a subcontractor or affiliate to the premises, extra parking, "what fee applies", "does this need landlord approval".
 
 ## Routing note
-Inbound requests often reach ORA as a forward from the third-party property manager (e.g., Peak Real Estate Partners). The manager is asking how to proceed; the reply goes to the manager with tenant-ready text to relay, unless Gabriel says otherwise. Do not assume the tenant is the addressee. Standing ask to the manager: forward the request with the suite, lease dates, and rent/insurance standing, and hold all responses on consent, fees and parking until ORA replies.
+Inbound requests often reach ORA as a forward from the third-party property manager. The manager is asking how to proceed; the reply goes to the manager with tenant-ready text to relay, unless Gabriel says otherwise. Do not assume the tenant is the addressee. Standing ask to the manager: forward the request with the suite, lease dates, and rent/insurance standing, and hold all responses on consent, fees and parking until ORA replies.
 
 ## Procedure
 1. Identify tenant, suite, property, landlord entity. Source of record: Notion Tenant Database (8dbbaec0) row, then HubSpot (current tenants only). Never fabricate tenant or lease facts. Read the Tenant row's `Parking Terms (Lease)` and `Assignment / Sublet Terms (Lease)` fields first; they are a shortcut, not a substitute for step 3, and they carry their own source/verification note.

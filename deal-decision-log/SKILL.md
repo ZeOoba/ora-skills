@@ -21,7 +21,7 @@ One running log per deal is the single source of truth for what Gabriel has deci
 1. **Header** - tenant, property, unit, counterparties (broker/counsel names), current operative file name and date, and what it supersedes.
 2. **Current state** - one line per open business term: position, status (agreed / open / conceded / held).
 3. **Decisions** - dated entries, newest first: `YYYY-MM-DD - [clause] - decision - decided by - source (question asked, chat, comment)`. Record the option chosen and the rejected alternatives in a few words.
-4. **Pre-approved fallbacks** - concessions Gabriel has approved in advance but not yet given, each tied to the clause and the trigger ("if Keel objects").
+4. **Pre-approved fallbacks** - concessions Gabriel has approved in advance but not yet given, each tied to the clause and the trigger ("if the counterparty objects").
 5. **Held positions** - what is not to be conceded, with the one-line reason.
 6. **Rejected proposals** - proposals from the counterparty, other drafts or graders that were rejected, with source and reason. This is what stops a rejected idea re-entering as an "agreed spec."
 7. **Version history** - one line per file version: name, date, author, what changed, supersedes.
