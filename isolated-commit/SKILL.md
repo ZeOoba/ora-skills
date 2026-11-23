@@ -15,7 +15,7 @@ One command for landing a change you just finished writing in a shared ORA check
 - You've written and tested a change in `~/.claude`, `ora-skills`, `website-canonical`, or `oxford-command-center` and need to land it.
 - NOT for cleaning up a pile of pre-existing uncommitted files you didn't write — use `dirty-tree-triage` instead.
 - **Mixed ownership: you are about to edit, or already edited, a file another session wrote and never committed.** It is untracked on every branch, and another session's `touched-files.txt` lists it. This is not purely your own work, so apply "Foreign untracked files" below BEFORE your first edit. If you already edited without a snapshot, say so to the user and review the whole file as if it were all new, since your delta can no longer be separated.
-- NOT a substitute for the mandatory Fable/Opus independent review gate on anything `eos-review-gate.py` gates (path classes listed in step 4) — this skill's own review step (4) is the SAME requirement generalized to repos/files that gate doesn't cover.
+- NOT a substitute for the mandatory Opus 5.5 independent review gate on anything `eos-review-gate.py` gates (path classes listed in step 4) — this skill's own review step (4) is the SAME requirement generalized to repos/files that gate doesn't cover.
 
 ## Workflow
 
