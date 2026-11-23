@@ -81,7 +81,7 @@ derived copies; Cowork only picks up a change when a packaged `.skill` is import
 
 ## Skill catalog
 
-104 skills, grouped by domain. One more, `personal-portfolio`, is kept local-only and gitignored because it holds personal (non-firm) financial data. Purposes are condensed from each skill's frontmatter `description`;
+105 skills, grouped by domain. One more, `personal-portfolio`, is kept local-only and gitignored because it holds personal (non-firm) financial data. Purposes are condensed from each skill's frontmatter `description`;
 the `SKILL.md` is authoritative. Expand a group to browse it.
 
 <details open>
@@ -234,11 +234,12 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 </details>
 
 <details>
-<summary><strong>Engineering, git and repo tooling</strong> (13)</summary>
+<summary><strong>Engineering, git and repo tooling</strong> (14)</summary>
 
 | Skill | Purpose |
 |---|---|
 | `isolated-commit` | Lands your own reviewed change in a shared checkout that other sessions may be editing |
+| `git-history-purge` | Removes private data from a GitHub repo's whole history: leased force-push, fresh-clone verify, live-checkout re-point, Support request for old PRs |
 | `dirty-tree-triage` | Attributes and safely settles uncommitted work across the shared checkouts |
 | `branch-catchup` | Brings a long-lived branch up to date with `origin/main` in a worktree, conflict by conflict |
 | `adversarial-merge-gate` | Second-reviewer gate before merging blast-radius or multi-session changes |
