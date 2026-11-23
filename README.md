@@ -33,7 +33,7 @@ git tooling that keeps the library itself honest.
 
 | | |
 |---|---|
-| Live skills | 104 top-level folders with a `SKILL.md` (recount: `ls */SKILL.md \| wc -l`) |
+| Live skills | 105 top-level folders with a `SKILL.md` (recount: `ls */SKILL.md \| wc -l`) |
 | Shared data | [`target-markets.json`](target-markets.json), the canonical buy-box market list, injected into 8 skills at package time |
 | Shared code | [`tools/ora_doc_qc.py`](tools/ora_doc_qc.py), the document-QC harness, injected into 5 QC skills as `scripts/ora_doc_qc.py` |
 | Tooling | [`tools/`](tools): packaging, CI gates, drift and mirror sync, hooks, 26 `tools/test_*.py` suites |
@@ -338,7 +338,7 @@ eval harness's daily `runs/` output.
 Install the test dependencies first. A missing dependency shows up as `SKIP`, which fails the gate.
 
 ```bash
-python -m pip install pymupdf python-docx reportlab lxml openpyxl   # plus poppler-utils for pdftotext
+python -m pip install pymupdf python-docx reportlab lxml openpyxl git-filter-repo   # plus poppler-utils for pdftotext
 bash tools/run_suite.sh               # tools/test_*.py
 bash tools/run_skill_suites.sh        # packaged-layout check + every skill-level test_*.py
 python tools/skill_ci_gates.py frontmatter

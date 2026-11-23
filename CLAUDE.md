@@ -4,7 +4,7 @@ Source of truth for Oxford Realty Advisors' custom skills: one top-level folder 
 
 ## Commands
 
-- Gate before every commit: `bash tools/run_suite.sh` (tools suite) and `bash tools/run_skill_suites.sh` (skill suites). Both must print no `FAIL` and no `SKIP`. `pip install pymupdf python-docx reportlab lxml openpyxl git-filter-repo` first, and `poppler-utils` for `pdftotext`; a missing dependency shows up as `SKIP`, which is not a pass.
+- Gate before every commit: `bash tools/run_suite.sh` (tools suite) and `bash tools/run_skill_suites.sh` (skill suites). Both must print no `FAIL` and no `SKIP`. `pip install pymupdf python-docx reportlab lxml openpyxl git-filter-repo` first, and `poppler-utils` for `pdftotext`; a missing dependency shows up as `SKIP` (a missing `git-filter-repo` as `FAIL` in `git-history-purge`), and neither is a pass.
 - Frontmatter, tree hygiene and shared-dependency check over every skill: `python tools/skill_ci_gates.py frontmatter`. Dollar-digit lint over every `SKILL.md` body: `python tools/lint_skill_dollar_args.py .` (must exit 0).
 - Package a skill: `python tools/package_skills.py <outdir> <skill>`. The output directory comes first; swapping the arguments packages into a skill's own source tree. Never use PowerShell `Compress-Archive`.
 - CI (`skill-gates`, `tools-tests`) re-runs the same commands on every push to any branch.
