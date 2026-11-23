@@ -31,7 +31,7 @@ FLOOR = re.compile(r"never\s+below\s+Opus\s+5\.5", re.I)
 NO_DOWNSHIFT = re.compile(r"never\s+`?sonnet`?\s*/\s*`?haiku`?|downshift[^.]*\bnever\b|downshift[^.]*\bnot\b", re.I)
 
 REVIEW_WORD = re.compile(
-    r"\b(review\w*|refut\w*|mandates?|adversarial|critics?|critiqu\w*|second[- ]opinion|"
+    r"\b(review\w*|refut\w*|mandates?|adversarial|critic(?!al\b)\w*|critiqu\w*|second[- ]opinion|"
     r"verif\w*|audit\w*|gates?|QA|checks?|spot[- ]check\w*|pressure[- ]test\w*|"
     r"red[- ]team\w*|validat\w*|scrutini[sz]\w*|independent\s+pass|regressions?|"
     r"findings?|correctness|judge\w*|bugs?|defects?|problems|flaws?|break\w*|wrong|"
@@ -198,6 +198,12 @@ class ReviewDispatchTier(unittest.TestCase):
             "After review, sonnet searches the diff a second time.",
             "After the review, Explore (haiku) re-searches the diff for anything missed.",
             "After review, use Explore on sonnet to look up each flagged caller.",
+            # Round-5 review: `critics?` dropped these; only the bare word "critical" is excluded.
+            "Criticize the diff on sonnet.",
+            "Criticise the change with haiku.",
+            "Criticism pass: model sonnet.",
+            "Critically examine the PR on haiku.",
+            "criticizes via haiku",
         ]
         for text in caught:
             with self.subTest(text=text):
