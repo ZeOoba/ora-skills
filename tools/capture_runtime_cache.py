@@ -37,7 +37,10 @@ What a run does
    frontmatter gate must never block preservation, and post-commit would otherwise
    record a false PENDING-REIMPORT for content the cache already holds.
 6. Run ~/.claude's fail-closed confidential-terms pre-push scanner over the new commits
-   (captured content never passed a human or a Code-surface guard). Only on a pass:
+   (captured content never passed a human or a Code-surface guard), then the machine-local
+   real-identifier denylist (tools/real-identifiers.local.json in the primary checkout;
+   absent = blocked, Gabriel 2026-11-23) over every captured file and commit message.
+   Only when both pass:
    push the branch and open a PR marked DO-NOT-MERGE-AS-IS. The worktree is removed
    either way. A blocked or failed push leaves the commits on the local branch, exits 1,
    and is retried on the next run.
@@ -62,6 +65,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -309,15 +313,155 @@ def confidential_gate(branch: str, scanner: Path = None) -> tuple:
     return r.returncode == 0, detail
 
 
+def denylist_path() -> Path:
+    """The machine-local real-identifier denylist (gitignored; format:
+    tools/real-identifiers.local.json.example), read from the PRIMARY checkout so a capture
+    run from any worktree uses the same file."""
+    return _primary_checkout(REPO) / 'tools' / 'real-identifiers.local.json'
+
+
+def denylist_gate(branch: str, denylist: Path = None, base_ref: str = 'origin/main') -> tuple:
+    """Scan every file the capture commits add or change, plus their commit messages, for
+    a term in the real-identifier denylist (tenant names, real prices, account numbers),
+    before anything reaches the PUBLIC remote (audit 2026-11-23, HIGH: the deal-roster scan
+    was the only gate, and this denylist ran on no push path). Uses the same matcher as
+    test_example_registers_synthetic (word, glued-slug and Office/PDF text passes).
+    FAIL-CLOSED (Gabriel, 2026-11-23): an absent, empty or malformed denylist, a git
+    failure, an unreadable blob, or ANY file the matcher cannot fully read as text (media,
+    _archive/ binaries, a PDF with embedded files, an Office file carrying embedded objects
+    or images) blocks the push; the commits stay on the local branch for human review and
+    are retried next run. File NAMES are scanned too. Never returns a term: a path that
+    itself carries a term is redacted from every message."""
+    from test_example_registers_synthetic import denylist_hits, load_denylist
+    path = denylist_path() if denylist is None else Path(denylist)
+    try:
+        terms = load_denylist(path)
+    except (OSError, ValueError) as e:
+        return False, f'real-identifier denylist unreadable ({type(e).__name__}) (fail-closed)'
+    if not terms:
+        return False, f'real-identifier denylist absent or empty at {path} (fail-closed)'
+
+    def shown(rel: str) -> str:
+        return '<path redacted: it contains a denylisted term>' if denylist_hits(rel, terms) else rel
+
+    try:
+        base = _git_bytes('merge-base', base_ref, branch).decode('utf-8').strip()
+        names = _git_bytes('diff', '--name-only', '-z', '--no-renames', '--diff-filter=ACMRT',
+                           base, branch).decode('utf-8', 'surrogateescape').split('\0')
+        messages = _git_bytes('log', '--format=%B', f'{base}..{branch}').decode('utf-8', 'replace')
+    except (RuntimeError, subprocess.SubprocessError, OSError, UnicodeDecodeError) as e:
+        return False, f'git failed while listing the capture ({type(e).__name__}) (fail-closed)'
+    hits = []
+    if denylist_hits(messages, terms):
+        hits.append('<commit message> -> indices %s' % denylist_hits(messages, terms))
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        for rel in (n for n in names if n):
+            try:
+                data = _git_bytes('cat-file', 'blob', f'{branch}:{rel}')
+            except (RuntimeError, subprocess.SubprocessError, OSError):
+                return False, f'could not read {shown(rel)} from {branch} (fail-closed)'
+            try:
+                text = _gate_text(root, rel, data)
+            except Exception as e:  # noqa: BLE001 -- any reader failure is an uncleared file
+                return False, (f'{shown(rel)} cannot be fully read as text ({type(e).__name__}), '
+                               f'so it cannot be cleared (fail-closed)')
+            idx = denylist_hits(rel + '\n' + text, terms)
+            if idx:
+                hits.append(f'{shown(rel)} -> indices {idx}')
+    if hits:
+        return False, 'real-identifier term(s) found: ' + '; '.join(hits)
+    return True, 'clean'
+
+
+def _git_bytes(*args) -> bytes:
+    """git output as raw bytes (no locale decoding: a non-ASCII captured filename must not
+    break the gate). Raises RuntimeError on a non-zero exit."""
+    r = subprocess.run(['git', '-C', str(REPO), *args], capture_output=True, env=GIT_ENV,
+                       timeout=180, creationflags=CREATE_NO_WINDOW)
+    if r.returncode != 0:
+        raise RuntimeError(f'git {args[0]} failed (exit {r.returncode})')
+    return r.stdout
+
+
+_UTF32_BOMS = (b'\xff\xfe\x00\x00', b'\x00\x00\xfe\xff')
+_ZIP_TEXT_PARTS = ('.xml', '.rels')
+
+
+class _Uncleared(Exception):
+    """A captured file the denylist gate cannot fully read, so it cannot clear it."""
+
+
+def _gate_text(root: Path, rel: str, data: bytes) -> str:
+    """All scannable text of one captured file. Stricter than the repo test's
+    scannable_text, which may SKIP a file (returns None): a skip is fine for a repo lint but
+    not for a push gate, so every skip raises _Uncleared here (review 2026-11-23, C2)."""
+    from test_example_registers_synthetic import _MEDIA, _OFFICE_ZIP, scannable_text
+    suffix = Path(rel).suffix.lower()
+    if suffix in _MEDIA:
+        raise _Uncleared('media file')
+    if data[:4] in _UTF32_BOMS:
+        text = data.decode('utf-32')
+        if _DATA_URI.search(text):
+            raise _Uncleared('inline base64 data: URI (an embedded image cannot be text-scanned)')
+        return text
+    if suffix in _OFFICE_ZIP:
+        import io as _io
+        import zipfile
+        with zipfile.ZipFile(_io.BytesIO(data)) as z:
+            other = [n for n in z.namelist() if not n.endswith('/') and not n.endswith(_ZIP_TEXT_PARTS)]
+        if other:
+            raise _Uncleared('Office file carries embedded objects or images')
+    if suffix == '.pdf':
+        import fitz  # PyMuPDF
+        with fitz.open(stream=data, filetype='pdf') as doc:
+            if doc.embfile_count():
+                raise _Uncleared('PDF carries embedded files')
+            parts = [str(v) for v in (doc.metadata or {}).values() if v]
+            parts.append(doc.get_xml_metadata() or '')
+            parts.extend(str(entry[1]) for entry in (doc.get_toc() or []))
+            for page in doc:
+                # A raster image cannot be text-scanned: a scanned lease or rent roll is exactly
+                # an image-only PDF (review round 2, C2).
+                # get_images() lists page-resource images only; get_image_info() also sees inline
+                # (BI/ID/EI) images and image stamp annotations (review round 3).
+                if page.get_images() or page.get_image_info():
+                    raise _Uncleared('PDF carries images')
+                parts.append(page.get_text())
+                parts.append(page.get_label() or '')
+                parts.extend(str(link.get('uri') or '') for link in page.get_links())
+                for annot in page.annots() or []:
+                    parts.extend(str(v) for v in (annot.info or {}).values() if v)
+            return '\n'.join(parts)
+    target = root / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    text = scannable_text(target, root)
+    if text is None:
+        raise _Uncleared('file type the matcher skips')
+    if _DATA_URI.search(text):
+        raise _Uncleared('inline base64 data: URI (an embedded image cannot be text-scanned)')
+    return text
+
+
+# RFC 2397 allows parameters before ;base64 (data:image/svg+xml;charset=utf-8;base64,...).
+_DATA_URI = re.compile(r'data:[^,]*;base64,', re.IGNORECASE)
+
+
 def push_and_pr(entry: dict) -> str:
     """Push entry['branch'] and make sure a PR exists for it. Idempotent, so a branch
     left in state['pending_push'] by a failed run is simply retried. Returns the PR URL.
-    Refuses to push unless the confidential-terms scan passes."""
+    Refuses to push unless the confidential-terms scan AND the real-identifier denylist
+    scan both pass."""
     branch = entry['branch']
     ok, detail = confidential_gate(branch)
     if not ok:
         raise RuntimeError(f'confidential scan BLOCKED push of {branch} -- commits kept '
                            f'locally; review before pushing. Scanner: {detail}')
+    ok, detail = denylist_gate(branch)
+    if not ok:
+        raise RuntimeError(f'real-identifier denylist BLOCKED push of {branch} -- commits kept '
+                           f'locally; review before pushing. {detail}')
     _git('push', '-u', 'origin', branch, timeout=300)
     existing = _gh('pr', 'list', '--head', branch, '--state', 'all', '--json', 'url', '--jq', '.[0].url')
     if existing.returncode == 0 and existing.stdout.strip():
