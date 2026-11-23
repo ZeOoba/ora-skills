@@ -36,18 +36,6 @@ REVIEW_WORD = re.compile(
     r"red[- ]team\w*|validat\w*|scrutini[sz]\w*|independent\s+pass|regressions?|"
     r"findings?|correctness|judge\w*|bugs?|defects?|problems|flaws?|break\w*|wrong|"
     r"fail\w*|holes|safe\s+to\s+merge|signs?\s+off)\b", re.I)
-# Only two lead-in shapes are scene-setting rather than a dispatch: a "... lane:" label, and
-# "After (the) review,". Any other "X review:" lead-in IS the review being dispatched.
-SCENE_LEAD_IN = re.compile(r"(?:\blane\s*:|^\s*after\s+(?:the\s+)?review\s*,)\s*$", re.I)
-# A lead-in clause ending in ':' or ',' ("Code review lane:", "After review,") may carry the
-# review word while the rest of the sentence dispatches a non-review job.
-LEAD_IN = re.compile(r"^([^:,]*[:,])(.*)$", re.S)
-# Non-review jobs. A sentence is spared only when the clause holding the model names one of
-# these and holds no review word ("Code review lane: use Explore (haiku) to list callers
-# first", "After review, dispatch a sonnet agent to format the changelog").
-NON_REVIEW_TASK = re.compile(
-    r"\b(Explore|search\w*|lookup|look\s+up|format\w*|changelog|list\s+(?:callers|files|paths))\b",
-    re.I)
 DOWN_MODEL = re.compile(r"\b(?:claude-)?(sonnet|haiku)\b", re.I)
 # A prohibition removes only the model(s) it names ("never `sonnet`/`haiku`").
 MODEL_PROHIBITION = re.compile(r"never\s+`?(?:sonnet|haiku)`?(?:\s*/\s*`?(?:sonnet|haiku)`?)?", re.I)
@@ -85,24 +73,11 @@ def live_markdown():
     return [p for p in out if not HISTORY.search(p) and not p.startswith(".claude/")]
 
 
-def spared_as_non_review(sentence):
-    """True when the clause that holds the model names a non-review job and no review word:
-    either the whole sentence has no review word, or the review word sits only in a lead-in
-    clause ending in ':' or ',' and the model sits after it."""
-    if not REVIEW_WORD.search(sentence):
-        return bool(NON_REVIEW_TASK.search(sentence))
-    m = LEAD_IN.match(sentence)
-    if not m or not SCENE_LEAD_IN.search(m.group(1)):
-        return False
-    rest = m.group(2)
-    return (bool(DOWN_MODEL.search(rest)) and not DOWN_MODEL.search(m.group(1))
-            and not REVIEW_WORD.search(rest) and bool(NON_REVIEW_TASK.search(rest)))
-
-
 def downshift_findings(text):
     """Sentences naming sonnet/haiku where a review word sits in the sentence, in an earlier
-    sentence on the same line, or in the LOOKBACK non-blank lines before it. A sentence that
-    names a non-review job (Explore, search, formatting) and no reviewer is spared.
+    sentence on the same line, or in the LOOKBACK non-blank lines before it. No sentence is
+    spared for naming a non-review job: every such spare let real review dispatches slip.
+    It over-flags by design; reviewed non-dispatch lines go in ALLOWED.
     Pattern check: it catches common phrasings, not all of them."""
     hits = []
     lines = text.splitlines()
@@ -117,11 +92,6 @@ def downshift_findings(text):
             if SENTENCE_EXEMPT.search(sentence):
                 continue
             if not DOWN_MODEL.search(MODEL_PROHIBITION.sub("", sentence)):
-                continue
-            # A review word in the context (an earlier sentence, a heading, the lines above)
-            # voids the spare: a search sent to sonnet under "## Adversarial review" is still
-            # the review.
-            if not REVIEW_WORD.search(earlier) and spared_as_non_review(sentence):
                 continue
             if REVIEW_WORD.search(sentence) or REVIEW_WORD.search(earlier):
                 hits.append((n, line.strip()[:160]))
@@ -221,6 +191,13 @@ class ReviewDispatchTier(unittest.TestCase):
             "Have haiku poke holes in the plan.",
             "Ask a sonnet agent whether the diff is safe to merge.",
             "Gate step: Explore on haiku looks up readers and signs off.",
+            # Round-4 review: slipped through the "lane:" / "After review," spares (now removed).
+            "Review lane: dispatch a sonnet agent to search the diff.",
+            "REFUTE lane: Explore (haiku) searches each reader.",
+            "Adversarial lane: haiku searches the change and lists issues.",
+            "After review, sonnet searches the diff a second time.",
+            "After the review, Explore (haiku) re-searches the diff for anything missed.",
+            "After review, use Explore on sonnet to look up each flagged caller.",
         ]
         for text in caught:
             with self.subTest(text=text):
@@ -231,12 +208,23 @@ class ReviewDispatchTier(unittest.TestCase):
             'Explore search uses model: "sonnet".',
             "- v1.2.2 (2026-10-30): reviewer runs on sonnet were moved to opus.",
             "Critical: Explore agents run on haiku.",
-            "Code review lane: use Explore (haiku) to list callers first.",
-            "After review, dispatch a sonnet agent to format the changelog.",
         ]
         for text in spared:
             with self.subTest(text=text):
                 self.assertEqual(downshift_findings(text), [])
+
+    def test_known_false_positives_stay_flagged(self):
+        # Deliberate over-flagging. Four review rounds (2026-11-23) showed that every way of
+        # sparing these let a real review dispatch slip that the c689272 detector caught:
+        # "Review lane: sonnet searches the diff", "After review, haiku searches every file
+        # again". With no spare, this detector flags everything c689272 flags (its vocabulary
+        # and context window are supersets). A real line like these goes in ALLOWED after review.
+        for text in (
+            "Code review lane: use Explore (haiku) to list callers first.",
+            "After review, dispatch a sonnet agent to format the changelog.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(len(downshift_findings(text)), 1)
 
 if __name__ == "__main__":
     unittest.main()
