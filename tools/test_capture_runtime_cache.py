@@ -151,6 +151,310 @@ def _g(cwd, *args):
     return r.stdout
 
 
+class DenylistGateTests(unittest.TestCase):
+    """The capture push must clear the real-identifier denylist (audit 2026-11-23, HIGH):
+    captured content goes to the PUBLIC remote, and before this gate only the deal-roster
+    scan ran. Missing, malformed or unreadable = blocked (fail closed, Gabriel 2026-11-23)."""
+
+    TERM = 'Zephyrton Widget Holdings'
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        t = Path(self.tmp.name)
+        self.repo = t / 'repo'
+        self.repo.mkdir()
+        for args in (('init', '-q', '-b', 'main'), ('config', 'user.email', 't@example.com'),
+                     ('config', 'user.name', 't'), ('config', 'core.autocrlf', 'false')):
+            _g(self.repo, *args)
+        (self.repo / 'alpha').mkdir()
+        (self.repo / 'alpha' / 'SKILL.md').write_text('---\nname: alpha\n---\nv1\n', encoding='utf-8')
+        _g(self.repo, 'add', '-A')
+        _g(self.repo, 'commit', '-q', '-m', 'init')
+        origin = t / 'origin.git'
+        _g(t, 'init', '-q', '--bare', str(origin))
+        _g(self.repo, 'remote', 'add', 'origin', str(origin))
+        _g(self.repo, 'push', '-q', 'origin', 'main')
+        _g(self.repo, 'fetch', '-q', 'origin')
+        self.deny = t / 'real-identifiers.local.json'
+        self.deny.write_text('{"terms": ["%s", "000-999999"]}' % self.TERM, encoding='utf-8')
+        self.saved = crc.REPO
+        crc.REPO = self.repo
+
+    def tearDown(self):
+        crc.REPO = self.saved
+        self.tmp.cleanup()
+
+    def _branch(self, files, message='capture: alpha'):
+        _g(self.repo, 'checkout', '-q', '-B', 'capture/x', 'origin/main')
+        for rel, data in files.items():
+            p = self.repo / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(data)
+        _g(self.repo, 'add', '-A')
+        _g(self.repo, 'commit', '-q', '-m', message)
+        _g(self.repo, 'checkout', '-q', 'main')
+        return 'capture/x'
+
+    def test_default_denylist_lives_in_the_primary_checkout(self):
+        self.assertEqual(crc.denylist_path(), self.repo / 'tools' / 'real-identifiers.local.json')
+
+    def test_absent_denylist_fails_closed(self):
+        b = self._branch({'alpha/SKILL.md': b'---\nname: alpha\n---\nclean\n'})
+        ok, detail = crc.denylist_gate(b, denylist=self.deny.with_name('nope.json'))
+        self.assertFalse(ok)
+        self.assertIn('fail-closed', detail)
+
+    def test_malformed_denylist_fails_closed(self):
+        self.deny.write_text('{"terms": "not a list"}', encoding='utf-8')
+        b = self._branch({'alpha/SKILL.md': b'clean\n'})
+        ok, detail = crc.denylist_gate(b, denylist=self.deny)
+        self.assertFalse(ok)
+        self.assertIn('fail-closed', detail)
+
+    def test_clean_capture_passes(self):
+        b = self._branch({'alpha/SKILL.md': b'---\nname: alpha\n---\nv2 nothing real\n'})
+        ok, detail = crc.denylist_gate(b, denylist=self.deny)
+        self.assertTrue(ok, detail)
+
+    def test_term_in_captured_file_blocks_and_is_not_echoed(self):
+        b = self._branch({'beta/references/r.md': ('tenant: %s\n' % self.TERM).encode()})
+        ok, detail = crc.denylist_gate(b, denylist=self.deny)
+        self.assertFalse(ok)
+        self.assertIn('beta/references/r.md', detail)
+        self.assertNotIn('zephyrton', detail.casefold())
+
+    def test_glued_term_in_a_slug_blocks(self):
+        b = self._branch({'alpha/SKILL.md': b'see x-zephyrton-widget-holdings-tracker\n'})
+        self.assertFalse(crc.denylist_gate(b, denylist=self.deny)[0])
+
+    def test_term_in_commit_message_blocks(self):
+        b = self._branch({'alpha/SKILL.md': b'clean\n'}, message='capture: %s notes' % self.TERM)
+        ok, detail = crc.denylist_gate(b, denylist=self.deny)
+        self.assertFalse(ok)
+        self.assertIn('commit message', detail)
+
+    def test_term_inside_a_docx_blocks(self):
+        import zipfile
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w') as z:
+            z.writestr('word/document.xml', '<w:t>Zephyrton Widget</w:t><w:t> Holdings</w:t>')
+        b = self._branch({'gamma/templates/t.docx': buf.getvalue()})
+        self.assertFalse(crc.denylist_gate(b, denylist=self.deny)[0])
+
+    def test_unscannable_binary_fails_closed(self):
+        b = self._branch({'alpha/blob.bin': b'\x00\x01 opaque'})
+        ok, detail = crc.denylist_gate(b, denylist=self.deny)
+        self.assertFalse(ok)
+        self.assertIn('fail-closed', detail)
+
+    # --- review round 1 (2026-11-23): skips must block, every fail-closed branch pinned ---
+    def _blocks(self, files, **kw):
+        ok, detail = crc.denylist_gate(self._branch(files, **kw), denylist=self.deny)
+        self.assertFalse(ok, detail)
+        self.assertNotIn('zephyrton', detail.casefold())
+        return detail
+
+    def test_empty_denylist_fails_closed(self):
+        self.deny.write_text('{"terms": []}', encoding='utf-8')
+        self.assertIn('fail-closed', self._blocks({'alpha/SKILL.md': b'clean\n'}))
+
+    def test_unknown_base_ref_fails_closed(self):
+        b = self._branch({'alpha/SKILL.md': b'clean\n'})
+        ok, detail = crc.denylist_gate(b, denylist=self.deny, base_ref='refs/no/such')
+        self.assertFalse(ok)
+        self.assertIn('fail-closed', detail)
+
+    def test_unreadable_blob_fails_closed(self):
+        b = self._branch({'alpha/SKILL.md': b'clean\n'})
+        real = crc._git_bytes
+
+        def flaky(*args):
+            if args[0] == 'cat-file':
+                raise RuntimeError('boom')
+            return real(*args)
+        crc._git_bytes = flaky
+        try:
+            ok, detail = crc.denylist_gate(b, denylist=self.deny)
+        finally:
+            crc._git_bytes = real
+        self.assertFalse(ok)
+        self.assertIn('fail-closed', detail)
+
+    def test_media_file_cannot_be_cleared(self):
+        self.assertIn('fail-closed', self._blocks({'alpha/shot.png': b'\x89PNG plain bytes'}))
+
+    def test_text_named_like_media_cannot_be_cleared(self):
+        self._blocks({'alpha/notes.png': ('%s\n' % self.TERM).encode()})
+
+    def test_archive_binary_cannot_be_cleared(self):
+        self._blocks({'_archive/x.bin': b'\x00\x01 opaque'})
+
+    def test_utf32_text_is_scanned(self):
+        self._blocks({'alpha/u.md': ('﻿%s\n' % self.TERM).encode('utf-32-le')})
+
+    def test_term_in_the_file_name_blocks_and_the_path_is_redacted(self):
+        detail = self._blocks({'alpha/zephyrton-widget-holdings.md': b'clean\n'})
+        self.assertIn('redacted', detail)
+
+    def test_non_ascii_file_name_is_scanned_not_wedged(self):
+        b = self._branch({'alpha/café.md': b'clean\n'})
+        ok, detail = crc.denylist_gate(b, denylist=self.deny)
+        self.assertTrue(ok, detail)
+        self._blocks({'alpha/café.md': ('%s\n' % self.TERM).encode()})
+
+    def test_docx_with_an_embedded_object_cannot_be_cleared(self):
+        import zipfile
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w') as z:
+            z.writestr('word/document.xml', '<w:t>clean</w:t>')
+            z.writestr('word/embeddings/sheet.xlsx', b'PK opaque')
+        self._blocks({'gamma/t.docx': buf.getvalue()})
+
+    def _pdf(self, page_text='clean', meta_title='', annot=''):
+        import fitz
+        doc = fitz.open()
+        page = doc.new_page()
+        page.insert_text((72, 72), page_text)
+        if annot:
+            a = page.add_text_annot((100, 100), annot)
+            a.update()
+        if meta_title:
+            doc.set_metadata({'title': meta_title})
+        data = doc.tobytes()
+        doc.close()
+        return data
+
+    def test_clean_pdf_passes(self):
+        b = self._branch({'alpha/ref.pdf': self._pdf()})
+        ok, detail = crc.denylist_gate(b, denylist=self.deny)
+        self.assertTrue(ok, detail)
+
+    def test_term_only_in_pdf_metadata_blocks(self):
+        self._blocks({'alpha/ref.pdf': self._pdf(meta_title=self.TERM)})
+
+    def test_term_only_in_pdf_annotation_blocks(self):
+        self._blocks({'alpha/ref.pdf': self._pdf(annot=self.TERM)})
+
+    def test_archived_pdf_is_scanned_not_skipped(self):
+        self._blocks({'_archive/ref.pdf': self._pdf(page_text=self.TERM)})
+        # and a CLEAN archived PDF passes, so it is scanned, not blanket-blocked
+        b = self._branch({'_archive/ok.pdf': self._pdf()})
+        ok, detail = crc.denylist_gate(b, denylist=self.deny)
+        self.assertTrue(ok, detail)
+
+    def test_term_only_in_pdf_xmp_blocks(self):
+        import fitz
+        doc = fitz.open()
+        doc.new_page().insert_text((72, 72), 'clean')
+        doc.set_xml_metadata('<x:xmpmeta xmlns:x="adobe:ns:meta/"><d>%s</d></x:xmpmeta>' % self.TERM)
+        data = doc.tobytes()
+        doc.close()
+        self._blocks({'alpha/ref.pdf': data})
+
+    def test_pdf_with_an_embedded_file_cannot_be_cleared(self):
+        import fitz
+        doc = fitz.open()
+        doc.new_page().insert_text((72, 72), 'clean')
+        doc.embfile_add('a.bin', b'opaque')
+        data = doc.tobytes()
+        doc.close()
+        self.assertIn('fail-closed', self._blocks({'alpha/ref.pdf': data}))
+
+    def test_image_only_pdf_cannot_be_cleared(self):
+        import fitz
+        pix = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 4, 4), False)
+        doc = fitz.open()
+        doc.new_page().insert_image(fitz.Rect(0, 0, 40, 40), pixmap=pix)
+        data = doc.tobytes()
+        doc.close()
+        self.assertIn('fail-closed', self._blocks({'alpha/scan.pdf': data}))
+
+    def test_term_only_in_pdf_outline_blocks(self):
+        import fitz
+        doc = fitz.open()
+        doc.new_page().insert_text((72, 72), 'clean')
+        doc.set_toc([[1, self.TERM, 1]])
+        data = doc.tobytes()
+        doc.close()
+        self._blocks({'alpha/ref.pdf': data})
+
+    def test_inline_data_uri_image_cannot_be_cleared(self):
+        self._blocks({'alpha/page.html': b'<img src="data:image/png;base64,iVBORw0KGgo=">\n'})
+
+    # --- review round 3 ---
+    def test_parameterised_data_uri_cannot_be_cleared(self):
+        self._blocks({'alpha/a.svg': b'<image href="data:image/svg+xml;charset=utf-8;base64,PHN2Zz4="/>\n'})
+        self._blocks({'alpha/b.html': b'<img src="data:image/png;name=a.png;base64,iVBORw0KGgo=">\n'})
+
+    def test_utf32_text_with_a_data_uri_cannot_be_cleared(self):
+        self._blocks({'alpha/u.html': '﻿<img src="data:image/png;base64,iVBO=">\n'.encode('utf-32-le')})
+
+    def _png(self):
+        import fitz
+        return fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 4, 4), False).tobytes('png')
+
+    def test_image_stamp_annotation_pdf_cannot_be_cleared(self):
+        import fitz
+        doc = fitz.open()
+        page = doc.new_page()
+        page.insert_text((72, 72), 'clean')
+        page.add_stamp_annot(fitz.Rect(100, 100, 140, 140), stamp=self._png())
+        data = doc.tobytes()
+        doc.close()
+        self._blocks({'alpha/signed.pdf': data})
+
+    def test_inline_image_pdf_cannot_be_cleared(self):
+        import fitz
+        doc = fitz.open()
+        page = doc.new_page()
+        # An inline image (BI ... ID ... EI) in the page content stream: no page image resource.
+        stream = b'q 40 0 0 40 72 600 cm BI /W 2 /H 2 /CS /G /BPC 8 ID \x00\xff\xff\x00 EI Q'
+        xref = doc.get_new_xref()
+        doc.update_object(xref, '<<>>')
+        doc.update_stream(xref, stream)
+        doc.xref_set_key(page.xref, 'Contents', f'{xref} 0 R')
+        data = doc.tobytes()
+        doc.close()
+        self._blocks({'alpha/scan.pdf': data})
+
+    def test_term_only_in_pdf_link_uri_blocks(self):
+        import fitz
+        doc = fitz.open()
+        page = doc.new_page()
+        page.insert_text((72, 72), 'clean')
+        page.insert_link({'kind': fitz.LINK_URI, 'from': fitz.Rect(72, 60, 200, 80),
+                          'uri': 'https://example.com/zephyrton-widget-holdings'})
+        data = doc.tobytes()
+        doc.close()
+        self._blocks({'alpha/ref.pdf': data})
+
+    def test_term_only_in_pdf_page_label_blocks(self):
+        import fitz
+        doc = fitz.open()
+        doc.new_page().insert_text((72, 72), 'clean')
+        doc.set_page_labels([{'startpage': 0, 'prefix': self.TERM + '-', 'style': 'D', 'firstpagenum': 1}])
+        data = doc.tobytes()
+        doc.close()
+        self._blocks({'alpha/ref.pdf': data})
+
+    def test_push_and_pr_never_pushes_when_the_denylist_gate_blocks(self):
+        b = self._branch({'alpha/SKILL.md': ('%s\n' % self.TERM).encode()})
+        calls = []
+        saved = (crc.confidential_gate, crc._git, crc.denylist_path)
+        real_git = crc._git
+        crc.confidential_gate = lambda branch: (True, 'ok')
+        crc.denylist_path = lambda: self.deny
+        crc._git = lambda *a, **k: (calls.append(a), real_git(*a, **k))[1]
+        try:
+            with self.assertRaises(RuntimeError) as cm:
+                crc.push_and_pr({'branch': b, 'rows': [], 'stamp': 'x'})
+        finally:
+            crc.confidential_gate, crc._git, crc.denylist_path = saved
+        self.assertFalse([a for a in calls if a and a[0] == 'push'], calls)
+        self.assertIn('denylist', str(cm.exception))
+        self.assertNotIn('zephyrton', str(cm.exception).casefold())
+
+
 class EndToEndTests(unittest.TestCase):
     """Real git, synthetic repo + origin + cache: proves a run commits exactly the
     cache-only files to a capture branch, with the repo's hooks disabled, removes its
