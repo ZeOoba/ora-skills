@@ -31,13 +31,16 @@ FLOOR = re.compile(r"never\s+below\s+Opus\s+5\.5", re.I)
 NO_DOWNSHIFT = re.compile(r"never\s+`?sonnet`?\s*/\s*`?haiku`?|downshift[^.]*\bnever\b|downshift[^.]*\bnot\b", re.I)
 
 REVIEW_WORD = re.compile(
-    r"\b(review\w*|refut\w*|mandates?|adversarial|critics?|second[- ]opinion|verif\w*|"
-    r"audit\w*|gates?|QA|checks?)\b", re.I)
-# Tokens that name a review dispatch outright. A sentence holding one is never spared as
-# a non-review task.
-STRONG_REVIEW = re.compile(r"\b(reviewer\w*|refut\w*|adversarial|mandates?|verifier)\b", re.I)
-# A sentence that names a clearly non-review job ("Code review lane: use Explore (haiku) to
-# list callers first", "After review, dispatch a sonnet agent to format the changelog").
+    r"\b(review\w*|refut\w*|mandates?|adversarial|critics?|critiqu\w*|second[- ]opinion|"
+    r"verif\w*|audit\w*|gates?|QA|checks?|spot[- ]check\w*|pressure[- ]test\w*|"
+    r"red[- ]team\w*|validat\w*|scrutini[sz]\w*|independent\s+pass|regressions?|"
+    r"findings?|correctness|judge\w*)\b", re.I)
+# A lead-in clause ending in ':' or ',' ("Code review lane:", "After review,") may carry the
+# review word while the rest of the sentence dispatches a non-review job.
+LEAD_IN = re.compile(r"^([^:,]*[:,])(.*)$", re.S)
+# Non-review jobs. A sentence is spared only when the clause holding the model names one of
+# these and holds no review word ("Code review lane: use Explore (haiku) to list callers
+# first", "After review, dispatch a sonnet agent to format the changelog").
 NON_REVIEW_TASK = re.compile(
     r"\b(Explore|search\w*|lookup|look\s+up|format\w*|changelog|list\s+(?:callers|files|paths))\b",
     re.I)
@@ -78,6 +81,20 @@ def live_markdown():
     return [p for p in out if not HISTORY.search(p) and not p.startswith(".claude/")]
 
 
+def spared_as_non_review(sentence):
+    """True when the clause that holds the model names a non-review job and no review word:
+    either the whole sentence has no review word, or the review word sits only in a lead-in
+    clause ending in ':' or ',' and the model sits after it."""
+    if not REVIEW_WORD.search(sentence):
+        return bool(NON_REVIEW_TASK.search(sentence))
+    m = LEAD_IN.match(sentence)
+    if not m:
+        return False
+    rest = m.group(2)
+    return (bool(DOWN_MODEL.search(rest)) and not DOWN_MODEL.search(m.group(1))
+            and not REVIEW_WORD.search(rest) and bool(NON_REVIEW_TASK.search(rest)))
+
+
 def downshift_findings(text):
     """Sentences naming sonnet/haiku where a review word sits in the sentence, in an earlier
     sentence on the same line, or in the LOOKBACK non-blank lines before it. A sentence that
@@ -97,7 +114,7 @@ def downshift_findings(text):
                 continue
             if not DOWN_MODEL.search(MODEL_PROHIBITION.sub("", sentence)):
                 continue
-            if NON_REVIEW_TASK.search(sentence) and not STRONG_REVIEW.search(sentence):
+            if spared_as_non_review(sentence):
                 continue
             if REVIEW_WORD.search(sentence) or REVIEW_WORD.search(earlier):
                 hits.append((n, line.strip()[:160]))
@@ -164,6 +181,20 @@ class ReviewDispatchTier(unittest.TestCase):
             "Verify agent: haiku",
             "Reviewer\n\n\n\n\nmodel: sonnet",
             "Audit the diff on haiku.",
+            # Review of the first follow-up draft: the non-review spare hid these.
+            "Review the diff on sonnet, searching for callers of each touched function.",
+            "QA: use Explore (haiku) to check every reader and confirm the fix.",
+            "Review pass: dispatch a sonnet agent to search the diff for regressions and format findings.",
+            "Audit the formatting and logic of the change on haiku.",
+            "Second-pass review uses haiku to look up readers and judge correctness.",
+            "For the code-review step, use sonnet.",
+            "Spot-check the PR with haiku.",
+            "Critique the change on sonnet.",
+            "Pressure-test the fix with haiku.",
+            "Independent pass: model haiku.",
+            "Red-team the guard on sonnet.",
+            "Validate the claims with sonnet.",
+            "Scrutinize the diff using haiku.",
         ]
         for text in caught:
             with self.subTest(text=text):
