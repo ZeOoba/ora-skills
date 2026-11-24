@@ -29,6 +29,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pending_reimport as pr  # noqa: E402
 
+# Hermetic: never glob the real AppData rpm store-plugin root (R34-6 refute, C4).
+# Tests that need an rpm install patch pr.RPM_ROOT themselves.
+pr.RPM_ROOT = Path(tempfile.mkdtemp(prefix='pending_reimport_rpm_')) / 'rpm'
+
 
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -2017,6 +2021,31 @@ class ClearAcceptsCodeOnlyUninstalled(LogBeforeClearGuard):
         self.assertIn('cleared code-only-skill', out)
         err, out = attempt(['third-skill'])
         self.assertIn('REFUSED', err)
+
+
+
+class CodeOnlyInstalledViaRpm(unittest.TestCase):
+    """A CODE_ONLY skill installed through the store lands under RPM_ROOT, not the
+    legacy cache; it must not read as never-installed (that skips the log-before-clear
+    guard and recording). R34-6 refute, C1."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='code_only_rpm_'))
+        self.cache = self.tmp / 'cache'
+        self.cache.mkdir()
+        self.skill = sorted(pr.CODE_ONLY_SKILLS)[0]
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_rpm_install_counts_as_installed(self):
+        (self.tmp / 'rpm' / 'plugin_X' / 'skills' / self.skill).mkdir(parents=True)
+        with unittest.mock.patch.object(pr, 'RPM_ROOT', self.tmp / 'rpm'):
+            self.assertFalse(pr.code_only_uninstalled(self.skill, self.cache))
+
+    def test_installed_nowhere_is_still_uninstalled(self):
+        with unittest.mock.patch.object(pr, 'RPM_ROOT', self.tmp / 'rpm'):
+            self.assertTrue(pr.code_only_uninstalled(self.skill, self.cache))
 
 
 if __name__ == '__main__':

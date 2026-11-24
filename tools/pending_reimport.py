@@ -140,6 +140,30 @@ CACHE_ROOT = Path(
     r'\583f08bc-0123-4111-8158-8fe3d927e350\a6ad2c61-c3c8-4a48-98a5-e40c1db22ad3\skills'
 )
 
+# Since 2026-11 the store installs most skills as their own plugin under RPM_ROOT
+# (`plugin_<id>\skills\<skill>\`); the legacy CACHE_ROOT above still holds a few. A
+# lookup only under CACHE_ROOT reported every rpm install as never installed
+# (R34-6, 2026-11-23: isolated-commit + merge-ready postclick NO-CHANGE).
+RPM_ROOT = Path(r'C:\Users\Owner\AppData\Roaming\Claude\rpm\a6ad2c61\583f08bc')
+
+
+def skill_cache_root(skill: str, legacy: Path | None = None, rpm: Path | None = None) -> Path:
+    """The `skills` dir that holds `<skill>`'s installed copy: the legacy cache when the
+    skill is there, else the rpm `plugin_*/skills` dir holding it (the most recently
+    created one, if a re-import left more than one). Falls back to the legacy root, so a
+    skill installed nowhere still reads as absent there."""
+    legacy = legacy or CACHE_ROOT
+    rpm = rpm or RPM_ROOT
+    try:
+        if (legacy / skill).is_dir():
+            return legacy
+        hits = [d for d in rpm.glob(f'plugin_*/skills/{skill}') if d.is_dir()]
+        if not hits:
+            return legacy
+        return max(hits, key=lambda d: d.stat().st_ctime).parent
+    except OSError:
+        return legacy
+
 # reverse map: shared repo-root file -> [(consumer skill, skill-relative dest path)]
 SHARED_CONSUMERS: dict[str, list[tuple[str, str]]] = {}
 for _skill, _deps in SHARED_ROOT_DEPS.items():
@@ -554,7 +578,8 @@ def code_only_uninstalled(skill: str, cache_root=None) -> bool:
     """True for a CODE_ONLY_SKILLS member that has NO Cowork cache dir: it was never
     installed, so there is nothing stale to reimport and no install to log. False the
     moment a cache dir exists (someone did install it), so recording and the
-    log-before-clear guard resume on their own. `cache_root` defaults to the module's
+    log-before-clear guard resume on their own. An rpm store-plugin install
+    (RPM_ROOT) counts as installed. `cache_root` defaults to the module's
     CACHE_ROOT, looked up at call time so tests can patch it."""
     root = Path(CACHE_ROOT if cache_root is None else cache_root)
     if skill not in CODE_ONLY_SKILLS:
@@ -564,7 +589,10 @@ def code_only_uninstalled(skill: str, cache_root=None) -> bool:
     # cache" as "never installed". Same posture as sweep_drift and repo_first_check.run.
     if not _isdir_long(root):
         return False
-    return not _isdir_long(root / skill)
+    if _isdir_long(root / skill):
+        return False
+    # Installed through the store as an rpm plugin counts as installed too (R34-6).
+    return skill_cache_root(skill, root) == root
 
 def _read_bytes_long(path) -> bytes:
     with open(_win_long(path), 'rb') as f:
@@ -1107,7 +1135,7 @@ def cache_digest(skill: str, cache_root: Path | None = None) -> str | None:
     commit mirror sync overwrites cache files IN PLACE and keeps it (2026-11-03 refute, C7)."""
     # Walked through the `\\?\` form: plain rglob silently skips paths past MAX_PATH, and
     # masterlease-jurisdiction-rebase ships 9 of its 18 cache files there (round-3 refute).
-    root = _win_long((cache_root or CACHE_ROOT) / skill)
+    root = _win_long((cache_root or skill_cache_root(skill)) / skill)
     rels: list[str] = []
     try:
         if not os.path.isdir(root):
@@ -1156,7 +1184,7 @@ def recorded_install(skill: str, base: Path | None = None) -> tuple[datetime, st
 
 def cache_creation_time(skill: str, cache_root: Path | None = None) -> datetime | None:
     """The cache dir's CreationTime (naive local), the same reading reimport_correlate uses."""
-    d = (cache_root or CACHE_ROOT) / skill
+    d = (cache_root or skill_cache_root(skill)) / skill
     try:
         return datetime.fromtimestamp(d.stat().st_ctime) if d.is_dir() else None
     except OSError:
@@ -1240,7 +1268,7 @@ def logged_install_entry(skill: str, log_path: Path | None = None, base: Path | 
         return None, f'{why} in "{header.strip()}"'
     v = re.search(rf'(?<![\w-]){re.escape(skill)} v(\d+(?:\.\d+)+)(?![\w.])', block)
     try:
-        installed = _skill_md_text_version(((cache_root or CACHE_ROOT) / skill / 'SKILL.md')
+        installed = _skill_md_text_version(((cache_root or skill_cache_root(skill)) / skill / 'SKILL.md')
                                            .read_text(encoding='utf-8', errors='replace'))
     except OSError:
         installed = None
@@ -1272,7 +1300,7 @@ def older_entry_authorizes(skill: str, ledger_line: str, log_path: Path | None =
     if header is None:
         return False, f'not named in (fallback: {why}) --'
     try:
-        installed = _skill_md_text_version((CACHE_ROOT / skill / 'SKILL.md').read_text(
+        installed = _skill_md_text_version((skill_cache_root(skill) / skill / 'SKILL.md').read_text(
             encoding='utf-8', errors='replace'))
     except OSError:
         installed = None

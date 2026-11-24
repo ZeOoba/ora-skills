@@ -128,9 +128,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pending_reimport import (  # noqa: E402
-    CACHE_ROOT, REPO, _atomic_write_text, _primary_checkout, _read_text_retry, _retry_locked,
+    CACHE_ROOT, RPM_ROOT, REPO, _atomic_write_text, _primary_checkout, _read_text_retry, _retry_locked,
     _normalized_hash, _normalized_hash_bytes,
-    cache_digest, event_log_blocks, logged_install_entry, write_recorded_install,
+    cache_digest, event_log_blocks, logged_install_entry, skill_cache_root,
+    write_recorded_install,
 )
 
 import reimport_claims as _claims  # noqa: E402
@@ -146,16 +147,25 @@ LOCAL_LOG = Path(r'C:\Users\Owner\AppData\Local\Claude\Logs\main.log')
 ROAMING_LOG = Path(r'C:\Users\Owner\AppData\Roaming\Claude\logs\main.log')
 
 LOG_LINE = re.compile(
-    r'^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[\w+\] \[SkillsPlugin\] (?P<msg>.*)$'
+    r'^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[\w+\] \[(?P<src>SkillsPlugin|RemotePluginManager)\] (?P<msg>.*)$'
 )
 DELTA_RE = re.compile(r'Delta: (\d+) to download')
 SYNC_RE = re.compile(r'Sync complete: (\d+) downloaded, (\d+) failed')
+# An rpm (store plugin) install closes its cycle with this line instead; it has no
+# failed count. 2026-11-23: two Save-skill clicks logged "Refreshed 2 stale
+# user-installed plugin(s)" then "Sync complete: 2 downloaded, 0 removed".
+REMOTE_SYNC_RE = re.compile(r'Sync complete: (\d+) downloaded, \d+ removed')
 
 TOLERANCE = timedelta(seconds=1)  # exact-second match, +/-1s for line-ordering jitter
 
 
+def _root(skill: str) -> Path:
+    # This module's CACHE_ROOT/RPM_ROOT, passed explicitly so tests can patch them here.
+    return skill_cache_root(skill, CACHE_ROOT, RPM_ROOT)
+
+
 def _cache_dir(skill: str) -> Path:
-    return CACHE_ROOT / skill
+    return _root(skill) / skill
 
 
 def _creation_time(skill: str) -> datetime | None:
@@ -279,7 +289,7 @@ def install_snapshot(skill: str):
     """(CreationTime, content digest) of the install in the cache now, or None. Take it
     BEFORE verifying, and hand it to mark_logged: the marker must name the install that
     was verified, not whatever is in the cache by the time the append returns."""
-    installed, digest = _creation_time(skill), cache_digest(skill, CACHE_ROOT)
+    installed, digest = _creation_time(skill), cache_digest(skill, _root(skill))
     return None if installed is None or digest is None else (installed, digest)
 
 
@@ -564,27 +574,36 @@ def _sync_events(log_path: Path):
     """Yield (timestamp, delta_n, downloaded_n, failed_n) for every Delta-line
     followed within a few lines by its Sync-complete line. Pairs by proximity
     (Delta and its Sync-complete share the same or an adjacent timestamp in
-    every observed sample) rather than assuming a fixed line offset."""
+    every observed sample) rather than assuming a fixed line offset.
+
+    Two components run this cycle: [SkillsPlugin] (the legacy skills cache) and
+    [RemotePluginManager] (rpm store plugins, where most skills now install). Each
+    pairs only with its own Delta, so one component's cycle never borrows the
+    other's. RemotePluginManager logs no failed count; it is reported as 0."""
     if not log_path.is_file():
         return
     lines = log_path.read_text(errors='replace').splitlines()
-    pending_delta = None  # (timestamp, n)
+    pending_delta: dict[str, tuple[datetime, int]] = {}
     for line in lines:
         m = LOG_LINE.match(line)
         if not m:
             continue
         ts = datetime.strptime(m.group('ts'), '%Y-%m-%d %H:%M:%S')
-        msg = m.group('msg')
+        src, msg = m.group('src'), m.group('msg')
         dm = DELTA_RE.search(msg)
         if dm:
-            pending_delta = (ts, int(dm.group(1)))
+            pending_delta[src] = (ts, int(dm.group(1)))
             continue
-        sm = SYNC_RE.search(msg)
-        if sm and pending_delta is not None:
-            dts, dn = pending_delta
+        if src == 'SkillsPlugin':
+            sm = SYNC_RE.search(msg)
+            got = (int(sm.group(1)), int(sm.group(2))) if sm else None
+        else:
+            rm = REMOTE_SYNC_RE.search(msg)
+            got = (int(rm.group(1)), 0) if rm else None
+        if got is not None and src in pending_delta:
+            dts, dn = pending_delta.pop(src)
             if abs((ts - dts).total_seconds()) <= 5:
-                yield (ts, dn, int(sm.group(1)), int(sm.group(2)))
-            pending_delta = None
+                yield (ts, dn, *got)
 
 
 def _find_log_match(target: datetime) -> tuple[Path, datetime, int] | None:
@@ -607,7 +626,7 @@ def _already_recorded(skill: str, current: datetime) -> str | None:
     baseline and said NO-BASELINE, sending it looking for one. Rules:
     pending_reimport.logged_install_entry (recorded-install marker at this exact
     CreationTime + a confirming, never-negating entry at the installed version)."""
-    header, _ = logged_install_entry(skill, base=BASELINE_DIR, cache_root=CACHE_ROOT)
+    header, _ = logged_install_entry(skill, base=BASELINE_DIR, cache_root=_root(skill))
     return header
 
 
@@ -630,7 +649,7 @@ def cmd_verify(skills: list[str], baseline_override: str | None) -> int:
             text = _read_baseline(_baseline_path(skill))
             if text is None:
                 if current is None:
-                    print(f'{skill}: NO-CACHE -- cache dir not found under {CACHE_ROOT}')
+                    print(f'{skill}: NO-CACHE -- cache dir not found under {CACHE_ROOT} or {RPM_ROOT}')
                 else:
                     already = _already_recorded(skill, current)
                     if already:
@@ -656,7 +675,7 @@ def cmd_verify(skills: list[str], baseline_override: str | None) -> int:
             continue
 
         if not baseline_is_absent and current is None:
-            print(f'{skill}: NO-CACHE -- cache dir not found under {CACHE_ROOT} '
+            print(f'{skill}: NO-CACHE -- cache dir not found under {CACHE_ROOT} or {RPM_ROOT} '
                   f'(was present at baseline {baseline.isoformat()} -- may have been '
                   f'uninstalled or the cache root moved)')
             any_confirmed_missing = True
