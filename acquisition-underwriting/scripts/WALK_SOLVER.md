@@ -105,7 +105,7 @@ A market with an exit-cap row but outside the canonical clusters (`NON_CANONICAL
 
 ## TODO
 
-- Component mode: per-component cash flows + downside binding walk. The v4.57 Mixed-Use Component Lens is manual until then (`COMPONENT LENS — MANUAL`).
+- Component mode: per-component cash flows, the lowest-leg walk solved on Base and Downside, binding = the lower (v4.58). The v4.57 Mixed-Use Component Lens is manual until then (`COMPONENT LENS — MANUAL`).
 
 ## Governance
 
