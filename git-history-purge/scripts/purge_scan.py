@@ -23,14 +23,17 @@ Figure forms: a whole number gives "123,457", "123457", "123,457.00" and "123457
 a non-whole value of 1,000 or more gives "9,876.54", "9876.54" and its shortest form
 ("123,456.5"). A negative value gives the forms of its absolute value, so the written
 "-123,457" and "(123,457)" both match (the sign or brackets stay, the digits go). Every
-rule is a boundary-anchored regex: digits inside a longer number or a hex hash (before or
-after), and a phone number inside a longer digit run, are never touched. Skipped values are
+rule is a boundary-anchored regex: digits inside a longer number or a hex hash, and a phone
+number inside a longer digit run, are never touched ("inside a hash": a hex character right
+after the figure, or 7+ hex characters right before it; a figure after a shorter run of
+letters, such as USD123,457 or CAD987653, IS matched). Skipped values are
 counted in the output: they are NOT searched, so purge them another way if they matter.
 
 Phones: "phones": true finds dashed/dotted/spaced numbers in the history (public_phones
 excepted). "phone_numbers" lists known numbers; each gives one rule covering 614-555-0123,
-(614) 555-0123, (614)555-0123, 614.555.0123, 614 555 0123 and 6145550123, with an optional
-"+1" or "1-" prefix, never inside a longer digit run. Both kinds are written only when present.
+(614) 555-0123, (614)555-0123, (614)-555-0123, (614)/555-0123, 614.555.0123, 614/555-0123,
+614 555 0123 and 6145550123, with an optional "+1" or "1" prefix (+1 614..., 1-614...,
+1 (614) 555-0123, 16145550123), never inside a longer digit run. Both kinds are written only when present.
 scan and verify exit 2 if a phone_numbers entry is not exactly 10 digits; scan also exits 2
 if tip_ref does not exist or a literal contains a line break.
 
@@ -45,6 +48,9 @@ verify - exit 1 if any removed path is still reachable, any rule still matches a
          every object, not walked by ref or path: text blobs and commit and tag objects
          ("text objects"), binary blobs as raw bytes, and every tree object's file and
          directory names; the three are reported separately and each one fails verify.
+         A configured phone number is found in ANY punctuated form: within a span of digit
+         groups joined by 1-3 of ()[]./+- or whitespace, consecutive whole groups whose
+         digits equal the number (or 1 + the number) count.
          Anything also present in the tip (tip_ref's blobs or its trees' names) is accepted
          and counted as kept at tip. Values skipped by min_integer are not searched and are
          counted. Run it on the rewrite and on a fresh `git clone --bare` (a --mirror clone
@@ -60,6 +66,10 @@ PH = b"[figure: private]"
 PH_PHONE = b"[phone: private]"
 PHONE_RE = re.compile(rb"(?<![\dA-Za-z])(?:\+?1[-. ]?)?\(?\d{3}\)?[-. ]\d{3}[-. ]\d{4}(?!\d)")
 HEX = rb"0-9A-Fa-f"
+# Before a figure: no digit (a longer number) and no run of 7+ hex characters (a hash). A figure
+# glued to fewer letters, such as a currency code (USD123,457, CAD987653), still matches.
+NOT_AFTER_NUMBER_OR_HASH = b"(?<![0-9])(?<![" + HEX + b"]{7})"
+PHONE_SEP = rb"[-./ ]?"
 
 
 def git(repo, *a, inp=None):
@@ -176,12 +186,12 @@ def figure_forms(v, min_integer):
 def num_pattern(form):
     """Anchored pattern for one written form of a figure.
 
-    Always: no hex/digit glued on either side (hashes, longer numbers), no decimal point
-    before it (0.123457) or decimal digits after it (123457.12). Only for comma-grouped
+    Always: no digit or 7+ hex run before it and no hex/digit after it (hashes, longer
+    numbers; a currency code before it is fine), no decimal point before it (0.123457) or decimal digits after it (123457.12). Only for comma-grouped
     forms: no thousands group before or after (1,123,457 / 123,457,000). A plain form next
     to a comma is a CSV or JSON neighbour (BldgA,123457,2450000), so it still matches.
     """
-    pre = b"(?<![" + HEX + b"])(?<![0-9]\\.)"
+    pre = NOT_AFTER_NUMBER_OR_HASH + b"(?<![0-9]\\.)"
     post = b"(?:\\.0+)?(?![" + HEX + b"])(?!\\.[0-9])"
     if "," in form:
         if len(form.split(",")[0].lstrip("-")) == 3:
@@ -205,10 +215,44 @@ def phone_numbers(cfg):
 
 
 def number_phone_pattern(n):
-    """Every common written form of one 10-digit number, optional +1 / 1- prefix, no longer run."""
+    """Every common written form of one 10-digit number, optional +1 / 1 prefix, no longer run."""
     a, b, c = n[:3].encode(), n[3:6].encode(), n[6:].encode()
-    return (b"(?<![0-9A-Za-z])(?:\\+1[-. ]?|1-)?(?:\\(" + a + b"\\) ?|" + a + b"[-. ]?)"
-            + b + b"[-. ]?" + c + b"(?![0-9])")
+    return (b"(?<![0-9A-Za-z])(?:\\+?1" + PHONE_SEP + b")?(?:\\(" + a + b"\\)" + PHONE_SEP + b"|"
+            + a + PHONE_SEP + b")" + b + PHONE_SEP + c + b"(?![0-9])")
+
+
+class PhoneDigits:
+    """Verify's loose search for one configured phone number, in any punctuated form.
+
+    A span is digit groups joined by 1-3 of ()[]./+- or whitespace. Any run of consecutive
+    WHOLE groups whose digits equal the number (or 1 + the number) is one occurrence, so the
+    number is never found inside a longer digit run. Same search/findall API as a regex.
+    """
+    SPAN = re.compile(rb"[0-9]+(?:[\s()\[\]./+-]{1,3}[0-9]+)*")
+    GROUP = re.compile(rb"[0-9]+")
+
+    def __init__(self, n):
+        self.targets = {n.encode(), b"1" + n.encode()}
+
+    def findall(self, data):
+        hits = []
+        for span in self.SPAN.finditer(data):
+            groups = self.GROUP.findall(span.group(0))
+            i = 0
+            while i < len(groups):
+                acc, j = b"", i
+                while j < len(groups) and len(acc) < 11 and acc not in self.targets:
+                    acc += groups[j]
+                    j += 1
+                if acc in self.targets:
+                    hits.append(acc)
+                    i = j
+                else:
+                    i += 1
+        return hits
+
+    def search(self, data):
+        return bool(self.findall(data))
 
 
 def number_phone_rule(n):
@@ -293,7 +337,8 @@ def residual(repo, cfg, tip_ref):
 
     Every object in the store, not walked by ref or path: text blobs plus commit and tag
     objects ("text"), binary blobs as raw bytes ("binary") and the file/directory names in
-    every tree object ("names"). Loose patterns (only hex/digit neighbours excluded), so a
+    every tree object ("names"). Loose patterns (only digit/hash neighbours excluded; a phone
+    number in any punctuated form, see PhoneDigits), so a
     value the rules missed - wrong form, odd context, unusual file - still shows up. A value
     also present in the tip (tip_ref's blobs or its trees' names) is kept at the tip
     (accepted) and not counted as residual.
@@ -308,9 +353,9 @@ def residual(repo, cfg, tip_ref):
             skipped += 1
             continue
         alt = b"|".join(re.escape(f.encode()) for f in sorted(forms, key=len, reverse=True))
-        pats.append(re.compile(b"(?<![" + HEX + b"])(?:" + alt + b")(?![" + HEX + b"])"))
+        pats.append(re.compile(NOT_AFTER_NUMBER_OR_HASH + b"(?:" + alt + b")(?![" + HEX + b"])"))
     pats += [re.compile(re.escape(s.encode("utf-8"))) for s in cfg.get("literals", [])]
-    pats += [re.compile(number_phone_pattern(n)) for n in phone_numbers(cfg) or []]
+    pats += [PhoneDigits(n) for n in phone_numbers(cfg) or []]
 
     lst = git(repo, "cat-file", "--batch-all-objects", "--batch-check=%(objectname) %(objecttype)").decode()
     kinds = dict(l.split() for l in lst.splitlines() if l)

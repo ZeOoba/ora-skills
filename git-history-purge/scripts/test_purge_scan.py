@@ -430,15 +430,21 @@ class PurgeScanTest(unittest.TestCase):
     def test_blob_reachable_only_from_a_tag_is_scanned(self):
         self.r.commit({"a.md": "x\n"})
         git(self.r.path, "checkout", "-q", "-b", "side")
-        self.r.commit({"s.md": "noi %s\n" % FIG})
+        # G1-06: the tag-only commit's MESSAGE holds a phone found only by "phones": true (not a
+        # configured value, so verify's residual search cannot catch a miss): scan must see it.
+        self.r.commit({"s.md": "noi %s\n" % FIG}, msg="owner cell 614-555-0177")
         git(self.r.path, "tag", "only-tag")
         git(self.r.path, "checkout", "-q", "main")
         git(self.r.path, "branch", "-q", "-D", "side")
         self.scan()
         self.assertTrue(rules_match(self.rules, FIG))
+        self.assertTrue(rules_match(self.rules, "614-555-0177"))
         v = self.verify()
         self.assertEqual(v.returncode, 1, v.stdout)
         self.assertIn("blobs matching a rule: 1", v.stdout)
+        self.assertIn("message hits: 1", v.stdout)
+        self.r.filter(self.rules)
+        self.assertNotIn("614-555-0177", self.r.history_text())
 
     def test_residual_covers_annotated_tag_message(self):
         self.r.commit({"a.md": "x\n"})
@@ -461,6 +467,71 @@ class PurgeScanTest(unittest.TestCase):
         v = self.verify()
         self.assertEqual(v.returncode, 1, v.stdout)
         self.assertIn("values still present: 1", v.stdout)
+
+    # ---- G1-08: more written forms of a configured phone number -------------------------
+    def test_configured_phone_numbers_cover_slash_paren_dash_and_eleven_digit_forms(self):
+        self.config(phones=False, phone_numbers=["6145550124"])
+        forms = ["(614)-555-0124", "(614)/555-0124", "614/555-0124", "16145550124", "1 (614) 555-0124",
+                 "1.614.555.0124", "+1/614/555/0124"]
+        decoys = "long 96145550124 x; 616145550124 x; 614/555-01245 x; (614)-555-01245 x\n"
+        self.r.commit({"c.md": "".join("p %s x\n" % f for f in forms) + decoys})
+        self.r.commit({"c.md": "x\n"})
+        self._empty_rules()
+        v = self.verify()
+        self.assertEqual(v.returncode, 1, v.stdout)
+        self.assertIn("values still present: 1 (%d occurrences)" % len(forms), v.stdout)
+        s = self.scan()
+        self.assertIn("phones 1", s.stdout)
+        self.assertNotIn("6145550124", s.stdout + s.stderr)
+        self.r.filter(self.rules)
+        old = git(self.r.path, "show", "main~1:c.md")
+        self.assertEqual(old, "p [phone: private] x\n" * len(forms) + decoys)
+        self.assertEqual(self.verify().returncode, 0)
+
+    def test_verify_flags_configured_phone_digits_in_any_punctuated_span(self):
+        """Verify's independent search strips punctuation inside a phone-shaped span, so a written
+        form the rule pattern does not know (spaced dashes, brackets) still fails verify."""
+        self.config(phones=False, phone_numbers=["6145550124"])
+        self.r.commit({"c.md": "decoys 614 - 555 - 01245 x; 9614 - 555 - 0124 x\n"})
+        self._empty_rules()
+        v = self.verify()
+        self.assertEqual(v.returncode, 0, v.stdout)       # never inside a longer digit run
+        self.r.commit({"d.md": "call 614 - 555 - 0124 or [614] 555 0124 now\n"})
+        self.r.commit(delete=["d.md"])
+        v = self.verify()
+        self.assertEqual(v.returncode, 1, v.stdout)
+        self.assertIn("values still present: 1 (2 occurrences)", v.stdout)
+        self.assertNotIn("6145550124", v.stdout + v.stderr)
+
+    # ---- G1-09: a figure right after letters (currency codes) ---------------------------
+    def test_figure_glued_to_a_currency_code_is_found_but_hashes_are_not(self):
+        self.config(values=[123457, 987653], phones=False)
+        sha = "a1b2c3d4e5f6a7b8c9d0123457e1f2a3b4c5d6e7"      # 40 hex, figure inside
+        keep = "sha %s x\nx deadbeef123457 y\nz deadbeef987653\n" % sha
+        self.r.commit({"d.md": "price USD123,457\nbid CAD987653\n" + keep})
+        self.r.commit({"d.md": keep})
+        self._empty_rules()
+        v = self.verify()
+        self.assertEqual(v.returncode, 1, v.stdout)
+        self.assertIn("values still present: 2 (2 occurrences)", v.stdout)
+        s = self.scan()
+        self.assertIn("found: numbers 2", s.stdout)
+        self.assertIn("dropped (present at tip): 0", s.stdout)
+        self.r.filter(self.rules)
+        old = git(self.r.path, "show", "main~1:d.md")
+        self.assertEqual(old, "price USD[figure: private]\nbid CAD[figure: private]\n" + keep)
+        self.assertEqual(git(self.r.path, "show", "main:d.md"), keep)
+        self.assertEqual(self.verify().returncode, 0)
+
+    # ---- G1-16 (S32): the tip's ROOT tree is part of the tip ----------------------------
+    def test_file_name_in_tip_root_tree_is_kept_at_tip(self):
+        self.r.commit({"%s.md" % LIT: "nothing\n"})
+        self._empty_rules()
+        v = self.verify()
+        self.assertEqual(v.returncode, 0, v.stdout)
+        self.assertIn("kept at tip (accepted): 1", v.stdout)
+        self.assertIn("in file names: 0 (0 occurrences)", v.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

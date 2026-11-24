@@ -5,8 +5,10 @@
                           [--delete-removed] [--main-ref refs/heads/<default>]
 
 prepare  makes the copy filter-repo runs on: refuses (exit 2) if <work.git> exists, then
-         `git clone --mirror --no-local` of the backup and <work.git>/purge-backup-refs.txt =
-         "# backup <abs path>" plus the backup's heads and tags ("<sha> <ref>") at clone time.
+         `git init --bare` + `git fetch --no-tags` of the backup's refs/heads/* and refs/tags/*
+         ONLY (no refs/pull/* or other namespaces, nor objects reachable only from them), and
+         <work.git>/purge-backup-refs.txt = "# backup <abs path>" plus the backup's heads and tags
+         ("<sha> <ref>") at copy time. A backup that changes during the copy is refused (exit 2).
          Run filter-repo on <work.git> afterwards (it leaves filter-repo/ref-map: old SHA,
          new SHA, ref; a second filter-repo pass on the same copy keeps the original "old" SHAs).
 
@@ -32,6 +34,10 @@ Push mode checks every link before anything is pushed:
              Without --delete-removed: exit 4, nothing pushed. With it: each is deleted, leased
              against the snapshot's SHA.
 
+  after    - once the last push is done, `ls-remote` again: a branch or tag on the remote that is
+             neither in <work.git> nor deleted by the rewrite (created during the push), or a
+             pushed ref whose remote value is not the pushed SHA -> exit 3 MOVED (same recovery).
+
 Every lease is against the backup's SHA (as snapshotted), never against what the remote shows
 at push time. Refspecs carry NO "+": a "+" forces past its own lease. All refs except the
 default branch go in batches of --batch (default 40; hundreds of lease arguments exceed the
@@ -41,7 +47,11 @@ else was rejected.
 Exit: 0 everything pushed or already done; 1 a rejection or the default branch held (rerun
 after fixing: finished refs are skipped); 2 bad arguments, unreadable repo, failed ls-remote,
 missing or stale snapshot or ref-map, default-branch problem, existing prepare target;
-3 remote moved since backup; 4 refs deleted by the rewrite (see above).
+3 remote moved since backup (before the push, or found by the re-check after it); 4 refs deleted
+by the rewrite (see above).
+
+Every git call decodes as UTF-8 (surrogateescape), so non-ASCII ref names round-trip under
+`python -I` on Windows, where the default would be the ANSI code page.
 """
 import argparse
 import os
@@ -50,14 +60,18 @@ import sys
 
 ZERO = "0" * 40
 SNAPSHOT = "purge-backup-refs.txt"
-MOVED_HELP = ("nothing pushed. Someone pushed after the backup: find who (the freeze leaked). "
-              "Never fetch into the existing backup (it is the record of the old commits). "
-              "Make a NEW backup directory from the remote (Step 1), redo Steps 2-3 from it, "
-              "and pass both backups to local_cleanup.py changed.")
+MOVED_RECOVERY = ("Someone pushed after the backup: find who (the freeze leaked). "
+                  "Never fetch into the existing backup (it is the record of the old commits). "
+                  "Make a NEW backup directory from the remote (Step 1), redo Steps 2-3 from it, "
+                  "and pass both backups to local_cleanup.py changed.")
+MOVED_HELP = "nothing pushed. " + MOVED_RECOVERY
+MOVED_AFTER_HELP = ("the remote moved DURING the push (the refs pushed above stand). " + MOVED_RECOVERY)
 
 
 def sh(args):
-    return subprocess.run(args, capture_output=True, text=True)
+    # UTF-8 explicitly: under `python -I` on Windows text=True would decode as the ANSI code page
+    # and a non-ASCII ref name would never match (G1-07).
+    return subprocess.run(args, capture_output=True, encoding="utf-8", errors="surrogateescape")
 
 
 def local_refs(repo):
@@ -70,7 +84,7 @@ def local_refs(repo):
 def read_ref_map(work):
     path = os.path.join(work, "filter-repo", "ref-map")
     try:
-        with open(path, encoding="utf-8") as fh:
+        with open(path, encoding="utf-8", errors="surrogateescape") as fh:
             rows = [l.split() for l in fh.read().splitlines()[1:] if l.strip()]
     except OSError:
         return None
@@ -89,23 +103,32 @@ def prepare(argv):
     if not backup:
         print("cannot read refs from %s" % a.backup)
         return 2
-    r = sh(["git", "clone", "-q", "--mirror", "--no-local", a.backup, a.work])
+    # Heads and tags ONLY (G1-11): a GitHub --mirror backup also holds refs/pull/*, which scan
+    # never reads and which are never pushed; objects reachable only from them stay out of the copy.
+    r = sh(["git", "init", "-q", "--bare", a.work])
+    if not r.returncode:
+        r = sh(["git", "-C", a.work, "fetch", "-q", "--no-tags", os.path.abspath(a.backup),
+                "+refs/heads/*:refs/heads/*", "+refs/tags/*:refs/tags/*"])
     if r.returncode:
-        print("clone failed: %s" % r.stderr.strip()[-300:])
+        print("copy failed: %s" % r.stderr.strip()[-300:])
         return 2
-    snap = local_refs(a.backup)      # refs at clone time; a change during the clone is refused here
+    head = sh(["git", "-C", a.backup, "symbolic-ref", "-q", "HEAD"]).stdout.strip()
+    if head.startswith("refs/heads/"):
+        sh(["git", "-C", a.work, "symbolic-ref", "HEAD", head])
+    snap = local_refs(a.backup)      # refs at copy time; a change during the copy is refused here
     if snap != backup or local_refs(a.work) != snap:
         print("the backup changed while it was being copied: move %s aside and run prepare again" % a.work)
         return 2
-    with open(os.path.join(a.work, SNAPSHOT), "w", encoding="utf-8", newline="\n") as fh:
+    with open(os.path.join(a.work, SNAPSHOT), "w", encoding="utf-8", errors="surrogateescape", newline="\n") as fh:
         fh.write("# backup %s\n" % os.path.abspath(a.backup))
         fh.writelines("%s %s\n" % (sha, ref) for ref, sha in sorted(snap.items()))
     print("copy made: %d refs recorded in %s" % (len(snap), SNAPSHOT))
     return 0
 
 
-def push(work, url, refs, leases, dry_run, flags, rejected, label):
-    """One `git push` of refs (each "src:dst" with a lease); tallies porcelain flags."""
+def push(work, url, refs, leases, dry_run, flags, rejected, label, accepted):
+    """One `git push` of refs (each "src:dst" with a lease); tallies porcelain flags and records
+    each ref the remote accepted in accepted {dst: flag}."""
     print("%s: %s" % (label, " ".join(dst for _, dst in refs)))
     args = ["git", "-C", work, "push", "--porcelain", "--no-verify"]
     if dry_run:
@@ -122,6 +145,8 @@ def push(work, url, refs, leases, dry_run, flags, rejected, label):
             flags[f] = flags.get(f, 0) + 1
             if f == "!":
                 rejected.append(l)
+            else:
+                accepted[l.split("\t")[1].rsplit(":", 1)[-1]] = f
     if p.returncode and not seen:
         rejected.append("%s failed: %s" % (label, p.stderr.strip()[-300:]))
 
@@ -129,7 +154,7 @@ def push(work, url, refs, leases, dry_run, flags, rejected, label):
 def read_snapshot(work):
     """purge-backup-refs.txt written by `prepare`: (backup path, {ref: sha}) or None."""
     try:
-        with open(os.path.join(work, SNAPSHOT), encoding="utf-8") as fh:
+        with open(os.path.join(work, SNAPSHOT), encoding="utf-8", errors="surrogateescape") as fh:
             lines = fh.read().splitlines()
     except OSError:
         return None
@@ -145,6 +170,16 @@ def read_snapshot(work):
 
 def same_path(a, b):
     return os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
+
+
+def remote_refs(url):
+    """{ref: sha} of the remote's heads and tags (peeled ^{} lines dropped), None if ls-remote failed."""
+    r = sh(["git", "ls-remote", url, "refs/heads/*", "refs/tags/*"])
+    if r.returncode:
+        print("ls-remote failed: %s" % r.stderr.strip()[-300:])
+        return None
+    return {ref: sha for sha, ref in (l.split("\t", 1) for l in r.stdout.splitlines()
+                                      if l and not l.endswith("^{}"))}
 
 
 def remote_head(url):
@@ -202,12 +237,9 @@ def main():
         print("the rewrite was not made from this backup: move work.git aside, run prepare again, re-run filter-repo")
         return 2
 
-    r = sh(["git", "ls-remote", a.url, "refs/heads/*", "refs/tags/*"])
-    if r.returncode:
-        print("ls-remote failed: %s" % r.stderr.strip()[-300:])
+    remote = remote_refs(a.url)
+    if remote is None:
         return 2
-    remote = {ref: sha for sha, ref in (l.split("	") for l in r.stdout.splitlines()
-                                        if l and not l.endswith("^{}"))}
     head = remote_head(a.url)
     if head is None:
         print("ls-remote --symref HEAD failed")
@@ -261,22 +293,38 @@ def main():
     leases = {ref: snap.get(ref, "") for ref in todo}
     leases.update({ref: snap[ref] for ref in to_delete})
     others = [(ref, ref) for ref in todo if ref != main_ref] + [("", ref) for ref in to_delete]
-    flags, rejected, held = {}, [], []
+    flags, rejected, held, accepted = {}, [], [], {}
     for i in range(0, len(others), a.batch):
-        push(a.work, a.url, others[i:i + a.batch], leases, a.dry_run, flags, rejected, "batch %d" % (i // a.batch + 1))
+        push(a.work, a.url, others[i:i + a.batch], leases, a.dry_run, flags, rejected,
+             "batch %d" % (i // a.batch + 1), accepted)
     if main_ref in todo:
         if rejected:
             held.append(main_ref)
         else:
-            push(a.work, a.url, [(main_ref, main_ref)], leases, a.dry_run, flags, rejected, "main")
+            push(a.work, a.url, [(main_ref, main_ref)], leases, a.dry_run, flags, rejected, "main", accepted)
     print("flags: %s" % " ".join("%s=%d" % kv for kv in sorted(flags.items())))
     for l in rejected:
         print("REJECTED " + l)
     for ref in held:
         print("HELD %s (pushed only when every other ref succeeded)" % ref)
     print("rejected: %d; held: %d; deleted: %d" % (len(rejected), len(held), flags.get("-", 0)))
+    if not a.dry_run:
+        # G1-14: the pre-push check cannot see a push that lands while ours run. Look again.
+        after = remote_refs(a.url)
+        if after is None:                      # the re-check could not run: never report success
+            return 1 if (rejected or held) else 2
+        # created during the push: not in the copy, and not a deletion of ours the remote rejected
+        late = set(after) - set(work) - (set(to_delete) - set(accepted))
+        late |= {ref for ref, f in accepted.items()
+                 if after.get(ref) != (None if f == "-" else work.get(ref))}   # overwritten after ours
+        if late:
+            for ref in sorted(late):
+                print("MOVED " + ref)
+            print(MOVED_AFTER_HELP)
+            return 3
     return 1 if (rejected or held) else 0
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(errors="backslashreplace")
     sys.exit(prepare(sys.argv[2:]) if sys.argv[1:2] == ["prepare"] else main())

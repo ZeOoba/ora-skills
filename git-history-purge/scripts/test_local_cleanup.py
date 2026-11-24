@@ -4,7 +4,9 @@ Real git in temp dirs. The purge is a real `git filter-repo --replace-text` run 
 of the backup (SKILL.md Step 3). The FIRST commit holds nothing private, so the purge keeps its SHA
 and new branches share it: such branches must NOT count as old history (finding R3-01).
 """
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -26,8 +28,9 @@ def git(repo, *args):
                           text=True, check=True, env=ENV).stdout.strip()
 
 
-def run(*args):
-    return subprocess.run([sys.executable, "-I", SCRIPT] + list(args), capture_output=True, text=True, env=ENV)
+def run(*args, cwd=None, env=None):
+    return subprocess.run([sys.executable, "-I", SCRIPT] + list(args), capture_output=True, text=True,
+                          env=dict(ENV, **(env or {})), cwd=cwd)
 
 
 def write(path, data, age=None):
@@ -105,6 +108,40 @@ def load_module():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def inproc(argv, before=None, replace=None):
+    """Run local_cleanup.main in-process with a seam around its git() calls.
+    before(repo, args, kw) runs just before the real call; replace(real, repo, args, kw) may return a result
+    instead of calling git. Returns (rc, stdout, [(repo, args, stdin)])."""
+    mod = load_module()
+    real, calls = mod.git, []
+
+    def fake(repo, *args, **kw):
+        calls.append((repo, args, kw.get("stdin")))
+        if replace:
+            r = replace(real, repo, args, kw)
+            if r is not None:
+                return r
+        if before:
+            before(repo, args, kw)
+        return real(repo, *args, **kw)
+
+    mod.git = fake
+    old_env = dict(os.environ)
+    os.environ.update(ENV)
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            rc = mod.main(argv)
+    finally:
+        os.environ.clear()
+        os.environ.update(old_env)
+    return rc, buf.getvalue(), calls
+
+
+def fake_result(rc=0, stdout=""):
+    return subprocess.CompletedProcess(["git"], rc, stdout, "")
 
 
 class FullCleanupTest(unittest.TestCase):
@@ -185,9 +222,9 @@ class FullCleanupTest(unittest.TestCase):
                             "--min-age-hours", "0")
         cls.arch2 = os.path.join(t, "arch2")
         cls.archive2_run = run("archive", live, cls.plan2_path, cls.arch2, "--include-locked")
-        cls.gc_default = run("gc", live)
+        cls.gc_default = run("gc", live, s.old)
         cls.overlap_floor = run("overlap", live, s.old)
-        cls.gc_now = run("gc", live, "--prune-floor", "now")
+        cls.gc_now = run("gc", live, s.old, "--prune-floor", "now")
         cls.overlap_after = run("overlap", live, s.old)
 
     @classmethod
@@ -485,6 +522,296 @@ class SmallFixture(unittest.TestCase):
         a = run("archive", live, out, os.path.join(self.t, "arch-blocked"))
         self.assertEqual(a.returncode, 2, a.stdout + a.stderr)
         self.assertEqual(refs(live), before)
+
+
+    # ---- round-1 merge-gate fixes (PR 297)
+    def locked_paths(self):
+        out, cur, locked = git(self.live, "worktree", "list", "--porcelain"), None, set()
+        for line in out.splitlines():
+            if line.startswith("worktree "):
+                cur = norm(line[9:])
+            elif line.startswith("locked"):
+                locked.add(cur)
+        return locked
+
+    def archive_inproc(self, before=None, replace=None, plan=None):
+        return inproc(["archive", self.live, plan or self.plan, os.path.join(self.t, "arch"), "--include-locked"],
+                      before=before, replace=replace)
+
+    def test_changed_writes_dropped_blobs_and_trees(self):                      # G1-15
+        objs = self.s.old + ".objects"
+        self.assertTrue(os.path.isfile(objs))
+        listed = set(read(objs).decode().split())
+        self.assertIn(git(self.live, "rev-parse", self.s.c[1] + ":f.txt"), listed)
+        self.assertIn(git(self.live, "rev-parse", self.s.c[1] + "^{tree}"), listed)
+        self.assertNotIn(git(self.live, "rev-parse", self.s.c[0] + ":README.md"), listed)   # unchanged blob
+        self.assertFalse(listed & set(self.s.c))                                             # commits: own file
+
+    def test_tag_on_dropped_blob_or_tree_is_planned(self):                       # G1-15
+        git(self.live, "tag", "-a", "blobtag", "-m", "saved file",
+            git(self.live, "rev-parse", self.s.c[1] + ":f.txt"))
+        git(self.live, "tag", "treetag", git(self.live, "rev-parse", self.s.c[1] + "^{tree}"))
+        git(self.live, "tag", "oktag", git(self.live, "rev-parse", self.s.c[0] + ":README.md"))
+        out = os.path.join(self.t, "plan-blob.json")
+        run("plan", self.live, self.s.old, "--out", out, "--include-locked")
+        names = {x["name"] for x in json.load(open(out, encoding="utf-8"))["refs"]}
+        self.assertIn("refs/tags/blobtag", names)
+        self.assertIn("refs/tags/treetag", names)
+        self.assertNotIn("refs/tags/oktag", names)
+
+    def test_overlap_counts_a_dropped_blob(self):                                # G1-15
+        bare = os.path.join(self.t, "blob-only.git")
+        subprocess.run(["git", "init", "-q", "--bare", bare], check=True, env=ENV)
+        subprocess.run(["git", "-C", bare, "hash-object", "-w", "--stdin"], input=b"secret v1\n", check=True,
+                       env=ENV, capture_output=True)
+        r = run("overlap", bare, self.s.old)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+
+    def test_branch_reaching_old_only_through_second_parent_is_planned(self):   # G1-13 (L06)
+        m = git(self.live, "commit-tree", "newmain^{tree}", "-p", "newmain", "-p", self.s.c[1], "-m", "merge")
+        git(self.live, "update-ref", "refs/heads/merged-old", m)
+        out = os.path.join(self.t, "plan-merge.json")
+        run("plan", self.live, self.s.old, "--out", out, "--include-locked")
+        self.assertIn("refs/heads/merged-old", {x["name"] for x in json.load(open(out, encoding="utf-8"))["refs"]})
+
+    def test_branch_checked_out_in_new_worktree_after_plan_is_kept(self):       # G1-01 (race probe2)
+        sha = self.before["refs/heads/mv-br"]
+        git(self.live, "worktree", "add", "-q", os.path.join(self.t, "wnew"), "mv-br")
+        r = run("archive", self.live, self.plan, os.path.join(self.t, "arch"), "--include-locked")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertEqual(refs(self.live).get("refs/heads/mv-br"), sha)
+        self.assertRegex(r.stdout, r"SKIP refs/heads/mv-br: .*checked out")
+        self.assertNotIn("refs/heads/wb-br", refs(self.live))                  # the rest still archived
+
+    def test_branch_checked_out_just_before_removal_is_kept(self):              # G1-01 (live re-read)
+        sha = self.before["refs/heads/mv-br"]
+        wnew = os.path.join(self.t, "wnew")
+
+        def replace(real, repo, args, kw):
+            if args[:2] == ("worktree", "prune"):
+                r = real(repo, *args, **kw)
+                git(self.live, "worktree", "add", "-q", wnew, "mv-br")      # another session, after the prune
+                return r
+            return None
+
+        rc, stdout, _ = self.archive_inproc(replace=replace)
+        self.assertEqual(rc, 1, stdout)
+        self.assertEqual(refs(self.live).get("refs/heads/mv-br"), sha)
+        self.assertRegex(stdout, r"SKIP refs/heads/mv-br: .*checked out")
+        self.assertNotIn("REF REMOVAL FAILED", stdout)
+        self.assertNotIn("refs/heads/wb-br", refs(self.live))
+
+    def test_branch_whose_reflog_moved_is_kept(self):                            # G1-01 (reflog moved, tip same)
+        sha = self.before["refs/heads/mv-br"]
+        git(self.live, "update-ref", "-m", "elsewhere", "refs/heads/mv-br", self.s.c[2])
+        git(self.live, "update-ref", "-m", "back", "refs/heads/mv-br", sha)
+        r = run("archive", self.live, self.plan, os.path.join(self.t, "arch"), "--include-locked")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertEqual(refs(self.live).get("refs/heads/mv-br"), sha)
+        self.assertRegex(r.stdout, r"SKIP refs/heads/mv-br: reflog")
+
+    def test_detached_worktree_with_new_commit_after_plan_is_skipped(self):     # G1-02 (testvalidity L19)
+        write(os.path.join(self.wt["wd"], "work.txt"), "new work after the plan\n")
+        git(self.wt["wd"], "add", "work.txt")
+        git(self.wt["wd"], "commit", "-q", "-m", "new work")
+        new = git(self.wt["wd"], "rev-parse", "HEAD")
+        r = run("archive", self.live, self.plan, os.path.join(self.t, "arch"), "--include-locked")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("HEAD moved", r.stdout)
+        self.assertTrue(os.path.isdir(self.wt["wd"]))
+        self.assertIn(norm(self.wt["wd"]), wt_paths(self.live))
+        run("gc", self.live, self.s.old, "--prune-floor", "now")
+        self.assertEqual(git(self.wt["wd"], "rev-parse", "HEAD"), new)
+
+    def test_commit_between_recheck_and_move_is_not_lost(self):                 # G1-02 (race probe1, L35)
+        hook = os.path.join(self.live, ".git", "hooks", "reference-transaction")
+        mark, done = os.path.join(self.t, "b-mark"), os.path.join(self.t, "b-commit")
+        with open(hook, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write('#!/bin/sh\n[ "$1" = committed ] || exit 0\ngrep -q "refs/purge-archive/wt/" || exit 0\n'
+                     '[ -e "$B_MARK" ] && exit 0\n: > "$B_MARK"\n'
+                     'cd "$B_WT" && unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX && echo b > b-new.txt '
+                     '&& git add b-new.txt && git commit -q -m "B work" && git rev-parse HEAD > "$B_OUT"\nexit 0\n')
+        os.chmod(hook, 0o755)
+        fwd = lambda p: p.replace("\\", "/")
+        r = run("archive", self.live, self.plan, os.path.join(self.t, "arch"), "--include-locked",
+                env={"B_MARK": fwd(mark), "B_WT": fwd(self.wt["wd"]), "B_OUT": fwd(done)})
+        os.remove(hook)
+        self.assertTrue(os.path.isfile(done), "seam did not fire: " + r.stdout + r.stderr)
+        b_commit = read(done).decode().strip()
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("HEAD moved", r.stdout)
+        self.assertTrue(os.path.isdir(self.wt["wd"]))
+        self.assertIn(norm(self.wt["wd"]), wt_paths(self.live))
+        self.assertNotIn(norm(self.wt["wd"]), self.locked_paths())             # our lock released on skip
+        run("gc", self.live, self.s.old, "--prune-floor", "now")
+        self.assertEqual(git(self.wt["wd"], "rev-parse", "HEAD"), b_commit)
+        self.assertFalse(os.path.exists(self.wt["wb"]))                      # unchanged ones still moved
+
+    def test_each_worktree_is_locked_across_its_recheck_and_move(self):         # G1-02 (lock)
+        rc, stdout, calls = self.archive_inproc()
+        self.assertEqual(rc, 0, stdout)
+        for name in ("wa", "wb", "wd"):
+            p = norm(self.wt[name])
+            seq = [(norm(repo), args) for repo, args, _ in calls]
+            lock = [i for i, (_r, a) in enumerate(seq) if a[:2] == ("worktree", "lock") and norm(a[-1]) == p]
+            unlock = [i for i, (_r, a) in enumerate(seq) if a[:2] == ("worktree", "unlock") and norm(a[-1]) == p]
+            self.assertTrue(lock and unlock, name + ": " + stdout)
+            status = [i for i, (r, a) in enumerate(seq) if r == p and a[:1] == ("status",)]
+            self.assertTrue([i for i in status if lock[-1] < i < unlock[-1]], name + ": no live re-check while locked")
+        self.assertFalse(self.locked_paths())
+
+    def test_gc_keeps_other_sessions_stash_and_reflog_recovery(self):           # G1-03 (race probe3, pgc)
+        r = run("archive", self.live, self.plan, os.path.join(self.t, "arch"), "--include-locked")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        live = self.live
+        git(live, "checkout", "-q", "-b", "b-work")
+        for name in ("s1.txt", "s2.txt"):
+            write(os.path.join(live, name), name + "\n")
+            git(live, "add", name)
+            git(live, "stash", "-q")
+        write(os.path.join(live, "y.txt"), "yesterday\n")
+        git(live, "add", "y.txt")
+        git(live, "commit", "-q", "-m", "work later reset away")
+        y = git(live, "rev-parse", "HEAD")
+        git(live, "reset", "-q", "--hard", "HEAD~1")
+        stash = git(live, "reflog", "show", "--format=%H", "refs/stash").split()
+        self.assertEqual(len(stash), 2)
+        g = run("gc", live, self.s.old, "--prune-floor", "now")
+        self.assertEqual(g.returncode, 0, g.stdout + g.stderr)
+        self.assertEqual(git(live, "reflog", "show", "--format=%H", "refs/stash").split(), stash)
+        self.assertEqual(git(live, "cat-file", "-t", y), "commit")
+        self.assertIn(y, git(live, "reflog", "show", "--format=%H", "refs/heads/b-work").split())
+        o = run("overlap", live, self.s.old)
+        self.assertEqual(o.returncode, 0, o.stdout + o.stderr)
+
+    def test_commit_landing_on_a_planned_branch_before_removal_fails_leased(self):   # G1-04 (L38)
+        c1, state = self.s.c[1], {}
+
+        def before(repo, args, kw):
+            if args[:2] == ("update-ref", "--stdin") and "delete refs/heads/mv-br" in (kw.get("stdin") or "") \
+                    and not state:
+                n = git(self.live, "commit-tree", c1 + "^{tree}", "-p", c1, "-m", "concurrent work")
+                git(self.live, "update-ref", "refs/heads/mv-br", n, c1)
+                state["new"] = n
+
+        rc, stdout, _ = self.archive_inproc(before=before)
+        self.assertTrue(state, "seam did not fire")
+        self.assertEqual(rc, 1, stdout)
+        self.assertIn("REF REMOVAL FAILED", stdout)
+        self.assertEqual(refs(self.live).get("refs/heads/mv-br"), state["new"])
+        run("gc", self.live, self.s.old, "--prune-floor", "now")
+        self.assertEqual(git(self.live, "cat-file", "-t", state["new"]), "commit")
+
+    def test_worktree_local_refs_and_head_reflog_are_bundled(self):              # G1-10 (pwt)
+        wb, wd = self.wt["wb"], self.wt["wd"]
+        keep = git(wb, "commit-tree", self.s.c[0] + "^{tree}", "-m", "saved on a per-worktree ref")
+        git(wb, "update-ref", "refs/worktree/keep", keep)
+        orig = git(wb, "commit-tree", self.s.c[0] + "^{tree}", "-m", "only in ORIG_HEAD")
+        git(wb, "update-ref", "ORIG_HEAD", orig)
+        git(wd, "commit", "-q", "--allow-empty", "-m", "visited then left")
+        visited = git(wd, "rev-parse", "HEAD")
+        git(wd, "checkout", "-q", "--detach", self.s.c[1])                     # HEAD back where the plan saw it
+        arch = os.path.join(self.t, "arch")
+        r = run("archive", self.live, self.plan, arch, "--include-locked")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse([n for n in refs(self.live) if n.startswith("refs/purge-archive/")])
+        restore = os.path.join(self.t, "restore")
+        subprocess.run(["git", "init", "-q", restore], check=True, env=ENV)
+        git(restore, "fetch", "-q", os.path.join(arch, "refs.bundle"), "refs/*:refs/*")
+        got = set(refs(restore).values())
+        for sha in (keep, orig, visited):
+            self.assertIn(sha, got)
+            self.assertEqual(git(restore, "cat-file", "-t", sha), "commit")
+        manifest = read(os.path.join(arch, "manifest.tsv")).decode()
+        self.assertIn("refs/worktree/keep", manifest)
+        self.assertIn("ORIG_HEAD", manifest)
+
+    def test_stash_changed_after_plan_is_skipped_rest_archived(self):            # G1-16 L22
+        write(os.path.join(self.wt["wb"], "f.txt"), "old stash\n")
+        git(self.wt["wb"], "stash", "-q")
+        out = os.path.join(self.t, "plan-stash.json")
+        run("plan", self.live, self.s.old, "--out", out, "--include-locked")
+        self.assertTrue(json.load(open(out, encoding="utf-8"))["stash"])
+        write(os.path.join(self.live, "README.md"), "new stash\n")
+        git(self.live, "stash", "-q")
+        stash = git(self.live, "reflog", "show", "--format=%H", "refs/stash").split()
+        arch = os.path.join(self.t, "arch")
+        r = run("archive", self.live, out, arch, "--include-locked")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("stash changed since the plan", r.stdout)
+        self.assertNotIn("REF REMOVAL FAILED", r.stdout)
+        self.assertEqual(git(self.live, "reflog", "show", "--format=%H", "refs/stash").split(), stash)
+        self.assertNotIn("refs/heads/wb-br", refs(self.live))
+        self.assertNotIn("\nstash\t", "\n" + read(os.path.join(arch, "manifest.tsv")).decode())
+
+    def test_main_head_moved_after_plan_refuses(self):                           # G1-16 L23
+        git(self.live, "commit", "-q", "--allow-empty", "-m", "main moved")
+        before = refs(self.live)
+        r = run("archive", self.live, self.plan, os.path.join(self.t, "arch"), "--include-locked")
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn("main worktree HEAD moved", r.stdout)
+        self.assertEqual(refs(self.live), before)
+        self.assertTrue(all(os.path.isdir(p) for p in self.wt.values()))
+
+    def test_planned_branch_now_checked_out_in_main_is_skipped(self):           # G1-16 L26
+        head = git(self.live, "rev-parse", "HEAD")
+        git(self.live, "update-ref", "refs/heads/mv-br", head)
+        git(self.live, "symbolic-ref", "HEAD", "refs/heads/mv-br")             # main HEAD (sha) unchanged
+        r = run("archive", self.live, self.plan, os.path.join(self.t, "arch"), "--include-locked")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("SKIP refs/heads/mv-br: checked out in the main worktree", r.stdout)
+        self.assertEqual(refs(self.live).get("refs/heads/mv-br"), head)
+
+    def test_bundle_verify_failure_aborts_with_nothing_moved(self):              # G1-16 L29
+        def replace(real, repo, args, kw):
+            return fake_result(1) if args[:2] == ("bundle", "verify") else None
+
+        rc, stdout, _ = self.archive_inproc(replace=replace)
+        self.assertEqual(rc, 2, stdout)
+        self.assertIn("bundle verify failed", stdout)
+        self.assertEqual(refs(self.live), self.before)
+        self.assertTrue(all(os.path.isdir(p) for p in self.wt.values()))
+        self.assertEqual(len(wt_paths(self.live)), 5)
+
+    def test_worktree_still_registered_after_prune_is_reported(self):           # G1-16 L37
+        def replace(real, repo, args, kw):
+            return fake_result(0) if args[:2] == ("worktree", "prune") else None
+
+        rc, stdout, _ = self.archive_inproc(replace=replace)
+        self.assertEqual(rc, 1, stdout)
+        self.assertRegex(stdout, r"SKIP .*wd: still registered after prune")
+
+    def test_relative_paths_are_resolved_against_the_working_directory(self):   # G1-18
+        r = run("archive", "live", "plan.json", "arch-rel", "--include-locked", cwd=self.t)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue(os.path.isfile(os.path.join(self.t, "arch-rel", "refs.bundle")))
+        self.assertFalse(os.path.exists(os.path.join(self.live, "arch-rel")))
+
+
+class ChangedTagOnlyTest(unittest.TestCase):
+    def test_changed_includes_a_commit_reachable_only_from_a_tag(self):         # G1-05 (L04)
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as t:
+            src = os.path.join(t, "src")
+            subprocess.run(["git", "init", "-q", "-b", "main", src], check=True, env=ENV)
+            write(os.path.join(src, "r.md"), "r\n")
+            git(src, "add", "-A")
+            git(src, "commit", "-q", "-m", "c0")
+            git(src, "checkout", "-q", "--detach")
+            write(os.path.join(src, "rel.txt"), "secret in release\n")
+            git(src, "add", "-A")
+            git(src, "commit", "-q", "-m", "release")
+            rel = git(src, "rev-parse", "HEAD")
+            git(src, "tag", "-a", "v1", "-m", "release")
+            git(src, "checkout", "-q", "main")
+            backup, purged = os.path.join(t, "backup.git"), os.path.join(t, "purged.git")
+            subprocess.run(["git", "clone", "-q", "--mirror", src, backup], check=True, env=ENV)
+            subprocess.run(["git", "clone", "-q", "--mirror", "--no-local", backup, purged], check=True, env=ENV)
+            write(os.path.join(t, "rules.txt"), "secret==>[private]\n")
+            git(purged, "filter-repo", "--force", "--replace-text", os.path.join(t, "rules.txt"))
+            out = os.path.join(t, "old.txt")
+            r = run("changed", purged, backup, "--out", out)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn(rel, read(out).decode().split())
 
 
 class UnitTest(unittest.TestCase):

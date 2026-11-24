@@ -3,8 +3,10 @@
   python -I local_cleanup.py changed <purged.git> <backup.git> [<backup2.git> ...] --out <old-commits.txt>
   python -I local_cleanup.py plan <repo> <old-commits.txt> --out <plan.json> [--min-age-hours 24] [--include-locked]
   python -I local_cleanup.py archive <repo> <plan.json> <archive-dir> [--include-locked]
-  python -I local_cleanup.py gc <repo> [--prune-floor 1.hour.ago]
+  python -I local_cleanup.py gc <repo> <old-commits.txt> [--prune-floor 1.hour.ago]
   python -I local_cleanup.py overlap <repo> <old-commits.txt>
+
+Every path argument is resolved against the current directory before use.
 
 "Old history" = reaches a commit the purge CHANGED or DROPPED: every commit reachable from any ref of
 any backup, minus every commit reachable from any ref of the purged copy. A clean first commit keeps
@@ -12,22 +14,37 @@ its SHA through filter-repo, so branches sharing only that root are NOT old; an 
 old either. Several backups: a second one is made when someone pushed after the first (never fetch
 into an existing backup); `changed` takes their union.
 
-changed  writes the sorted old set; exit 1 if it is empty (refuse to guess).
-plan     (read-only) every ref in every namespace (annotated tags peeled), every stash entry, every
-         linked worktree. Linked worktrees on old history are skipped (with their branch) when locked
+changed  writes the sorted old set; exit 1 if it is empty (refuse to guess). Also writes
+         <out>.objects: the changed/dropped NON-commit objects (blobs, trees, tag objects reachable
+         from the backups minus those reachable from the purged copy); plan and overlap read it when
+         it sits next to the old-commits file.
+plan     (read-only) every ref in every namespace (annotated tags peeled; a ref whose object or
+         peeled object is in <old>.objects counts as old), every stash entry, every linked
+         worktree. Linked worktrees on old history are skipped (with their branch) when locked
          (unless --include-locked), missing/prunable, or dirty with a change newer than
          --min-age-hours. A main worktree on old history is a BLOCKER (re-point it first, Step 6.2).
-         Exit 0 if every old item is planned and there is no blocker, else 1.
-archive  re-checks every item (ref SHA, worktree HEAD, dirty set, each dirty file's mtime; anything
-         changed is skipped), bundles every ref to remove plus temp refs for stash entries and
-         detached worktree HEADs (refs/purge-archive/...), verifies the bundle and its heads, saves
-         staged-only content (index differs from both HEAD and the file), moves each worktree folder
-         intact (ignored files included) to <archive>/dirs/, prunes, and removes the refs in ONE
-         leased update-ref transaction. Nothing is deleted. Exit 0 all archived, 1 something
-         skipped, 2 refused before anything was moved or removed.
-gc       reflog expire --expire-unreachable=now --all, then gc --prune=<floor>. The floor (default
-         1.hour.ago, never now by default) protects objects other sessions are creating.
-overlap  commit objects in the object store that are in the old set: exit 0 when 0, else 1.
+         Records each planned ref's reflog length. Exit 0 if every old item is planned and there
+         is no blocker, else 1.
+archive  re-checks every item (ref SHA, worktree HEAD, dirty set, each dirty file's mtime; branches
+         checked out in any other worktree; anything changed is skipped), bundles every ref to
+         remove plus temp refs (refs/purge-archive/...) for stash entries, detached worktree HEADs
+         and each archived worktree's local refs (refs/worktree, refs/bisect, refs/rewritten,
+         ORIG_HEAD/FETCH_HEAD/... and HEAD-reflog entries not reachable otherwise), verifies the
+         bundle and its heads. Then per worktree: `git worktree lock`, re-check against LIVE state
+         (HEAD, branch, dirty set, mtimes, local refs), save staged-only content (index differs from
+         both HEAD and the file), unlock, move the folder intact (ignored files included) to
+         <archive>/dirs/. Prunes, re-reads the live worktree list and each ref's tip and reflog
+         (anything now checked out or moved is skipped), and removes the refs in ONE leased
+         update-ref transaction. Nothing is deleted. Exit 0 all archived, 1 something skipped,
+         2 refused before anything was moved or removed.
+gc       deletes ONLY the reflog entries (every reflog: each ref incl. refs/stash, every worktree's
+         HEAD and per-worktree refs) whose SHA reaches an old commit or is a listed old object,
+         highest index first (`reflog delete --rewrite`, so kept entries no longer point at a
+         deleted one); every other session's reflog and stash entry is kept. Then
+         gc --prune=<floor>. The floor (default 1.hour.ago, never now by default) protects objects
+         other sessions are creating.
+overlap  objects in the object store that are in the old set (commits) or, when <old>.objects
+         exists, in that set (blobs, trees, tags): exit 0 when 0, else 1.
 
 Prints counts and ref names only, never file contents.
 Exit codes: 0 ok, 1 work left/found, 2 bad input (nothing changed).
@@ -79,6 +96,11 @@ def rev_list_all(repo):
     return set(out(repo, "rev-list", "--all").split())
 
 
+def objects_all(repo):
+    """Every object (commit, tree, blob, tag) reachable from any ref."""
+    return {l.split(" ", 1)[0] for l in out(repo, "rev-list", "--objects", "--all").splitlines() if l}
+
+
 def read_old(path):
     if not os.path.isfile(path):
         raise Refuse("old-commits file not found: %s" % path)
@@ -87,6 +109,19 @@ def read_old(path):
     bad = [s for s in shas if not SHA_RE.match(s)]
     if bad or not shas:
         raise Refuse("old-commits file is empty or has %d malformed line(s)" % len(bad))
+    return set(shas)
+
+
+def read_old_objects(old_path):
+    """<old-commits>.objects (changed/dropped blobs, trees, tags) or an empty set when absent."""
+    path = old_path + ".objects"
+    if not os.path.isfile(path):
+        return set()
+    with open(path, encoding="ascii", errors="replace") as fh:
+        shas = [l.strip() for l in fh if l.strip()]
+    bad = [s for s in shas if not SHA_RE.match(s)]
+    if bad:
+        raise Refuse("old-objects file has %d malformed line(s)" % len(bad))
     return set(shas)
 
 
@@ -108,14 +143,25 @@ def missing_heads(expected, listed_text):
 
 
 class OldTest:
-    def __init__(self, repo, old):
-        self.repo, self.old, self.cache = repo, old, {}
+    """Called with a commit: does it reach an old commit? .obj(sha): is it a listed old non-commit object?"""
+
+    def __init__(self, repo, old, objs=frozenset()):
+        self.repo, self.old, self.objs, self.cache = repo, old, objs, {}
 
     def __call__(self, sha):
         if sha not in self.cache:
             r = git(self.repo, "rev-list", sha, check=False)
             self.cache[sha] = r.returncode == 0 and not self.old.isdisjoint(r.stdout.split())
         return self.cache[sha]
+
+    def obj(self, sha):
+        return sha in self.objs
+
+    def ref(self, sha, commit, peeled):
+        """A ref (object sha, peeled commit or None, peeled object) is old history."""
+        if commit:
+            return self(commit) or self.obj(sha)
+        return self.obj(sha) or self.obj(peeled)
 
 
 def ref_kind(name):
@@ -128,19 +174,51 @@ def ref_kind(name):
 
 
 def list_refs(repo):
-    """[(name, object sha, peeled commit or None, symref target or '')]."""
-    fmt = "%(refname)%00%(objectname)%00%(objecttype)%00%(symref)"
+    """[(name, object sha, peeled commit or None, symref target or '', peeled object sha)]."""
+    fmt = "%(refname)%00%(objectname)%00%(objecttype)%00%(symref)%00%(*objectname)"
     rows = []
     for line in out(repo, "for-each-ref", "--format=" + fmt).splitlines():
         if not line:
             continue
-        name, sha, typ, symref = line.split("\0")
-        commit = sha if typ == "commit" else None
+        name, sha, typ, symref, peeled = line.split("\0")
+        commit, peeled = (sha if typ == "commit" else None), (peeled or sha)
         if typ == "tag":
+            r = git(repo, "rev-parse", "--verify", "-q", sha + "^{}", check=False)
+            peeled = r.stdout.strip() if r.returncode == 0 else peeled
             r = git(repo, "rev-parse", "--verify", "-q", sha + "^{commit}", check=False)
             commit = r.stdout.strip() if r.returncode == 0 else None
-        rows.append((name, sha, commit, symref))
+        rows.append((name, sha, commit, symref, peeled))
     return rows
+
+
+def reflog_names(repo):
+    """Names that have a reflog (`git reflog list`), or None when this git cannot list them."""
+    r = git(repo, "reflog", "list", check=False)
+    return {l for l in r.stdout.splitlines() if l} if r.returncode == 0 else None
+
+
+def reflog_entries(repo, name):
+    """[(index, sha)] newest first, as `git reflog delete` addresses them; [] when there is none."""
+    r = git(repo, "reflog", "show", "--format=%gD %H", name, "--", check=False)
+    rows = []
+    if r.returncode != 0:
+        return rows
+    for line in r.stdout.splitlines():
+        m = re.match(r"^(.*)@\{(\d+)\} ([0-9a-f]+)$", line)
+        if m:
+            rows.append((int(m.group(2)), m.group(3)))
+    return rows
+
+
+def reflog_len(repo, name, have=None):
+    if have is not None and name not in have:
+        return 0
+    return len(reflog_entries(repo, name))
+
+
+def checked_out(repo):
+    """branch ref -> worktree path, for every worktree (main included) as git lists them NOW."""
+    return {w["branch"]: w["path"] for w in list_worktrees(repo) if w["branch"]}
 
 
 def stash_entries(repo):
@@ -227,6 +305,68 @@ def wt_snapshot(w):
             "newest_change": max(times) / 1e9 if times else None}
 
 
+WT_LOCAL_NS = ("refs/worktree", "refs/bisect", "refs/rewritten")
+WT_PSEUDO = ("ORIG_HEAD", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_HEAD")
+
+
+def wt_local_raw(repo, w):
+    """Everything only this linked worktree holds: [(label, original name, sha)], in a stable order.
+    Its local refs, its pseudo-refs (FETCH_HEAD lines included) and its HEAD reflog entries."""
+    path, rows = w["path"], []
+    r = git(path, "for-each-ref", "--format=%(refname) %(objectname)", *WT_LOCAL_NS, check=False)
+    for line in r.stdout.splitlines():
+        name, _, sha = line.rpartition(" ")
+        if name and SHA_RE.match(sha):
+            rows.append((name[len("refs/"):], name, sha))
+    for p in WT_PSEUDO:
+        r = git(path, "rev-parse", "--verify", "-q", p, check=False)
+        if r.returncode == 0 and SHA_RE.match(r.stdout.strip()):
+            rows.append((p, p, r.stdout.strip()))
+    fetch = git(path, "rev-parse", "--git-path", "FETCH_HEAD", check=False).stdout.strip()
+    if fetch:
+        fetch = fetch if os.path.isabs(fetch) else os.path.join(path, fetch)
+        try:
+            with open(fetch, encoding="utf-8", errors="replace") as fh:
+                for i, line in enumerate(fh):
+                    sha = line.split("\t", 1)[0].strip()
+                    if SHA_RE.match(sha):
+                        rows.append(("FETCH_HEAD/%d" % i, "FETCH_HEAD line %d" % i, sha))
+        except OSError:
+            pass
+    for i, sha in reflog_entries(repo, "worktrees/%s/HEAD" % w["id"]):
+        rows.append(("reflog/%d" % i, "HEAD@{%d}" % i, sha))
+    return rows
+
+
+def wt_local_refs(repo, w, raw):
+    """The subset of wt_local_raw to bundle: every local ref, plus each pseudo-ref / reflog entry whose
+    object exists and is NOT reachable from any ref (those are either kept or bundled anyway)."""
+    keep, loose = [], {}
+    for label, name, sha in raw:
+        if name.startswith("refs/"):
+            keep.append((label, name, sha))
+        else:
+            loose.setdefault(sha, (label, name, sha))
+    if loose:
+        listing = git(repo, "cat-file", "--batch-check=%(objectname) %(objecttype)",
+                      stdin="".join(s + "\n" for s in loose), check=False).stdout.split("\n")
+        present = {}
+        for line in listing:
+            parts = line.split()
+            if len(parts) == 2 and parts[1] != "missing":
+                present[parts[0]] = parts[1]
+        commits = [s for s, t in present.items() if t == "commit"]
+        unreached = set()
+        if commits:
+            r = git(repo, "rev-list", "--stdin", "--not", "--all", stdin="".join(s + "\n" for s in commits),
+                    check=False)
+            unreached = set(r.stdout.split()) if r.returncode == 0 else set(commits)
+        for sha, row in loose.items():
+            if sha in unreached or (sha in present and present[sha] != "commit"):
+                keep.append(row)
+    return keep
+
+
 # ---------------------------------------------------------------- modes
 
 def cmd_changed(a):
@@ -237,17 +377,24 @@ def cmd_changed(a):
     for b in a.backups:
         backup |= rev_list_all(b)
     old = sorted(backup - rev_list_all(a.purged))
+    backup_objs = set()
+    for b in a.backups:
+        backup_objs |= objects_all(b)
+    objs = sorted(backup_objs - objects_all(a.purged) - backup)
     with open(a.out, "w", encoding="ascii", newline="\n") as fh:
         fh.write("".join(s + "\n" for s in old))
+    with open(a.out + ".objects", "w", encoding="ascii", newline="\n") as fh:
+        fh.write("".join(s + "\n" for s in objs))
     print("changed or dropped commits: %d (backups: %d)" % (len(old), len(a.backups)))
+    print("changed or dropped blobs/trees/tags: %d (%s.objects)" % (len(objs), os.path.basename(a.out)))
     if not old:
         print("EMPTY: no commit differs; wrong purged copy or backup? refusing to guess")
         return 1
     return 0
 
 
-def build_plan(repo, old, min_age_hours, include_locked):
-    is_old = OldTest(repo, old)
+def build_plan(repo, old, min_age_hours, include_locked, objs=frozenset()):
+    is_old = OldTest(repo, old, objs)
     plan = {"repo": os.path.abspath(repo), "created": time.time(), "refs": [], "symrefs": [], "stash": [],
             "worktrees": [], "skipped": [], "blockers": [], "main_head": None, "main_branch": None}
     skip_branches = {}
@@ -280,18 +427,19 @@ def build_plan(repo, old, min_age_hours, include_locked):
             continue
         plan["worktrees"].append(snap)
     by_name = {}
-    for name, sha, commit, symref in list_refs(repo):
+    rows = list_refs(repo)
+    for name, sha, commit, symref, peeled in rows:
         if symref:
             continue
         by_name[name] = sha
-        if not commit or not is_old(commit):
+        if not is_old.ref(sha, commit, peeled):
             continue
         if name in skip_branches:
             plan["skipped"].append({"item": name, "reason": skip_branches[name]})
             continue
         plan["refs"].append({"name": name, "sha": sha, "commit": commit, "kind": ref_kind(name)})
     planned = {r["name"] for r in plan["refs"]}
-    for name, sha, commit, symref in list_refs(repo):
+    for name, sha, commit, symref, _p in rows:
         if symref and symref in planned:
             plan["symrefs"].append({"name": name, "target": symref})
     entries = stash_entries(repo)
@@ -300,13 +448,16 @@ def build_plan(repo, old, min_age_hours, include_locked):
         if "refs/stash" not in planned and "refs/stash" in by_name:
             plan["refs"].append({"name": "refs/stash", "sha": by_name["refs/stash"],
                                  "commit": by_name["refs/stash"], "kind": "stash"})
+    have = reflog_names(repo)
+    for r in plan["refs"]:
+        r["reflog"] = reflog_len(repo, r["name"], have)
     return plan
 
 
 def cmd_plan(a):
     require_repo(a.repo)
     old = read_old(a.old_commits)
-    plan = build_plan(a.repo, old, a.min_age_hours, a.include_locked)
+    plan = build_plan(a.repo, old, a.min_age_hours, a.include_locked, read_old_objects(a.old_commits))
     plan["old_commits"] = os.path.abspath(a.old_commits)
     plan["include_locked"] = a.include_locked
     with open(a.out, "w", encoding="utf-8", newline="\n") as fh:
@@ -367,6 +518,17 @@ def wt_unchanged(planned, current):
     return None
 
 
+def live_worktree(repo, path):
+    """The linked worktree's porcelain entry as git lists it NOW (None when no longer registered)."""
+    for w in list_worktrees(repo)[1:]:
+        if norm(w["path"]) == norm(path):
+            return w
+    return None
+
+
+LOCK_REASON = "git-history-purge local_cleanup archive in progress"
+
+
 def cmd_archive(a):
     require_repo(a.repo)
     repo = a.repo
@@ -381,8 +543,11 @@ def cmd_archive(a):
     if main["head"] != plan.get("main_head"):
         raise Refuse("main worktree HEAD moved since the plan: plan again")
     skipped = []
-    live = {name: sha for name, sha, _c, symref in list_refs(repo) if not symref}
+    live = {name: sha for name, sha, _c, symref, _p in list_refs(repo) if not symref}
     by_path = {norm(w["path"]): w for w in wts_now[1:]}
+    planned_paths = {norm(w["path"]) for w in plan["worktrees"]}
+    others = {w["branch"]: w["path"] for w in wts_now[1:]
+              if w["branch"] and norm(w["path"]) not in planned_paths}
 
     # re-check worktrees
     wts = []
@@ -404,6 +569,8 @@ def cmd_archive(a):
     for r in plan["refs"]:
         if r["name"] == main["branch"]:
             skipped.append((r["name"], "checked out in the main worktree"))
+        elif r["name"] in others:
+            skipped.append((r["name"], "checked out in worktree %s (not in the plan)" % others[r["name"]]))
         elif r["name"] in skip_branch:
             skipped.append((r["name"], skip_branch[r["name"]]))
         elif live.get(r["name"]) != r["sha"]:
@@ -421,9 +588,15 @@ def cmd_archive(a):
     temp = {}
     for e in stash:
         temp["%sstash/%d" % (TEMP_NS, e["index"])] = e["sha"]
+    wtrefs = []                      # (temp ref, worktree id, original name, sha): worktree-local state
     for w in wts:
         if w["detached"] or not w["branch"]:
             temp["%swt/%s" % (TEMP_NS, w["id"])] = w["head"]
+        w["wtrefs_raw"] = wt_local_raw(repo, w)
+        for label, name, sha in wt_local_refs(repo, w, w["wtrefs_raw"]):
+            tn = "%swtref/%s/%s" % (TEMP_NS, w["id"], label)
+            temp[tn] = sha
+            wtrefs.append((tn, w["id"], name, sha))
     expected = dict((r["name"], r["sha"]) for r in refs)
     expected.update(temp)
     if not expected and not wts:
@@ -465,22 +638,35 @@ def cmd_archive(a):
     manifest = [("kind", "id", "sha", "ref", "original_path")]
     for e in stash:
         manifest.append(("stash", str(e["index"]), e["sha"], "%sstash/%d" % (TEMP_NS, e["index"]), ""))
+    for tn, wid, name, sha in wtrefs:
+        manifest.append(("wtref", wid, sha, tn, name))
 
-    # staged-only content, then move each worktree
+    # per worktree: lock, re-check against LIVE state, save staged-only content, unlock, move
     moved = []
     for w in wts:
         label = "%s-%s" % (w["id"], os.path.basename(os.path.normpath(w["path"])))
-        why = wt_unchanged(w, {"head": w["head"], "branch": w["branch"]})
+        why, held = None, False
+        if not w["locked_now"]:
+            if git(repo, "worktree", "lock", "--reason", LOCK_REASON, w["path"], check=False).returncode != 0:
+                why = "could not lock it (locked by another session meanwhile?)"
+            else:
+                held = True
+        if why is None:
+            why = wt_unchanged(w, live_worktree(repo, w["path"]))       # live HEAD, branch, dirty set, mtimes
+        if why is None and wt_local_raw(repo, w) != w["wtrefs_raw"]:
+            why = "worktree-local refs or HEAD reflog changed since the bundle"
         if why is None:
             try:
-                n = save_staged(w, os.path.join(a.archive_dir, "staged-index", label))
+                save_staged(w, os.path.join(a.archive_dir, "staged-index", label))
                 for rel in w["index_only"]:
                     manifest.append(("staged", w["id"], "", "", os.path.join(w["path"], rel)))
             except (OSError, ValueError, subprocess.CalledProcessError) as exc:
                 why = "could not save staged-only content (%s)" % type(exc).__name__
-        if why is None and w["locked_now"]:
+        if why is None and (held or w["locked_now"]):              # the moved folder keeps no lock
             if git(repo, "worktree", "unlock", w["path"], check=False).returncode != 0:
                 why = "could not unlock"
+            else:
+                held = False
         dest = os.path.join(a.archive_dir, "dirs", label)
         if why is None:
             os.makedirs(os.path.dirname(dest), exist_ok=True)
@@ -495,6 +681,8 @@ def cmd_archive(a):
                     git(repo, "worktree", "lock", "--reason", w["lock_reason_now"] or "restored", w["path"],
                         check=False)
         if why:
+            if held:
+                git(repo, "worktree", "unlock", w["path"], check=False)
             skipped.append((w["path"], why))
             if w["branch"]:
                 skipped.append((w["branch"], why))
@@ -510,6 +698,22 @@ def cmd_archive(a):
             skipped.append((w["path"], "still registered after prune"))
             if w["branch"]:
                 refs = [r for r in refs if r["name"] != w["branch"]]
+
+    # immediately before the transaction: re-read the LIVE worktree list, each tip and each reflog
+    co = checked_out(repo)
+    live = {name: sha for name, sha, _c, symref, _p in list_refs(repo) if not symref}
+    have = reflog_names(repo)
+    keep = []
+    for r in refs:
+        if r["name"] in co:
+            skipped.append((r["name"], "checked out in worktree %s (now)" % co[r["name"]]))
+        elif live.get(r["name"]) != r["sha"]:
+            skipped.append((r["name"], "ref moved or removed since the plan"))
+        elif "reflog" in r and reflog_len(repo, r["name"], have) != r["reflog"]:
+            skipped.append((r["name"], "reflog changed since the plan (moved and back?)"))
+        else:
+            keep.append(r)
+    refs = keep
 
     # remove refs in ONE leased transaction (temp refs included: their content is in the bundle)
     names = {r["name"] for r in refs}
@@ -544,21 +748,67 @@ def cmd_archive(a):
     return 1 if skipped or rc else 0
 
 
+def all_reflogs(repo):
+    """Every reflog: the shared ones and the main worktree's (`git reflog list`), plus each linked
+    worktree's HEAD and per-worktree refs, addressed from the main repo as worktrees/<id>/<name>."""
+    names = reflog_names(repo)
+    if names is None:
+        raise Refuse("this git cannot list reflogs (`git reflog list` needs git 2.46+); nothing changed")
+    sel = sorted(names)
+    local = tuple(ns + "/" for ns in WT_LOCAL_NS)
+    for w in list_worktrees(repo)[1:]:
+        if not w["id"]:
+            continue
+        per = {"HEAD"}
+        base = os.path.join(common_dir(repo), "worktrees", w["id"], "logs")
+        for root, _dirs, files in os.walk(base):
+            for f in files:
+                per.add(os.path.relpath(os.path.join(root, f), base).replace(os.sep, "/"))
+        if os.path.isdir(w["path"]):
+            r = git(w["path"], "reflog", "list", check=False)
+            per |= {n for n in r.stdout.splitlines() if n == "HEAD" or n.startswith(local)}
+        sel += ["worktrees/%s/%s" % (w["id"], n) for n in sorted(per)]
+    return sel
+
+
 def cmd_gc(a):
     require_repo(a.repo)
-    git(a.repo, "reflog", "expire", "--expire-unreachable=now", "--all")
+    is_old = OldTest(a.repo, read_old(a.old_commits), read_old_objects(a.old_commits))
+    removed = logs = failed = 0
+    for name in all_reflogs(a.repo):
+        entries = reflog_entries(a.repo, name)
+        idx = sorted({i for i, sha in entries if is_old(sha) or is_old.obj(sha)}, reverse=True)
+        if not idx:
+            continue
+        top = entries[0][1] if entries else None
+        args = ["reflog", "delete", "--rewrite"] + (["--updateref"] if name == "refs/stash" else [])
+        r = git(a.repo, *(args + ["%s@{%d}" % (name, i) for i in idx]), check=False)   # highest index first
+        if r.returncode != 0:
+            print("reflog delete failed for %s (exit %d)" % (name, r.returncode))
+            failed += 1
+            continue
+        removed, logs = removed + len(idx), logs + 1
+        if name == "refs/stash" and len(idx) == len(entries) and top:     # every stash entry was old
+            git(a.repo, "update-ref", "-d", "refs/stash", top, check=False)
+    print("reflog entries on old history removed: %d (in %d reflogs); every other entry kept" % (removed, logs))
     r = git(a.repo, "gc", "--quiet", "--prune=" + a.prune_floor, check=False)
     print("gc --prune=%s: exit %d" % (a.prune_floor, r.returncode))
-    return 0 if r.returncode == 0 else 1
+    return 0 if r.returncode == 0 and not failed else 1
 
 
 def cmd_overlap(a):
     require_repo(a.repo)
     old = read_old(a.old_commits)
+    objs = read_old_objects(a.old_commits)
     listing = out(a.repo, "cat-file", "--batch-all-objects", "--batch-check=%(objecttype) %(objectname)")
-    commits = {l[7:] for l in listing.splitlines() if l.startswith("commit ")}
-    n = len(commits & old)
-    print("old commits still in the object store: %d" % n)
+    commits, others = set(), set()
+    for line in listing.splitlines():
+        typ, _, sha = line.partition(" ")
+        (commits if typ == "commit" else others).add(sha)
+    n = len(commits & old) + len(others & objs)
+    print("old commits still in the object store: %d" % len(commits & old))
+    if objs:
+        print("changed/dropped blobs, trees and tags still in the object store: %d" % len(others & objs))
     if n:
         print("hint: a ref, stash entry or worktree still reaches them (run plan again), or they are younger "
               "than the prune floor (re-run gc after the floor passes)")
@@ -588,6 +838,7 @@ def main(argv=None):
     c.set_defaults(fn=cmd_archive)
     c = sub.add_parser("gc")
     c.add_argument("repo")
+    c.add_argument("old_commits")
     c.add_argument("--prune-floor", default="1.hour.ago")
     c.set_defaults(fn=cmd_gc)
     c = sub.add_parser("overlap")
@@ -598,6 +849,11 @@ def main(argv=None):
         a = p.parse_args(argv)
     except SystemExit as exc:
         return 2 if exc.code else 0
+    for attr in ("purged", "repo", "out", "plan", "archive_dir", "old_commits"):   # never resolved against -C
+        if getattr(a, attr, None):
+            setattr(a, attr, os.path.abspath(getattr(a, attr)))
+    if getattr(a, "backups", None):
+        a.backups = [os.path.abspath(b) for b in a.backups]
     try:
         return a.fn(a)
     except Refuse as exc:
