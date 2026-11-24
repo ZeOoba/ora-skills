@@ -30,8 +30,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pending_reimport as pr  # noqa: E402
 
 # Hermetic: never glob the real AppData rpm store-plugin root (R34-6 refute, C4).
-# Tests that need an rpm install patch pr.RPM_ROOT themselves.
+# Tests that need an rpm install patch pr.RPM_ROOT themselves. The pinned root EXISTS
+# (empty): every sweep refuses to run unless both install roots are reachable.
 pr.RPM_ROOT = Path(tempfile.mkdtemp(prefix='pending_reimport_rpm_')) / 'rpm'
+pr.RPM_ROOT.mkdir()
+_PINNED_RPM_ROOT = pr.RPM_ROOT
+# Same for the legacy root (round-2 refute): the CLI's unreadable-root guard reads the
+# module default, and ubuntu CI has no AppData legacy cache at all.
+pr.CACHE_ROOT = pr.RPM_ROOT.parent / 'legacy'
+pr.CACHE_ROOT.mkdir()
+_PINNED_CACHE_ROOT = pr.CACHE_ROOT
+
+
+def _reload_pr_keeping_rpm_pin():
+    """importlib.reload(pr) re-executes the module and restores the REAL AppData
+    RPM_ROOT; every later test would then glob the live store (found 2026-11-23: the
+    shared-dep tests saw the real acquisition-underwriting install). Re-pin after it."""
+    importlib.reload(pr)
+    pr.RPM_ROOT = _PINNED_RPM_ROOT
+    pr.CACHE_ROOT = _PINNED_CACHE_ROOT
 
 
 def _write(path: Path, text: str) -> None:
@@ -1480,9 +1497,9 @@ class LedgerResolvesToPrimaryCheckout(FixtureTestCase):
         import package_skills
         wt = self.tmp / 'wt'
         _git(self.repo, 'worktree', 'add', '-q', str(wt))
-        self.addCleanup(importlib.reload, pr)
+        self.addCleanup(_reload_pr_keeping_rpm_pin)
         with unittest.mock.patch.object(package_skills, 'REPO', wt):
-            importlib.reload(pr)
+            _reload_pr_keeping_rpm_pin()
 
         pr.write_entries({'demo-skill': '- demo-skill | pending'})
         _git(self.repo, 'worktree', 'remove', '--force', str(wt))
@@ -2044,8 +2061,172 @@ class CodeOnlyInstalledViaRpm(unittest.TestCase):
             self.assertFalse(pr.code_only_uninstalled(self.skill, self.cache))
 
     def test_installed_nowhere_is_still_uninstalled(self):
+        (self.tmp / 'rpm').mkdir()
         with unittest.mock.patch.object(pr, 'RPM_ROOT', self.tmp / 'rpm'):
             self.assertTrue(pr.code_only_uninstalled(self.skill, self.cache))
+
+    def test_unreachable_rpm_root_never_reads_as_uninstalled(self):
+        # Absent from the legacy cache proves nothing when the rpm root can't be read.
+        with unittest.mock.patch.object(pr, 'RPM_ROOT', self.tmp / 'no-rpm'):
+            self.assertFalse(pr.code_only_uninstalled(self.skill, self.cache))
+
+
+
+class DriftSweepReadsRpmInstalls(FixtureTestCase):
+    """R34-6 follow-up: the drift/sweep side resolves each skill's installed copy
+    through skill_cache_root() -- legacy cache first, else the newest rpm store-plugin
+    install. A legacy-only lookup missed every rpm install (32 drifted skills on the
+    live store, 2026-11-23). Every test passes an rpm_root under its own fixture."""
+
+    def setUp(self):
+        super().setUp()
+        self.rpm = self.tmp / 'rpm'
+        self.rpm.mkdir()
+
+    def _rpm(self, plugin: str, skill: str, text: str) -> Path:
+        d = self.rpm / plugin / 'skills' / skill
+        _write(d / 'SKILL.md', text)
+        return d
+
+    def test_rpm_installed_drift_is_swept(self):
+        _write(self.repo / 'demo' / 'SKILL.md', 'name: demo\nv2\n')
+        self._rpm('plugin_A', 'demo', 'name: demo\nv1\n')
+        self.assertEqual(pr.sweep_drift(self.repo, self.cache, self.rpm), ['demo'])
+
+    def test_rpm_installed_in_sync_is_not_flagged(self):
+        _write(self.repo / 'demo' / 'SKILL.md', 'name: demo\nv2\n')
+        self._rpm('plugin_A', 'demo', 'name: demo\nv2\n')
+        self.assertEqual(pr.sweep_drift(self.repo, self.cache, self.rpm), [])
+
+    def test_legacy_copy_takes_precedence_over_rpm(self):
+        _write(self.repo / 'demo' / 'SKILL.md', 'name: demo\nv2\n')
+        _write(self.cache / 'demo' / 'SKILL.md', 'name: demo\nv2\n')
+        self._rpm('plugin_A', 'demo', 'name: demo\nv1\n')
+        self.assertEqual(pr.sweep_drift(self.repo, self.cache, self.rpm), [])
+
+    def test_newest_rpm_copy_is_the_one_compared(self):
+        _write(self.repo / 'demo' / 'SKILL.md', 'name: demo\nv2\n')
+        self._rpm('plugin_OLD', 'demo', 'name: demo\nv1\n')
+        time.sleep(0.05)
+        self._rpm('plugin_NEW', 'demo', 'name: demo\nv2\n')
+        self.assertEqual(pr.sweep_drift(self.repo, self.cache, self.rpm), [])
+
+    def test_unreachable_rpm_root_yields_no_findings(self):
+        # Legacy drift exists, but a sweep that cannot read the rpm root is partial:
+        # it must refuse rather than report a subset as the whole picture.
+        _write(self.repo / 'demo' / 'SKILL.md', 'name: demo\nv2\n')
+        _write(self.cache / 'demo' / 'SKILL.md', 'name: demo\nv1\n')
+        self.assertEqual(pr.sweep_drift(self.repo, self.cache, self.tmp / 'no-rpm'), [])
+        self.assertEqual(pr.unreachable_cache_roots(self.cache, self.tmp / 'no-rpm'),
+                         [self.tmp / 'no-rpm'])
+
+    def test_unreachable_legacy_root_yields_no_findings(self):
+        _write(self.repo / 'demo' / 'SKILL.md', 'name: demo\nv2\n')
+        self._rpm('plugin_A', 'demo', 'name: demo\nv1\n')
+        self.assertEqual(pr.sweep_drift(self.repo, self.tmp / 'no-legacy', self.rpm), [])
+
+    def test_candidates_and_backfill_see_rpm_drift(self):
+        _write(self.repo / 'demo' / 'SKILL.md', 'name: demo\nv2\n')
+        self._rpm('plugin_A', 'demo', 'name: demo\nv1\n')
+        ledger = self.tmp / 'PENDING_REIMPORT.md'
+        self.assertIn('demo', pr.candidates(self.repo, self.cache, ledger, rpm_root=self.rpm))
+        self.assertEqual(pr.backfill(self.repo, self.cache, ledger, rpm_root=self.rpm), ['demo'])
+        self.assertIn('demo', pr.read_entries(ledger))
+
+    def test_backfill_with_unreachable_rpm_writes_nothing(self):
+        _write(self.repo / 'demo' / 'SKILL.md', 'name: demo\nv2\n')
+        _write(self.cache / 'demo' / 'SKILL.md', 'name: demo\nv1\n')
+        ledger = self.tmp / 'PENDING_REIMPORT.md'
+        self.assertEqual(pr.backfill(self.repo, self.cache, ledger,
+                                     rpm_root=self.tmp / 'no-rpm'), [])
+        self.assertFalse(ledger.exists())
+
+    def test_installed_skill_dirs_is_the_union_resolved_per_skill(self):
+        _write(self.cache / 'legacy-only' / 'SKILL.md', 'x')
+        _write(self.cache / 'both' / 'SKILL.md', 'x')
+        self._rpm('plugin_A', 'both', 'x')
+        b = self._rpm('plugin_B', 'rpm-only', 'x')
+        dirs = pr.installed_skill_dirs(self.cache, self.rpm)
+        self.assertEqual(dirs, {'both': self.cache / 'both',
+                                'legacy-only': self.cache / 'legacy-only',
+                                'rpm-only': b})
+
+    def test_module_default_rpm_root_is_read_at_call_time(self):
+        _write(self.repo / 'demo' / 'SKILL.md', 'name: demo\nv2\n')
+        self._rpm('plugin_A', 'demo', 'name: demo\nv1\n')
+        with unittest.mock.patch.object(pr, 'RPM_ROOT', self.rpm):
+            self.assertEqual(pr.sweep_drift(self.repo, self.cache), ['demo'])
+
+
+class SharedDepReportReadsRpmInstalls(FixtureTestCase):
+    DEP = 'target-markets.json'
+    CONSUMER = 'acquisition-underwriting'
+
+    def setUp(self):
+        super().setUp()
+        self.rpm = self.tmp / 'rpm'
+        self.rpm.mkdir()
+        _git(self.repo, 'init', '-q', '-b', 'main')
+        _git(self.repo, 'config', 'user.email', 'test@example.com')
+        _git(self.repo, 'config', 'user.name', 'Test')
+        _git_commit(self.repo, self.DEP, 'v1\n', 'add')
+
+    def test_rpm_consumer_copy_is_compared(self):
+        _write(self.rpm / 'plugin_A' / 'skills' / self.CONSUMER / self.DEP, 'v1\n')
+        rep = pr.shared_dep_report(self.repo, self.cache, self.rpm)
+        self.assertEqual(rep[self.DEP][self.CONSUMER], 'IN-SYNC')
+
+    def test_unreachable_root_is_never_clean(self):
+        rep = pr.shared_dep_report(self.repo, self.cache, self.tmp / 'no-rpm')
+        self.assertEqual(rep[self.DEP][self.CONSUMER], 'CACHE-UNREADABLE')
+        self.assertIn((self.DEP, self.CONSUMER, 'CACHE-UNREADABLE'),
+                      pr.shared_dep_problems(rep))
+
+
+
+class RefuteRound1Regressions(FixtureTestCase):
+    """2026-11-23 Opus refute, round 1: C3 (one vanished rpm copy must not discard the
+    surviving one) and C2 (a blind CLI run must never print as clean, exit 0)."""
+
+    def setUp(self):
+        super().setUp()
+        self.rpm = self.tmp / 'rpm'
+        self.rpm.mkdir()
+
+    def test_vanished_rpm_copy_does_not_drop_the_surviving_one(self):
+        old = self.rpm / 'plugin_OLD' / 'skills' / 'demo'
+        new = self.rpm / 'plugin_NEW' / 'skills' / 'demo'
+        _write(old / 'SKILL.md', 'x')
+        _write(new / 'SKILL.md', 'x')
+        real_stat = Path.stat
+
+        def flaky_stat(p, *a, **kw):
+            if p == old:
+                raise FileNotFoundError(str(p))   # torn down between glob and stat
+            return real_stat(p, *a, **kw)
+
+        with unittest.mock.patch.object(Path, 'stat', flaky_stat):
+            self.assertEqual(pr.installed_skill_dir('demo', self.cache, self.rpm), new)
+
+    def _cli(self, argv):
+        import contextlib
+        import io
+        err = io.StringIO()
+        with unittest.mock.patch.object(pr, 'RPM_ROOT', self.tmp / 'no-rpm'), \
+                unittest.mock.patch.object(pr, 'CACHE_ROOT', self.cache), \
+                unittest.mock.patch.object(sys, 'argv', ['pending_reimport.py', *argv]), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(SystemExit) as cm:
+                pr.main()
+        return cm.exception.code, err.getvalue()
+
+    def test_blind_cli_runs_exit_nonzero_and_name_the_root(self):
+        for cmd in ('candidates', 'backfill', 'shared-deps'):
+            with self.subTest(cmd=cmd):
+                code, err = self._cli([cmd])
+                self.assertEqual(code, 2)
+                self.assertIn('install root unreadable', err)
+                self.assertIn(str(self.tmp / 'no-rpm'), err)
 
 
 if __name__ == '__main__':

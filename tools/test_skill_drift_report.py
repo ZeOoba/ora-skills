@@ -31,6 +31,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import skill_drift_report as sdr  # noqa: E402
 
+# Hermetic: never read the real AppData rpm store-plugin root (R34-6 follow-up). The
+# pinned root exists (empty) because every sweep requires BOTH install roots reachable;
+# tests that need an rpm install build one under their own fixture and pass rpm_root.
+import pending_reimport as _pr_pin  # noqa: E402
+_pr_pin.RPM_ROOT = Path(tempfile.mkdtemp(prefix='rpm_pin_')) / 'rpm'
+_pr_pin.RPM_ROOT.mkdir()
+
 
 def _rmtree(path) -> None:
     """git writes object files read-only, which rmtree cannot unlink on Windows --
@@ -778,6 +785,52 @@ class FixtureTeardownRemovesGitRepos(unittest.TestCase):
         fx.tearDown()
 
         self.assertFalse(fx.tmp.exists())
+
+
+
+class RpmStorePluginInstalls(FixtureTestCase):
+    """R34-6 follow-up: report() and --publish-status read rpm store-plugin installs
+    (legacy cache first, else the newest rpm plugin_*/skills copy)."""
+
+    def setUp(self):
+        super().setUp()
+        self.rpm = self.tmp / 'rpm'
+        self.rpm.mkdir()
+
+    def test_rpm_install_reads_installed_and_in_sync(self):
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        _write(self.rpm / 'plugin_A' / 'skills' / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        rep = sdr.report(self.repo, self.cache, skills=['demo'], rpm_root=self.rpm)
+        self.assertEqual(rep['skills']['demo']['verdict'], sdr.IN_SYNC)
+        self.assertIn('demo: INSTALLED', sdr.render_publish_status(rep))
+
+    def test_rpm_drift_is_reported(self):
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B v2\n'))
+        _write(self.rpm / 'plugin_A' / 'skills' / 'demo' / 'SKILL.md', _skill_md('d', 'B v1\n'))
+        rep = sdr.report(self.repo, self.cache, rpm_root=self.rpm)
+        self.assertNotEqual(rep['skills']['demo']['verdict'], sdr.IN_SYNC)
+        self.assertNotEqual(rep['skills']['demo']['verdict'], sdr.NOT_INSTALLED)
+
+    def test_unreachable_rpm_root_refuses_to_report(self):
+        _write(self.repo / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        _write(self.cache / 'demo' / 'SKILL.md', _skill_md('d', 'B\n'))
+        rep = sdr.report(self.repo, self.cache, skills=['demo'], rpm_root=self.tmp / 'no-rpm')
+        self.assertTrue(rep['cache_root_unreadable'])
+        self.assertEqual(rep['skills'], {})
+        self.assertIn(str(self.tmp / 'no-rpm'), sdr.render_publish_status(rep))
+        self.assertIn(str(self.tmp / 'no-rpm'), sdr.render_text(rep))
+
+    def test_third_party_and_local_only_rpm_skills_are_not_enumerated(self):
+        for name in ('humanize-writing', 'personal-portfolio', 'ora-extra'):
+            _write(self.rpm / f'plugin_{name}' / 'skills' / name / 'SKILL.md',
+                   _skill_md('d', 'B\n'))
+        rep = sdr.report(self.repo, self.cache, rpm_root=self.rpm)
+        self.assertEqual(sorted(rep['skills']), ['ora-extra'])
+        self.assertEqual(rep['skills']['ora-extra']['verdict'], sdr.CACHE_ONLY)
+        # Naming a local-only skill explicitly still reports it.
+        named = sdr.report(self.repo, self.cache, skills=['personal-portfolio'],
+                           rpm_root=self.rpm)
+        self.assertIn('personal-portfolio', named['skills'])
 
 
 if __name__ == '__main__':

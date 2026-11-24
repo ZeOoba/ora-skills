@@ -76,7 +76,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pending_reimport import CACHE_ROOT, REPO, _primary_checkout, _read_bytes_long  # noqa: E402
+from pending_reimport import (  # noqa: E402
+    CACHE_ROOT, REPO, _primary_checkout, _read_bytes_long, installed_skill_dir,
+    installed_skill_dirs, unreachable_cache_roots,
+)
 from repo_first_check import NONINTERACTIVE_GIT_ENV, _hash_file, classify_skill  # noqa: E402
 
 CAPTURE_VERDICTS = ('CACHE-AHEAD', 'REPO-MISSING')
@@ -270,9 +273,17 @@ def load_ignore() -> set:
         return set()
 
 
-def installed_skills(cache_root: Path, ignore: set = frozenset()) -> list:
-    return sorted(d.name for d in cache_root.iterdir()
-                  if (d / 'SKILL.md').is_file() and d.name not in ignore)
+def installed_dirs(cache_root: Path, ignore: set = frozenset(),
+                   rpm_root: Path = None) -> dict:
+    """{skill: installed dir} across the legacy cache AND the rpm store-plugin root,
+    each resolved the same way every other drift reader resolves it (R34-6 follow-up:
+    reading only the legacy cache saw none of the ~100 rpm-installed skills)."""
+    return {s: d for s, d in installed_skill_dirs(cache_root, rpm_root).items()
+            if (d / 'SKILL.md').is_file() and s not in ignore}
+
+
+def installed_skills(cache_root: Path, ignore: set = frozenset(), rpm_root: Path = None) -> list:
+    return sorted(installed_dirs(cache_root, ignore, rpm_root))
 
 
 def git_ignored(wt: Path, paths: list) -> set:
@@ -482,9 +493,10 @@ def push_and_pr(entry: dict) -> str:
     return r.stdout.strip().splitlines()[-1]
 
 
-def run(full: bool, dry_run: bool, cache_root: Path = CACHE_ROOT) -> int:
-    if not cache_root.is_dir():
-        _log(f'ERROR cache root unreachable: {cache_root}')
+def run(full: bool, dry_run: bool, cache_root: Path = CACHE_ROOT, rpm_root: Path = None) -> int:
+    unreachable = unreachable_cache_roots(cache_root, rpm_root)
+    if unreachable:
+        _log(f'ERROR cache root unreachable: {", ".join(str(r) for r in unreachable)}')
         return 1
     state = load_state()
     for k, default in (('fingerprints', {}), ('captured', {}), ('pending_push', [])):
@@ -502,14 +514,15 @@ def run(full: bool, dry_run: bool, cache_root: Path = CACHE_ROOT) -> int:
                 rc = 1
         save_state(state)
 
-    skills = installed_skills(cache_root, load_ignore())
-    fps = {s: fingerprint(cache_root / s) for s in skills}
+    dirs = installed_dirs(cache_root, load_ignore(), rpm_root)
+    skills = sorted(dirs)
+    fps = {s: fingerprint(dirs[s]) for s in skills}
     candidates = skills if full else changed_skills(fps, state['fingerprints'])
 
     # Pre-filter against this checkout: cheap, and sound -- content that is in local
     # history is in git, so only a local CACHE-AHEAD/REPO-MISSING can be a capture.
     pre = [s for s in candidates
-           if files_to_capture(classify_skill(s, REPO, cache_root)[1])]
+           if files_to_capture(classify_skill(s, REPO, cache_root, rpm_root)[1])]
     if not pre:
         if not dry_run:
             state['fingerprints'].update(fps)
@@ -528,7 +541,15 @@ def run(full: bool, dry_run: bool, cache_root: Path = CACHE_ROOT) -> int:
     rows, made_branch = [], False
     try:
         for s in pre:
-            per = classify_skill(s, wt, cache_root)[1]
+            per = classify_skill(s, wt, cache_root, rpm_root)[1]
+            # classify_skill resolves the install afresh; if a reimport moved it to a new
+            # plugin dir since enumeration, the bytes below would come from a different
+            # copy than the one classified (2026-11-23 refute, C3). Retry next run.
+            if installed_skill_dir(s, cache_root, rpm_root) != dirs[s]:
+                _log(f'{s}: install moved mid-run ({dirs[s]} -> '
+                     f'{installed_skill_dir(s, cache_root, rpm_root)}) -- skipped, next run '
+                     'retries')
+                continue
             rels = files_to_capture(per)
             ignored = git_ignored(wt, [f'{s}/{rel}' for rel in rels])
             rels = [rel for rel in rels if f'{s}/{rel}' not in ignored]
@@ -536,11 +557,11 @@ def run(full: bool, dry_run: bool, cache_root: Path = CACHE_ROOT) -> int:
                 _log(f'{s}: nothing never-committed left after origin/main + .gitignore '
                      '-- not captured')
                 continue
-            key = {rel: _hash_file(cache_root / s / rel) for rel in rels}
+            key = {rel: _hash_file(dirs[s] / rel) for rel in rels}
             if already_captured(state, s, key):
                 _log(f'{s}: identical content already captured -- skipped')
                 continue
-            ctime = _ctime(cache_root / s)
+            ctime = _ctime(dirs[s])
             if dry_run:
                 rows.append([s, rels, ctime])
                 continue
@@ -550,7 +571,7 @@ def run(full: bool, dry_run: bool, cache_root: Path = CACHE_ROOT) -> int:
             for rel in rels:
                 dest = wt / s / rel
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_bytes(_read_bytes_long(cache_root / s / rel))
+                dest.write_bytes(_read_bytes_long(dirs[s] / rel))
             paths = [f'{s}/{rel}' for rel in rels]
             _git('add', '--', *paths, cwd=wt)
             with tempfile.NamedTemporaryFile('w', suffix='.txt', delete=False,

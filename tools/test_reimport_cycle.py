@@ -54,5 +54,24 @@ class GateFailures(unittest.TestCase):
                     rc.gate_failures(SKILL, no_plugin, clean, {SKILL}, f"dep: {lbl} {SKILL}"))
 
 
+
+class PrepStopsWhenSharedDepsDidNotRun(unittest.TestCase):
+    """shared-deps exits 2 (no rows) when an install root is unreadable; prep must not
+    read the empty output as a clean shared-dep gate (2026-11-23 refute, round 2)."""
+
+    def test_nonzero_shared_deps_stops_prep(self):
+        import io
+        import subprocess
+        import tempfile
+        import unittest.mock
+        from contextlib import redirect_stdout
+        failed = subprocess.CompletedProcess([], 2, stdout='', stderr='install root unreadable')
+        with unittest.mock.patch.object(rc, '_run', return_value=failed) as run,                 unittest.mock.patch.object(rc, '_git_dirty', return_value=False),                 redirect_stdout(io.StringIO()) as out:
+            code = rc.cmd_prep(['loi-generation'], Path(tempfile.mkdtemp()) / 'out')
+        self.assertEqual(code, 1)
+        self.assertIn('shared-deps check did not run', out.getvalue())
+        self.assertEqual(run.call_count, 1, 'nothing may be packaged after the gate stops')
+
+
 if __name__ == '__main__':
     unittest.main()

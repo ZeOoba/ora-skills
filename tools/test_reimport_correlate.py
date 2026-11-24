@@ -28,6 +28,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pending_reimport as pr  # noqa: E402
+
+# Hermetic (2026-11-23 refute, C4): pin BOTH install roots to empty fixture dirs BEFORE
+# reimport_correlate imports them by value, so neither the first import nor the
+# importlib.reload(rc) below can rebind the real AppData stores (91 real-store reads
+# measured before this pin). Tests that need an install patch rc/pr themselves.
+import tempfile as _tempfile  # noqa: E402
+_PIN = Path(_tempfile.mkdtemp(prefix='reimport_correlate_pin_'))
+pr.CACHE_ROOT, pr.RPM_ROOT = _PIN / 'legacy', _PIN / 'rpm'
+pr.CACHE_ROOT.mkdir()
+pr.RPM_ROOT.mkdir()
 import reimport_correlate as rc  # noqa: E402
 import reimport_cycle as cyc  # noqa: E402
 import reimport_claims as claims  # noqa: E402

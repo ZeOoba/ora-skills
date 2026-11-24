@@ -157,12 +157,66 @@ def skill_cache_root(skill: str, legacy: Path | None = None, rpm: Path | None = 
     try:
         if (legacy / skill).is_dir():
             return legacy
-        hits = [d for d in rpm.glob(f'plugin_*/skills/{skill}') if d.is_dir()]
+        hits = []
+        for d in rpm.glob(f'plugin_*/skills/{skill}'):
+            # Stat each hit on its own: a copy that vanishes between glob and stat (a
+            # mid-run reimport tearing down its old plugin dir) must not discard the
+            # surviving copy and fall back to the legacy root -- that reads an rpm
+            # install as NOT-INSTALLED, and repo_first_check's REPLACE-semantics ledger
+            # would then drop the skill (2026-11-23 refute, C3).
+            try:
+                if d.is_dir():
+                    hits.append((d.stat().st_ctime, d))
+            except OSError:
+                continue
         if not hits:
             return legacy
-        return max(hits, key=lambda d: d.stat().st_ctime).parent
+        return max(hits, key=lambda h: h[0])[1].parent
     except OSError:
         return legacy
+
+
+def installed_skill_dir(skill: str, cache_root: Path | None = None,
+                        rpm_root: Path | None = None) -> Path:
+    """`<skill>`'s installed copy, resolved exactly as skill_cache_root() does (legacy
+    cache first, else the newest rpm `plugin_*/skills/<skill>`). The path may not exist:
+    a skill installed nowhere resolves to `<legacy>/<skill>`, which reads as absent."""
+    return skill_cache_root(skill, cache_root, rpm_root) / skill
+
+
+def unreachable_cache_roots(cache_root: Path | None = None,
+                            rpm_root: Path | None = None) -> list[Path]:
+    """The install roots that cannot be read: the legacy skills-plugin cache and the rpm
+    store-plugin root. Empty means both are reachable.
+
+    Every drift/sweep reader refuses to compute findings unless BOTH are reachable. An
+    unreachable rpm root hides ~100 installed skills, which a sweep would read as "never
+    installed" / "reconciled" (repo_first_check's ledger is REPLACED from each sweep, so
+    that would wipe real entries); an unreachable legacy root leaves the legacy-first
+    precedence of skill_cache_root() undecidable. Looked up at call time (module
+    attributes), so tests patch CACHE_ROOT / RPM_ROOT."""
+    legacy = Path(CACHE_ROOT if cache_root is None else cache_root)
+    rpm = Path(RPM_ROOT if rpm_root is None else rpm_root)
+    return [r for r in (legacy, rpm) if not _isdir_long(r)]
+
+
+def installed_skill_dirs(cache_root: Path | None = None,
+                         rpm_root: Path | None = None) -> dict[str, Path]:
+    """{skill: installed dir} across BOTH roots, each resolved through skill_cache_root()
+    so enumeration and per-skill lookup can never disagree about which copy is live.
+    Unreadable roots contribute nothing; callers check unreachable_cache_roots() first."""
+    legacy = Path(CACHE_ROOT if cache_root is None else cache_root)
+    rpm = Path(RPM_ROOT if rpm_root is None else rpm_root)
+    names: set[str] = set()
+    try:
+        names.update(d.name for d in legacy.iterdir() if d.is_dir())
+    except OSError:
+        pass
+    try:
+        names.update(d.name for d in rpm.glob('plugin_*/skills/*') if d.is_dir())
+    except OSError:
+        pass
+    return {n: installed_skill_dir(n, legacy, rpm) for n in sorted(names)}
 
 # reverse map: shared repo-root file -> [(consumer skill, skill-relative dest path)]
 SHARED_CONSUMERS: dict[str, list[tuple[str, str]]] = {}
@@ -591,6 +645,10 @@ def code_only_uninstalled(skill: str, cache_root=None) -> bool:
         return False
     if _isdir_long(root / skill):
         return False
+    # Same for the rpm store-plugin root: if it can't be read, absence from the legacy
+    # cache proves nothing (most installs now land under RPM_ROOT).
+    if not _isdir_long(RPM_ROOT):
+        return False
     # Installed through the store as an rpm plugin counts as installed too (R34-6).
     return skill_cache_root(skill, root) == root
 
@@ -599,7 +657,8 @@ def _read_bytes_long(path) -> bytes:
         return f.read()
 
 
-def skill_drifted(repo_root: Path, cache_root: Path, skill: str) -> bool:
+def skill_drifted(repo_root: Path, cache_root: Path, skill: str,
+                  rpm_root: Path | None = None) -> bool:
     """True if the skill is installed (has a cache dir) AND any shipped file
     differs (EOL-normalized) or is missing under it.
 
@@ -618,8 +677,12 @@ def skill_drifted(repo_root: Path, cache_root: Path, skill: str) -> bool:
     Existence and read checks against the cache are long-path-safe (see
     _win_long()) -- a deep bundled path past MAX_PATH must never read as
     "missing" when it's actually present.
+
+    The installed copy is resolved through installed_skill_dir(): the legacy cache
+    first, else the rpm store-plugin install (R34-6 follow-up -- a lookup under
+    cache_root alone read every rpm install as never installed, hiding its drift).
     """
-    cache_dir = cache_root / skill
+    cache_dir = installed_skill_dir(skill, cache_root, rpm_root)
     if not _isdir_long(cache_dir):
         return False
     for rel, src_path in skill_source_files(skill, repo_root).items():
@@ -638,19 +701,23 @@ def all_skill_dirs(repo_root: Path) -> list[str]:
     )
 
 
-def sweep_drift(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT) -> list[str]:
+def sweep_drift(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
+                rpm_root: Path | None = None) -> list[str]:
     """Full repo-vs-cache SHA256 sweep across EVERY packageable skill -- not just
     ones a post-commit hook happened to see. Catches drift that predates the
     hook's existence or a hook run that failed/was bypassed. Never fabricates:
-    an unreachable cache root (unattended session, wrong machine) yields no
-    findings rather than flagging every skill as drifted."""
-    if not cache_root.is_dir():
+    an unreachable install root -- legacy cache OR rpm store-plugin root
+    (unattended session, wrong machine, Cowork sandbox) -- yields no findings
+    rather than a partial sweep read as complete."""
+    if unreachable_cache_roots(cache_root, rpm_root):
         return []
-    return [s for s in all_skill_dirs(repo_root) if skill_drifted(repo_root, cache_root, s)]
+    return [s for s in all_skill_dirs(repo_root)
+            if skill_drifted(repo_root, cache_root, s, rpm_root)]
 
 
 def candidates(
     repo_root: Path = REPO, cache_root: Path = CACHE_ROOT, ledger_path: Path = LEDGER,
+    rpm_root: Path | None = None,
 ) -> dict[str, str]:
     """The consumption contract for every downstream consumer: UNION of ledger
     entries and a fresh full sweep, never "ledger OR derive". Read-only -- never
@@ -666,7 +733,7 @@ def candidates(
     drift-check) already reads through, so filtering here closes the gap
     regardless of which of the two sources first detected the drift."""
     result = dict(read_entries(ledger_path))
-    for skill in sweep_drift(repo_root, cache_root):
+    for skill in sweep_drift(repo_root, cache_root, rpm_root):
         result.setdefault(
             skill,
             f'- {skill} | source: sweep (no ledger entry) | trigger: full repo-vs-cache SHA256 sweep',
@@ -678,7 +745,7 @@ def candidates(
 
 def backfill(
     repo_root: Path = REPO, cache_root: Path = CACHE_ROOT, ledger_path: Path | None = None,
-    timeout: float | None = None,
+    timeout: float | None = None, rpm_root: Path | None = None,
 ) -> list[str]:
     """Run a full sweep and PERSIST any drifted skill missing from the ledger,
     so it becomes durably visible via `list` (not just a one-off union computed
@@ -686,7 +753,7 @@ def backfill(
     a real commit-hash entry is never clobbered by a backfill stub."""
     # The sweep hashes every skill (seconds), so it runs BEFORE taking the lock; the
     # ledger is read under the lock, so a commit recorded mid-sweep is never dropped.
-    drifted = sweep_drift(repo_root, cache_root)
+    drifted = sweep_drift(repo_root, cache_root, rpm_root)
     if not drifted:
         return []                        # nothing to seed: stay read-free and lock-free
     now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%MZ')
@@ -751,6 +818,7 @@ SHARED_DEP_ACTION = {
     'REPO-MISSING': 'stale shared-dep declaration — repo file is gone (fix SHARED_ROOT_DEPS)',
     'MISSING-IN-CACHE': 'repackage + reimport (shared file absent from an installed skill)',
     'NOT-INSTALLED': 'consumer skill has no cache dir — never installed (not drift)',
+    'CACHE-UNREADABLE': 'an install root (legacy cache or rpm store-plugin root) is unreachable — nothing was compared; re-run from a Windows shell on the install machine',
     'UNKNOWN': 'git history unavailable — verify direction by hand',
 }
 
@@ -839,24 +907,31 @@ def _file_history_hashes(repo_root: Path, relpath: str):
     return _hashes(head), _hashes(all_text)
 
 
-def shared_dep_report(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT):
+def shared_dep_report(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
+                      rpm_root: Path | None = None):
     """Reconcile every shared repo-root dependency (SHARED_ROOT_DEPS, reversed into
     SHARED_CONSUMERS) against each consumer skill's cached copy. Returns
-    {dep_filename: {consumer_skill: STATUS}}, deduped to one shared file per row."""
+    {dep_filename: {consumer_skill: STATUS}}, deduped to one shared file per row.
+    An unreachable install root marks every row CACHE-UNREADABLE (not clean) instead
+    of NOT-INSTALLED, so a blind run never reads as reconciled."""
     report: dict[str, dict[str, str]] = {}
+    unreachable = bool(unreachable_cache_roots(cache_root, rpm_root))
     for dep in sorted(SHARED_CONSUMERS):
         repo_file = repo_root / dep
         repo_hash = _normalized_hash(repo_file) if repo_file.is_file() else None
         ancestor_hashes, all_history_hashes = _file_history_hashes(repo_root, dep)
         rows: dict[str, str] = {}
         for skill, dest in sorted(SHARED_CONSUMERS[dep]):
-            if not _isdir_long(cache_root / skill):
+            skill_dir = installed_skill_dir(skill, cache_root, rpm_root)
+            if unreachable:
+                rows[skill] = 'CACHE-UNREADABLE'
+            elif not _isdir_long(skill_dir):
                 rows[skill] = 'NOT-INSTALLED'
-            elif not _isfile_long(cache_root / skill / dest):
+            elif not _isfile_long(skill_dir / dest):
                 rows[skill] = 'MISSING-IN-CACHE'
             else:
                 rows[skill] = classify_shared_copy(
-                    _normalized_hash(cache_root / skill / dest),
+                    _normalized_hash(skill_dir / dest),
                     repo_hash, ancestor_hashes, all_history_hashes,
                 )
         report[dep] = rows
@@ -1027,6 +1102,7 @@ def cmd_candidates() -> None:
     (package-and-stage-skill Entry Point A) should call to build its work queue
     instead of `list` alone. The former `ora-skills-reimport-watch` reference here
     was a dead pointer -- see the module docstring."""
+    _exit_if_install_root_unreadable('candidates')
     result = candidates()
     if not result:
         print('pending_reimport: no candidates (ledger empty and full sweep found no drift)')
@@ -1053,7 +1129,19 @@ def cmd_candidates() -> None:
     _print_shared_dep_advisory()
 
 
+def _exit_if_install_root_unreadable(cmd: str) -> None:
+    """A blind sweep returns [] -- never let the CLI print that as "no drift" with exit 0
+    (2026-11-23 refute, C2). Exit 2, naming the roots, before anything is computed."""
+    unreachable = unreachable_cache_roots()
+    if unreachable:
+        print(f'pending_reimport: {cmd}: install root unreadable '
+              f'({", ".join(str(r) for r in unreachable)}) -- nothing computed, ledger '
+              f'untouched; this is a reporting gap, never a clean result', file=sys.stderr)
+        sys.exit(2)
+
+
 def cmd_backfill() -> None:
+    _exit_if_install_root_unreadable('backfill')
     try:
         seeded = backfill()
     except LedgerLockTimeout as exc:
@@ -1498,6 +1586,7 @@ def cmd_clear(skills: list[str], force: bool = False) -> None:
 def cmd_shared_deps() -> None:
     """Reconcile shared repo-root deps against the runtime cache, one row per file,
     with a direction so a reader never guesses reimport-vs-commit by eye."""
+    _exit_if_install_root_unreadable('shared-deps')
     report = shared_dep_report()
     problems = shared_dep_problems(report)
     print('pending_reimport: shared repo-root dependency reconciliation')

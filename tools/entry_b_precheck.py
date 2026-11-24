@@ -65,8 +65,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from package_skills import (  # noqa: E402
     REPO, MAX_DESC, plugin_of, skill_source_files, validate_skill_frontmatter,
 )
+import pending_reimport as _pr  # noqa: E402
 from pending_reimport import (  # noqa: E402
-    CACHE_ROOT, _normalized_hash, _normalized_hash_bytes, _isdir_long, _win_long,
+    _normalized_hash, _normalized_hash_bytes, _isdir_long, _win_long, installed_skill_dir,
+    unreachable_cache_roots,
 )
 
 
@@ -167,14 +169,26 @@ def baseline_cache(skill: str) -> dict:
     """Cache-dir CreationTime baseline for the CreationTime discriminator
     verify_install.ps1 uses post-click (package-and-stage-skill step 2/7).
     None means 'no directory' -- the cleanest possible baseline (proves any
-    later directory existence is first-hand install evidence)."""
-    cache_dir = CACHE_ROOT / skill
+    later directory existence is first-hand install evidence).
+
+    The dir resolves through pending_reimport.installed_skill_dir() (legacy cache
+    first, else the newest rpm store-plugin install; R34-6 follow-up). `rpm_root` is
+    recorded so verify_install.ps1 can find a copy that lands in a plugin dir the
+    baseline could not name in advance (a first rpm install, or a re-import that
+    created a new plugin_<id>)."""
+    cache_dir = installed_skill_dir(skill)
+    rpm_root = str(_pr.RPM_ROOT)
     captured_at = datetime.now(timezone.utc).isoformat()
+    # A baseline taken while an install root was unreadable cannot prove "no dir at T0";
+    # recorded so verify_install.ps1 never reads the absent baseline as first-hand evidence.
+    unreadable = [str(r) for r in unreachable_cache_roots()]
     if not _isdir_long(cache_dir):
-        return {'cache_dir': str(cache_dir), 'creation_time': None, 'captured_at': captured_at}
+        return {'cache_dir': str(cache_dir), 'creation_time': None, 'captured_at': captured_at,
+                'rpm_root': rpm_root, 'unreadable_roots': unreadable}
     import os
     ct = datetime.fromtimestamp(os.path.getctime(_win_long(cache_dir)), tz=timezone.utc).isoformat()
-    return {'cache_dir': str(cache_dir), 'creation_time': ct, 'captured_at': captured_at}
+    return {'cache_dir': str(cache_dir), 'creation_time': ct, 'captured_at': captured_at,
+            'rpm_root': rpm_root, 'unreadable_roots': unreadable}
 
 
 def precheck_one(name_or_path: str, search: list[Path], stage_to: Path | None,
