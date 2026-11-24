@@ -104,6 +104,14 @@ class Structural(unittest.TestCase):
         doctrine = (ROOT / 'acquisition-underwriting/scripts/ora_walk/doctrine.py').read_text(encoding='utf-8')
         self.assertNotRegex(doctrine, r'RCT_POINT\s*=\s*\{', 'RCT POINT figures are runtime config, not source')
 
+    def test_no_literal_reference_sf_in_size_premium(self):
+        # The size premium is (109200/referenceSf)^b. A literal divisor publishes derivation.referenceSf, a private
+        # build parameter (tools/RCT_TABLE.md). Re-review of #278, 2026-11-23: it came back in add-target-market.
+        # Runs without the private table, so CI catches it too.
+        rx = re.compile(r'109,?200\s*/\s*\d')
+        offenders = [rel for rel in surface_files() if rel != SELF and (txt := read_text(rel)) and rx.search(txt)]
+        self.assertEqual(offenders, [], 'write the premium as (109200/derivation.referenceSf)^b, never a literal')
+
     def test_figure_regex(self):
         # Invented figure; never use a real RCT value here (this file is scanned too).
         r = figure_regex(123.4)
@@ -153,10 +161,19 @@ class ValueScan(unittest.TestCase):
         patterns += [one_decimal_regex(f) for f in figures]
         patterns += money_patterns(whole)
         # The escalation parameter (derivation block) as a multiplier and as a percentage. The soft-cost
-        # multiplier and reference SF are too common as bare numbers to scan without false positives.
+        # multiplier and reference SF are too common as bare numbers to scan on their own, so they are scanned
+        # only in RCT context: the soft-cost multiplier inside a product (x N x) here, and the reference SF as a literal
+        # divisor of the C&W small-tier box in the structural test above (re-review of #278, 2026-11-23).
         esc = float(table['derivation']['escalation'])
         pct = f'{(esc - 1) * 100:.2f}'.rstrip('0').rstrip('.')
         patterns += [rf'(?<![\d.]){re.escape(f"{esc:.4f}".rstrip("0"))}(?!\d)', rf'(?<![\d.]){re.escape(pct)}\s?%']
+        soft = float(table['derivation']['softCostMultiplier'])
+        soft_s = re.escape(f'{soft:.4f}'.rstrip('0').rstrip('.'))
+        patterns += [rf'[×x*·]\s?\(?{soft_s}0*\)?(?![\d.]\d)\s?(?:[×x*·]|[.,;)]|$)']
+        # The reference SF near the C&W box, the premium or its own key name, in any comma form.
+        ref_sf = int(float(table['derivation']['referenceSf']))
+        ref_forms = '|'.join({str(ref_sf), f'{ref_sf:,}'})
+        patterns += [rf'(?:109,?200|premium|referenceSf)[^\n]{{0,40}}?(?<![\d.,])(?:{ref_forms})(?![\d,])']
         combined = re.compile('|'.join(f'({p})' for p in patterns))
         findings = []
         for rel in surface_files():
