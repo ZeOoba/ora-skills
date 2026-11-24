@@ -109,8 +109,8 @@ jobs:
             sudo apt-get update -qq
             sudo apt-get install -y -qq poppler-utils
           fi
-          python -m pip install --disable-pip-version-check pymupdf python-docx reportlab lxml openpyxl
-          echo "pdftotext: $(command -v pdftotext || echo missing)  tesseract: $(command -v tesseract || echo absent)"
+          python -m pip install --disable-pip-version-check pymupdf python-docx reportlab lxml openpyxl git-filter-repo
+          echo "pdftotext: $(command -v pdftotext || echo missing)  tesseract: $(command -v tesseract || echo absent)  git-filter-repo: $(git filter-repo --version 2>/dev/null || echo missing)"
 
       - name: Run skill test suites
         env:
