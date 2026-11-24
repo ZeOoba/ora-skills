@@ -1,9 +1,11 @@
 ---
 name: "cost-seg-tax-layer"
-description: "Use when an ORA underwrite needs after-tax returns: cost-segregation allocation by property type (industrial/flex default, retail override), class-by-class recapture, and a per-state tax layer (WI, OH, IN, MD, MO, KS, TN, MI)."
+description: "Use when an ORA underwrite needs after-tax returns: cost-segregation allocation by property type (industrial/flex default, retail override, multifamily 27.5-yr residential), class-by-class recapture, and a per-state tax layer (WI, OH, IN, MD, MO, KS, TN, MI)."
 ---
 
 # Cost-Seg & State Tax Layer for ORA Underwrites
+
+v1.3 (2026-11-24): Multifamily / residential rental case added (27.5-yr residential, mid-month). No standing MF allocation existed, so The Abigail (18%) and Turkey Run (18%) each improvised one. Ohio municipal rule clarified (Dublin 2.0%). Ratified by Gabriel in-turn 2026-11-24 with acquisition-underwriting v4.60 (authored as v1.4 against a v1.3 that did not exist; numbered v1.3 on the rebase). Allocation defaults only: no governor constant changed.
 
 v1.2.1 (2026-11-14): Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 
@@ -21,6 +23,11 @@ All allocations are [EST] until an engineering study replaces them. Benchmarks a
 | Retail conservative | 5% | 0% | 12% | 17% | Dated shell, tenant-owned finish |
 | Retail strip BASE (override) | 8% | 1% | 17% | 26% | Strip centers 25-40% in vendor studies; parking, lighting, signage, drainage, storefront finish |
 | Retail high | 13% | 2% | 22% | 37% | Above the ~32% scrutiny line (90th percentile); needs documentation |
+| Multifamily conservative | 10% | 0% | 5% | 15% | Dated garden/townhome; appliances and carpet only |
+| Multifamily BASE | 12% | 0% | 6% | 18% | Garden/townhome or mid-rise; appliances, flooring, cabinets, site paving/lighting |
+| Multifamily high | 18% | 0% | 8% | 26% | Heavy unit finishes and amenity package; needs a study |
+
+Multifamily: the remainder is 27.5-yr residential rental (mid-month), not 39-yr, while dwelling-unit rents are at least 80% of gross rents each year (§168(e)(2)(A)); test it every year on mixed-use. Cost-seg classes recapture as in §2.
 
 Commercial interquartile range 22-28%; above ~32% draws scrutiny. Pick the property-type row, state which case is selected, and show the other cases as a band.
 
@@ -52,7 +59,7 @@ State/local combined marginal rate; SB = share of 5/7/15-yr basis the state lets
 | State | Rate (as modeled) | Bonus | Gain treatment | Confidence |
 |---|---|---|---|---|
 | WI | 7.65% | Decoupled (2014 IRC): SB 0, regular MACRS | 30% exclusion of net LTCG | PRIMARY (WI DOR) |
-| OH | 3% business rate above USD 250K business-income deduction + municipal ~2% [EST] | Decoupled: 5/6 add-back (6/6 if NOL), recovered 1/5 per year over 5 years -> SB 1/6, DR 5/6, DN 5 | No exclusion found | PARTIAL: municipal tax and rental-income business classification unverified |
+| OH | 3% business rate above USD 250K business-income deduction + municipal ~2% [EST] | Decoupled: 5/6 add-back (6/6 if NOL), recovered 1/5 per year over 5 years -> SB 1/6, DR 5/6, DN 5 | No exclusion found | PARTIAL: municipal tax and rental-income business classification unverified. Municipal: name the city. Dublin 2.0% applies to net profits of businesses and rentals (City of Dublin taxation page, retrieved 2026-11-24); Columbus 2.5%. Rental real estate is sitused to the city where the property sits (separate accounting since TY2017, HB 5). Passive losses are deductible only when federally allowed and are not part of municipal NOL carryforwards. |
 | IN | 2.95% (2.90% in 2027) + county (Marion 2.02%; range 0.5-3.0%) | Decoupled (S.B. 243, 2026): add-back then regular MACRS | No exclusion found | PARTIAL: county tax on nonresident passive rental income and statute mechanics unverified |
 | MD | 6.5% top (5.75% above USD 250K) + county ~3.2% [EST] (range 2.25-3.3%) | Decoupled since 2002; subtraction schedule unverified -> modeled as regular MACRS | 2% surtax on net capital gain when AGI > USD 350K | PARTIAL |
 | MO | 4.7% (2026 conflicts: 4.7 vs 4.8) | Appears to conform: SB 1 | 100% capital-gain deduction from 2025 (HB 594); unrecaptured Sec 1250 eligibility unverified | PARTIAL |

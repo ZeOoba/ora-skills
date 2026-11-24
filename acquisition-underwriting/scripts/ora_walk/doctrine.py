@@ -25,7 +25,7 @@ MAJORITY_VACANT_PREMIUM = 0.01    # +100 bps when >50% of SF vacant at close (v4
 SINGLE_TENANT_PREMIUM = 0.01      # single tenant, or any tenant > 50% of in-place rent
 TERTIARY_MARKET_PREMIUM = 0.005   # entry clusters in TERTIARY_MARKETS, and any satellite
 ENVIRONMENTAL_PREMIUM = 0.005     # IOS / automotive / legacy mfg / dry cleaner / UST use until a clean Phase II
-NEW_COMPETENCY_PREMIUM = 0.01     # new operating competency (MHC, multifamily) until management scale
+NEW_COMPETENCY_PREMIUM = 0.01     # new operating competency (MHC only; multifamily carries no add-on since v4.60, RE-4.60-5) until management scale
 TERTIARY_MARKETS = frozenset({"Grand Rapids MI", "Richmond VA", "Des Moines IA"})
 # Land at market in the basis test (v4.53, RE-4.53-1):
 #   all-in - credited land <= (1 - vintage floor) x (construction-adjusted RCT LOW x SF)
