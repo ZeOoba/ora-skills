@@ -576,6 +576,9 @@ class RiskTieredIrr(unittest.TestCase):
                        new_operating_competency=False), UST)
         self.assertFalse(any("DATA-GAP: satellite" in f or "DATA-GAP: environmental" in f
                              or "DATA-GAP: operating" in f for f in r.flags))
+        # stated False applies no add-on; multifamily is always False (RE-4.60-5, v4.60)
+        self.assertAlmostEqual(r.floors["irr_floor"], 0.10)
+        self.assertEqual(r.floors["irr_floor_addons"], [])
         # a tertiary market needs no satellite answer
         r = solve(base(market="Des Moines IA", single_tenant=False), UST)
         self.assertFalse(any("DATA-GAP: satellite" in f for f in r.flags))
