@@ -143,10 +143,32 @@ def sweep_all(repo_root: Path = REPO, mirror_root: Path = LOCAL_SKILLS_DIR,
 
 
 def dirty_skills(repo_root: Path = REPO) -> set:
-    """Top-level dirs with uncommitted (staged, unstaged or untracked) changes."""
-    out = subprocess.run(['git', 'status', '--porcelain', '--untracked-files=all'], cwd=repo_root,
-                         capture_output=True, text=True).stdout
-    return {ln[3:].strip('"').split('/')[0] for ln in out.splitlines() if len(ln) > 3}
+    """Skills whose shipped content has uncommitted (staged, unstaged or untracked) changes.
+
+    Review 2026-11-23 (two leaks into the live mirror, both reproduced):
+    - `--porcelain -z` and BOTH sides of a rename/copy: the text form put the source first
+      (`R  other/x.md -> a-skill/x.md`), so only `other` counted and the destination skill synced
+      a staged-but-uncommitted file. -z also needs no quote/escape handling.
+    - a dirty repo-root shared dependency (target-markets.json) fans out to every consumer skill
+      via affected_skills (SHARED_CONSUMERS), because skill_source_files copies the WORKING file.
+    Returns top-level names too, so a dirty skill dir counts whatever is_bundled says."""
+    raw = subprocess.run(['git', 'status', '--porcelain', '-z', '--untracked-files=all'],
+                         cwd=repo_root, capture_output=True).stdout
+    entries = raw.decode('utf-8', 'surrogateescape').split('\0')
+    paths = []
+    i = 0
+    while i < len(entries):
+        entry = entries[i]
+        i += 1
+        if len(entry) < 4:
+            continue
+        paths.append(entry[3:])
+        if entry[0] in 'RC' and i < len(entries):  # -z: "R  <dest>\0<source>\0"
+            paths.append(entries[i])
+            i += 1
+    names = {p.split('/')[0] for p in paths}
+    names |= set(affected_skills(paths))
+    return names
 
 
 def current_branch() -> str:
@@ -154,14 +176,34 @@ def current_branch() -> str:
                           capture_output=True, text=True).stdout.strip()
 
 
+def is_canonical_checkout(repo_root: Path = REPO) -> bool:
+    """True only in the PRIMARY checkout with `main` checked out (same rule as
+    sync_appdata_mirror.is_canonical_checkout). A linked worktree (git-dir != git-common-dir)
+    or any other branch holds unreviewed content. Any git failure -> False (fail closed).
+    KNOWN LIMIT (review 2026-11-23, accepted): this cannot tell the primary from a SECOND full
+    clone on `main` -- any non-linked clone with the hooks installed counts as canonical, and
+    unpushed commits on local main sync by design. Keep one ora-skills clone per machine."""
+    def _git(*args):
+        return subprocess.run(['git', '-C', str(repo_root), *args], capture_output=True,
+                              text=True, check=True).stdout.strip()
+    try:
+        branch = _git('rev-parse', '--abbrev-ref', 'HEAD')
+        git_dir = Path(_git('rev-parse', '--absolute-git-dir')).resolve()
+        common = Path(_git('rev-parse', '--git-common-dir'))
+        common = (common if common.is_absolute() else Path(repo_root) / common).resolve()
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    return branch == 'main' and git_dir == common
+
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if '--all' in argv:
         check = '--check' in argv
         # A write sweep from a stale feature worktree would roll live mirrors
-        # back to that branch's content -- only main may write.
-        if not check and current_branch() != 'main':
-            print('local-mirror: --all sweep skipped (not on main)')
+        # back to that branch's content -- only main, in the primary checkout, may write.
+        if not check and (current_branch() != 'main' or not is_canonical_checkout()):
+            print('local-mirror: --all sweep skipped (not the canonical checkout on main)')
             return 0
         try:
             drifted = sweep_all(check=check)
@@ -170,13 +212,25 @@ def main(argv=None) -> int:
             return 0
         return 1 if (check and drifted) else 0
     commit = argv[0] if argv else 'HEAD'
+    # Cross-repo audit 2026-11-23 (HIGH): post-commit fires in EVERY worktree and on EVERY
+    # branch, and sync_skill copies this checkout's working files into the live
+    # ~/.claude/skills mirror -- so a feature-branch (or uncommitted) edit became the live
+    # Code-surface skill before review. Same gates as the --all sweep: canonical checkout on
+    # main only, and a skill with uncommitted changes is skipped.
+    if not is_canonical_checkout():
+        print('local-mirror: per-commit sync skipped (not the canonical checkout on main)')
+        return 0
     try:
         files = changed_files(commit)
         hits = affected_skills(files)
+        dirty = dirty_skills()
     except Exception as exc:  # noqa: BLE001 - never block the commit
         print(f'sync_local_skills_mirror: could not inspect {commit} ({exc})')
         return 0
     for skill in sorted(hits):
+        if skill in dirty:
+            print(f'local-mirror: {skill}: skipped (uncommitted changes in the checkout)')
+            continue
         print(f'local-mirror: {sync_skill(skill)}')
     return 0
 

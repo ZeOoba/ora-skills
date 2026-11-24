@@ -10,6 +10,7 @@ synthetic repo/mirror fixture trees (never the real ora-skills repo or the
 real ~/.claude/skills) so they're deterministic regardless of live drift state.
 """
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -196,6 +197,129 @@ class MainBranchGuard(unittest.TestCase):
             rc = slm.main(['--all', '--check'])
         sweep.assert_called_once()
         self.assertEqual(rc, 1)
+
+
+class PerCommitGuard(unittest.TestCase):
+    """Cross-repo audit 2026-11-23 (HIGH): the post-commit hook ran the per-commit sync on
+    EVERY branch and worktree, so unreviewed feature-branch (or uncommitted) skill content
+    became the live Code-surface skill. Only the canonical checkout on main may write, and a
+    skill with uncommitted changes is skipped (same rules as the --all sweep)."""
+
+    def _main(self, canonical, dirty=frozenset()):
+        with unittest.mock.patch.object(slm, 'is_canonical_checkout', return_value=canonical), \
+             unittest.mock.patch.object(slm, 'dirty_skills', return_value=set(dirty)), \
+             unittest.mock.patch.object(slm, 'changed_files', return_value=['a-skill/SKILL.md', 'b-skill/SKILL.md']), \
+             unittest.mock.patch.object(slm, 'affected_skills', return_value={'a-skill', 'b-skill'}), \
+             unittest.mock.patch.object(slm, 'sync_skill', return_value='synced') as sync:
+            rc = slm.main(['HEAD'])
+        return rc, sorted(c.args[0] for c in sync.call_args_list)
+
+    def test_feature_branch_or_worktree_commit_does_not_touch_live_mirrors(self):
+        rc, synced = self._main(canonical=False)
+        self.assertEqual(rc, 0)
+        self.assertEqual(synced, [])
+
+    def test_canonical_main_commit_still_syncs(self):
+        rc, synced = self._main(canonical=True)
+        self.assertEqual((rc, synced), (0, ['a-skill', 'b-skill']))
+
+    def test_skill_with_uncommitted_changes_is_skipped_per_commit(self):
+        rc, synced = self._main(canonical=True, dirty={'a-skill'})
+        self.assertEqual((rc, synced), (0, ['b-skill']))
+
+    def test_all_sweep_runs_on_the_canonical_checkout_on_main(self):
+        # Review 2026-11-23 (M6): a regression that silently skips every post-merge sweep must fail.
+        with unittest.mock.patch.object(slm, 'is_canonical_checkout', return_value=True), \
+             unittest.mock.patch.object(slm, 'current_branch', return_value='main'), \
+             unittest.mock.patch.object(slm, 'sweep_all', return_value=[]) as sweep:
+            self.assertEqual(slm.main(['--all']), 0)
+        sweep.assert_called_once()
+
+    def test_all_sweep_also_requires_the_canonical_checkout(self):
+        with unittest.mock.patch.object(slm, 'is_canonical_checkout', return_value=False), \
+             unittest.mock.patch.object(slm, 'current_branch', return_value='main'), \
+             unittest.mock.patch.object(slm, 'sweep_all') as sweep:
+            self.assertEqual(slm.main(['--all']), 0)
+        sweep.assert_not_called()
+
+
+class CanonicalCheckout(unittest.TestCase):
+    """is_canonical_checkout against REAL repos: primary on main -> True; a linked worktree, or
+    the primary on another branch -> False; not a repo -> False (fail closed)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='slm-canon-'))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.repo = self.tmp / 'repo'
+        self.repo.mkdir()
+        for args in (['init', '-q', '-b', 'main'], ['config', 'user.email', 't@t'],
+                     ['config', 'user.name', 't'], ['commit', '-q', '--allow-empty', '-m', 'x']):
+            subprocess.run(['git', '-C', str(self.repo), *args], check=True, capture_output=True)
+
+    def test_primary_on_main_is_canonical(self):
+        self.assertTrue(slm.is_canonical_checkout(self.repo))
+
+    def test_linked_worktree_is_not_canonical(self):
+        wt = self.tmp / 'wt'
+        subprocess.run(['git', '-C', str(self.repo), 'worktree', 'add', '-q', '-b', 'feat', str(wt)],
+                       check=True, capture_output=True)
+        self.assertFalse(slm.is_canonical_checkout(wt))
+
+    def test_primary_on_another_branch_is_not_canonical(self):
+        subprocess.run(['git', '-C', str(self.repo), 'checkout', '-q', '-b', 'feat'],
+                       check=True, capture_output=True)
+        self.assertFalse(slm.is_canonical_checkout(self.repo))
+
+    def test_linked_worktree_on_main_is_not_canonical(self):
+        # Review 2026-11-23 (M3): pins the git-dir == common-dir half of the rule; the branch
+        # check alone would call this worktree canonical.
+        subprocess.run(['git', '-C', str(self.repo), 'checkout', '-q', '-b', 'feat2'],
+                       check=True, capture_output=True)
+        wt = self.tmp / 'wt-main'
+        subprocess.run(['git', '-C', str(self.repo), 'worktree', 'add', '-q', str(wt), 'main'],
+                       check=True, capture_output=True)
+        self.assertFalse(slm.is_canonical_checkout(wt))
+
+    def test_not_a_repo_is_not_canonical(self):
+        plain = self.tmp / 'plain'
+        plain.mkdir()
+        with unittest.mock.patch.dict('os.environ', {'GIT_CEILING_DIRECTORIES': str(self.tmp)}):
+            self.assertFalse(slm.is_canonical_checkout(plain))
+
+
+class DirtySkills(unittest.TestCase):
+    """dirty_skills against a REAL repo (review 2026-11-23, C2: two leaks)."""
+
+    def setUp(self):
+        self.repo = Path(tempfile.mkdtemp(prefix='slm-dirty-'))
+        self.addCleanup(shutil.rmtree, self.repo, True)
+        _write(self.repo / 'other' / 'leak.md', 'x\n')
+        _write(self.repo / 'daily-brief' / 'SKILL.md', 'v1\n')
+        _write(self.repo / 'target-markets.json', '{"v": 1}\n')
+        _write(self.repo / 'my skill' / 'SKILL.md', 'v1\n')
+        for args in (['init', '-q', '-b', 'main'], ['config', 'user.email', 't@t'],
+                     ['config', 'user.name', 't'], ['add', '-A'], ['commit', '-q', '-m', 'base']):
+            subprocess.run(['git', '-C', str(self.repo), *args], check=True, capture_output=True)
+
+    def test_clean_repo_has_no_dirty_skills(self):
+        self.assertEqual(slm.dirty_skills(self.repo), set())
+
+    def test_staged_rename_marks_the_DESTINATION_skill_dirty(self):
+        subprocess.run(['git', '-C', str(self.repo), 'mv', 'other/leak.md', 'daily-brief/leak.md'],
+                       check=True, capture_output=True)
+        dirty = slm.dirty_skills(self.repo)
+        self.assertIn('daily-brief', dirty)
+        self.assertIn('other', dirty)
+
+    def test_dirty_shared_dependency_marks_every_consumer_dirty(self):
+        _write(self.repo / 'target-markets.json', '{"v": "UNCOMMITTED"}\n')
+        dirty = slm.dirty_skills(self.repo)
+        for consumer in ('daily-brief', 'deal-comparison', 'market-monitor', 'acquisition-underwriting'):
+            self.assertIn(consumer, dirty)
+
+    def test_path_with_spaces_is_parsed(self):
+        _write(self.repo / 'my skill' / 'SKILL.md', 'v2\n')
+        self.assertIn('my skill', slm.dirty_skills(self.repo))
 
 
 class Main(unittest.TestCase):
