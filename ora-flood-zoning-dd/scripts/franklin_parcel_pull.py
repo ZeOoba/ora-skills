@@ -4,8 +4,11 @@ Usage: python3 franklin_parcel_pull.py --owner "EXAMPLE HOLDINGS LLC%"   |   --a
 Vendored 2026-11-24 from a Dublin OH multifamily underwrite (ora-flood-zoning-dd v1.9). Needs curl on PATH.
 Returns (stdout + JSON file): parcel count, class codes, auditor values, last sale(s), year built,
 bed/bath mix, FEMA NFHL zone per parcel polygon, and City of Dublin zoning when the parcels fall in Dublin.
-Exit codes: 0 = pulled; 1 = the query ran and matched no parcels; 2 = QUERY FAILED (server error or no response).
-A failed sub-query (sales, flood, zoning, FIRM panel) never reads as "no data": it is reported as QUERY FAILED.
+Exit codes: 0 = pulled and written; 3 = the parcel query ran and matched no parcels (the ONLY "no data" code);
+any other non-zero code is a failure: 2 = QUERY FAILED on the parcel layer or a usage error, 4 = WRITE FAILED
+(the summary is still printed first), 1 = unexpected error. Never read a non-zero code other than 3 as "no parcels".
+A failed sub-query (sales, flood, zoning, FIRM panel) does not change the exit code; it is reported as QUERY FAILED
+in the output and the JSON, never as "no data".
 Endpoints (verified 2026-11-24):
   Parcels  https://gis.franklincountyohio.gov/hosting/rest/services/ParcelFeatures/Parcel_Features/MapServer/0
   Sales    https://gis.franklincountyohio.gov/hosting/rest/services/RealEstate/Sales_Information/MapServer/0  (stale after 2025-07)
@@ -70,16 +73,32 @@ def fetch_parcels(where):
 
 
 def default_out(a):
-    key = re.sub(r'[^A-Za-z0-9]+', '_', a.owner or a.address).strip('_')[:40] or 'query'
+    value = a.owner if a.owner is not None else a.address
+    key = re.sub(r'[^A-Za-z0-9]+', '_', value).strip('_')[:40] or 'query'
     return f'parcel_pull_{key}_{datetime.date.today():%Y%m%d}.json'
 
 
-def write_atomic(path, obj):
+def write_atomic(path, obj, tries=5):
+    """Write JSON via a temp file in the target folder, then os.replace. Creates the folder if needed.
+    Retries the replace on PermissionError (Windows: another process has the target open).
+    Raises OSError after the last try; the temp file is always removed."""
     folder = os.path.dirname(os.path.abspath(path))
+    os.makedirs(folder, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=folder, prefix='.parcel_pull_', suffix='.tmp')
-    with os.fdopen(fd, 'w') as fh:
-        json.dump(obj, fh, indent=1, default=str)
-    os.replace(tmp, path)
+    try:
+        with os.fdopen(fd, 'w') as fh:
+            json.dump(obj, fh, indent=1, default=str)
+        for i in range(tries):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if i == tries - 1:
+                    raise
+                time.sleep(0.2 * (i + 1))
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
 
 def main():
@@ -89,8 +108,11 @@ def main():
     g.add_argument('--address')
     ap.add_argument('--out', help='output JSON (default: parcel_pull_<query>_<YYYYMMDD>.json)')
     a = ap.parse_args()
+    value = a.owner if a.owner is not None else a.address
+    if not value or not value.strip('% '):
+        ap.error('--owner/--address must be a non-empty pattern')   # exits 2
     out_path = a.out or default_out(a)
-    where = f"OWNERNME1 LIKE {sql_str(a.owner)}" if a.owner else f"SITEADDRESS LIKE {sql_str(a.address)}"
+    where = f"OWNERNME1 LIKE {sql_str(a.owner)}" if a.owner is not None else f"SITEADDRESS LIKE {sql_str(a.address)}"
 
     feats, err = fetch_parcels(where)
     if err:
@@ -98,7 +120,7 @@ def main():
         sys.exit(2)
     if not feats:
         print('no parcels (query ran and matched nothing)')
-        sys.exit(1)
+        sys.exit(3)
     P = [f['attributes'] for f in feats]
     s = lambda k: sum((p.get(k) or 0) for p in P)
     out = dict(parcels=len(P), owners=collections.Counter(p.get('OWNERNME1') for p in P).most_common(3),
@@ -162,6 +184,8 @@ def main():
                 zoning[zn] += 1
     if no_geom:
         flood['NO-GEOM (parcel has no polygon; flood not tested)'] += no_geom
+        if in_dublin:
+            zoning['NO-GEOM (parcel has no polygon; zoning not tested)'] += no_geom
     out['flood_by_parcel'] = flood.most_common()
     if xs:
         cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
@@ -174,11 +198,21 @@ def main():
         out['firm_panel'] = 'NO-GEOM: no parcel polygon returned'
     out['zoning_by_parcel'] = zoning.most_common() if in_dublin else 'not in City of Dublin — use ora-flood-zoning-dd for the municipality'
     out['pulled'] = str(datetime.date.today())
-    write_atomic(out_path, out)
     for k, v in out.items():
         print(f'{k}: {v}')
+    try:
+        write_atomic(out_path, out)
+    except OSError as e:
+        print(f'WRITE FAILED: {out_path}: {e}')
+        sys.exit(4)
     print(f'written: {out_path}')
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception as e:   # never let a crash exit with the "no parcels" code
+        print(f'FAILED: {type(e).__name__}: {e}')
+        sys.exit(1)
