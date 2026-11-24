@@ -107,7 +107,7 @@ class Deal:
     satellite: Optional[bool] = None      # satellite of an established cluster (+50 bps, tertiary)
     environmental_heavy_use: Optional[bool] = None  # IOS, automotive, legacy manufacturing, dry cleaner, UST
     clean_phase_ii: bool = False          # a clean Phase II in hand lifts the environmental add-on
-    new_operating_competency: Optional[bool] = None  # MHC, multifamily until ORA reaches management scale
+    new_operating_competency: Optional[bool] = None  # MHC until ORA reaches management scale; never multifamily (v4.60, RE-4.60-5)
 
 
 @dataclass
@@ -625,7 +625,7 @@ def _irr_addons(deal: Deal, market: Optional[str], flags: list) -> dict:
                      "set environmental_heavy_use")
     if deal.new_operating_competency is None:
         flags.append("[DATA-GAP: operating competency] new-competency IRR add-on (+100 bps) not tested — "
-                     "set new_operating_competency")
+                     "set new_operating_competency (MHC only; multifamily = false, RE-4.60-5)")
     if (market not in D.EXIT_CAPS or market in D.NON_CANONICAL_EXIT_ROWS) and not deal.satellite:
         flags.append("Off-cluster market: any IRR premium is per-deal judgment (SKILL.md STAGE 1) — state it")
     return {"single_tenant": bool(deal.single_tenant),
