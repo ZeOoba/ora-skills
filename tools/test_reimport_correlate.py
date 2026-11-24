@@ -19,6 +19,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import unittest.mock
 from contextlib import redirect_stdout
@@ -69,6 +70,10 @@ class FixtureTestCase(unittest.TestCase):
         self.cache.mkdir()
         self.patches = [
             unittest.mock.patch.object(rc, 'CACHE_ROOT', self.cache),
+            # rpm store-plugin root: never the real AppData one (R34-6, 2026-11-23).
+            unittest.mock.patch.object(rc, 'RPM_ROOT', self.tmp / 'rpm'),
+            unittest.mock.patch.object(pr, 'RPM_ROOT', self.tmp / 'rpm'),
+            unittest.mock.patch.object(pr, 'CACHE_ROOT', self.cache),
             unittest.mock.patch.object(rc, 'BASELINE_DIR', self.baselines),
             unittest.mock.patch.object(rc, 'LOCAL_LOG', self.local_log),
             unittest.mock.patch.object(rc, 'ROAMING_LOG', self.roaming_log),
@@ -2542,6 +2547,65 @@ class HelpFlag(unittest.TestCase):
     def test_no_arguments_is_still_a_usage_error(self):
         code, _ = self._run()
         self.assertEqual(code, 2)
+
+
+class RpmStorePluginInstalls(FixtureTestCase):
+    """Since 2026-11 the store installs most skills under rpm/plugin_<id>/skills/<skill>.
+    A lookup only under the legacy cache read every such install as never installed
+    (R34-6, 2026-11-23: isolated-commit + merge-ready postclick NO-CHANGE)."""
+
+    def _rpm_skill(self, plugin, skill):
+        d = self.tmp / 'rpm' / plugin / 'skills' / skill
+        d.mkdir(parents=True)
+        (d / 'SKILL.md').write_text(f'---\nname: {skill}\n---\nbody\n', encoding='utf-8')
+        return d
+
+    def test_rpm_only_skill_resolves_to_its_plugin_dir(self):
+        d = self._rpm_skill('plugin_A', 'demo-skill')
+        self.assertEqual(rc._cache_dir('demo-skill'), d)
+        self.assertIsNotNone(rc._creation_time('demo-skill'))
+        self.assertIsNotNone(pr.cache_digest('demo-skill'))
+        self.assertIsNotNone(pr.cache_creation_time('demo-skill'))
+
+    def test_legacy_cache_wins_when_both_hold_the_skill(self):
+        self._rpm_skill('plugin_A', 'demo-skill')
+        (self.cache / 'demo-skill').mkdir()
+        self.assertEqual(rc._cache_dir('demo-skill'), self.cache / 'demo-skill')
+
+    def test_two_rpm_copies_pick_the_most_recently_created(self):
+        self._rpm_skill('plugin_A', 'demo-skill')
+        time.sleep(0.05)
+        newer = self._rpm_skill('plugin_B', 'demo-skill')
+        self.assertEqual(rc._cache_dir('demo-skill'), newer)
+
+    def test_skill_installed_nowhere_stays_absent(self):
+        self.assertEqual(rc._cache_dir('nowhere-skill'), self.cache / 'nowhere-skill')
+        self.assertIsNone(rc._creation_time('nowhere-skill'))
+
+    def test_first_rpm_install_confirmed_by_remote_plugin_manager_cycle(self):
+        _write(rc._baseline_path('demo-skill'),
+               json.dumps({'skill': 'demo-skill', 'creation_time': None}))
+        self._rpm_skill('plugin_A', 'demo-skill')
+        ts = rc._creation_time('demo-skill').strftime('%Y-%m-%d %H:%M:%S')
+        _write(self.local_log,
+               f'{ts} [info] [RemotePluginManager] Delta: 0 to download, 0 to remove\n'
+               f'{ts} [info] [RemotePluginManager] Refreshed 1 stale user-installed plugin(s) (remote_newer)\n'
+               f'{ts} [info] [RemotePluginManager] Sync complete: 1 downloaded, 0 removed, 0 orphans cleaned\n')
+
+        code, out = self._run(rc.cmd_verify, ['demo-skill'], None)
+
+        self.assertEqual(code, 0)
+        self.assertIn('CONFIRMED', out)
+
+    def test_delta_from_one_component_never_pairs_with_the_others_sync(self):
+        _write(self.local_log,
+               '2026-11-23 20:37:06 [info] [SkillsPlugin] Delta: 3 to download\n'
+               '2026-11-23 20:37:07 [info] [RemotePluginManager] Sync complete: 2 downloaded, 0 removed\n'
+               '2026-11-23 20:37:08 [info] [RemotePluginManager] Delta: 0 to download, 0 to remove\n'
+               '2026-11-23 20:37:09 [info] [SkillsPlugin] Sync complete: 3 downloaded, 0 failed\n'
+               '2026-11-23 20:37:10 [info] [RemotePluginManager] Sync complete: 2 downloaded, 0 removed\n')
+        events = list(rc._sync_events(self.local_log))
+        self.assertEqual([(e[0].second, e[1], e[2]) for e in events], [(9, 3, 3), (10, 0, 2)])
 
 
 if __name__ == '__main__':
