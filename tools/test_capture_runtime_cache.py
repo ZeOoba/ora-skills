@@ -14,6 +14,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import capture_runtime_cache as crc  # noqa: E402
 
+# Hermetic: never read the real AppData rpm store-plugin root (R34-6 follow-up). The
+# pinned root exists (empty) because every sweep requires BOTH install roots reachable;
+# tests that need an rpm install build one under their own fixture and pass rpm_root.
+import pending_reimport as _pr_pin  # noqa: E402
+_pr_pin.RPM_ROOT = Path(tempfile.mkdtemp(prefix='rpm_pin_')) / 'rpm'
+_pr_pin.RPM_ROOT.mkdir()
+
 
 class FingerprintTests(unittest.TestCase):
     def setUp(self):
@@ -556,6 +563,47 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(self.pushed, [])
         self.assertFalse(crc.STATE_FILE.exists())
         self.assertNotIn(crc.BRANCH_PREFIX, _g(self.repo, 'branch', '--list'))
+
+
+
+class RpmStorePluginCapture(EndToEndTests):
+    """R34-6 follow-up: the capture enumerates and reads rpm store-plugin installs too.
+    Same fixture as EndToEndTests, but alpha's platform-side edit lives ONLY under the
+    rpm root (legacy cache holds beta alone)."""
+
+    def setUp(self):
+        super().setUp()
+        import shutil
+        self.rpm = Path(self.tmp.name) / 'rpm'
+        dest = self.rpm / 'plugin_A' / 'skills' / 'alpha'
+        dest.parent.mkdir(parents=True)
+        shutil.move(str(self.cache / 'alpha'), str(dest))
+
+    def test_capture_run(self):
+        with redirect_stdout(io.StringIO()):
+            rc = crc.run(full=True, dry_run=False, cache_root=self.cache, rpm_root=self.rpm)
+        self.assertEqual(rc, 0)
+        self.assertEqual([r[0] for r in self.pushed[0]['rows']], ['alpha', 'beta'])
+        branch = self.pushed[0]['branch']
+        self.assertIn('v2 saved from Cowork', _g(self.repo, 'show', f'{branch}:alpha/SKILL.md'))
+
+    def test_dry_run_writes_nothing(self):
+        with redirect_stdout(io.StringIO()):
+            rc = crc.run(full=True, dry_run=True, cache_root=self.cache, rpm_root=self.rpm)
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.pushed, [])
+
+    def test_installed_skills_spans_both_roots(self):
+        self.assertEqual(crc.installed_skills(self.cache, rpm_root=self.rpm), ['alpha', 'beta'])
+        self.assertEqual(crc.installed_skills(self.cache, {'alpha'}, rpm_root=self.rpm), ['beta'])
+
+    def test_unreachable_rpm_root_is_an_error_and_captures_nothing(self):
+        with redirect_stdout(io.StringIO()):
+            rc = crc.run(full=True, dry_run=False, cache_root=self.cache,
+                         rpm_root=Path(self.tmp.name) / 'no-rpm')
+        self.assertEqual(rc, 1)
+        self.assertEqual(self.pushed, [])
+        self.assertFalse(crc.STATE_FILE.exists())
 
 
 if __name__ == '__main__':

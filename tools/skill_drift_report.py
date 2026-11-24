@@ -50,9 +50,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from package_skills import MAX_DESC, REPO, SKIP  # noqa: E402
+import pending_reimport as _pr  # noqa: E402
 from pending_reimport import (  # noqa: E402
     CACHE_ROOT, _git_blob_bytes, _git_text, _isdir_long, _isfile_long,
-    _read_bytes_long, all_skill_dirs, classify_shared_copy,
+    _read_bytes_long, all_skill_dirs, classify_shared_copy, installed_skill_dir,
+    installed_skill_dirs, unreachable_cache_roots,
 )
 from skill_md_normalize import (  # noqa: E402
     _normalize_frontmatter, _unquote, split_skill_md,
@@ -112,7 +114,18 @@ STOCK_SKILLS = frozenset({
     # doctrine or branding. Same rationale applies -- capturing it would manufacture
     # a bogus authoritative source for a skill ORA does not own.
     'explain-usage',
+    # Third-party marketplace plugins (rpm store-plugin root, R34-6 follow-up
+    # 2026-11-23): cowork-plugin-management (knowledge-work-plugins) ships the first
+    # two, anthropic-plugin-directory ships humanize-writing. Not ORA paper; they only
+    # became visible once enumeration read the rpm root.
+    'cowork-plugin-customizer', 'create-cowork-plugin', 'humanize-writing',
 })
+
+# ORA skills installed on purpose with NO repo source: kept local-only and gitignored
+# (personal-portfolio holds personal, non-firm financial data; untracked in #247).
+# Left out of the all-skills enumeration so they never read as CACHE-ONLY review work;
+# naming one explicitly still reports it.
+LOCAL_ONLY_SKILLS = frozenset({'personal-portfolio'})
 
 REMEDY = {
     IN_SYNC: 'none',
@@ -421,20 +434,23 @@ def _terminal(skill, verdict, read_at, remedy=None):
             'point_in_time': {'read_at': read_at}}
 
 
-def skill_md_report(repo_root: Path, cache_root: Path, skill: str, read_at=None) -> dict:
+def skill_md_report(repo_root: Path, cache_root: Path, skill: str, read_at=None,
+                    rpm_root: Path | None = None) -> dict:
     """One skill's verdict. `read_at` is stamped when THIS skill's files are read,
     not when the run began - a full run takes tens of seconds against a live cache,
     so a single run-start stamp would misdate every figure after the first."""
     read_at = read_at or _now()
     repo_file = repo_root / skill / 'SKILL.md'
-    cache_file = cache_root / skill / 'SKILL.md'
+    # Legacy cache first, else the rpm store-plugin install (R34-6 follow-up).
+    cache_dir = installed_skill_dir(skill, cache_root, rpm_root)
+    cache_file = cache_dir / 'SKILL.md'
 
     if not (repo_root / skill / 'SKILL.md').is_file():
         # Installed with no authoritative source, or the repo dir was deleted while
         # the skill stayed installed. Either way its text still enters session
         # context with nothing to review it against.
         return _terminal(skill, CACHE_ONLY, read_at)
-    if not _isdir_long(cache_root / skill):
+    if not _isdir_long(cache_dir):
         return _terminal(skill, NOT_INSTALLED, read_at)
     if not _isfile_long(cache_file):
         # HALF-installed, not un-installed - a distinct, actionable state that the
@@ -528,17 +544,16 @@ def skill_md_report(repo_root: Path, cache_root: Path, skill: str, read_at=None)
     }
 
 
-def _cache_skill_dirs(cache_root: Path) -> set:
-    try:
-        return {d.name for d in cache_root.iterdir() if d.is_dir()}
-    except OSError:
-        return set()
+def _cache_skill_dirs(cache_root: Path, rpm_root: Path | None = None) -> set:
+    """Installed skill names across BOTH roots (legacy cache + rpm store plugins)."""
+    return set(installed_skill_dirs(cache_root, rpm_root))
 
 
 def report(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
-           skills=None, _after_read=None) -> dict:
-    """Full drift report. Never fabricates: an unreachable cache root yields no
-    findings rather than flagging every skill as drifted.
+           skills=None, _after_read=None, rpm_root: Path | None = None) -> dict:
+    """Full drift report. Never fabricates: an unreachable install root -- the legacy
+    cache OR the rpm store-plugin root -- yields no findings rather than flagging every
+    skill as drifted or reading rpm installs as NOT-INSTALLED.
 
     Enumeration is the UNION of both stores, not just the repo working tree. A
     repo-only enumeration silently dropped every cache-only skill - installed
@@ -548,14 +563,17 @@ def report(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
     _after_read is a test seam for the stability re-check (simulates the cache
     moving mid-run, which it demonstrably does).
     """
+    unreadable = unreachable_cache_roots(cache_root, rpm_root)
     out = {'read_at': _now(), 'repo_root': str(repo_root), 'cache_root': str(cache_root),
-           'cache_root_unreadable': not cache_root.is_dir(),
+           'rpm_root': str(rpm_root if rpm_root is not None else _pr.RPM_ROOT),
+           'cache_root_unreadable': bool(unreadable),
+           'unreadable_roots': [str(r) for r in unreadable],
            'unknown_skills': [], 'skills': {}}
     if out['cache_root_unreadable']:
         return out
 
     repo_skills = {s for s in all_skill_dirs(repo_root) if s not in SKIP}
-    cache_skills = _cache_skill_dirs(cache_root)
+    cache_skills = _cache_skill_dirs(cache_root, rpm_root)
     if skills is not None:
         # An unknown name used to yield an empty, reassuring report - the worst
         # possible answer to "is this one skill in sync?".
@@ -563,12 +581,12 @@ def report(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
                                        if s not in repo_skills | cache_skills)
         names = [s for s in skills if s not in out['unknown_skills']]
     else:
-        names = sorted(repo_skills | (cache_skills - STOCK_SKILLS))
+        names = sorted(repo_skills | (cache_skills - STOCK_SKILLS - LOCAL_ONLY_SKILLS))
 
     baseline = {}
     for skill in names:
-        out['skills'][skill] = skill_md_report(repo_root, cache_root, skill)
-        cache_file = cache_root / skill / 'SKILL.md'
+        out['skills'][skill] = skill_md_report(repo_root, cache_root, skill, rpm_root=rpm_root)
+        cache_file = installed_skill_dir(skill, cache_root, rpm_root) / 'SKILL.md'
         if _isfile_long(cache_file):
             try:
                 baseline[skill] = norm_hash(_read_bytes(cache_file))
@@ -582,7 +600,8 @@ def report(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
     # single session between two verification passes on 2026-08-03 - so a verdict
     # computed from a file that moved mid-run must say so rather than be reported flat.
     for skill, before in baseline.items():
-        cache_file = cache_root / skill / 'SKILL.md'
+        # Re-resolved: a re-import can land in a NEW rpm plugin dir mid-run.
+        cache_file = installed_skill_dir(skill, cache_root, rpm_root) / 'SKILL.md'
         try:
             after = norm_hash(_read_bytes(cache_file)) if _isfile_long(cache_file) else None
         except OSError:
@@ -597,11 +616,15 @@ ACTIONABLE = (REPO_NEWER, CACHE_NEWER, MANUAL_MERGE,
               BROKEN_INSTALL, CACHE_ONLY, UNREADABLE)
 
 
+def _unreadable(rep: dict) -> str:
+    return ', '.join(rep.get('unreadable_roots') or [rep['cache_root']])
+
+
 def render_text(rep: dict) -> str:
     lines = [f"skill-drift-report read_at={rep['read_at']} "
              f"verified_at={rep.get('verified_at', '-')}"]
     if rep['cache_root_unreadable']:
-        lines.append(f"  CACHE ROOT UNREADABLE: {rep['cache_root']} - no findings "
+        lines.append(f"  CACHE ROOT UNREADABLE: {_unreadable(rep)} - no findings "
                      f"(store unreadable is reported, never inferred as clean)")
         return '\n'.join(lines)
 
@@ -642,7 +665,7 @@ INSTALLED_VERDICTS = {IN_SYNC, REPO_NEWER, CACHE_NEWER, MANUAL_MERGE, CACHE_ONLY
 def render_publish_status(rep: dict) -> str:
     """One line per named skill, citation-ready for a Rev-log/advisory entry: whether
     the skill is CURRENTLY installed in the runtime cache, sourced from a live read of
-    CACHE_ROOT at read_at — never from memory or a prior Rev-log's own claim.
+    CACHE_ROOT and RPM_ROOT (rpm store-plugin installs) at read_at — never from memory or a prior Rev-log's own claim.
 
     Added 2026-08-15 (Rev 10 remediation): a Rev 5 log had recorded capex-budgeting as
     Gabriel-confirmed UNPUBLISHED as of 2026-08-09, while the Code catalog separately
@@ -652,14 +675,14 @@ def render_publish_status(rep: dict) -> str:
     publish/unpublished claim can cite a fresh, timestamped run of this flag instead of
     carrying a prior claim forward unverified.
 
-    NOTE: this reads the LOCAL Windows runtime-cache mirror (CACHE_ROOT) — the same
+    NOTE: this reads the LOCAL Windows runtime-cache mirror (CACHE_ROOT + RPM_ROOT) — the same
     store install/uninstall drives — not the account's live claude.ai/Cowork ListSkills
     API directly. The two are expected to agree (the cache IS how a Save-skill install
     reaches this machine) but a Cowork-side ListSkills call remains the independent
     cross-check if the two were ever suspected to disagree.
     """
     if rep['cache_root_unreadable']:
-        return (f"CACHE ROOT UNREADABLE: {rep['cache_root']} — no publish-status could "
+        return (f"CACHE ROOT UNREADABLE: {_unreadable(rep)} — no publish-status could "
                  f"be read; do not report a publish/unpublished claim from this run")
     lines = []
     for skill, r in sorted(rep['skills'].items()):

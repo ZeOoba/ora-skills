@@ -130,6 +130,24 @@ function Test-OneManifest {
     $m = Get-Content $Path -Raw | ConvertFrom-Json
     $skill = $m.skill
     $cacheDir = $m.baseline.cache_dir
+    # rpm store-plugin installs (R34-6 follow-up): a first install, or a re-import that
+    # created a new plugin_<id>, lands in a dir the baseline could not name. When the
+    # baseline dir is absent, take the newest rpm copy of this skill instead.
+    if (-not (Test-Path $cacheDir) -and $m.baseline.rpm_root) {
+        $rpmHit = Get-ChildItem -Path $m.baseline.rpm_root -Directory -Filter 'plugin_*' -ErrorAction SilentlyContinue |
+            ForEach-Object { Join-Path $_.FullName (Join-Path 'skills' $skill) } |
+            Where-Object { Test-Path $_ -PathType Container } |
+            ForEach-Object { Get-Item $_ } |
+            Sort-Object CreationTimeUtc -Descending | Select-Object -First 1
+        # Only a copy CREATED AFTER the baseline was captured can be this install: a
+        # pre-existing rpm copy (e.g. a legacy shadow removed since) would otherwise read
+        # as REAL INSTALL with no click at all (2026-11-23 refute, C6). No later copy ->
+        # keep the absent baseline dir, which reads FAIL below.
+        if ($rpmHit -and $m.baseline.captured_at) {
+            $capturedAt = [datetimeoffset]::Parse($m.baseline.captured_at).UtcDateTime
+            if ($rpmHit.CreationTimeUtc -gt $capturedAt) { $cacheDir = $rpmHit.FullName }
+        }
+    }
     Write-Host "=== $skill ==="
     Write-Host "  manifest: $Path"
     $fail = @()
@@ -168,7 +186,10 @@ function Test-OneManifest {
     }
 
     $baselineCT = $m.baseline.creation_time
-    if ($null -eq $baselineCT -or $baselineCT -eq '') {
+    if ($m.baseline.unreadable_roots -and @($m.baseline.unreadable_roots).Count -gt 0) {
+        $ambiguous += "baseline was taken while an install root was unreadable ($(@($m.baseline.unreadable_roots) -join ', ')) -- an absent baseline proves nothing"
+        Write-Host "  CREATIONTIME DISCRIMINATOR: baseline taken BLIND (install root unreadable) -- AMBIGUOUS"
+    } elseif ($null -eq $baselineCT -or $baselineCT -eq '') {
         Write-Host "  CREATIONTIME DISCRIMINATOR: baseline was ABSENT -- directory now existing is first-hand install evidence -> REAL INSTALL"
     } else {
         $baseDt = [datetimeoffset]::Parse($baselineCT).UtcDateTime

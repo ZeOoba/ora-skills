@@ -25,3 +25,12 @@ setup-claude
 setup-cowork
 skill-creator
 xlsx
+# Third-party marketplace plugins under the rpm store-plugin root, visible to the capture
+# once it read that root (2026-11-23, R34-6 follow-up): cowork-plugin-management
+# (knowledge-work-plugins) and anthropic-plugin-directory's humanize-writing.
+cowork-plugin-customizer
+create-cowork-plugin
+humanize-writing
+# ORA-authored but deliberately local-only: personal, non-firm financial data (#247). The
+# repo is PUBLIC; .gitignore already excludes it, this is the second, independent layer.
+personal-portfolio

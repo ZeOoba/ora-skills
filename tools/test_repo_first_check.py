@@ -34,6 +34,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pending_reimport as pr  # noqa: E402
 import repo_first_check as rfc  # noqa: E402
+
+# Hermetic: never read the real AppData rpm store-plugin root (R34-6 follow-up). The
+# pinned root exists (empty) because every sweep requires BOTH install roots reachable;
+# tests that need an rpm install build one under their own fixture and pass rpm_root.
+import pending_reimport as _pr_pin  # noqa: E402
+_pr_pin.RPM_ROOT = Path(tempfile.mkdtemp(prefix='rpm_pin_')) / 'rpm'
+_pr_pin.RPM_ROOT.mkdir()
 from pending_reimport import read_entries  # noqa: E402
 from unittest import mock  # noqa: E402
 
@@ -890,6 +897,60 @@ class CodeOnlySkills(FixtureTestCase):
         _write(self.cache / 'codey' / 'SKILL.md', 'name: codey-EDITED-IN-COWORK\n')
         findings = rfc._sweep_findings(repo_root=self.repo, cache_root=self.cache)
         self.assertIn('codey', {f[0] for f in findings})
+
+
+
+class RpmStorePluginInstalls(FixtureTestCase):
+    """R34-6 follow-up: classify_skill / rescue / run resolve the installed copy through
+    pending_reimport.installed_skill_dir() -- legacy cache first, else the rpm
+    store-plugin install. Before this, every rpm install classified NOT-INSTALLED."""
+
+    def setUp(self):
+        super().setUp()
+        self.rpm = self.tmp / 'rpm'
+        self.rpm.mkdir()
+        self.ledger = self.tmp / 'STORE_AHEAD_OF_REPO.md'
+        self.rescue_dir = self.tmp / 'rescue'
+
+    def _rpm_dir(self, plugin='plugin_A', skill='demo-skill') -> Path:
+        return self.rpm / plugin / 'skills' / skill
+
+    def test_rpm_install_is_classified_not_not_installed(self):
+        _commit(self.repo, 'demo-skill/SKILL.md', 'name: demo-skill\n', 'init')
+        _write(self._rpm_dir() / 'SKILL.md', 'name: demo-skill\n')
+        verdict, per_file = rfc.classify_skill('demo-skill', self.repo, self.cache, self.rpm)
+        self.assertEqual(verdict, 'IN-SYNC')
+        self.assertEqual(per_file, [('SKILL.md', 'IN-SYNC')])
+
+    def test_cache_ahead_in_an_rpm_install_is_found_and_rescued(self):
+        _commit(self.repo, 'demo-skill/SKILL.md', 'name: demo-skill\n', 'init')
+        _write(self._rpm_dir() / 'SKILL.md', 'name: demo-skill\nnever committed\n')
+        code = rfc.run(False, repo_root=self.repo, cache_root=self.cache,
+                       ledger_path=self.ledger, rescue_dir=self.rescue_dir,
+                       rpm_root=self.rpm)
+        self.assertEqual(code, 0)
+        self.assertIn('demo-skill', read_entries(self.ledger))
+        rescued = list((self.rescue_dir / 'demo-skill').glob('*/SKILL.md'))
+        self.assertEqual(len(rescued), 1)
+        self.assertIn('never committed', rescued[0].read_text(encoding='utf-8'))
+
+    def test_unreachable_rpm_root_never_touches_an_existing_ledger(self):
+        # The legacy root alone is reachable; a sweep of it would see none of the rpm
+        # installs and REPLACE the ledger with that partial (empty) view.
+        rfc.record_ledger([('kept', 'CACHE-AHEAD', [('SKILL.md', 'CACHE-AHEAD')])],
+                          ledger_path=self.ledger)
+        before = self.ledger.read_text(encoding='utf-8')
+        code = rfc.run(False, repo_root=self.repo, cache_root=self.cache,
+                       ledger_path=self.ledger, rescue_dir=self.rescue_dir,
+                       rpm_root=self.tmp / 'no-rpm')
+        self.assertEqual(code, 0)
+        self.assertEqual(self.ledger.read_text(encoding='utf-8'), before)
+
+    def test_rescue_reads_the_rpm_copy(self):
+        _write(self._rpm_dir() / 'SKILL.md', 'rpm bytes\n')
+        dest = rfc.rescue('demo-skill', ['SKILL.md'], cache_root=self.cache,
+                          rescue_dir=self.rescue_dir, rpm_root=self.rpm)
+        self.assertEqual((dest / 'SKILL.md').read_text(encoding='utf-8'), 'rpm bytes\n')
 
 
 if __name__ == '__main__':

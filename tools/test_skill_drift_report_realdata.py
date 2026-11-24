@@ -40,6 +40,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import skill_drift_report as sdr  # noqa: E402
 
+# Hermetic: never read the real AppData rpm store-plugin root (R34-6 follow-up). The
+# pinned root exists (empty) because every sweep requires BOTH install roots reachable;
+# tests that need an rpm install build one under their own fixture and pass rpm_root.
+import pending_reimport as _pr_pin  # noqa: E402
+_pr_pin.RPM_ROOT = Path(tempfile.mkdtemp(prefix='rpm_pin_')) / 'rpm'
+_pr_pin.RPM_ROOT.mkdir()
+
 REPO = Path(__file__).resolve().parent.parent
 
 # Skills chosen for their DESCRIPTION SHAPE, not their content:

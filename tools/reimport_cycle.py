@@ -91,7 +91,11 @@ def cmd_prep(skills: list[str], out: Path) -> int:
     consumers = set(SHARED_ROOT_DEPS)
     print("== shared-deps")
     deps = _run([str(TOOLS / "pending_reimport.py"), "shared-deps"])
-    stop = False
+    # A failed shared-deps run (exit 2 when an install root is unreadable) prints no
+    # rows, which gate_failures would read as "no bad dep": stop instead (2026-11-23).
+    stop = deps.returncode != 0
+    if stop:
+        print(f"   STOP: shared-deps check did not run (exit {deps.returncode})")
     for s in skills:
         bad = gate_failures(s, plugin_of, _git_dirty, consumers, deps.stdout)
         last = subprocess.run(["git", "log", "-1", "--format=%h %ci %s", "--", f"{s}/"],

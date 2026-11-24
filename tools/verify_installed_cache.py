@@ -20,25 +20,24 @@ Reports, per installed copy: whether the description scalar is balanced, whether
 an orphaned quote sits in the head of the body, and the description's leading
 text. Exit 0 = all inspected copies look sane, 1 = a problem or nothing found.
 """
-import glob
 import io
-import os
 import sys
 from pathlib import Path
 
-CACHE_GLOB = os.path.join(
-    os.environ.get('APPDATA', ''), 'Claude', 'local-agent-mode-sessions',
-    'skills-plugin', '*', '*', 'skills')
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import pending_reimport as pr  # noqa: E402
 
 
-def installed_paths(names=None):
-    for skills_root in sorted(glob.glob(CACHE_GLOB)):
-        for d in sorted(Path(skills_root).iterdir()):
-            if not (d / 'SKILL.md').exists():
-                continue
-            if names and d.name not in names:
-                continue
-            yield d.name, d / 'SKILL.md'
+def installed_paths(names=None, cache_root=None, rpm_root=None):
+    """(skill, SKILL.md) for every installed copy in effect: the legacy skills-plugin
+    cache AND the rpm store-plugin root, each skill resolved the way every drift reader
+    resolves it (pending_reimport.installed_skill_dirs; R34-6 follow-up -- a legacy-only
+    glob found none of the ~100 rpm-installed ORA skills)."""
+    for name, d in pr.installed_skill_dirs(cache_root, rpm_root).items():
+        if names and name not in names:
+            continue
+        if (d / 'SKILL.md').exists():
+            yield name, d / 'SKILL.md'
 
 
 def inspect(path):
@@ -56,10 +55,16 @@ def inspect(path):
     return balanced, stray, val
 
 
-def main(argv):
+def main(argv, cache_root=None, rpm_root=None):
     names = set(a for a in argv if not a.startswith('-')) or None
+    unreachable = pr.unreachable_cache_roots(cache_root, rpm_root)
+    if unreachable:
+        # Fail closed: a partial read would omit every skill under the unreadable root.
+        print('install root unreadable: %s -- nothing inspected'
+              % ', '.join(str(r) for r in unreachable))
+        return 1
     seen = bad = 0
-    for name, path in installed_paths(names):
+    for name, path in installed_paths(names, cache_root, rpm_root):
         seen += 1
         balanced, stray, val = inspect(path)
         flag = '' if (balanced and stray == 0) else '   <-- CHECK'
@@ -68,7 +73,8 @@ def main(argv):
         print('%-30s balanced=%-5s stray_body_quotes=%d  %s...%s'
               % (name, balanced, stray, val[:52], flag))
     if not seen:
-        print('no installed skills found under %s' % CACHE_GLOB)
+        print('no installed skills found under %s or %s'
+              % (cache_root or pr.CACHE_ROOT, rpm_root or pr.RPM_ROOT))
         return 1
     print('--- %d installed copy(ies) inspected; %d need attention ---' % (seen, bad))
     return 1 if bad else 0

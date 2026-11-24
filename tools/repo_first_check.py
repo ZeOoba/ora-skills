@@ -86,6 +86,8 @@ from pending_reimport import (  # noqa: E402
     _win_long,
     all_skill_dirs,
     classify_shared_copy,
+    installed_skill_dir,
+    unreachable_cache_roots,
     update_entries,
 )
 
@@ -270,14 +272,17 @@ def _cache_only_rel_paths(cache_dir: Path, exclude: set[str]) -> list[str]:
     return sorted(rels)
 
 
-def classify_skill(skill: str, repo_root: Path = REPO, cache_root: Path = CACHE_ROOT):
+def classify_skill(skill: str, repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
+                   rpm_root: Path | None = None):
     """-> (verdict, [(relpath, verdict), ...]). Worst verdict wins.
 
     repo_root/cache_root are parameterized (matching every other drift function in
     this repo -- pending_reimport.sweep_drift, skill_drift_report.report) so this can
     be exercised against a synthetic fixture tree in tests, not just the live stores.
+    The installed copy resolves through pending_reimport.installed_skill_dir() (legacy
+    cache first, else the rpm store-plugin install; R34-6 follow-up).
     """
-    cache_dir = Path(cache_root) / skill
+    cache_dir = installed_skill_dir(skill, Path(cache_root), rpm_root)
     if not _isdir_long(cache_dir):
         return ('CODE-ONLY' if skill in CODE_ONLY_SKILLS else 'NOT-INSTALLED'), []
 
@@ -350,7 +355,8 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%MZ')
 
 
-def _classify_all(skills, repo_root: Path = REPO, cache_root: Path = CACHE_ROOT):
+def _classify_all(skills, repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
+                  rpm_root: Path | None = None):
     """[(skill, verdict, per_file)] for EVERY skill in `skills`, whatever the
     verdict -- shared by main()'s two modes and by _sweep_findings(), so there is
     exactly one place that calls classify_skill() in a loop with fail-open error
@@ -358,7 +364,7 @@ def _classify_all(skills, repo_root: Path = REPO, cache_root: Path = CACHE_ROOT)
     out = []
     for skill in skills:
         try:
-            verdict, per_file = classify_skill(skill, repo_root, cache_root)
+            verdict, per_file = classify_skill(skill, repo_root, cache_root, rpm_root)
         except Exception as exc:          # fail open, always -- one bad skill must
             print(f'repo_first_check: {skill} check errored ({exc}) -- skipped',  # not
                   file=sys.stderr)         # abort the sweep for every other skill
@@ -367,7 +373,8 @@ def _classify_all(skills, repo_root: Path = REPO, cache_root: Path = CACHE_ROOT)
     return out
 
 
-def _sweep_findings(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT):
+def _sweep_findings(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
+                    rpm_root: Path | None = None):
     """BAD_VERDICTS findings only, full sweep across every skill dir in the repo --
     not just a commit's staged set. This is the only path that can see a skill
     nobody is currently committing to, which is exactly how masterlease-
@@ -378,7 +385,7 @@ def _sweep_findings(repo_root: Path = REPO, cache_root: Path = CACHE_ROOT):
     in front of this so an unreachable cache root never reaches record_ledger() as
     an empty (and therefore falsely "everything reconciled") finding set.
     """
-    all_results = _classify_all(all_skill_dirs(repo_root), repo_root, cache_root)
+    all_results = _classify_all(all_skill_dirs(repo_root), repo_root, cache_root, rpm_root)
     return [(s, v, pf) for s, v, pf in all_results if v in BAD_VERDICTS]
 
 
@@ -482,7 +489,8 @@ def _newest_rescue(skill_dir: Path) -> Path | None:
 
 
 def rescue(skill: str, rels: list[str], cache_root: Path = CACHE_ROOT,
-           rescue_dir: Path = RESCUE_DIR, checkout: str = REPO.name) -> Path | None:
+           rescue_dir: Path = RESCUE_DIR, checkout: str = REPO.name,
+           rpm_root: Path | None = None) -> Path | None:
     """Copy the about-to-be-clobbered cache files into their OWN
     `<rescue_dir>/<skill>/<UTC timestamp>-<checkout>/` dir. Every checkout's pre-commit
     and sweep share rescue_dir (STAGING), and a rescue is the only surviving copy, so a
@@ -492,6 +500,7 @@ def rescue(skill: str, rels: list[str], cache_root: Path = CACHE_ROOT,
     cannot be read (a concurrent reimport replaced the cache mid-rescue) is reported
     and skipped -- it never costs the files that were read."""
     skill_dir = rescue_dir / skill
+    src_dir = installed_skill_dir(skill, Path(cache_root), rpm_root)
     tmp = None
     try:
         # Bytes AND stat from one open handle: the cache can be replaced (a concurrent
@@ -500,7 +509,7 @@ def rescue(skill: str, rels: list[str], cache_root: Path = CACHE_ROOT,
         data, unread = {}, []
         for rel in rels:
             try:
-                data[rel] = _read_with_stat(Path(cache_root) / skill / rel)
+                data[rel] = _read_with_stat(src_dir / rel)
             except OSError as exc:
                 unread.append(f'{rel} ({exc.strerror or exc})')
         if unread:
@@ -540,7 +549,8 @@ def rescue(skill: str, rels: list[str], cache_root: Path = CACHE_ROOT,
 
 
 def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
-        ledger_path: Path = LEDGER, rescue_dir: Path = RESCUE_DIR) -> int:
+        ledger_path: Path = LEDGER, rescue_dir: Path = RESCUE_DIR,
+        rpm_root: Path | None = None) -> int:
     """Core logic, fully parameterized on every store it touches -- the test seam.
     main() is a thin CLI wrapper around this (mirroring skill_drift_report.report()'s
     own repo_root/cache_root parameterization) so the WHOLE control flow, including
@@ -550,7 +560,8 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
     """
     quiet = check_staged
 
-    if not _isdir_long(cache_root):
+    unreachable = unreachable_cache_roots(Path(cache_root), rpm_root)
+    if unreachable:
         # Never fabricate: an unreachable cache root must not look like "nothing
         # drifted". Fatal specifically for record_ledger(), which reads an empty
         # findings list as "every previously-drifted skill has reconciled" and WIPES
@@ -559,8 +570,12 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
         # unresolvable from a Cowork bash sandbox specifically. Same posture as
         # skill_drift_report.report()'s cache_root_unreadable guard: bail before
         # calling classify_skill or record_ledger at all, so an existing ledger is
-        # left untouched rather than being read as "resolved".
-        print(f'repo_first_check: cache root unreadable ({cache_root}) -- no findings '
+        # left untouched rather than being read as "resolved". BOTH install roots
+        # count (R34-6 follow-up): most skills now live under the rpm store-plugin
+        # root, so a sweep that could read only the legacy cache would clear ~every
+        # real entry from this REPLACE-semantics ledger.
+        roots = ', '.join(str(r) for r in unreachable)
+        print(f'repo_first_check: cache root unreadable ({roots}) -- no findings '
               f'computed, ledger left untouched (this is a reporting gap, never a '
               f'clean result)', file=sys.stderr)
         return 0
@@ -568,7 +583,7 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
     if not check_staged:                  # pre-commit path stays offline and fast
         _fetch_origin_main(repo_root)
     skills = _staged_skills(repo_root) if check_staged else all_skill_dirs(repo_root)
-    all_results = _classify_all(skills, repo_root, cache_root)
+    all_results = _classify_all(skills, repo_root, cache_root, rpm_root)
     findings = [(s, v, pf) for s, v, pf in all_results if v in BAD_VERDICTS]
 
     if not quiet:
@@ -607,7 +622,8 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
         for rel, v in bad:
             print(f'     {rel} -- {why[v]}', file=sys.stderr)
             if v == 'DIVERGENT':
-                where = _divergent_provenance(repo_root, Path(cache_root) / skill / rel)
+                where = _divergent_provenance(
+                    repo_root, installed_skill_dir(skill, Path(cache_root), rpm_root) / rel)
                 if where:
                     print(f'       matches {where}', file=sys.stderr)
         for v in ('CACHE-AHEAD', 'REPO-MISSING', 'DIVERGENT'):
@@ -615,7 +631,7 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
                 print(f'   {fix[v]}', file=sys.stderr)
         print('   The mirror sync that runs next WILL overwrite it.', file=sys.stderr)
         dest = rescue(skill, [rel for rel, _ in bad], cache_root, rescue_dir,
-                      checkout=Path(repo_root).resolve().name)
+                      checkout=Path(repo_root).resolve().name, rpm_root=rpm_root)
         if dest:
             print(f'   Rescued the cache copy -> {dest}', file=sys.stderr)
             print(f'   (the "-{Path(repo_root).resolve().name}" suffix names the checkout that ran '
