@@ -1,9 +1,11 @@
 ---
 name: "cost-seg-tax-layer"
-description: "Use when an ORA underwrite needs after-tax returns: cost-segregation allocation by property type (industrial/flex default, retail override), class-by-class recapture, and a per-state tax layer (WI, OH, IN, MD, MO, KS, TN, MI)."
+description: "Use when an ORA underwrite needs after-tax returns: cost-segregation allocation by property type (industrial/flex default, retail override, multifamily 27.5-yr residential), class-by-class recapture, and a per-state tax layer (WI, OH, IN, MD, MO, KS, TN, MI)."
 ---
 
 # Cost-Seg & State Tax Layer for ORA Underwrites
+
+v1.4 (2026-11-24): Multifamily / residential rental case added (27.5-yr residential, mid-month). No standing MF allocation existed, so The Abigail (18%) and Turkey Run (18%) each improvised one. Ohio municipal rule clarified (Dublin 2.0%). Ratified by Gabriel in-turn 2026-11-24 with acquisition-underwriting v4.60 (v1.3, a District of Columbia row from 2026-11-20, is runtime-cache-only on `capture/runtime-cache-20261120T195348Z` and lands separately; this entry does not include it). Allocation defaults only: no governor constant changed.
 
 v1.2.1 (2026-11-14): Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 
@@ -21,6 +23,11 @@ All allocations are [EST] until an engineering study replaces them. Benchmarks a
 | Retail conservative | 5% | 0% | 12% | 17% | Dated shell, tenant-owned finish |
 | Retail strip BASE (override) | 8% | 1% | 17% | 26% | Strip centers 25-40% in vendor studies; parking, lighting, signage, drainage, storefront finish |
 | Retail high | 13% | 2% | 22% | 37% | Above the ~32% scrutiny line (90th percentile); needs documentation |
+| Multifamily conservative | 10% | 0% | 5% | 15% | Dated garden/townhome; appliances and carpet only |
+| Multifamily BASE | 12% | 0% | 6% | 18% | Garden/townhome or mid-rise; appliances, flooring, cabinets, site paving/lighting |
+| Multifamily high | 18% | 0% | 8% | 26% | Heavy unit finishes and amenity package; needs a study |
+
+Multifamily: the remainder is 27.5-yr residential rental (mid-month), not 39-yr, while dwelling-unit rents are at least 80% of gross rents each year (§168(e)(2)(A)); test it every year on mixed-use. Cost-seg classes recapture as in §2.
 
 Commercial interquartile range 22-28%; above ~32% draws scrutiny. Pick the property-type row, state which case is selected, and show the other cases as a band.
 
@@ -40,19 +47,19 @@ Never use the acquisition-underwriting Ruling 4 dry-land credit in a tax calcula
 
 - 100% bonus is permanent for property acquired after Jan 19, 2025 (OBBBA). Used property qualifies if bought from an unrelated seller and not previously used by the taxpayer (IRS bonus FAQ Q3). Pre-1/20/2025 binding contracts stay on the old phase-down.
 - QIP covers only improvements the taxpayer makes (lease-up TI), not the acquired building's existing interior. Cost-seg 5/7-yr carve-outs of an acquired building are bonus-eligible as used property.
-- Recapture by class, never one lump: 5/7-yr = Section 1245 ordinary; 15-yr bonus in excess of straight-line = Section 1250 additional depreciation (ordinary); straight-line portion of 15-yr plus 39-yr = unrecaptured Section 1250 at 25%; remainder LTCG + NIIT 23.8%. Ordinary rate convention 37% (modeling convention, not Gabriel's bracket).
+- Recapture by class, never one lump: 5/7-yr = Section 1245 ordinary; 15-yr bonus in excess of straight-line = Section 1250 additional depreciation (ordinary); straight-line portion of 15-yr plus 39-yr (27.5-yr for the §1 multifamily cases) = unrecaptured Section 1250 at 25%; remainder LTCG + NIIT 23.8%. Ordinary rate convention 37% (modeling convention, not Gabriel's bracket).
 - NOT modeled, always flag: Section 469 passive-loss and Section 461(l) excess-business-loss limits (loss usability against ORA portfolio passive income needs CPA confirmation), AMT, federal deductibility of state tax / PTE elections, study cost.
-- **Placed-in-service timing (v1.1):** drive the schedule by tax year from a placed-in-service month input, not by model year. 39-yr nonresidential: mid-month convention, so a December placement gives 0.5/12 of a year in that tax year and full years after; all bonus on 5/7/15-yr basis falls in the placed-in-service tax year (a 12/31 close puts it at t0, before model Year 1). Disposition year: mid-month (a December sale gives 11.5/12); state if not modeled and size it. Confirm acquisition and placed-in-service dates with the CPA.
+- **Placed-in-service timing (v1.1):** drive the schedule by tax year from a placed-in-service month input, not by model year. 39-yr nonresidential and 27.5-yr residential (§1 multifamily cases): mid-month convention, so a December placement gives 0.5/12 of a year in that tax year and full years after; all bonus on 5/7/15-yr basis falls in the placed-in-service tax year (a 12/31 close puts it at t0, before model Year 1). Disposition year: mid-month (a December sale gives 11.5/12); state if not modeled and size it. Confirm acquisition and placed-in-service dates with the CPA.
 - MACRS half-year tables: 5-yr .2000/.3200/.1920/.1152/.1152/.0576; 7-yr .1429/.2449/.1749/.1249/.0893/.0892/.0893/.0446; 15-yr (150DB) .0500/.0950/.0855/.0770/.0693/.0623/.0590/.0590/.0591/.0590/.0591/.0590/.0591/.0590/.0591/.0295.
 
 ## 3. State layer: five parameters per state
 
-State/local combined marginal rate; SB = share of 5/7/15-yr basis the state lets you expense in Year 1; DR = share of bonus add-back recovered later over DN years (from Year 2); gain exclusion on non-recapture gain; gain surtax. State depreciation = SB x classBasis (Yr 1) + (1-SB-DR) x MACRS + DR x classBasis/DN (Yr 2..1+DN) + 39-yr straight line. State ordinary recapture = state class depreciation in excess of 15-yr straight-line. State sale tax = rate x ordinary recapture + (rate x (1-exclusion) + surtax) x remaining gain.
+State/local combined marginal rate; SB = share of 5/7/15-yr basis the state lets you expense in Year 1; DR = share of bonus add-back recovered later over DN years (from Year 2); gain exclusion on non-recapture gain; gain surtax. State depreciation = SB x classBasis (Yr 1) + (1-SB-DR) x MACRS + DR x classBasis/DN (Yr 2..1+DN) + 39-yr straight line (27.5-yr for the §1 multifamily cases). State ordinary recapture = state class depreciation in excess of 15-yr straight-line. State sale tax = rate x ordinary recapture + (rate x (1-exclusion) + surtax) x remaining gain.
 
 | State | Rate (as modeled) | Bonus | Gain treatment | Confidence |
 |---|---|---|---|---|
 | WI | 7.65% | Decoupled (2014 IRC): SB 0, regular MACRS | 30% exclusion of net LTCG | PRIMARY (WI DOR) |
-| OH | 3% business rate above USD 250K business-income deduction + municipal ~2% [EST] | Decoupled: 5/6 add-back (6/6 if NOL), recovered 1/5 per year over 5 years -> SB 1/6, DR 5/6, DN 5 | No exclusion found | PARTIAL: municipal tax and rental-income business classification unverified |
+| OH | 3% business rate above USD 250K business-income deduction + municipal ~2% [EST] | Decoupled: 5/6 add-back (6/6 if NOL), recovered 1/5 per year over 5 years -> SB 1/6, DR 5/6, DN 5 | No exclusion found | PARTIAL: municipal tax and rental-income business classification unverified. Municipal: name the city. Dublin 2.0% applies to net profits of businesses and rentals (City of Dublin taxation page, retrieved 2026-11-24); Columbus 2.5%. Rental real estate is sitused to the city where the property sits (separate accounting since TY2017, HB 5). Passive losses are deductible only when federally allowed and are not part of municipal NOL carryforwards. |
 | IN | 2.95% (2.90% in 2027) + county (Marion 2.02%; range 0.5-3.0%) | Decoupled (S.B. 243, 2026): add-back then regular MACRS | No exclusion found | PARTIAL: county tax on nonresident passive rental income and statute mechanics unverified |
 | MD | 6.5% top (5.75% above USD 250K) + county ~3.2% [EST] (range 2.25-3.3%) | Decoupled since 2002; subtraction schedule unverified -> modeled as regular MACRS | 2% surtax on net capital gain when AGI > USD 350K | PARTIAL |
 | MO | 4.7% (2026 conflicts: 4.7 vs 4.8) | Appears to conform: SB 1 | 100% capital-gain deduction from 2025 (HB 594); unrecaptured Sec 1250 eligibility unverified | PARTIAL |
@@ -68,7 +75,7 @@ Rules: (a) every state row carries a retrieval date and source; re-verify each t
 
 - Cost Seg tab: benchmark table with sources, case table (rows read by an Inputs INDEX selector), live results from per-case engines, MACRS tables, rules and caveats.
 - State Tax tab: one row per state with the five parameters, confidence, source and note; a live by-state results table from per-state engines.
-- Engine rows: acquisition basis (from the §1A selector); class bases 5/7/15 — 5-yr and 7-yr together form the §1245 bucket in DOLLARS (basis × share; never add a percentage to a dollar cell), 15-yr includes the 15-yr share of deferred-maintenance CapEx and lease-up TI as QIP — and 39-yr; a t0 (placed-in-service year) column for bonus and the partial-year 39-yr amount, with its tax effect in the t0 after-tax cash flow; federal depreciation; state depreciation; federal and state tax; exit block by class with a tie row (class depreciation minus cumulative depreciation = 0).
+- Engine rows: acquisition basis (from the §1A selector); class bases 5/7/15 — 5-yr and 7-yr together form the §1245 bucket in DOLLARS (basis × share; never add a percentage to a dollar cell), 15-yr includes the 15-yr share of deferred-maintenance CapEx and lease-up TI as QIP — and 39-yr (27.5-yr for the §1 multifamily cases); a t0 (placed-in-service year) column for bonus and the partial-year 39-yr (or 27.5-yr) amount, with its tax effect in the t0 after-tax cash flow; federal depreciation; state depreciation; federal and state tax; exit block by class with a tie row (class depreciation minus cumulative depreciation = 0).
 - Verification: an independent Python mirror must reproduce every after-tax IRR to 4+ decimals for every case and state, from the workbook's own cells (land share, bases, timing) — the memo quotes the workbook, and the mirror proves it; pre-tax IRR must be identical across cases; duplicate-key assertion on Returns lines.
 
 ## 5. Output block

@@ -9,8 +9,9 @@
 
 ## Columbus OH
 | City of Columbus zoning REST | https://maps2.columbus.gov/arcgis/rest/services/Schemas/BuildingZoning/MapServer | V | Also Schemas/Development |
+| City of Dublin OH zoning | https://services1.arcgis.com/NqY8dnPSEdMJhuRw/arcgis/rest/services/Zoning/FeatureServer/1 | V | Verified 2026-11-24 (layer edited 2026-10-19). Fields: Description, Dev_Txt (PUD name), Ord_Num, PUDClass, HeightMax. Query per parcel polygon (inSR 4326). PUD → run Step 6A. |
 | Columbus zoning code | https://library.municode.com/oh/columbus | V | JS shell — browser |
-| Franklin Co GIS | https://gis.franklincountyohio.gov/ | U | REST path not discoverable; use auditor GIS UI + NFHL/ODNR for flood |
+| Franklin Co GIS | https://gis.franklincountyohio.gov/hosting/rest/services | V | Verified 2026-11-24: parcels at ParcelFeatures/Parcel_Features/MapServer/0, sales at RealEstate/Sales_Information/MapServer/0 (stale after 2025-07). Flood from NFHL/ODNR |
 | Gahanna code | https://codelibrary.amlegal.com/codes/gahanna/latest/overview | U | Cloudflare challenge — browser only; IM front-yard overlay applies |
 | Ohio DNR floodplain | https://gis.ohiodnr.gov/arcgis/rest/services | V | DSW_Services folder |
 
