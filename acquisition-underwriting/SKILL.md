@@ -295,7 +295,7 @@ Every gate/floor exception MUST carry a one-sentence compensating factor, logged
   - **Rent growth:** market rent flat for two years, then 2.5% (Base); Bear 1.5%, Bull 3.0% after the same two flat years (standing convention, Gabriel 2026-11-21).
   - **Rent-gap size normalization:** before crediting any OM "below comps" mark-to-market, compare rent per SF against the comp set; a per-unit gap that disappears per SF is a unit-size artifact and earns no mark-to-market beyond the property's own executed trade-outs (12-month report). Origins: The Abigail (2026-11-19, conventional gap ~USD 0 weighted after normalization) and Turkey Run (2026-11-24, USD 1.60/SF in place vs comp average USD 1.56/SF against an OM-claimed per-unit gap of 284 USD).
   - **Mark-to-market source:** market rent = the property's own trailing new-lease average or T1 GSR, never the OM comp average; loss-to-lease burns off over ~2 years [EST].
-  - **Cost seg:** run `cost-seg-tax-layer` with its multifamily case (27.5-yr residential; v1.3).
+  - **Cost seg:** run `cost-seg-tax-layer` with its multifamily case (27.5-yr residential; v1.4).
 
 ### State Reassessment Matrix (post-sale property tax)
 

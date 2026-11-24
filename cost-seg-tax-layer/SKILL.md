@@ -5,7 +5,7 @@ description: "Use when an ORA underwrite needs after-tax returns: cost-segregati
 
 # Cost-Seg & State Tax Layer for ORA Underwrites
 
-v1.3 (2026-11-24): Multifamily / residential rental case added (27.5-yr residential, mid-month). No standing MF allocation existed, so The Abigail (18%) and Turkey Run (18%) each improvised one. Ohio municipal rule clarified (Dublin 2.0%). Ratified by Gabriel in-turn 2026-11-24 with acquisition-underwriting v4.60 (authored as v1.4 against a v1.3 that did not exist; numbered v1.3 on the rebase). Allocation defaults only: no governor constant changed.
+v1.4 (2026-11-24): Multifamily / residential rental case added (27.5-yr residential, mid-month). No standing MF allocation existed, so The Abigail (18%) and Turkey Run (18%) each improvised one. Ohio municipal rule clarified (Dublin 2.0%). Ratified by Gabriel in-turn 2026-11-24 with acquisition-underwriting v4.60 (v1.3, a District of Columbia row from 2026-11-20, is runtime-cache-only on `capture/runtime-cache-20261120T195348Z` and lands separately; this entry does not include it). Allocation defaults only: no governor constant changed.
 
 v1.2.1 (2026-11-14): Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 

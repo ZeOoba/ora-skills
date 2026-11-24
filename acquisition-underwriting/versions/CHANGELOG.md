@@ -104,7 +104,7 @@ Fields per the RULE EVIDENCE section of SKILL.md. Values not in the original ent
 2. UNDERWRITING CONVENTIONS: new Multifamily conventions bullet after the Mixed-Use Component Lens: opex floors, reserves, rent growth, rent-gap size normalization, mark-to-market source, cost-seg case (RE-4.60-1..3).
 3. Replacement Cost Table: PROVISIONAL multifamily row USD 240,000/unit POINT ex-land; MF Basis floor reported, not decision-grade (RE-4.60-4).
 4. `references/state-reassessment-matrix.md`: OH residential-condo note (Franklin class 55x condo rentals taxed at the residential rate while parcels stay separate).
-- Companion changes in the same PR: cost-seg-tax-layer v1.3 (multifamily case, Ohio municipal rule); ora-flood-zoning-dd v1.9 (City of Dublin zoning endpoint, Franklin County parcel pull tool); parcel-data-recovery pointer to that tool.
+- Companion changes in the same PR: cost-seg-tax-layer v1.4 (multifamily case, Ohio municipal rule); ora-flood-zoning-dd v1.9 (City of Dublin zoning endpoint, Franklin County parcel pull tool); parcel-data-recovery pointer to that tool.
 - Constants changed: no scored weight, Stage 1 floor base or governor constant moved: DSCR 1.25x, LTV 40% aggregate and 65% per-property are unchanged. The IRR floor add-on (e) changed scope (multifamily removed), not value. New `[EST]` multifamily opex floors, reserve and a PROVISIONAL replacement row were added.
 - Rule Evidence: RE-4.60-1..5.
 
