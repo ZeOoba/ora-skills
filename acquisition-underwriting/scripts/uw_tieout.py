@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+"""uw_tieout.py — mandatory engine-mirror tie-out for every FULL underwrite (ORA acquisition-underwriting QC Gate).
+The workbook is the deliverable; an independent Python engine (written separately from the formulas) is the check.
+This tool compares the recalculated workbook to the engine's expected values cell by cell and fails loudly.
+
+Expected-values file (JSON), written by the deal's engine:
+  {"tolerances": {"money": 1.0, "rate": 1e-4},
+   "cells": {"PF_Base!E40": 142292.84, "PF_Base!B120": 0.041725, ...},
+   "rows":  {"PF_Base!C39:M39": [14336.13, 119114.0, ...]}}          # optional: whole rows
+Rule: |x| < 5 is treated as a rate (rate tolerance); otherwise money tolerance.
+
+Usage:
+  python uw_tieout.py model.xlsx expected.json --out tieout.md
+Exit 0 = PASS (every cell within tolerance and the workbook has no formula errors);
+     1 = FAIL (mismatches listed); 2 = input error (missing sheet/cell, workbook not recalculated).
+Run recalc first (xlsx skill scripts/recalc.py) so cached values exist.
+"""
+import sys, json, argparse, openpyxl
+from openpyxl.utils import range_boundaries, get_column_letter
+ERRS=('#REF!','#VALUE!','#DIV/0!','#NAME?','#N/A','#NUM!','#NULL!')
+def cells_of(ref):
+    sh,rng=ref.split('!'); c1,r1,c2,r2=range_boundaries(rng)
+    return [(sh,f"{get_column_letter(c)}{r}") for r in range(r1,r2+1) for c in range(c1,c2+1)]
+def main():
+    ap=argparse.ArgumentParser(); ap.add_argument('xlsx'); ap.add_argument('expected'); ap.add_argument('--out')
+    a=ap.parse_args(); E=json.load(open(a.expected,encoding='utf-8'))
+    if hasattr(sys.stdout,'reconfigure'): sys.stdout.reconfigure(encoding='utf-8')   # ORA: Windows console (cp1252)
+    tm=E.get('tolerances',{}).get('money',1.0); tr=E.get('tolerances',{}).get('rate',1e-4)
+    wb=openpyxl.load_workbook(a.xlsx,data_only=True)
+    pairs=[(r.split('!')[0],r.split('!')[1],v) for r,v in E.get('cells',{}).items()]
+    for ref,vals in E.get('rows',{}).items():
+        for (sh,c),v in zip(cells_of(ref),vals): pairs.append((sh,c,v))
+    errs=[f"{ws.title}!{c.coordinate}" for ws in wb for row in ws.iter_rows() for c in row if isinstance(c.value,str) and c.value in ERRS]
+    rows=[]; fails=0; missing=0
+    for sh,c,exp in pairs:
+        if sh not in wb.sheetnames: rows.append((f"{sh}!{c}",exp,'MISSING SHEET','FAIL')); missing+=1; continue
+        got=wb[sh][c].value
+        if got is None: rows.append((f"{sh}!{c}",exp,'None (not recalculated?)','FAIL')); missing+=1; continue
+        if isinstance(exp,str):
+            ok=str(got)==exp
+        else:
+            tol=tr if abs(exp)<5 else tm; ok=abs(float(got)-exp)<=tol
+        rows.append((f"{sh}!{c}",exp,got,'ok' if ok else 'FAIL')); fails+= (not ok)
+    status='PASS' if not fails and not missing and not errs else 'FAIL'
+    L=[f"# Engine tie-out: {status}",f"- Workbook: {a.xlsx}",f"- Checks: {len(pairs)} · mismatches: {fails} · missing: {missing} · formula errors: {len(errs)}",
+       f"- Tolerances: money ±{tm}, rate ±{tr}","","| Cell | Engine | Workbook | Result |","|---|---|---|---|"]
+    show=[r for r in rows if r[3]!='ok'] or rows[:25]
+    for r in show: L.append(f"| {r[0]} | {r[1]} | {r[2]} | {r[3]} |")
+    if errs: L+=["","Formula errors: "+", ".join(errs[:50])]
+    rep="\n".join(L); print(rep)
+    if a.out: open(a.out,'w',encoding='utf-8').write(rep)
+    sys.exit(0 if status=='PASS' else (2 if missing and not fails else 1))
+if __name__=='__main__': main()
