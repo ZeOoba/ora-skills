@@ -3,7 +3,7 @@ name: ora-millage-lookup
 description: "Use whenever the user mentions: millage, mill rate, certified tax rate, effective tax rate, property tax lookup, tax rate by district, assessed value lookup, assessment lookup, taxable value, tax history, county assessor pull, auditor tax record, parcel tax record, reassessed tax, or when an Oxford Realty Advisors acquisition SCREEN/UNDERWRITE has an unresolved property-tax figure — resolves a parcel's property-tax rate and taxable base from verified government endpoints. Companion to acquisition-underwriting STAGE 2.5 item 5 (millage lookup ladder), which caps any deal with an unknown reassessed tax at T2 WATCH. Distinct from tax-appeal, which owns the assessment-challenge workflow; this skill only resolves the rate and base."
 ---
 
-# ORA Millage & Assessment Lookup (v1.3)
+# ORA Millage & Assessment Lookup (v1.4)
 
 Purpose: turn `[EST]` property-tax figures into sourced, reproducible ones. Under Buy Box v1.1 an unknown reassessed tax caps a deal at **T2 WATCH**, and `acquisition-underwriting` STAGE 2.5 item 5 makes a rate-pull attempt a **pre-FULL requirement** — this skill is that attempt, executed the same way every time.
 
@@ -22,6 +22,7 @@ Sibling to `ora-flood-zoning-dd`: same shape (a ladder over verified government 
 
 1. **State/county published static certified-rate document.** A state DOR/DLGF-style annual "Certified Tax Rates by District/County" PDF at a stable government URL. **PREFERRED whenever it exists** — fetchable, citable, search-indexable, no session required.
 2. **Direct county assessor/auditor parcel record** — a REST/JSON service where one exists (see registry), otherwise the county's parcel-search page or a phone/portal query. A government REST service that answers a scripted query with no interactive session is **tier-1-equivalent**; treat it as tier 1 for citation purposes and say so.
+   - **DC rung (v1.4), run first for DC, ahead of tier 1:** run `acquisition-underwriting/scripts/dc_parcel_pull.py --ssl "<SQUARE> <LOT>"` (or `--address`). One scripted DCGIS query (tier 2) returns current + proposed assessment, the Class 2 rate step, ten years of real-property bills with penalty/interest/fees and a late-payment count. It does NOT carry the BID tax, public-space fees or special assessments: confirm those on MyTax.DC (Tax History tab). Time the buyer's tax line with the property-tax-timing skill (Year 1 on the seller's base).
 3. **Interactive state/county GIS or tax portal** (e.g. Indiana's DLGF Gateway) — **LAST resort**. Not indexable by search, needs a live session; if reached only this way, log the query date and the screen values used.
 4. **State Reassessment Matrix range midpoint**, `[EST]`, only after 1–3 are genuinely unattainable, with the attempts logged.
 
@@ -73,6 +74,7 @@ Cross-links: `county-parcel-screen`'s `references/county-endpoints.v1.json` (par
 
 ## Changelog
 
+- v1.4 (2026-11-24): DC rung points to `acquisition-underwriting/scripts/dc_parcel_pull.py` (acquisition-underwriting v4.61, RE-4.61-1) and the property-tax-timing skill.
 - v1.3 (2026-11-14): Added Michigan (Kent County / City of Walker) inline registry entry and pitfall 8 (SEV vs Taxable Value, 1% administration fee, non-homestead column). BS&A Online and Kent County Property Search are CAPTCHA-gated, so CoStar's Public Record tab becomes Michigan step 1 for the taxable base; the MI Treasury Total Rates compilation is tier 1 for the rate. Origin: a Walker MI lease-up FULL underwrite, where the derived 44.75-mill [EST] was later verified at 45.5054 (walk effect about −1,241 USD). No ladder order or output field changed.
 - v1.2.1 (2026-11-14): Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - v1.2 (2026-09-29): Added Cook County IL, ratified that day as ORA's 11th cluster (Chicago–Greater Cook County, entry phase). New pitfall 7 (three-factor Cook base; derive the parcel's own composite rate from the bill rather than using the municipal average; check the AV's tax year against appeals) plus Cook units in pitfall 4 and the 14-digit PIN form in pitfall 2. Registry count 2 → 3 with the Cook entries inline until they are merged into `references/endpoints.md` on the Code surface. Origin: the South Chicago Small-Bay Portfolio FULL underwrite, where a municipal-average rate would have understated Harvey tax by ~38%. No ladder order or output field changed.

@@ -772,7 +772,19 @@ def solve(deal: Deal, ust: float, portfolio_mode: bool = False) -> Result:
     flags: list = []
     market = normalize_market(deal.market)
     cap = _exit_cap(deal, market, flags)
+    b = basis_context(deal, market, flags)
+    point, mult, adders_psf, low_psf, vintage, v_floor, replacement, replacement_point, land = (
+        b["point"], b["mult"], b["adders_psf"], b["low_psf"], b["vintage"], b["v_floor"], b["replacement"],
+        b["replacement_point"], b["land"])
+    return _solve_rest(deal, ust, portfolio_mode, flags, market, cap, point, mult, adders_psf, low_psf, vintage,
+                       v_floor, replacement, replacement_point, land)
 
+
+def basis_context(deal, market: Optional[str], flags: list) -> dict:
+    """Basis-leg inputs shared by the whole-building solver and component mode (components.py): RCT point,
+    construction multiplier, adders, effective vintage, vintage floor, improvements replacement (LOW and POINT)
+    and the admitted market land value. `deal` needs sf, market, year_built, renovation_*, effective_vintage,
+    construction_type, adders and the land fields."""
     # Private RCT table (rct_table.py): raises RctTableUnavailable, so no walk is produced without it.
     rct_point = rct_table.points(rct_table.current())
     point = rct_point.get(market or "")
@@ -794,6 +806,12 @@ def solve(deal: Deal, ust: float, portfolio_mode: bool = False) -> Result:
     replacement = low_psf * deal.sf
     replacement_point = (point * mult + adders_psf) * deal.sf
     land = _market_land(deal, flags)
+    return {"point": point, "mult": mult, "adders_psf": adders_psf, "low_psf": low_psf, "vintage": vintage,
+            "v_floor": v_floor, "replacement": replacement, "replacement_point": replacement_point, "land": land}
+
+
+def _solve_rest(deal, ust, portfolio_mode, flags, market, cap, point, mult, adders_psf, low_psf, vintage, v_floor,
+                replacement, replacement_point, land) -> Result:
     mv = _is_majority_vacant(deal, flags)
     addons = _irr_addons(deal, market, flags)
     r_floor = irr_floor(ust, mv, **addons)

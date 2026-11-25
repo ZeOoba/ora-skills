@@ -14,6 +14,7 @@ from dataclasses import fields
 from datetime import date, timedelta
 
 from . import rct_table
+from .components import from_dict as components_from_dict, solve_components
 from .solver import Deal, solve, solve_portfolio
 
 FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10"
@@ -74,6 +75,32 @@ def render(res: dict, ust_note: str) -> str:
     return "\n".join(out)
 
 
+def render_components(res: dict, ust_note: str) -> str:
+    out = [
+        f"## {res['name']} — Binding walk {_usd(res['binding_walk'])} (component lens; {res['binding_case']} binds)",
+        f"Doctrine: {res['doctrine']} · UST {ust_note} · IRR floor {_pct(res['irr_floor'])}"
+        + "".join(f" (+{v * 1e4:.0f} bps {k})" for k, v in res['irr_floor_addons'])
+        + f" · tax case {res['tax_case'] if res.get('tax_profile') in ('DC', 'MI') else res.get('tax_profile') or '—'}",
+        "",
+        f"| Case | Basis | Yield | IRR ({'after entity tax' if res.get('entity_tax_modeled') else 'no entity tax'}) | Walk | Binds |",
+        "|---|---:|---:|---:|---:|---|",
+        f"| Base | {_usd(res['legs_base']['basis'])} | {_usd(res['legs_base']['yield'])} | "
+        f"{_usd(res['legs_base']['irr'])} | {_usd(res['base_walk'])} | {res['base_binding_leg']} |",
+        f"| Downside | {_usd(res['legs_downside']['basis'])} | {_usd(res['legs_downside']['yield'])} | "
+        f"{_usd(res['legs_downside']['irr'])} | {_usd(res['downside_walk'])} | {res['downside_binding_leg']} |",
+        "",
+        f"COMPONENT LENS: Base {_usd(res['base_walk'])} / Downside {_usd(res['downside_walk'])} "
+        f"(spread {_usd(res['spread'])})",
+    ]
+    if res.get("ask"):
+        A = res["ask"]
+        out += ["", f"**Ask {_usd(A['ask_price'])}:** gap {_usd(A['gap_to_ask'])} · floor-test IRR at ask "
+                f"{_pct(A['floor_test_irr_at_ask'])}"]
+    if res["flags"]:
+        out += ["", "**Flags:**"] + [f"- {f}" for f in res["flags"]]
+    return "\n".join(out)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="ora_walk", description="ORA walk-price solver")
     ap.add_argument("deal_json")
@@ -126,6 +153,15 @@ def main(argv=None) -> int:
         for f in res["flags"]:
             print(f"- {f}")
         return 0
+
+    if "components" in spec:   # v4.61: Mixed-Use Component Lens (components.py)
+        try:
+            res = solve_components(components_from_dict(spec), ust)
+        except ValueError as e:
+            raise SystemExit(f"Invalid component deal: {e}")
+        if a.json:
+            print(json.dumps(res, indent=2)); return 0
+        print(render_components(res, note)); return 0
 
     res = solve(_deal(spec), ust).to_dict()
     print(json.dumps(res, indent=2) if a.json else render(res, note))
