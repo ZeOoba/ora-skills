@@ -1062,6 +1062,17 @@ class CliParsing(unittest.TestCase):
         self.assertTrue(run.call_args.args[0])
         self.assertIsNone(run.call_args.kwargs['only'])
 
+    def test_blank_names_fail_instead_of_becoming_a_full_sweep(self):
+        # Refute 2026-11-25 (C5): an empty $SKILLS expanded into the documented named
+        # call used to parse to only=None -- a FULL sweep that REPLACES the ledger.
+        import contextlib
+        import io
+        for argv in (('--only', ''), ('--only', ','), ('--only=  ',), ('',), ('/',)):
+            with contextlib.redirect_stderr(io.StringIO()), \
+                    self.assertRaises(SystemExit) as cm:
+                _, run = self._parse(*argv)
+            self.assertEqual(cm.exception.code, 2, argv)
+
     def test_names_conflict_with_all_and_check_staged(self):
         import contextlib
         import io

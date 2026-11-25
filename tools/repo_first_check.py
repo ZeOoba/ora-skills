@@ -742,8 +742,14 @@ def main(argv: list[str] | None = None) -> int:
         n = n.strip().strip('/\\')
         if n and n not in names:
             names.append(n)
-    if names and (a.all or a.check_staged):
+    named = bool(a.skills or a.only)      # what was ASKED for, not what survived cleaning
+    if named and (a.all or a.check_staged):
         ap.error('skill names cannot be combined with --all or --check-staged')
+    if named and not names:
+        # An empty $SKILLS in a named call must never become a full, ledger-REPLACING
+        # sweep (refute 2026-11-25, C5). Run with no arguments for a full sweep.
+        ap.error('no skill names given (blank --only / name) -- refusing to fall back to '
+                 'a full sweep; run with no arguments for that')
     return run(a.check_staged, only=names or None)
 
 
