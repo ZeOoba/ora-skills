@@ -412,6 +412,25 @@ class PrepareTest(Base):
         self.assertEqual(code, 2)
         self.assertFalse(os.path.exists(os.path.join(work, "purge-backup-refs.txt")))
 
+    def test_unreadable_remote_after_the_push_is_never_success(self):
+        # R2-15 (P30): every ref pushed cleanly, but the re-check after the push (the second
+        # `ls-remote refs/heads/* refs/tags/*`) fails as on a network drop: exit 2, never 0.
+        real_sh, calls = leased_push.sh, []
+
+        def sh(args):
+            if "ls-remote" in args and "--symref" not in args:
+                calls.append(1)
+                if len(calls) == 2:
+                    return subprocess.CompletedProcess(args, 128, "", "fatal: unable to access remote")
+            return real_sh(args)
+        argv = ["leased_push.py", self.mirror, self.work, self.remote]
+        with mock.patch.object(leased_push, "sh", sh), mock.patch.object(sys, "argv", argv), \
+                mock.patch("sys.stdout"):
+            code = leased_push.main()
+        self.assertEqual(len(calls), 2)                 # the pre-push read and the failed re-check
+        self.assert_remote_matches_work()               # the push itself went through
+        self.assertEqual(code, 2)
+
 
 class NonAsciiRefTest(Base):
     def test_non_ascii_branch_is_pushed_and_main_is_not_held(self):

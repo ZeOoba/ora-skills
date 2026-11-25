@@ -2,6 +2,7 @@
 
 All values are synthetic (555-01xx phones, made-up figures and names).
 """
+import io
 import json
 import os
 import re
@@ -9,6 +10,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
+import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, "purge_scan.py")
@@ -23,6 +26,11 @@ ENV = dict(os.environ, GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GI
 def git(repo, *args):
     return subprocess.run(["git", "-C", repo, "-c", "core.autocrlf=false"] + list(args), capture_output=True,
                           text=True, check=True, env=ENV).stdout
+
+
+def show_bytes(repo, spec):
+    """`git show` output as raw bytes (the text=True helper decodes with the locale code page)."""
+    return subprocess.run(["git", "-C", repo, "show", spec], capture_output=True, check=True, env=ENV).stdout
 
 
 def run(*args):
@@ -531,6 +539,165 @@ class PurgeScanTest(unittest.TestCase):
         self.assertEqual(v.returncode, 0, v.stdout)
         self.assertIn("kept at tip (accepted): 1", v.stdout)
         self.assertIn("in file names: 0 (0 occurrences)", v.stdout)
+
+    # ---- R2-10 / S41: a currency code after a figure; a hash that starts with a figure ----
+    def test_figure_followed_by_a_currency_code_is_found_but_hash_like_runs_are_not(self):
+        # Decided: a following run of 1-3 hex letters with no digit is text (EUR, CAD, ABC) and
+        # matches; a run holding a digit (ab9f0e), or of 4+ hex letters ending at a non-letter
+        # (ABCD, deadbeef), is a hash and does not. 4+ letters running on into a non-hex letter
+        # (DEADLINE) is a word, so it matches.
+        self.config(values=[123457, 987653], phones=False)
+        keep = "h 123457ab9f0e x\nk 123457ABCD x\nm 987653deadbeef\nn 987653abc1 x\no 123,457Fa0 x\n"
+        self.r.commit({"d.md": "price 123,457EUR\ncap 987653CAD\nfee 123457ABC\nby 987,653DEADLINE\n" + keep})
+        self.r.commit({"d.md": keep})
+        self._empty_rules()
+        v = self.verify()
+        self.assertEqual(v.returncode, 1, v.stdout)
+        self.assertIn("values still present: 2 (4 occurrences)", v.stdout)
+        s = self.scan()
+        self.assertIn("found: numbers 4", s.stdout)          # 123,457 123457 987653 987,653
+        self.assertIn("dropped (present at tip): 0", s.stdout)
+        self.r.filter(self.rules)
+        old = git(self.r.path, "show", "main~1:d.md")
+        self.assertEqual(old, "price [figure: private]EUR\ncap [figure: private]CAD\nfee [figure: private]ABC\n"
+                              "by [figure: private]DEADLINE\n" + keep)
+        self.assertEqual(git(self.r.path, "show", "main:d.md"), keep)
+        self.assertEqual(self.verify().returncode, 0)
+
+    def test_verify_ignores_a_hash_that_starts_with_a_figure_only_in_history(self):
+        # S41: verify's own search must keep the trailing-hash guard, not only the scan rules.
+        self.config(values=[123457], phones=False)
+        self.r.commit({"a.md": "see commit 123457ab9f0e1d2c3b4a5f6e\nand 123457deadbeef\n"})
+        self.r.commit({"a.md": "x\n"})
+        self._empty_rules()
+        v = self.verify()
+        self.assertEqual(v.returncode, 0, v.stdout)
+        self.assertIn("values still present: 0 (0 occurrences)", v.stdout)
+
+    # ---- R2-13: Unicode dash / space phone separators; values in ref names ----------------
+    def test_configured_phone_number_with_unicode_dashes_and_spaces_is_found_and_purged(self):
+        self.config(phones=False, phone_numbers=["6145550124"])
+        forms = ["614‐555‐0124", "614‑555‑0124", "614‒555‒0124",
+                 "614–555–0124", "614—555—0124", "614―555―0124",
+                 "614−555−0124", "614 555 0124", "614 555 0124",
+                 "614 – 555 – 0124", "(614) 555–0124", "+1 614–555–0124"]
+        decoys = "long 614–555–01245 x; 9614–555–0124 x\n"
+        self.r.commit({"c.md": "".join("p %s x\n" % f for f in forms) + decoys})
+        self.r.commit({"c.md": "x\n"})
+        self._empty_rules()
+        v = self.verify()
+        self.assertEqual(v.returncode, 1, v.stdout)
+        self.assertIn("values still present: 1 (%d occurrences)" % len(forms), v.stdout)
+        s = self.scan()
+        self.assertIn("phones 1", s.stdout)
+        self.r.filter(self.rules)
+        old = show_bytes(self.r.path, "main~1:c.md").decode("utf-8")
+        self.assertEqual(old, "p [phone: private] x\n" * len(forms) + decoys)
+        self.assertEqual(self.verify().returncode, 0)
+
+    def test_found_phone_with_a_unicode_dash_gets_a_rule(self):
+        self.config(values=[], phone_numbers=[])
+        self.r.commit({"a.md": "x\n"}, msg="owner cell 614–555–0177; desk 614 555 0178")
+        self.scan()
+        self.assertTrue(rules_match(self.rules, "614–555–0177"))
+        self.assertTrue(rules_match(self.rules, "614 555 0178"))
+
+    def test_verify_fails_on_a_value_or_rule_hit_in_a_branch_or_tag_name(self):
+        self.config(values=[123457, 987653], phones=False)
+        self.r.commit({"a.md": "x\n"})
+        git(self.r.path, "branch", "deal-123457")
+        git(self.r.path, "tag", "noi-987,653")
+        git(self.r.path, "branch", "zq-marker-77")
+        self._rules_file("regex:zq-marker-77==>[gone]")
+        v = self.verify()
+        self.assertEqual(v.returncode, 1, v.stdout)
+        self.assertIn("branch and tag names holding a value or matching a rule: 3", v.stdout)
+        self.assertIn("REF-NAME refs/heads/deal-[private]", v.stdout)
+        self.assertIn("REF-NAME refs/tags/noi-[private]", v.stdout)
+        self.assertIn("REF-NAME refs/heads/[private]", v.stdout)
+        for secret in ("123457", "987,653", "zq-marker-77"):
+            self.assertNotIn(secret, v.stdout + v.stderr)
+        for line in ("removed paths still reachable: 0", "blobs matching a rule: 0", "message hits: 0",
+                     "values still present: 0"):
+            self.assertIn(line, v.stdout)
+
+    # ---- R2-09: values inside zip containers, UTF-16 text and PDF Flate streams ------------
+    @staticmethod
+    def _zip(members, compression=zipfile.ZIP_DEFLATED):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", compression) as z:
+            for name, data in members.items():
+                z.writestr(name, data)
+        return buf.getvalue()
+
+    @staticmethod
+    def _pdf(*streams):
+        """A minimal PDF; each stream is (filter or None, raw stream bytes)."""
+        out = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"
+        for i, (flt, data) in enumerate(streams, 1):
+            f = b" /Filter /" + flt.encode() if flt else b""
+            out += b"%d 0 obj\n<< /Length %d%s >>\nstream\n" % (i, len(data), f) + data + b"\nendstream\nendobj\n"
+        return out + b"trailer\n<< /Root 1 0 R >>\n%%EOF\n"
+
+    def test_verify_finds_values_inside_zip_utf16_and_pdf_flate_blobs(self):
+        self.config(values=[987653], literals=[LIT], phone_numbers=["6145550124"], phones=False)
+        sheet = "<sst><si><t>NOI 987,653 owner 614-555-0124</t></si></sst>" + "<x/>" * 50
+        xlsx = self._zip({"[Content_Types].xml": "<Types/>", "xl/sharedStrings.xml": sheet})
+        inner = self._zip({"word/document.xml": "<w:t>%s</w:t>" % LIT + "<x/>" * 50})
+        docx = self._zip({"word/document.xml": "<w/>", "word/embeddings/pack.docx": inner})
+        u16le = "﻿NOI 987,653\r\n".encode("utf-16-le")
+        u16be = ("deal %s call 614-555-0124\n" % LIT).encode("utf-16-be")          # no BOM
+        pdf = self._pdf(("FlateDecode", zlib.compress(b"BT (NOI 987,653) Tj ET" + b" " * 200)))
+        for blob in (xlsx, inner, docx, pdf):
+            for raw in (b"987,653", b"987653", LIT.encode(), b"614-555-0124"):
+                self.assertNotIn(raw, blob)
+        self.r.commit({"a.md": "x\n"})
+        files = {"deal.xlsx": xlsx, "memo.docx": docx, "le.txt": u16le, "be.txt": u16be, "om.pdf": pdf}
+        for name, data in files.items():
+            self.r.commit({name: data})
+            self.r.commit(delete=[name])
+            self._empty_rules()
+            v = self.verify()
+            self.assertEqual(v.returncode, 1, name + v.stdout)
+            self.assertRegex(v.stdout, r"in binary blobs: [1-9]", name)
+            self.assertIn("opaque blobs (NOT searched inside): 0", v.stdout, name)
+            git(self.r.path, "reset", "-q", "--hard", "HEAD~2")
+            git(self.r.path, "reflog", "expire", "--expire=now", "--all")
+            git(self.r.path, "gc", "-q", "--prune=now")
+        for secret in ("987,653", "987653", LIT, "6145550124", "614-555-0124"):
+            self.assertNotIn(secret, v.stdout + v.stderr)
+
+    def test_values_inside_a_tip_xlsx_are_kept_at_tip(self):
+        self.config(values=[987653], phones=False)
+        self.r.commit({"deal.xlsx": self._zip({"xl/s.xml": "<t>987,653</t>" + "<x/>" * 50})})
+        self._empty_rules()
+        v = self.verify()
+        self.assertEqual(v.returncode, 0, v.stdout)
+        self.assertIn("kept at tip (accepted): 1", v.stdout)
+
+    def test_blobs_verify_cannot_read_are_listed_as_opaque_with_path_and_commit(self):
+        self.config(values=[987653], phones=False)
+        enc = bytearray(self._zip({"xl/s.xml": "<t>secret-ish</t>"}, zipfile.ZIP_STORED))
+        for sig, off in ((b"PK\x03\x04", 6), (b"PK\x01\x02", 8)):         # set the "encrypted" flag bit
+            i = enc.index(sig)
+            enc[i + off] |= 1
+        png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR" + bytes(range(256))
+        jpeg_pdf = self._pdf(("DCTDecode", b"\xff\xd8\xff\xe0\x00\x10JFIF\x00" + bytes(64)))
+        self.r.commit({"locked.xlsx": bytes(enc), "scan.png": png, "photo.pdf": jpeg_pdf})
+        commit = git(self.r.path, "rev-parse", "HEAD").strip()
+        self.r.commit(delete=["locked.xlsx", "scan.png", "photo.pdf"])
+        self._empty_rules()
+        v = self.verify()
+        self.assertEqual(v.returncode, 0, v.stdout)        # opaque is reported, not a failure
+        self.assertIn("opaque blobs (NOT searched inside): 3", v.stdout)
+        lines = [l for l in v.stdout.splitlines() if l.startswith("OPAQUE ")]
+        self.assertEqual(len(lines), 3, v.stdout)
+        for path, why in (("locked.xlsx", "encrypted"), ("scan.png", "image"), ("photo.pdf", "DCTDecode")):
+            line = [l for l in lines if (" path=%s " % path) in l]
+            self.assertEqual(len(line), 1, v.stdout)
+            self.assertIn(why, line[0])
+            self.assertIn("commit=%s" % commit, line[0])
+        self.assertTrue(v.stdout.rstrip().splitlines()[-1].startswith("OPAQUE "), v.stdout)
 
 
 if __name__ == "__main__":

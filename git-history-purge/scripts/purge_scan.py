@@ -1,4 +1,5 @@
-"""Build and verify git-filter-repo replace rules for a history purge. Prints COUNTS ONLY.
+"""Build and verify git-filter-repo replace rules for a history purge. Prints counts, plus (verify)
+ref names, paths and blob/commit ids with every configured value masked; never a value itself.
 
   python -I purge_scan.py scan   <repo.git> <purge-config.json> <rules-out.txt>
   python -I purge_scan.py verify <repo.git> <purge-config.json> <rules.txt>
@@ -24,16 +25,21 @@ a non-whole value of 1,000 or more gives "9,876.54", "9876.54" and its shortest 
 ("123,456.5"). A negative value gives the forms of its absolute value, so the written
 "-123,457" and "(123,457)" both match (the sign or brackets stay, the digits go). Every
 rule is a boundary-anchored regex: digits inside a longer number or a hex hash, and a phone
-number inside a longer digit run, are never touched ("inside a hash": a hex character right
-after the figure, or 7+ hex characters right before it; a figure after a shorter run of
-letters, such as USD123,457 or CAD987653, IS matched). Skipped values are
+number inside a longer digit run, are never touched ("inside a hash": 7+ hex characters
+right before the figure, or right after it a run of hex characters holding a digit
+(123457ab9f) or of 4+ hex letters ending at a non-letter (123457deadbeef)). A figure next to
+a short run of letters IS matched: USD123,457, CAD987653, 123,457EUR, 987653CAD, 123457ABC
+(1-3 letters after it), 987,653DEADLINE (a longer word). Skipped values are
 counted in the output: they are NOT searched, so purge them another way if they matter.
 
 Phones: "phones": true finds dashed/dotted/spaced numbers in the history (public_phones
 excepted). "phone_numbers" lists known numbers; each gives one rule covering 614-555-0123,
 (614) 555-0123, (614)555-0123, (614)-555-0123, (614)/555-0123, 614.555.0123, 614/555-0123,
-614 555 0123 and 6145550123, with an optional "+1" or "1" prefix (+1 614..., 1-614...,
-1 (614) 555-0123, 16145550123), never inside a longer digit run. Both kinds are written only when present.
+614 555 0123, 614 - 555 - 0123 and 6145550123, with an optional "+1" or "1" prefix (+1 614...,
+1-614..., 1 (614) 555-0123, 16145550123), never inside a longer digit run. Both kinds accept
+the Unicode dashes U+2010..U+2015 and minus U+2212 wherever a - is accepted, and the no-break
+(U+00A0), thin (U+2009) and narrow no-break (U+202F) spaces wherever a space is. Both kinds are
+written only when present.
 scan and verify exit 2 if a phone_numbers entry is not exactly 10 digits; scan also exits 2
 if tip_ref does not exist or a literal contains a line break.
 
@@ -44,32 +50,63 @@ scan   - writes one rule per form ACTUALLY present, drops any rule that matches 
          or rename those by path.
 verify - exit 1 if any removed path is still reachable, any rule still matches a blob, a
          commit message or a tag message, OR the independent search finds a configured
-         value, literal or phone number anywhere in the object store. That search reads
-         every object, not walked by ref or path: text blobs and commit and tag objects
-         ("text objects"), binary blobs as raw bytes, and every tree object's file and
-         directory names; the three are reported separately and each one fails verify.
+         value, literal or phone number anywhere in the object store, OR a branch or tag
+         name holds a configured value or matches a rule (filter-repo never renames refs;
+         each is printed as REF-NAME with the value masked: rename or delete it in the
+         rewritten copy). The object search reads every object, not walked by ref or path:
+         text blobs and commit and tag objects ("text objects"), binary blobs ("binary"),
+         and every tree object's file and directory names; the three are reported
+         separately and each one fails verify. A binary blob is searched as raw bytes plus
+         what verify can decode from it: every member of a zip container (xlsx, docx, pptx,
+         zip; a zip inside it one level deep, e.g. an embedded workbook) and the member
+         names; UTF-16 LE/BE text (byte-order mark, or mostly-NUL odd/even bytes); a PDF's
+         FlateDecode streams (best effort: text drawn with a font's own glyph codes is not
+         found). A blob verify cannot read inside - an encrypted zip member or PDF, a zip
+         member or PDF stream under another compression or filter (images in a PDF), an
+         image file, a gzip/bzip2/xz/7z/rar archive, a legacy Office (OLE2) file - is listed
+         at the end as OPAQUE <blob> path=<a path> commit=<a commit> reason=<why>; OPAQUE
+         does not change the exit code: open each one and check it, or remove it by path.
          A configured phone number is found in ANY punctuated form: within a span of digit
-         groups joined by 1-3 of ()[]./+- or whitespace, consecutive whole groups whose
-         digits equal the number (or 1 + the number) count.
-         Anything also present in the tip (tip_ref's blobs or its trees' names) is accepted
-         and counted as kept at tip. Values skipped by min_integer are not searched and are
-         counted. Run it on the rewrite and on a fresh `git clone --bare` (a --mirror clone
-         also fetches GitHub's refs/pull/*, which still hold old history).
+         groups joined by 1-3 of ()[]./+-, whitespace, a Unicode dash or a no-break/thin
+         space, consecutive whole groups whose digits equal the number (or 1 + the number).
+         Anything also present in the tip (tip_ref's blobs, what verify decodes from them,
+         or its trees' names) is accepted and counted as kept at tip. Values skipped by
+         min_integer are not searched and are counted. Names verify prints (REF-NAME,
+         OPAQUE paths and zip member names) have every configured value and rule match
+         replaced by [private]. Run it on the rewrite and on a fresh `git clone --bare` (a
+         --mirror clone also fetches GitHub's refs/pull/*, which still hold old history).
 """
+import io
 import json
 import re
 import subprocess
 import sys
+import zipfile
+import zlib
 from collections import defaultdict
 
 PH = b"[figure: private]"
 PH_PHONE = b"[phone: private]"
-PHONE_RE = re.compile(rb"(?<![\dA-Za-z])(?:\+?1[-. ]?)?\(?\d{3}\)?[-. ]\d{3}[-. ]\d{4}(?!\d)")
+MASK = b"[private]"     # replaces a matched value in a ref name or path that verify prints
 HEX = rb"0-9A-Fa-f"
 # Before a figure: no digit (a longer number) and no run of 7+ hex characters (a hash). A figure
 # glued to fewer letters, such as a currency code (USD123,457, CAD987653), still matches.
 NOT_AFTER_NUMBER_OR_HASH = b"(?<![0-9])(?<![" + HEX + b"]{7})"
-PHONE_SEP = rb"[-./ ]?"
+# After a figure (R2-10): no digit, and no hash-like run of hex characters: one holding a digit
+# (123457ab9f0e) or 4+ hex letters ending at a non-letter (123457deadbeef). A currency code or
+# other short letter run (123,457EUR, 987653CAD, 123457ABC) and a longer word (987,653DEADLINE)
+# still match.
+NOT_BEFORE_NUMBER_OR_HASH = b"(?![A-Fa-f]*[0-9])(?![A-Fa-f]{4,}(?![A-Za-z]))"
+# Phone separators (R2-13), as UTF-8 bytes. Dashes: ASCII - and ., the Unicode dashes
+# U+2010..U+2015 and minus U+2212. Spaces: ASCII space, no-break U+00A0, thin U+2009 and
+# narrow no-break U+202F.
+DASH = rb"(?:[-.]|\xe2\x80[\x90-\x95]|\xe2\x88\x92)"
+SPACE = rb"(?:[ ]|\xc2\xa0|\xe2\x80[\x89\xaf])"
+ONE_SEP = b"(?:" + DASH + b"|" + SPACE + b")"
+PHONE_RE = re.compile(rb"(?<![\dA-Za-z])(?:\+?1" + ONE_SEP + rb"?)?\(?\d{3}\)?" + ONE_SEP + rb"\d{3}"
+                      + ONE_SEP + rb"\d{4}(?!\d)")
+# A configured number's rule: no separator, one, or a dash or slash with a space on either side.
+PHONE_SEP = b"(?:" + SPACE + b"?(?:" + DASH + b"|/)" + SPACE + b"?|" + SPACE + b")?"
 
 
 def git(repo, *a, inp=None):
@@ -148,6 +185,133 @@ def tree_names(data, hash_len):
     return b"\n".join(names)
 
 
+MAX_MEMBER = 256 << 20          # a zip member larger than this is not decompressed (zip bomb)
+OPAQUE_MAGIC = ((b"\x89PNG", "image (PNG)"), (b"\xff\xd8\xff", "image (JPEG)"), (b"GIF8", "image (GIF)"),
+                (b"II*\x00", "image (TIFF)"), (b"MM\x00*", "image (TIFF)"), (b"BM", "image (BMP)"),
+                (b"\x1f\x8b", "compressed (gzip)"),
+                (b"BZh", "compressed (bzip2)"), (b"\xfd7zXZ\x00", "compressed (xz)"),
+                (b"7z\xbc\xaf\x27\x1c", "compressed (7z)"), (b"Rar!", "compressed (rar)"),
+                (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", "legacy Office/OLE2 file"))
+
+
+def utf16_text(data):
+    """data decoded as UTF-16 and re-encoded as UTF-8, or None if it does not look like UTF-16:
+    a byte-order mark, or (no BOM) NUL bytes on over 30% of the odd (LE) or even (BE) positions
+    of the first 4096 bytes and four times as many as on the other positions."""
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        enc = "utf-16"
+    else:
+        sample = data[:4096]
+        even, odd, half = sample[0::2].count(0), sample[1::2].count(0), len(sample) // 2
+        if half < 2:
+            return None
+        if odd > 0.3 * half and odd > 4 * even:
+            enc = "utf-16-le"
+        elif even > 0.3 * half and even > 4 * odd:
+            enc = "utf-16-be"
+        else:
+            return None
+    return data[:len(data) // 2 * 2].decode(enc, "replace").encode("utf-8")
+
+
+def pdf_streams(data):
+    """(decoded streams, opaque reasons) for a PDF: FlateDecode streams are decompressed (best
+    effort); a stream under any other filter, damaged Flate data or encryption is opaque."""
+    if re.search(rb"/Encrypt\b", data):
+        return [], {"encrypted PDF"}
+    parts, opaque = [], set()
+    for m in re.finditer(rb"(?<![A-Za-z])stream\r?\n", data):
+        end = data.find(b"endstream", m.end())
+        if end < 0:
+            break
+        head = data[max(0, data.rfind(b"obj", 0, m.start())):m.start()]
+        f = re.search(rb"/Filter\s*(\[[^\]]*\]|/[A-Za-z0-9]+)", head)
+        names = re.findall(rb"/([A-Za-z0-9]+)", f.group(1)) if f else []
+        if not names:
+            continue                                   # unfiltered: already in the raw bytes
+        if names in ([b"FlateDecode"], [b"Fl"]):
+            try:
+                parts.append(zlib.decompressobj().decompress(data[m.end():end]))
+                continue
+            except zlib.error:
+                opaque.add("PDF stream with damaged Flate data")
+                continue
+        opaque.add("PDF stream filter " + "+".join(n.decode("ascii") for n in names))
+    return parts, opaque
+
+
+def expand(data, depth=0):
+    """(parts, opaque): the byte strings verify searches for one blob, and the reasons any part
+    of it could not be read (empty if none). A zip container (xlsx/docx/pptx/zip) gives every
+    member's content and name, opening a zip inside it one level deep; a PDF gives its raw bytes
+    plus its FlateDecode streams; UTF-16 text gives its raw bytes plus the text as UTF-8; an
+    image, another compressed format or a legacy Office (OLE2) file is opaque."""
+    if data[:4] in (b"PK\x03\x04", b"PK\x05\x06"):
+        if depth >= 2:
+            return [data], {"zip nested more than one level"}
+        try:
+            z = zipfile.ZipFile(io.BytesIO(data))
+            infos = z.infolist()
+        except (zipfile.BadZipFile, zipfile.LargeZipFile, ValueError, EOFError, OSError):
+            return [data], {"unreadable zip"}
+        parts, opaque = [b"\n".join(i.filename.encode("utf-8", "surrogateescape") for i in infos)], set()
+        for info in infos:
+            if info.is_dir():
+                continue
+            if info.flag_bits & 1:
+                opaque.add("encrypted zip member " + info.filename)
+                continue
+            if info.file_size > MAX_MEMBER:
+                opaque.add("zip member too large " + info.filename)
+                continue
+            try:
+                member = z.read(info)
+            except (NotImplementedError, RuntimeError, zipfile.BadZipFile, zlib.error, EOFError, OSError):
+                opaque.add("zip member with unknown compression or damaged " + info.filename)
+                continue
+            sub, why = expand(member, depth + 1)
+            parts += sub
+            opaque |= {info.filename + ": " + w for w in why}
+        return parts, opaque
+    if data[:5] == b"%PDF-":
+        parts, opaque = pdf_streams(data)
+        return [data] + parts, opaque
+    text = utf16_text(data) if is_binary(data) or data[:2] in (b"\xff\xfe", b"\xfe\xff") else None
+    if text is not None:
+        return [data, text], set()
+    if is_binary(data):
+        for magic, why in OPAQUE_MAGIC:
+            if data.startswith(magic):
+                return [data], {why}
+    return [data], set()
+
+
+def mask(data, patterns):
+    """data with every match of every pattern replaced by MASK, for printing a name verify found."""
+    for p in patterns:
+        data = p.sub(MASK, data)
+    return data
+
+
+def blob_origins(repo, shas):
+    """sha -> (a path, a commit) that stored it, from branches and tags; absent if unreachable."""
+    want, out, commit = set(shas), {}, ""
+    toks = git(repo, "log", "-z", "--raw", "--no-abbrev", "--no-renames", "--root", "-m", "--format=%x01%H",
+               "--branches", "--tags").split(b"\0")
+    i = 0
+    while i < len(toks):
+        t = toks[i].lstrip(b"\n")
+        if t.startswith(b"\x01"):
+            commit = t[1:].decode()
+        elif t.startswith(b":") and i + 1 < len(toks):
+            new = t.split()[3].decode()
+            if new in want and new not in out:
+                out[new] = (toks[i + 1], commit)
+            i += 1
+        i += 1
+    return out
+
+
 def messages(repo, refs):
     """Commit messages plus annotated-tag messages, as one bytes blob."""
     if not refs:
@@ -192,7 +356,7 @@ def num_pattern(form):
     to a comma is a CSV or JSON neighbour (BldgA,123457,2450000), so it still matches.
     """
     pre = NOT_AFTER_NUMBER_OR_HASH + b"(?<![0-9]\\.)"
-    post = b"(?:\\.0+)?(?![" + HEX + b"])(?!\\.[0-9])"
+    post = b"(?:\\.0+)?" + NOT_BEFORE_NUMBER_OR_HASH + b"(?!\\.[0-9])"
     if "," in form:
         if len(form.split(",")[0].lstrip("-")) == 3:
             pre += b"(?<![0-9],)"
@@ -224,35 +388,46 @@ def number_phone_pattern(n):
 class PhoneDigits:
     """Verify's loose search for one configured phone number, in any punctuated form.
 
-    A span is digit groups joined by 1-3 of ()[]./+- or whitespace. Any run of consecutive
-    WHOLE groups whose digits equal the number (or 1 + the number) is one occurrence, so the
-    number is never found inside a longer digit run. Same search/findall API as a regex.
+    A span is digit groups joined by 1-3 of ()[]./+-, whitespace, a Unicode dash (U+2010..U+2015,
+    U+2212) or a no-break/thin space (U+00A0, U+2009, U+202F). Any run of consecutive WHOLE
+    groups whose digits equal the number (or 1 + the number) is one occurrence, so the number is
+    never found inside a longer digit run. Same search/findall/sub API as a regex.
     """
-    SPAN = re.compile(rb"[0-9]+(?:[\s()\[\]./+-]{1,3}[0-9]+)*")
+    JOIN = rb"(?:[\s()\[\]./+-]|\xe2\x80[\x90-\x95\x89\xaf]|\xe2\x88\x92|\xc2\xa0)"
+    SPAN = re.compile(rb"[0-9]+(?:" + JOIN + rb"{1,3}[0-9]+)*")
     GROUP = re.compile(rb"[0-9]+")
 
     def __init__(self, n):
         self.targets = {n.encode(), b"1" + n.encode()}
 
-    def findall(self, data):
-        hits = []
+    def spans(self, data):
+        """(start, end) of each occurrence."""
+        out = []
         for span in self.SPAN.finditer(data):
-            groups = self.GROUP.findall(span.group(0))
+            groups = list(self.GROUP.finditer(data, span.start(), span.end()))
             i = 0
             while i < len(groups):
                 acc, j = b"", i
                 while j < len(groups) and len(acc) < 11 and acc not in self.targets:
-                    acc += groups[j]
+                    acc += groups[j].group(0)
                     j += 1
                 if acc in self.targets:
-                    hits.append(acc)
+                    out.append((groups[i].start(), groups[j - 1].end()))
                     i = j
                 else:
                     i += 1
-        return hits
+        return out
+
+    def findall(self, data):
+        return [data[a:b] for a, b in self.spans(data)]
 
     def search(self, data):
-        return bool(self.findall(data))
+        return bool(self.spans(data))
+
+    def sub(self, repl, data):
+        for a, b in reversed(self.spans(data)):
+            data = data[:a] + repl + data[b:]
+        return data
 
 
 def number_phone_rule(n):
@@ -332,19 +507,9 @@ def scan(repo, cfg, out):
     return 0
 
 
-def residual(repo, cfg, tip_ref):
-    """Independent of the scan's rules: search every object for every configured value.
-
-    Every object in the store, not walked by ref or path: text blobs plus commit and tag
-    objects ("text"), binary blobs as raw bytes ("binary") and the file/directory names in
-    every tree object ("names"). Loose patterns (only digit/hash neighbours excluded; a phone
-    number in any punctuated form, see PhoneDigits), so a
-    value the rules missed - wrong form, odd context, unusual file - still shows up. A value
-    also present in the tip (tip_ref's blobs or its trees' names) is kept at the tip
-    (accepted) and not counted as residual.
-    Returns dict: left (values with a residual), occ, at_tip, skipped, and per category
-    (text/binary/names) a [values, occurrences] pair.
-    """
+def value_patterns(cfg):
+    """(patterns, skipped): verify's loose search pattern for each configured value, literal and
+    phone number, and how many values min_integer / round thousands left unsearched."""
     min_int = int(cfg.get("min_integer", 10000))
     pats, skipped = [], 0
     for v in cfg.get("values", []):
@@ -353,21 +518,45 @@ def residual(repo, cfg, tip_ref):
             skipped += 1
             continue
         alt = b"|".join(re.escape(f.encode()) for f in sorted(forms, key=len, reverse=True))
-        pats.append(re.compile(NOT_AFTER_NUMBER_OR_HASH + b"(?:" + alt + b")(?![" + HEX + b"])"))
+        pats.append(re.compile(NOT_AFTER_NUMBER_OR_HASH + b"(?:" + alt + b")" + NOT_BEFORE_NUMBER_OR_HASH))
     pats += [re.compile(re.escape(s.encode("utf-8"))) for s in cfg.get("literals", [])]
     pats += [PhoneDigits(n) for n in phone_numbers(cfg) or []]
+    return pats, skipped
 
+
+def residual(repo, cfg, tip_ref):
+    """Independent of the scan's rules: search every object for every configured value.
+
+    Every object in the store, not walked by ref or path: text blobs plus commit and tag
+    objects ("text"), binary blobs as raw bytes plus whatever expand() decodes from them -
+    zip members, PDF Flate streams, UTF-16 text ("binary") - and the file/directory names in
+    every tree object ("names"). Loose patterns (only digit/hash neighbours excluded; a phone
+    number in any punctuated form, see PhoneDigits), so a
+    value the rules missed - wrong form, odd context, unusual file - still shows up. A value
+    also present in the tip (tip_ref's blobs or its trees' names) is kept at the tip
+    (accepted) and not counted as residual.
+    Returns dict: left (values with a residual), occ, at_tip, skipped, per category
+    (text/binary/names) a [values, occurrences] pair, searched/all (patterns), opaque
+    ({blob sha: reasons} outside the tip) and opaque_at_tip (a count).
+    """
+    pats, skipped = value_patterns(cfg)
     lst = git(repo, "cat-file", "--batch-all-objects", "--batch-check=%(objectname) %(objecttype)").decode()
     kinds = dict(l.split() for l in lst.splitlines() if l)
+    opaque = {}
 
     def searchable(objs):
-        """Yield (sha, category, bytes to search)."""
+        """Yield (sha, category, bytes to search); a blob may yield several parts (expand)."""
         for sha, data in objs:
             kind = kinds.get(sha)
             if kind == "tree":
                 yield sha, "names", tree_names(data, len(sha) // 2)
-            elif kind == "blob" and is_binary(data):
-                yield sha, "binary", data
+            elif kind == "blob":
+                parts, why = expand(data)
+                if why:
+                    opaque[sha] = why
+                cat = "binary" if (is_binary(data) or len(parts) > 1 or why) else "text"
+                for part in parts:
+                    yield sha, cat, part
             else:
                 yield sha, "text", data
 
@@ -379,6 +568,8 @@ def residual(repo, cfg, tip_ref):
     at_tip = set()
     for _, _, data in searchable(raw_objects(repo, sorted(tip))):
         at_tip |= {i for i, rx in enumerate(pats) if rx.search(data)}
+    opaque_at_tip = len(opaque)
+    opaque.clear()
 
     cats = {"text": [set(), 0], "binary": [set(), 0], "names": [set(), 0]}
     wanted = [sha for sha, k in kinds.items() if k in ("blob", "tree", "commit", "tag") and sha not in tip]
@@ -392,7 +583,9 @@ def residual(repo, cfg, tip_ref):
                 cats[cat][1] += n
     left = set().union(*(c[0] for c in cats.values()))
     return {"left": len(left), "occ": sum(c[1] for c in cats.values()), "at_tip": len(at_tip),
-            "skipped": skipped, **{k: [len(c[0]), c[1]] for k, c in cats.items()}}
+            "skipped": skipped, **{k: [len(c[0]), c[1]] for k, c in cats.items()},
+            "searched": [p for i, p in enumerate(pats) if i not in at_tip], "all": pats,
+            "opaque": opaque, "opaque_at_tip": opaque_at_tip}
 
 
 def verify(repo, cfg, rules_path):
@@ -410,6 +603,10 @@ def verify(repo, cfg, rules_path):
     hit_blobs = sum(1 for _, d in text_blobs(repo, list(kept)) if any(x.search(d) for x in rxs))
     msg_hits = sum(len(x.findall(msgs)) for x in rxs)
     res = residual(repo, cfg, tip_ref)
+    # R2-13: filter-repo rewrites contents, never ref names. A name is printed with every value masked.
+    names = [r.encode("utf-8", "surrogateescape") for r in refs]
+    ref_hits = [n for n in names if any(p.search(n) for p in rxs + res["searched"])]
+    printable = lambda b: mask(b, rxs + res["all"]).decode("utf-8", "backslashreplace")
     print("removed paths still reachable: %d" % len(removed))
     print("blobs checked: %d; blobs matching a rule: %d; message hits: %d" % (len(kept), hit_blobs, msg_hits))
     print("independent search of every object: values still present: %d (%d occurrences); "
@@ -417,7 +614,19 @@ def verify(repo, cfg, rules_path):
     print("  in text objects: %d (%d occurrences); in binary blobs: %d (%d occurrences); "
           "in file names: %d (%d occurrences)" % tuple(res["text"] + res["binary"] + res["names"]))
     print("  values skipped (round thousands or below min_integer, NOT searched): %d" % res["skipped"])
-    return 1 if (removed or hit_blobs or msg_hits or res["left"]) else 0
+    print("branch and tag names holding a value or matching a rule: %d (filter-repo does not rename refs; "
+          "rename or delete them in the rewritten copy)" % len(ref_hits))
+    for n in ref_hits:
+        print("REF-NAME " + printable(n))
+    opaque = res["opaque"]
+    print("opaque blobs (NOT searched inside): %d; at tip (accepted): %d. Open each one and check it, "
+          "or remove it by path" % (len(opaque), res["opaque_at_tip"]))
+    origins = blob_origins(repo, opaque) if opaque else {}
+    for sha in sorted(opaque):
+        path, commit = origins.get(sha, (b"(none)", "(unreachable)"))
+        why = "; ".join(sorted(opaque[sha])).encode("utf-8", "surrogateescape")
+        print("OPAQUE %s path=%s commit=%s reason=%s" % (sha, printable(path), commit, printable(why)))
+    return 1 if (removed or hit_blobs or msg_hits or res["left"] or ref_hits) else 0
 
 
 def main(argv):
@@ -430,4 +639,5 @@ def main(argv):
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(errors="backslashreplace")
     sys.exit(main(sys.argv))
