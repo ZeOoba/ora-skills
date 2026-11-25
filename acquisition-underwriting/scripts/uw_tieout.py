@@ -34,11 +34,11 @@ def main():
     pairs=[(r.split('!')[0],r.split('!')[1],v) for r,v in E.get('cells',{}).items()]
     bad_rows=[]   # ORA: input errors (empty file, row-length mismatch)
     for ref,vals in E.get('rows',{}).items():
-        cl=cells_of(ref)
+        cl=cells_of(ref)   # ORA
         if len(cl)!=len(vals): bad_rows.append(f"{ref}: {len(cl)} cells vs {len(vals)} values")   # ORA: never truncate
-        for (sh,c),v in zip(cl,vals): pairs.append((sh,c,v))
+        for (sh,c),v in zip(cl,vals): pairs.append((sh,c,v))   # ORA
     ratios=set(E.get('ratios',[]))   # ORA: cells that are ratios/multiples (DSCR, EM): rate tolerance whatever the size
-    errs=[f"{ws.title}!{c.coordinate}" for ws in wb for row in ws.iter_rows() for c in row if isinstance(c.value,str) and (c.value in ERRS or ERR_RX.match(c.value))]
+    errs=[f"{ws.title}!{c.coordinate}" for ws in wb for row in ws.iter_rows() for c in row if isinstance(c.value,str) and (c.value in ERRS or ERR_RX.match(c.value))]   # ORA: any error literal
     rows=[]; fails=0; missing=0
     for sh,c,exp in pairs:
         if sh not in wb.sheetnames: rows.append((f"{sh}!{c}",exp,'MISSING SHEET','FAIL')); missing+=1; continue

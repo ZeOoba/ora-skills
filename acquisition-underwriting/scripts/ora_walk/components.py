@@ -103,7 +103,7 @@ class Component:
     services_psf: float = 0.0             # landlord services on occupied SF, USD/SF/yr (full-service office)
     vacant_carry_psf: float = 0.0         # carry on dark SF, USD/SF/yr
     office_finish: Optional[bool] = None  # finished-office suite (v4.55: 12-month non-renewal downtime);
-                                          # None = inferred from `use` containing "office"
+                                          # None = from use_class ("office" -> office-finish)
 
 
 @dataclass
@@ -298,7 +298,7 @@ def validate(deal: ComponentDeal) -> None:
         _num(et.get("improvements_life", 15), "entity_tax.improvements_life", 15, 40)
         _num(et.get("cost_seg_5yr", 0.0), "entity_tax.cost_seg_5yr", 0, 1)
         _num(et.get("cost_seg_15yr", 0.0), "entity_tax.cost_seg_15yr", 0, 1)
-        if et.get("cost_seg_5yr", 0) + et.get("cost_seg_15yr", 0) > 1:
+        if et.get("cost_seg_5yr", COST_SEG_DEFAULT[0]) + et.get("cost_seg_15yr", COST_SEG_DEFAULT[1]) > 1:
             raise ValueError("entity_tax cost-seg shares exceed 100%")
     undeclared = [lb for lb in departure_labels(deal) if lb not in deal.cited_overrides]
     if undeclared:

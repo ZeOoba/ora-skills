@@ -1768,7 +1768,13 @@ class ComponentMode(unittest.TestCase):
         absent = self.C.replace(d, entity_tax={k: v for k, v in d.entity_tax.items()
                                                if k not in ("cost_seg_5yr", "cost_seg_15yr")})
         self.assertNotIn("entity_tax.cost_seg", self.C.departure_labels(absent))       # absent = default
-        for cs in ((0.08, 0.08), (0.0, 0.20), (0.15, 0.0), (0.0, 0.0)):
+        noi = [150_000.0] * 10
+        self.assertEqual(self.C._entity_tax(absent, noi, [0.0] * 10, 1_000_000.0, 0.0),
+                         self.C._entity_tax(d, noi, [0.0] * 10, 1_000_000.0, 0.0))        # engine applies 7/8 too
+        one = self.C.replace(d, entity_tax={**absent.entity_tax, "cost_seg_5yr": 0.95})    # 15-yr omitted = 0.08
+        with self.assertRaises(ValueError):
+            self.C.validate(self.C.replace(one, cited_overrides={"entity_tax.cost_seg": "t", **d.cited_overrides}))
+        for cs in ((0.08, 0.08), (0.0, 0.20), (0.15, 0.0), (0.0, 0.0), (0.07, 0.20), (0.07, 0.0)):
             other = self.C.replace(d, entity_tax={**d.entity_tax, "cost_seg_5yr": cs[0], "cost_seg_15yr": cs[1]})
             self.assertIn("entity_tax.cost_seg", self.C.departure_labels(other), cs)
 
@@ -1785,17 +1791,28 @@ class ComponentMode(unittest.TestCase):
         ok = self.C.replace(base, components=[self.C.replace(c, use="flex warehouse with front office")])
         self.assertNotIn("Flex.core", self.C.departure_labels(ok))
 
+    def test_office_finish_default_comes_from_use_class_only(self):
+        c = self.C.Component(name="WH2", sf=4_000, use="flex warehouse with front office", use_class="flex",
+                             core=True, rent_psf=12, exit_cap=0.075, downtime_m=9)
+        band = next(v for bound, v in D.ROLLOVER_DOWNTIME_BY_SF if 4_000 < bound)
+        self.assertEqual(self.C._renewal_defaults(c, [])[1], band)          # not the 12-month office-finish value
+        d = self._leased(comp=dict(use="flex warehouse with front office"))
+        self.assertFalse([lb for lb in self.C.departure_labels(d) if lb.endswith(".office_finish")])
+
     def test_use_class_required_and_names_reserved(self):
         spec = json.loads(json.dumps(self.spec))
         spec["components"][0].pop("use_class")
         with self.assertRaises(ValueError):
             self.C.solve_components(self.C.from_dict(spec), UST)
-        for bad in ("property_tax", "credit_loss", "a.b"):
+        for bad in ("property_tax", "entity_tax", "credit_loss", "a.b"):
             spec = json.loads(json.dumps(self.spec))
+            old = spec["components"][0]["name"]
             spec["components"][0]["name"] = bad
-            spec["cited_overrides"] = {}
-            with self.assertRaises(ValueError, msg=bad):
+            spec["cited_overrides"] = {k.replace(old, bad, 1): v for k, v in spec["cited_overrides"].items()}
+            with self.assertRaisesRegex(ValueError, "reserved", msg=bad):
                 self.C.solve_components(self.C.from_dict(spec), UST)
+        ok = json.loads(json.dumps(self.spec))                       # control: a plain name with citations passes
+        self.C.validate(self.C.from_dict(ok))
 
     def test_clamp_keeps_a_reference_valid(self):
         # supplied stabilization_year 3 is valid with 12-month downtime; resetting downtime to 9 moves the derived
@@ -1817,7 +1834,7 @@ class ComponentMode(unittest.TestCase):
 
     def test_dc_parcel_null_assessment_is_a_gap(self):
         import dc_parcel_pull as DCP
-        attrs = {"SSL": "0067    0066", "PREMISEADD": "X", "CLASSTYPE": "2", "NEWTOTAL": None, "LANDAREA": None}
+        attrs = {"SSL": "0067    0066", "PREMISEADD": "X", "CLASSTYPE": "2", "NEWTOTAL": None, "LANDAREA": 1100}
         orig = DCP.get
         DCP.get = lambda url, params, timeout=40: {"features": [{"attributes": attrs, "geometry": {}}]} \
             if "MapServer/40" in url else {"features": []}
@@ -1826,7 +1843,7 @@ class ComponentMode(unittest.TestCase):
         finally:
             DCP.get = orig
         self.assertIsNone(out["next_bill"]["real_property_tax"])
-        self.assertIn("[DATA-GAP]", DCP.to_md(out))
+        self.assertIn("proposed [DATA-GAP]", DCP.to_md(out))
 
     def test_cli_routes_components(self):
         import contextlib
