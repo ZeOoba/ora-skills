@@ -240,7 +240,7 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 | Skill | Purpose |
 |---|---|
 | `isolated-commit` | Lands your own reviewed change in a shared checkout that other sessions may be editing |
-| `git-history-purge` | Removes private data from a GitHub repo's whole history: leased force-push, fresh-clone verify, each local checkout archived whole and re-cloned from the purged remote (nothing deleted), Support request for old PRs |
+| `git-history-purge` | Removes private data from a GitHub repo's whole history: leased force-push, fresh-clone verify, each local checkout archived whole and re-cloned from the purged remote (nothing deleted; one supported worktree layout, every other one refused with manual steps), Support request for old PRs |
 | `dirty-tree-triage` | Attributes and safely settles uncommitted work across the shared checkouts |
 | `branch-catchup` | Brings a long-lived branch up to date with `origin/main` in a worktree, conflict by conflict |
 | `adversarial-merge-gate` | Second-reviewer gate before merging blast-radius or multi-session changes |

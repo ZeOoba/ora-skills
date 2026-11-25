@@ -65,13 +65,14 @@ verify - exit 1 if any removed path is still reachable, any rule still matches a
          the member names; UTF-16 LE/BE text (byte-order mark, or mostly-NUL odd/even bytes);
          a PDF's FlateDecode (or /Fl) and unfiltered streams, each decoded stream read again
          the same way (an attached xlsx is opened), plus the text of its literal (...) and hex
-         <...> strings with the pieces of a TJ array joined. A blob verify cannot read inside -
-         an encrypted zip member or PDF, a zip member or PDF stream under another compression
+         <...> strings, each alone and with the pieces of a TJ array joined. A blob verify
+         cannot read inside - an encrypted zip member or PDF, a zip member or PDF stream under another compression
          or filter (images in a PDF), PDF text drawn with a font's own glyph codes
          (Identity-H/V), a container nested more than one level deep, an image file, a
          gzip/bzip2/xz/7z/rar archive, a legacy Office (OLE2) file - is listed
          at the end as OPAQUE <blob> path=<a path> commit=<a commit> ref=<a branch, tag or
-         notes ref that reaches the commit> reason=<why>; OPAQUE
+         notes ref that reaches the commit, full name> reason=<why> (a blob a tag points at
+         directly, or holds in a tree it points at: commit=(none), ref=that tag); OPAQUE
          does not change the exit code: open each one and check it, or remove it by path.
          A configured phone number is found in ANY punctuated form: within a span of digit
          groups joined by 1-4 of ()[]./+-, whitespace, a Unicode dash or a no-break/thin
@@ -261,7 +262,8 @@ PDF_ESC = {b"n": b"\n", b"r": b"\r", b"t": b"\t", b"b": b"\b", b"f": b"\f"}
 
 
 LITERAL_STOP = re.compile(rb"[()\\]")
-HEX_STRING = re.compile(rb"<([0-9A-Fa-f\s]*)>")
+HEX_STRING = re.compile(rb"<([0-9A-Fa-f\s\x00]*)>")     # PDF whitespace includes NUL
+COMMENT_END = re.compile(rb"[\r\n]")
 
 
 def pdf_literal(data, i):
@@ -295,11 +297,10 @@ def pdf_literal(data, i):
         i += 1
 
 
-def pdf_strings(data):
-    """The text a PDF content holds in its strings: every literal (...) and hex <...> string
-    decoded; the pieces of one TJ array (or any [...] array) joined with nothing between them, so
-    a figure split by kerning ([(987,)-15(653)] TJ) reads whole; separate strings on separate
-    lines. Empty if there are none."""
+def pdf_string_lines(data, comments):
+    """pdf_strings() for one reading of data: every string on its own line, plus the pieces of
+    each [...] array (one still open at the end too) joined on a line of their own. comments:
+    whether "%" starts a comment running to the end of the line."""
     lines, cur, depth, i = [], [], 0, 0
     while True:
         m = PDF_TOKEN.search(data, i)
@@ -308,7 +309,9 @@ def pdf_strings(data):
         c, i = m.group(0), m.start()
         if c == b"(":
             s, i = pdf_literal(data, i)
-            (cur if depth else lines).append(s)
+            lines.append(s)
+            if depth:
+                cur.append(s)
             continue
         if c == b"<":
             if data[i + 1:i + 2] == b"<":                  # a dictionary, not a string
@@ -316,9 +319,11 @@ def pdf_strings(data):
                 continue
             h = HEX_STRING.match(data, i)
             if h:
-                digits = re.sub(rb"\s", b"", h.group(1))
+                digits = re.sub(rb"[^0-9A-Fa-f]", b"", h.group(1))
                 s = bytes.fromhex((digits + b"0" * (len(digits) % 2)).decode("ascii"))
-                (cur if depth else lines).append(s)
+                lines.append(s)
+                if depth:
+                    cur.append(s)
                 i = h.end()
                 continue
         elif c == b"[":
@@ -328,14 +333,24 @@ def pdf_strings(data):
             if not depth:
                 lines.append(b"".join(cur))
                 cur = []
-        elif c == b"%":                                   # a comment runs to the end of the line
-            e = re.compile(rb"[\r\n]").search(data, i)
+        elif c == b"%" and comments:                      # a comment runs to the end of the line
+            e = COMMENT_END.search(data, i)
             i = e.start() if e else len(data)
             continue
         i += 1
     if cur:
         lines.append(b"".join(cur))
-    return b"\n".join(l for l in lines if l)
+    return lines
+
+
+def pdf_strings(data):
+    """The text a PDF content holds in its strings: every literal (...) and hex <...> string
+    decoded, each on its own line, and the pieces of one TJ array (or any [...] array, closed or
+    not) also joined with nothing between them, so a figure split by kerning ([(987,)-15(653)] TJ)
+    reads whole. Read twice, with "%" as a comment and without (a "%" in binary inline image
+    data is not one), so neither a stray "%" nor an unclosed "[" hides a string. Empty if none."""
+    lines = pdf_string_lines(data, True) + pdf_string_lines(data, False)
+    return b"\n".join(dict.fromkeys(l for l in lines if l))
 
 
 # Closing a paragraph, table cell or spreadsheet cell, or a tab or line break, ends a piece of
@@ -428,11 +443,13 @@ def mask(data, patterns):
 
 
 def blob_origins(repo, shas):
-    """sha -> (a path, a commit, a ref reaching that commit) that stored it, from branches, tags
-    and notes refs; absent if unreachable."""
+    """sha -> (a path, a commit, the full name of a ref reaching that commit) that stored it, from
+    branches, tags and notes refs. A blob a tag (or other ref) points at directly, or holds in a
+    tree it points at, gives (its path in that tree or "(none)", "(none)", that ref). Absent if
+    unreachable."""
     want, out, commit, ref = set(shas), {}, "", b""
     toks = git(repo, "log", "-z", "--raw", "--no-abbrev", "--no-renames", "--root", "-m", "--source",
-               "--format=%x01%H %S", "--branches", "--tags", NOTES).split(b"\0")
+               "--format=%x01%H %S", "--glob=refs/heads/*", "--glob=refs/tags/*", NOTES).split(b"\0")
     i = 0
     while i < len(toks):
         t = toks[i].lstrip(b"\n")
@@ -445,6 +462,19 @@ def blob_origins(repo, shas):
                 out[new] = (toks[i + 1], commit, ref)
             i += 1
         i += 1
+    refs = refs_of(repo)
+    peeled = git(repo, "cat-file", "--batch-check=%(objectname) %(objecttype)",
+                 inp="".join(r + "^{}\n" for r in refs).encode()).decode().splitlines() if refs else []
+    for r, line in zip(refs, peeled):
+        obj, _, kind = line.partition(" ")
+        if kind == "blob" and obj in want and obj not in out:
+            out[obj] = (b"(none)", "(none)", r.encode())
+        elif kind == "tree":
+            for entry in git(repo, "ls-tree", "-r", "-z", obj).split(b"\0"):
+                meta, _, path = entry.partition(b"\t")
+                sha = meta.split()[2].decode() if meta.count(b" ") == 2 else ""
+                if sha in want and sha not in out:
+                    out[sha] = (path, "(none)", r.encode())
     return out
 
 

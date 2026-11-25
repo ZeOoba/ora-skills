@@ -6,69 +6,45 @@
   python -I local_cleanup.py overlap <repo> <old-commits.txt>
   python -I local_cleanup.py restore <archive-dir> --exclusive
 
-Every path argument is resolved against the current directory before use. Nothing is ever deleted (a
-run's own <repo>.rehome.lock file excepted).
+Paths are resolved against the current directory. Nothing is deleted (except a run's own <repo>.rehome.lock,
+and its own rehome.json after a complete rollback).
 
-"Old history" = reaches a commit the purge CHANGED or DROPPED: every commit reachable from any ref of
-any backup, minus every commit reachable from any ref of the purged copy. A clean first commit keeps
-its SHA through filter-repo, so branches sharing only that root are NOT old; an orphan branch is not
-old either. Several backups: a second one is made when someone pushed after the first (never fetch
-into an existing backup); `changed` takes their union.
+"Old history" = reaches a commit the purge CHANGED or DROPPED (in any backup, not in the purged copy). A clean
+first commit keeps its SHA, so branches sharing only that root are NOT old; neither is an orphan branch.
 
-changed    writes the sorted old set; exit 1 if it is empty (refuse to guess: the file then holds only a
-           "0 commits" marker, the one empty form inventory accepts; an empty or malformed file is
-           refused with exit 2). Also writes
-           <out>.objects: the changed/dropped NON-commit objects (blobs, trees, tag objects reachable
-           from the backups minus those reachable from the purged copy); inventory and overlap read it
-           when it sits next to the old-commits file.
-inventory  (read-only) the main checkout and every linked worktree (branch or detached HEAD, locked,
-           modified, untracked, staged-only, operation in progress, submodules), every local ref in
-           every namespace (per-worktree refs included) and every stash entry, each OLD (reaches an
-           old commit, or is/peels to a listed old object) or KEPT; remotes, branch upstreams,
-           core.hooksPath and the hooks dir; each worktree's ignored top-level paths by name (they
-           stay in the archive); and a full-state snapshot. Prints a table. Exit 2 with a REFUSED list
-           when something cannot be carried across without loss: a KEPT worktree that has modified,
-           untracked or staged-only files, skip-worktree / assume-unchanged files that differ from
-           the index, an operation in progress, or a submodule with unpushed commits or changes; or
-           an operation in progress in ANY worktree (the rehome gate refuses it). OLD worktrees may be
-           dirty: they stay intact in the archive, with their per-worktree refs.
-rehome     EXCLUSIVE MAINTENANCE. Refuses (exit 4) unless --exclusive is passed (every session, IDE
-           and scheduled job using the checkout is stopped), no other rehome/restore holds the
-           <repo>.rehome.lock file (created O_EXCL next to the checkout, held for the whole run), no
-           *.lock file exists, nothing is in progress, and two snapshots --quiet-seconds apart equal
-           each other and the inventory's (a third, taken right before the first rename, too).
-           Refuses (exit 2) an archive dir that exists, is inside the checkout or a worktree, or is
-           on another volume. Then renames every linked worktree outside the main folder to
-           <archive>/worktrees/<n>-<name>/ and the main folder to <archive>/repo/, and runs
-           `git worktree repair` there (a failed rename, repair or clone renames everything back: exit 3).
-           Clones <clone-url> (the PURGED remote) into <archive>/new-clone, re-points every gitfile and
-           every submodule repository's core.worktree in the archive at its archived location,
-           restores remotes, branch upstreams and core.hooksPath (hooks are NOT copied), fetches the
-           KEPT refs from the archived repo with an explicit refspec list (branches, tags, notes and
-           other namespaces; never remote-tracking or old refs, never --tags) plus every kept
-           worktree HEAD, per-worktree ref and stash entry through temp refs, stores the kept stash
-           entries oldest first, writes the main worktree's kept per-worktree refs, checks the main
-           worktree out clean (its branch or detached HEAD; detached at the clone's HEAD when the
-           main checkout was OLD), and deletes the temp refs. Then ONE rename moves it to the main
-           path (it fails if anything recreated that path meanwhile: exit 5, nothing there touched).
-           Re-creates each kept worktree at its path (detached if it was, re-locked with its reason)
-           with its per-worktree refs, and verifies: overlap 0, every carried ref at its SHA, every
-           re-created worktree (and the main one) clean at its HEAD, and the new clone's reflogs
-           unchanged since the rename. Writes <archive>/rehome.json (for restore) and
-           <archive>/REHOME.md (what moved, what came across, ignored paths left behind, how to restore).
-restore    EXCLUSIVE MAINTENANCE, the reverse of a rehome that reached the clone: moves the new clone
-           and its re-created worktrees aside to <archive>/restored-aside-<n>/, renames every archived
-           folder back, runs `git worktree repair`, re-points gitfiles and submodule core.worktree, and
-           compares the checkout with the inventory's snapshot: exit 0 identical, 1 differs (listed).
-overlap    objects in the object store that are in the old set (commits) or, when <old>.objects
-           exists, in that set (blobs, trees, tags): exit 0 when 0, else 1.
+changed    writes the sorted old set (exit 1 if empty: the file then holds only a "0 commits" marker, the one
+           empty form accepted; an empty or malformed file is refused, exit 2) and <out>.objects, the
+           changed/dropped blobs, trees and tag objects, read by inventory and overlap.
+inventory  (read-only) classifies every worktree, ref and stash entry OLD or KEPT, names each worktree's
+           ignored paths exactly as git reports them, records remotes, upstreams, core.hooksPath and a
+           full-state snapshot, and prints a table. rehome carries ONE layout: the main worktree and linked
+           worktrees that are direct folders (none inside another), each on a branch with commits or detached
+           at a commit a carried ref reaches; kept ones clean, with no initialised submodule and no
+           per-worktree ref; kept branches, tags, notes, other refs and stash entries. The main checkout may
+           be OLD. Everything else is REFUSED (exit 2), each with what to do by hand. OLD worktrees may be
+           dirty: they stay in the archive.
+rehome     EXCLUSIVE MAINTENANCE. Exit 4 (nothing changed) without --exclusive, while <repo>.rehome.lock
+           exists, with a *.lock file or an operation in progress, or when two snapshots --quiet-seconds apart
+           (and a third before the first rename) differ from each other or the inventory. Exit 2 for an
+           archive dir that exists, is inside a worktree or on another volume. Writes <archive>/rehome.json,
+           renames every linked worktree to <archive>/worktrees/<n>-<name>/ and the main folder to
+           <archive>/repo/, runs `git worktree repair` there, and clones the purged remote into
+           <archive>/new-clone (a failure rolls every rename back: exit 3; an interrupt rolls back, then is
+           raised again). Then re-points gitfiles and submodule core.worktree in the archive, restores
+           remotes, upstreams and core.hooksPath (a clone without hooks gets <archive>/hooks-stub, whose
+           pre-push refuses every push), fetches the kept refs (explicit refspecs) and stash entries, checks
+           the main worktree out clean, renames the clone into place (exit 5 if the path was recreated),
+           re-creates the kept worktrees and verifies: overlap 0, every carried ref at its SHA, stash order,
+           every worktree clean at its HEAD, reflogs unchanged. Writes <archive>/REHOME.md.
+restore    EXCLUSIVE MAINTENANCE, the reverse: moves the new clone (if any) and its worktrees aside to
+           <archive>/restored-aside-<n>/, renames back every folder the rehome moved, repairs links and
+           compares with the inventory's snapshot: exit 0 identical, 1 differs.
+overlap    old commits (and listed old objects) in the object store: exit 0 when 0, else 1.
 
 Prints counts, ref names and paths only, never file contents.
-Exit codes: 0 ok, 1 work left/found, 2 bad input, a missing or invalid inventory, or REFUSED (nothing
-changed), 3 rehome stopped before the clone (or restore stopped) and rolled every rename back, 4 not
-exclusive / another run holds the lock / not quiet / changed since the inventory (nothing changed), 5 a
-step after the clone failed (the archive is complete; see REHOME.md), 6 the rollback itself failed
-(folders listed where they are now).
+Exit codes: 0 ok, 1 work left/found, 2 bad input or REFUSED (nothing changed), 3 stopped and rolled back,
+4 not exclusive / locked / not quiet (nothing changed), 5 a step after the clone failed (the archive is
+complete; see REHOME.md), 6 the rollback itself failed (folders listed where they are now).
 """
 import argparse
 import contextlib
@@ -92,6 +68,7 @@ ZERO_MARK = "# local_cleanup changed: 0 commits"     # the only empty old-commit
 LOCK_SUFFIX = ".rehome.lock"
 STAGING = "new-clone"
 RECORD = "rehome.json"
+STUB = "hooks-stub"
 EXIT_ROLLED_BACK, EXIT_NOT_QUIET, EXIT_AFTER_CLONE, EXIT_ROLLBACK_FAILED = 3, 4, 5, 6
 
 
@@ -146,6 +123,13 @@ def objects_all(repo):
     return {l.split(" ", 1)[0] for l in out(repo, "rev-list", "--objects", "--all").splitlines() if l}
 
 
+def objects_of(repo, shas):
+    """Every object reachable from the given objects."""
+    stdin = "".join(sha + "\n" for sha in shas)
+    listing = git(repo, "rev-list", "--objects", "--stdin", stdin=stdin).stdout if shas else ""
+    return {l.split(" ", 1)[0] for l in listing.splitlines() if l}
+
+
 def read_shas(path, what, allow_empty):
     with open(path, encoding="ascii", errors="replace") as fh:
         lines = [l.strip() for l in fh if l.strip()]
@@ -187,7 +171,7 @@ def index_only(xy):
 
 
 class OldTest:
-    """Called with a commit: does it reach an old commit? .obj(sha): is it a listed old non-commit object?"""
+    """Called with a commit: does it reach an old commit? .ref(...): is a ref old history?"""
 
     def __init__(self, repo, old, objs=frozenset()):
         self.repo, self.old, self.objs, self.cache = repo, old, objs, {}
@@ -245,20 +229,6 @@ def common_dir(repo):
     return os.path.abspath(d if os.path.isabs(d) else os.path.join(repo, d))
 
 
-def worktree_ids(repo):
-    """norm(worktree path) -> admin id under <common>/worktrees/."""
-    base = os.path.join(common_dir(repo), "worktrees")
-    ids = {}
-    if os.path.isdir(base):
-        for wid in os.listdir(base):
-            try:
-                with open(os.path.join(base, wid, "gitdir"), encoding="utf-8") as fh:
-                    ids[norm(os.path.dirname(fh.read().strip()))] = wid
-            except OSError:
-                continue
-    return ids
-
-
 def list_worktrees(repo):
     blocks, cur = [], None
     for line in out(repo, "worktree", "list", "--porcelain").splitlines():
@@ -282,10 +252,8 @@ def list_worktrees(repo):
             cur["prunable"] = True
         if cur is not None and line:
             cur["raw"].append(line)
-    ids = worktree_ids(repo)
     for i, w in enumerate(blocks):
         w["main"] = i == 0
-        w["id"] = None if i == 0 else ids.get(norm(w["path"]), os.path.basename(w["path"]))
         w["raw"] = "\n".join(w["raw"])
     return blocks
 
@@ -450,24 +418,13 @@ def quiet_gate(repo, a):
 
 # ---------------------------------------------------------------- inventory
 
-def admin_dir(path):
-    return out(path, "rev-parse", "--absolute-git-dir").strip()
-
-
-def submodules(path, prefix=""):
-    """[{path, unpushed, dirty}] for every initialised submodule under path (recursive)."""
+def submodules(path):
+    """Paths of the initialised submodules (gitlinks whose folder holds a .git) in the worktree at path."""
     found = []
     for entry in filter(None, out(path, "ls-files", "-s", "-z").split("\0")):
         meta, rel = entry.split("\t", 1)
-        if not meta.startswith("160000 "):
-            continue
-        sub = os.path.join(path, rel)
-        if not os.path.exists(os.path.join(sub, ".git")):
-            continue                                         # not initialised: nothing local to lose
-        unpushed = len(out(sub, "rev-list", "--all", "--not", "--remotes").split())
-        dirty = len([l for l in out(sub, "status", "--porcelain", "-uall").splitlines() if l])
-        found.append({"path": prefix + rel, "unpushed": unpushed, "dirty": dirty})
-        found += submodules(sub, prefix + rel + "/")
+        if meta.startswith("160000 ") and os.path.exists(os.path.join(path, rel, ".git")):
+            found.append(rel)
     return found
 
 
@@ -486,20 +443,19 @@ def hidden_changes(path):
     return [rel for (rel, sha), h in zip(rows, hashed) if h != sha]
 
 
-def ignored_names(path, nested):
-    """Ignored top-level paths ('dir/' or 'file'), skipping folders that only hold nested worktrees."""
-    names = set()
+def ignored_names(path, worktrees):
+    """Ignored paths exactly as git reports them ('dir/' or 'file'), never one that is or holds a worktree."""
+    names = []
     for x in git(path, "ls-files", "-o", "-i", "--exclude-standard", "--directory", "-z").stdout.split("\0"):
-        p = x.rstrip("/")
-        if not p or any(p == n or n.startswith(p + "/") for n in nested):
-            continue
-        names.add(x.split("/", 1)[0] + ("/" if "/" in x else ""))
-    return sorted(names)
+        full = os.path.join(path, x.rstrip("/"))
+        if x and not any(norm(w) == norm(full) or inside(w, full) for w in worktrees):
+            names.append(x)
+    return names
 
 
-def worktree_state(path, nested):
-    """modified / untracked / staged-only / hidden (skip-worktree, assume-unchanged) paths (registered
-    worktrees nested in it are not untracked), operations in progress, submodules and ignored top-level paths."""
+def worktree_state(path, worktrees=()):
+    """modified / untracked / staged-only / hidden (skip-worktree, assume-unchanged) paths, operations in
+    progress, initialised submodules and ignored paths."""
     st = {"modified": [], "untracked": [], "staged_only": []}
     raw = git(path, "status", "--porcelain=v1", "-uall", "-z").stdout.split("\0")
     i = 0
@@ -511,18 +467,18 @@ def worktree_state(path, nested):
         xy, rel = item[:2], item[3:]
         if xy[0] in "RC":
             i += 1                                           # skip the rename/copy source path
-        if xy == "??":
-            if rel.rstrip("/") not in nested:
-                st["untracked"].append(rel)
+        if xy == "??":                                       # a nested worktree is refused as such, not here
+            st["untracked"] += [] if any(norm(w) == norm(os.path.join(path, rel)) for w in worktrees) else [rel]
         elif index_only(xy):
             st["staged_only"].append(rel)
         else:
             st["modified"].append(rel)
-    g = admin_dir(path)
+    g = out(path, "rev-parse", "--absolute-git-dir").strip()
     st["busy"] = [n for n in BUSY if os.path.exists(os.path.join(g, n))]
     st["submodules"] = submodules(path)
+    st["own_refs"] = out(path, "for-each-ref", "--format=%(refname)", *[p.rstrip("/") for p in PER_WORKTREE]).split()
     st["hidden"] = hidden_changes(path)
-    st["ignored"] = ignored_names(path, nested)
+    st["ignored"] = ignored_names(path, worktrees)
     return st
 
 
@@ -532,17 +488,27 @@ FIXES = {
     "untracked": "commit it, `git stash -u` it, or move the files out of the checkout",
     "staged-only": "commit the staged version, or unstage it",
     "in progress": "finish or abort it (`git <op> --continue` / `--abort`, `git bisect reset`)",
-    "unpushed": "push the submodule's commits, or move them onto a branch its remote has",
-    "submodule changes": "commit (and push) inside the submodule",
+    "missing": "restore the folder, or `git worktree prune` it yourself first",
+    "unborn": "commit on it there (`git commit --allow-empty -m start`), or switch to a branch with commits",
+    "nested": "`git worktree move <path> <new path outside every worktree>` (unlock it first if locked)",
+    "submodule": "in each, push every commit and commit or drop every change, then `git submodule deinit -f <sub>` "
+                 "(its repository moves to the archive); after rehome, `git submodule update --init`",
+    "per-worktree": "in that worktree, `git branch <name> <ref>`, then `git update-ref -d <ref>`",
+    "unreached": "name it: `git branch <name>` in that worktree",
+    "purged": "re-point it onto its rewritten counterpart (SKILL.md Step 6 item 2), or rebuild it without that "
+              "content (`git update-ref <ref> <new> <old>`); the old tip stays in its reflog in the archive",
 }
+
+
+def refusal(path, problem, key):
+    return {"path": path, "problem": problem, "fix": FIXES[key]}
 
 
 def refusals_for(w):
     rows, path = [], w["path"]
 
     def add(problem, items, key):
-        rows.append({"path": path, "problem": "%s (%d): %s" % (problem, len(items), ", ".join(items[:5])),
-                     "fix": FIXES[key]})
+        rows.append(refusal(path, "%s (%d): %s" % (problem, len(items), ", ".join(items[:5])), key))
     if w["busy"]:
         add("operation in progress", w["busy"], "in progress")
     if w["old"]:
@@ -555,17 +521,20 @@ def refusals_for(w):
         add("staged-only content", w["staged_only"], "staged-only")
     if w["hidden"]:
         add("local changes hidden by skip-worktree / assume-unchanged", w["hidden"], "hidden")
-    for s in w["submodules"]:
-        if s["unpushed"]:
-            add("submodule %s has unpushed commits" % s["path"], ["%d commit(s)" % s["unpushed"]], "unpushed")
-        if s["dirty"]:
-            add("submodule %s has changes" % s["path"], ["%d file(s)" % s["dirty"]], "submodule changes")
+    if w["submodules"]:
+        add("initialised submodule(s)", w["submodules"], "submodule")
+    if w["own_refs"]:
+        add("per-worktree ref(s)", w["own_refs"], "per-worktree")
     return rows
 
 
 def config_entries(repo, pattern):
     r = git(repo, "config", "-z", "--get-regexp", pattern, check=False)
     return [list(e.split("\n", 1)) if "\n" in e else [e, ""] for e in r.stdout.split("\0") if e]
+
+
+def unborn(w):
+    return not w["head"] or set(w["head"]) == {"0"}
 
 
 def build_inventory(repo, old, objs):
@@ -581,35 +550,32 @@ def build_inventory(repo, old, objs):
     paths = [w["path"] for w in wts]
     for w in wts:
         if w["prunable"] or not os.path.isdir(w["path"]):
-            inv["refusals"].append({"path": w["path"], "problem": "worktree folder missing (prunable)",
-                                    "fix": "restore the folder, or `git worktree prune` it yourself first"})
+            inv["refusals"].append(refusal(w["path"], "worktree folder missing (prunable)", "missing"))
             continue
         containers = [p for p in paths if inside(w["path"], p)]
         if w["main"] and containers:
             raise Refuse("the main checkout is inside worktree %s" % containers[0])
-        nested = {os.path.relpath(p, w["path"]).replace(os.sep, "/") for p in paths if inside(p, w["path"])}
-        rec = {k: w[k] for k in ("path", "id", "main", "head", "branch", "detached", "locked", "lock_reason")}
-        rec["old"] = bool(w["head"]) and is_old(w["head"])
-        rec["container"] = max(containers, key=len) if containers else None
-        rec.update(worktree_state(w["path"], nested))
+        rec = {k: w[k] for k in ("path", "main", "head", "branch", "detached", "locked", "lock_reason")}
+        rec["old"] = not unborn(w) and is_old(w["head"])
+        rec.update(worktree_state(w["path"], paths))
         inv["worktrees"].append(rec)
+        if containers:
+            inv["refusals"].append(refusal(w["path"], "worktree nested inside %s" % max(containers, key=len),
+                                           "nested"))
+        if unborn(w):
+            inv["refusals"].append(refusal(w["path"], "branch %s is unborn (no commit yet)" % w["branch"], "unborn"))
         inv["refusals"] += refusals_for(rec)
-        if not w["main"]:
-            for name, sha, commit, symref, peeled in list_refs(w["path"]):
-                if name.startswith(PER_WORKTREE) and not symref:
-                    inv["refs"].append({"name": name, "sha": sha, "kind": "worktree", "worktree": w["id"],
-                                        "old": is_old.ref(sha, commit, peeled)})
-    for name, sha, commit, symref, peeled in list_refs(repo):
+    for name, sha, commit, symref, peeled in list_refs(repo):         # the main worktree's own refs included
         if symref or name == "refs/stash":
             continue
-        inv["refs"].append({"name": name, "sha": sha, "kind": ref_kind(name), "worktree": None,
-                            "old": is_old.ref(sha, commit, peeled)})
-    for i, (sha, msg) in enumerate(stash_entries(repo)):
-        inv["stash"].append({"index": i, "sha": sha, "message": msg, "old": is_old(sha)})
-    old_wt = {w["id"]: w["old"] for w in inv["worktrees"]}             # main: id None
+        inv["refs"].append({"name": name, "sha": sha, "kind": ref_kind(name), "old": is_old.ref(sha, commit, peeled)})
     for r in inv["refs"]:
-        r["in_old_worktree"] = r["kind"] == "worktree" and old_wt.get(r["worktree"], True)
-        r["carry"] = not r["old"] and r["kind"] != "remotes" and not r["in_old_worktree"]
+        r["carry"] = not r["old"] and r["kind"] not in ("remotes", "worktree")
+    carried = [r for r in inv["refs"] if r["carry"]]
+    for i, (sha, msg) in enumerate(stash_entries(repo)):
+        old_entry = is_old(sha) or bool(objs and not objs.isdisjoint(objects_of(repo, [sha])))
+        inv["stash"].append({"index": i, "sha": sha, "message": msg, "old": old_entry})
+    inv["refusals"] += layout_refusals(repo, inv, carried, objs)
     inv["remotes"] = config_entries(repo, r"^remote\.")
     inv["branch_config"] = config_entries(repo, r"^branch\.")
     hp = git(repo, "config", "--get", "core.hooksPath", check=False).stdout.strip()
@@ -619,6 +585,25 @@ def build_inventory(repo, old, objs):
     return inv
 
 
+def layout_refusals(repo, inv, carried, objs):
+    """Kept worktrees detached at a commit no carried ref reaches; carried refs that reach a listed old
+    (purged) object."""
+    rows, names = [], {r["name"] for r in carried}
+    for w in inv["worktrees"]:
+        if not w["old"] and w["detached"]:
+            reach = out(repo, "for-each-ref", "--contains", w["head"], "--format=%(refname)").split()
+            if names.isdisjoint(reach):
+                rows.append(refusal(w["path"], "detached at %s, which no carried ref reaches" % w["head"],
+                                    "unreached"))
+    if objs and not objs.isdisjoint(objects_of(repo, [r["sha"] for r in carried])):
+        for r in carried:
+            n = len(objs & objects_of(repo, [r["sha"]]))
+            if n:
+                rows.append(refusal(repo, "ref %s reaches %d purged blob/tree/tag object(s)" % (r["name"], n),
+                                    "purged"))
+    return rows
+
+
 def label(old):
     return "OLD " if old else "KEPT"
 
@@ -626,28 +611,18 @@ def label(old):
 def print_inventory(inv):
     print("worktrees:")
     for w in inv["worktrees"]:
-        flags = [w["branch"] or "detached@" + (w["head"] or "?")[:12]]
-        if w["main"]:
-            flags.append("main")
-        if w["locked"]:
-            flags.append("locked")
-        for k in ("modified", "untracked", "staged_only", "hidden", "busy"):
-            if w[k]:
-                flags.append("%s %d" % (k, len(w[k])))
-        if w["submodules"]:
-            flags.append("submodules %d" % len(w["submodules"]))
+        flags = [w["branch"] or "detached@" + (w["head"] or "?")[:12]] + [k for k in ("main", "locked") if w[k]]
+        flags += ["%s %d" % (k, len(w[k])) for k in ("modified", "untracked", "staged_only", "hidden", "busy",
+                                                     "submodules", "own_refs") if w[k]]
         print("  %s  %s  [%s]" % (label(w["old"]), w["path"], ", ".join(flags)))
         if w["old"] and (w["modified"] or w["untracked"] or w["staged_only"]):
             print("        uncommitted changes here stay only in the archive")
         if w["ignored"]:
-            print("        ignored, NOT carried (stays in the archive; copy back what is needed): %s"
-                  % ", ".join(w["ignored"]))
+            print("        ignored, NOT carried (stays in the archive): %s" % ", ".join(w["ignored"]))
     print("refs:")
     for r in inv["refs"]:
-        where = "" if r["worktree"] is None else "  (worktree %s)" % r["worktree"]
-        how = "" if r["old"] else ("  carried" if r["carry"] else "  stays in the archive (old worktree)"
-                                   if r["in_old_worktree"] else "  fresh from the clone")
-        print("  %s  %-8s %s%s%s" % (label(r["old"]), r["kind"], r["name"], where, how))
+        how = "" if r["old"] else "  carried" if r["carry"] else "  fresh from the clone"
+        print("  %s  %-8s %s%s" % (label(r["old"]), r["kind"], r["name"], how))
     for e in inv["stash"]:
         print("  %s  stash    stash@{%d}" % (label(e["old"]), e["index"]))
     print("remotes: %d config entr%s; core.hooksPath: %s; hooks: %s" % (
@@ -675,7 +650,7 @@ def cmd_inventory(a):
         json.dump(inv, fh, indent=1)
     print_inventory(inv)
     if inv["refusals"]:
-        print("%d case(s) cannot be carried across without loss: resolve each, then run inventory again"
+        print("%d case(s) outside the supported layout: do what each REFUSED line says, then run inventory again"
               % len(inv["refusals"]))
         return 2
     return 0
@@ -723,19 +698,18 @@ def run_lock(repo):
 
 
 def move_plan(inv, archive):
-    """[(original, archived)] renames: linked worktrees not inside another worktree (sorted), then main."""
-    moves, n = [], 0
+    """[(original, archived)] renames: every linked worktree (sorted), then main."""
+    moves = []
     for w in sorted(inv["worktrees"], key=lambda w: norm(w["path"])):
-        if not w["main"] and w["container"] is None:
+        if not w["main"]:
             moves.append((w["path"], os.path.join(archive, "worktrees", "%d-%s" % (
-                n, os.path.basename(os.path.normpath(w["path"]))))))
-            n += 1
+                len(moves), os.path.basename(os.path.normpath(w["path"]))))))
     main = [w for w in inv["worktrees"] if w["main"]][0]
     return moves + [(main["path"], os.path.join(archive, "repo"))]
 
 
 def archived_path(path, moves):
-    """Where a path is after the moves [(was, now)] (it may be nested in a moved folder)."""
+    """Where a path is after the moves [(was, now)] (it may be inside a moved folder)."""
     for src, dst in moves:
         if norm(path) == norm(src):
             return dst
@@ -756,8 +730,7 @@ def rollback(repo, inv, archive, done, repaired, why):
         print("ROLLBACK FAILED after: %s" % why)
         for src, dst, err in stuck:
             print("  %s is now at %s (rename back failed: %s)" % (src, dst, err))
-        back = [s for s, _d in done if s not in {x[0] for x in stuck}]
-        for src in back:
+        for src in [s for s, _d in done if s not in {x[0] for x in stuck}]:
             print("  %s is back at its original path" % src)
         print("Nothing was deleted. Rename each folder back by hand, then run `git worktree repair` in %s." % repo)
         return EXIT_ROLLBACK_FAILED
@@ -768,6 +741,8 @@ def rollback(repo, inv, archive, done, repaired, why):
         print("ROLLBACK FAILED after: %s. Every folder is back, but the checkout differs from the inventory:" % why)
         show_keys(changed)
         return EXIT_ROLLBACK_FAILED
+    with contextlib.suppress(OSError):
+        os.remove(os.path.join(archive, RECORD))              # this run's own record: nothing moved any more
     remove_empty_archive(archive)
     print("STOPPED: %s. Every rename was rolled back; the checkout matches the inventory again." % why)
     return EXIT_ROLLED_BACK
@@ -775,10 +750,8 @@ def rollback(repo, inv, archive, done, repaired, why):
 
 def remove_empty_archive(archive):
     for d in (os.path.join(archive, "worktrees"), archive):
-        try:
+        with contextlib.suppress(OSError):
             os.rmdir(d)                                       # only removes an EMPTY dir this run made
-        except OSError:
-            pass
 
 
 def check_archive_dir(inv, archive, url):
@@ -803,11 +776,9 @@ GITDIR_SKIP = {"objects", "refs", "logs", "hooks", "info", "lfs"}
 
 
 def relink(pairs, here):
-    """After the folders in pairs [(was, now)] moved: re-point every gitfile ('.git' file: submodules, linked
-    worktrees) under each moved folder, and core.worktree of every submodule repository under a git dir's
-    modules/ (worktree admin dirs included, at any depth), at where its target now is. Git writes these as
-    relative paths, which break when a work tree and its repository moved to different folders. Already
-    correct links are left as they are. Returns the number of links rewritten."""
+    """After the folders in pairs [(was, now)] moved, re-point every gitfile under them and core.worktree of
+    every submodule repository under a git dir's modules/ (at any depth) at where its target now is: git writes
+    relative paths, which break when a work tree and its repository moved apart. Returns the number rewritten."""
     back = [(b, a) for a, b in pairs]
     fixed, gitdirs = 0, []
     for _a, top in pairs:
@@ -847,6 +818,7 @@ def relink(pairs, here):
 
 
 def restore_config(inv, path):
+    """Remotes, carried branches' config and core.hooksPath from the inventory."""
     carried = {r["name"][len("refs/heads/"):] for r in inv["refs"] if r["carry"] and r["kind"] == "heads"}
     entries = list(inv["remotes"])
     for key, value in inv["branch_config"]:
@@ -861,31 +833,34 @@ def restore_config(inv, path):
         git(path, "config", "core.hooksPath", inv["hooks_path"])
 
 
-def carry(inv, archived_repo, path):
-    """Fetch the kept refs (explicit refspecs), and through temp refs (deleted by name later) every kept
-    worktree HEAD, kept per-worktree ref and kept stash entry. Returns [(temp ref, sha)]."""
-    specs = ["+%s:%s" % (r["name"], r["name"]) for r in inv["refs"] if r["carry"] and r["kind"] != "worktree"]
-    shas = [w["head"] for w in inv["worktrees"] if not w["old"] and w["head"]]
-    shas += [r["sha"] for r in inv["refs"] if r["carry"] and r["kind"] == "worktree"]
-    shas += [e["sha"] for e in inv["stash"] if not e["old"]]
-    temp = [("%s%d" % (TMP_NS, i), sha) for i, sha in enumerate(shas)]
+def hook_stub(path, archive):
+    """When the checked-out new clone has no hooks: core.hooksPath -> <archive>/hooks-stub, whose pre-push
+    refuses every push until the repo's hook installer runs. Returns the stub path, or None (hooks present)."""
+    hooks = resolve(path, out(path, "rev-parse", "--git-path", "hooks").strip())
+    if os.path.isdir(hooks) and any(not f.endswith(".sample") for f in os.listdir(hooks)):
+        return None
+    stub = os.path.join(archive, STUB)
+    os.makedirs(stub)
+    with open(os.path.join(stub, "pre-push"), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("#!/bin/sh\necho \"local_cleanup rehome: this clone has no hooks yet; run the repo's hook installer "
+                 "first (see %s)\" >&2\nexit 1\n" % os.path.join(archive, "REHOME.md").replace(os.sep, "/"))
+    os.chmod(os.path.join(stub, "pre-push"), 0o755)
+    git(path, "config", "core.hooksPath", stub)
+    return stub
+
+
+def prepare_clone(inv, archived_repo, path):
+    """In the staging clone: fetch the kept refs (explicit refspecs) and the kept stash entries through temp
+    refs, store the stash entries (oldest first), check the main worktree out clean, delete the temp refs."""
+    specs = ["+%s:%s" % (r["name"], r["name"]) for r in inv["refs"] if r["carry"]]
+    temp = [("%s%d" % (TMP_NS, i), e["sha"]) for i, e in enumerate(inv["stash"]) if not e["old"]]
     specs += ["+%s:%s" % (sha, name) for name, sha in temp]
     if specs:
         git(path, "fetch", "--no-tags", "--update-head-ok", "--no-write-fetch-head", "--no-recurse-submodules",
             "--stdin", archived_repo, stdin="".join(s + "\n" for s in specs))
-    return temp
-
-
-def prepare_clone(inv, archived_repo, path):
-    """In the staging clone: kept refs, stash entries (oldest first), the main worktree's kept per-worktree
-    refs, the main worktree checked out clean, temp refs deleted (each by name)."""
-    temp = carry(inv, archived_repo, path)
     for e in reversed(inv["stash"]):
         if not e["old"]:
             git(path, "stash", "store", "-q", "-m", e["message"], e["sha"])
-    for r in inv["refs"]:
-        if r["carry"] and r["kind"] == "worktree" and r["worktree"] is None:
-            git(path, "update-ref", r["name"], r["sha"])
     main = [w for w in inv["worktrees"] if w["main"]][0]
     if main["old"]:                       # never on a branch a kept worktree may need; HEAD after the fetch
         git(path, "checkout", "-q", "-f", "--detach", "HEAD")
@@ -899,8 +874,8 @@ def prepare_clone(inv, archived_repo, path):
 
 
 def add_worktrees(inv, path):
-    """Kept linked worktrees at their paths (outer first), re-locked, with their kept per-worktree refs."""
-    for w in sorted(inv["worktrees"], key=lambda w: len(w["path"])):
+    """Kept linked worktrees at their paths, re-locked with their reason."""
+    for w in inv["worktrees"]:
         if w["main"] or w["old"]:
             continue
         if w["branch"]:
@@ -909,9 +884,6 @@ def add_worktrees(inv, path):
             git(path, "worktree", "add", "-q", "--detach", w["path"], w["head"])
         if w["locked"]:
             git(path, "worktree", "lock", *(["--reason", w["lock_reason"]] if w["lock_reason"] else []), w["path"])
-        for r in inv["refs"]:
-            if r["carry"] and r["worktree"] == w["id"]:
-                git(w["path"], "update-ref", r["name"], r["sha"])
 
 
 def reflogs(path):
@@ -936,29 +908,25 @@ def verify(inv, path, logs):
     n_c, n_o = overlap_counts(path, read_old(old_path), read_old_objects(old_path))
     if n_c or n_o:
         bad.append("overlap: %d old commit(s) and %d old blob/tree/tag object(s) in the new clone" % (n_c, n_o))
-    wts = {w["id"]: w for w in inv["worktrees"]}
     for r in inv["refs"]:
         if r["carry"]:
-            where = path if r["worktree"] is None else wts[r["worktree"]]["path"]
-            got = git(where, "rev-parse", "--verify", "-q", r["name"], check=False).stdout.strip()
+            got = git(path, "rev-parse", "--verify", "-q", r["name"], check=False).stdout.strip()
             if got != r["sha"]:
                 bad.append("ref %s is %s, expected %s" % (r["name"], got or "missing", r["sha"]))
     want = [e["sha"] for e in inv["stash"] if not e["old"]]
     have = git(path, "reflog", "show", "--format=%H", "refs/stash", "--", check=False).stdout.split()
     if have != want:
         bad.append("stash list differs from the kept entries")
-    paths = [w["path"] for w in inv["worktrees"] if not w["old"]]
     listed = {norm(w["path"]): w for w in list_worktrees(path)}
     for w in inv["worktrees"]:
         if w["old"] and not w["main"]:
             continue
         now = listed.get(norm(w["path"]))
-        nested = {os.path.relpath(p, w["path"]).replace(os.sep, "/") for p in paths if inside(p, w["path"])}
         if not now or (not w["old"] and (now["head"] != w["head"] or now["branch"] != w["branch"] or
                                          (now["locked"], now["lock_reason"]) != (w["locked"], w["lock_reason"]))):
             bad.append("worktree %s is not at its recorded HEAD/branch/lock" % w["path"])
             continue
-        st = worktree_state(w["path"], nested)
+        st = worktree_state(w["path"])
         if st["modified"] or st["untracked"] or st["staged_only"]:
             bad.append("worktree %s is not clean" % w["path"])
     changed = diff_keys(logs, reflogs(path))
@@ -968,26 +936,38 @@ def verify(inv, path, logs):
     return bad
 
 
-def write_rehome_md(inv, archive, moves, url, result):
+def at(base, rel):
+    """An ignored path rel ('dir/' or 'file', '/'-separated) under base, a folder keeping its trailing separator."""
+    return os.path.join(base, os.path.normpath(rel)) + (os.sep if rel.endswith("/") else "")
+
+
+def write_rehome_md(inv, archive, moves, url, result, stub):
     carried = [r for r in inv["refs"] if r["carry"]]
     lines = ["# Rehome record", "", "Result: %s" % result, "", "Clone URL (purged remote): %s" % url, "",
              "## What moved where (renames only; nothing was deleted)", ""]
     for w in inv["worktrees"]:
         lines.append("- %s %s -> %s" % (label(w["old"]).strip(), w["path"], archived_path(w["path"], moves)))
     lines += ["", "## Carried into the new clone", ""]
-    lines += ["- %s %s" % (r["name"], r["sha"]) + ("" if r["worktree"] is None else " (worktree %s)" % r["worktree"])
-              for r in carried]
+    lines += ["- %s %s" % (r["name"], r["sha"]) for r in carried]
     lines += ["- stash entry %s" % e["sha"] for e in inv["stash"] if not e["old"]]
     lines += ["- worktree %s" % w["path"] for w in inv["worktrees"] if not w["old"] and not w["main"]]
     main = [w for w in inv["worktrees"] if w["main"]][0]
     if main["old"]:
         lines += ["", "The main checkout was on old history: the new clone's main worktree is detached at the "
                   "clone's HEAD; `git switch <branch>` there."]
+    lines += ["", "## Hooks", "", "The new clone has no hooks, so core.hooksPath points at %s, whose pre-push "
+              "refuses every push. Run the repo's hook installer once on the new clone; when the installer does not "
+              "set core.hooksPath itself, then run `git config --unset core.hooksPath` there." % stub if stub else
+              "core.hooksPath (%s) holds hooks in the new clone." % inv["hooks_path"],
+              "The checkout's core.hooksPath was: %s. Its hooks stay in the archived copy." % (
+                  inv["hooks_path"] or "(unset)")]
     lines += ["", "## Ignored files left in the archive (NOT in the new clone)", ""]
-    ign = [os.path.join(archived_path(w["path"], moves), n) for w in inv["worktrees"] for n in w["ignored"]]
+    ign = [at(archived_path(w["path"], moves), n) for w in inv["worktrees"] for n in w["ignored"]]
     lines += ["- %s" % p for p in ign] or ["- none"]
-    lines += ["", "Copy back what the repo's tools need before resuming sessions or scheduled jobs (ora-skills: "
-              "`_staging/`, e.g. `_staging/PENDING_REIMPORT.md` and `STORE_AHEAD_OF_REPO.md`).", "",
+    lines += ["", "Copy back only the files the repo's tools need, one named path at a time, before resuming "
+              "sessions or scheduled jobs (ora-skills: `_staging/` and `tools/real-identifiers.local.json`).",
+              "Never copy a `.git` file or a whole worktree folder back: the new clone's worktree would then "
+              "point at the archive.", "",
               "Everything else (old refs, reflogs, unreachable objects, hooks, other config, ORIG_HEAD/FETCH_HEAD, "
               "submodule repositories, per-worktree refs of old worktrees) is only in the archived copy.", "",
               "## How to restore", "",
@@ -1025,6 +1005,47 @@ def cmd_rehome(a):
         return rehome_locked(a, inv)
 
 
+def move_and_clone(a, inv, moves, staging):
+    """Renames, repair, clone. Returns None when the clone is in staging, else the rollback's exit code. Any
+    exception (Ctrl+C included) rolls every rename back first, then is raised again."""
+    archive, repo, done, repaired, why = a.archive_dir, a.repo, [], False, None
+    try:
+        for src, dst in moves:
+            try:
+                os.rename(src, dst)
+            except OSError as exc:
+                why = "rename of %s failed (%s): close whatever holds it open (shell, editor, fsmonitor)" % (
+                    src, type(exc).__name__)
+                break
+            done.append((src, dst))
+        if why is None:
+            archived_repo = os.path.join(archive, "repo")
+            linked = [archived_path(w["path"], moves) for w in inv["worktrees"] if not w["main"]]
+            repaired = True
+            r = git(archived_repo, "worktree", "repair", *linked, check=False)
+            rows = {norm(w["path"]): w for w in list_worktrees(archived_repo)} if r.returncode == 0 else {}
+            if r.returncode != 0 or not all(norm(p) in rows and not rows[norm(p)]["prunable"] for p in linked):
+                why = "`git worktree repair` in the archive failed"
+        if why is None:
+            rc = git(archive, "clone", "-q", "--no-recurse-submodules", a.clone_url, staging, check=False).returncode
+            if rc != 0:
+                why = "clone failed (exit %d)%s" % (rc, set_leftover_aside(archive, staging))
+    except BaseException as exc:
+        rollback(repo, inv, archive, done, repaired, "%s%s" % (type(exc).__name__, set_leftover_aside(archive,
+                                                                                                   staging)))
+        raise
+    return None if why is None else rollback(repo, inv, archive, done, repaired, why)
+
+
+def set_leftover_aside(archive, staging):
+    """Move a partial clone to <archive>/failed-clone (never deleted). Returns a note for the message."""
+    if os.path.exists(staging):
+        with contextlib.suppress(OSError):
+            os.rename(staging, os.path.join(archive, "failed-clone"))
+    left = [p for p in (staging, os.path.join(archive, "failed-clone")) if os.path.exists(p)]
+    return "; its leftover is in %s" % left[0] if left else ""
+
+
 def rehome_locked(a, inv):
     archive, repo = a.archive_dir, a.repo
     changed = diff_keys(inv["snapshot"], quiet_gate(repo, a))
@@ -1038,46 +1059,19 @@ def rehome_locked(a, inv):
         remove_empty_archive(archive)
         raise NotQuiet("the checkout changed after the quiet window, right before the first rename: something "
                        "is still writing; find and stop it", changed)
-    done = []
-    for src, dst in moves:
-        try:
-            os.rename(src, dst)
-        except OSError as exc:
-            return rollback(repo, inv, archive, done, False, "rename of %s failed (%s): close whatever holds it "
-                            "open (shell, editor, fsmonitor)" % (src, type(exc).__name__))
-        done.append((src, dst))
-    archived_repo = os.path.join(archive, "repo")
-    linked = [archived_path(w["path"], moves) for w in inv["worktrees"] if not w["main"]]
-    try:
-        r = git(archived_repo, "worktree", "repair", *linked, check=False)
-        rows = {norm(w["path"]): w for w in list_worktrees(archived_repo)} if r.returncode == 0 else {}
-        ok = r.returncode == 0 and all(norm(p) in rows and not rows[norm(p)]["prunable"] for p in linked)
-    except (subprocess.CalledProcessError, OSError):
-        ok = False
-    if not ok:
-        return rollback(repo, inv, archive, done, True, "`git worktree repair` in the archive failed")
-
+    with open(os.path.join(archive, RECORD), "w", encoding="utf-8", newline="\n") as fh:   # before any rename
+        json.dump({"repo": repo, "moves": moves, "clone_url": a.clone_url, "inv": inv}, fh, indent=1)
     staging = os.path.join(archive, STAGING)
+    rc = move_and_clone(a, inv, moves, staging)
+    if rc is not None:
+        return rc
+    archived_repo = os.path.join(archive, "repo")
+    where, bad, stub = staging, [], None
     try:
-        rc = git(archive, "clone", "-q", "--no-recurse-submodules", a.clone_url, staging, check=False).returncode
-    except (subprocess.CalledProcessError, OSError):
-        rc = -1
-    if rc != 0:
-        why = "clone failed (exit %d)" % rc
-        if os.path.exists(staging):
-            try:
-                os.rename(staging, os.path.join(archive, "failed-clone"))
-                why += "; its leftover is in %s" % os.path.join(archive, "failed-clone")
-            except OSError:
-                why += "; its leftover is in %s" % staging
-        return rollback(repo, inv, archive, done, True, why)
-    where, bad = staging, []
-    try:
-        with open(os.path.join(archive, RECORD), "w", encoding="utf-8", newline="\n") as fh:
-            json.dump({"repo": repo, "moves": moves, "clone_url": a.clone_url, "inv": inv}, fh, indent=1)
         relink(moves, archive)
         restore_config(inv, staging)
         prepare_clone(inv, archived_repo, staging)
+        stub = hook_stub(staging, archive)
         logs = reflogs(staging)
         if os.path.lexists(repo):
             raise FileExistsError(repo)
@@ -1091,7 +1085,7 @@ def rehome_locked(a, inv):
                    "there was touched; the new clone is in %s" % (repo, staging)]
         else:
             bad = ["%s: %s" % (type(exc).__name__, " ".join(getattr(exc, "cmd", []) or [str(exc)]))]
-    write_rehome_md(inv, archive, moves, a.clone_url, "FAILED: " + "; ".join(bad) if bad else "verified")
+    write_rehome_md(inv, archive, moves, a.clone_url, "FAILED: " + "; ".join(bad) if bad else "verified", stub)
     print("archived copy: %s (worktrees in %s); record: %s" % (archived_repo, os.path.join(archive, "worktrees"),
                                                              os.path.join(archive, "REHOME.md")))
     if bad:
@@ -1108,9 +1102,11 @@ def rehome_locked(a, inv):
         sum(1 for w in inv["worktrees"] if not w["old"] and not w["main"])))
     ign = sum(len(w["ignored"]) for w in inv["worktrees"])
     if ign:
-        print("ignored paths NOT carried: %d (listed in REHOME.md); copy back what the repo's tools need" % ign)
-    print("hooks were NOT copied and the new clone runs NO hooks until you run the repo's hook installer once on "
-          "it (a v1.0 old_history_guard is no longer needed there; the archived copy keeps its own hooks)")
+        print("ignored paths NOT carried: %d (listed in REHOME.md); copy back only the named files the repo's tools "
+              "need, never a `.git` file or a worktree folder" % ign)
+    print("hooks were NOT copied: core.hooksPath now points at %s, whose pre-push refuses every push; run the repo's "
+          "hook installer once on the new clone (see REHOME.md)" % stub if stub else "hooks were NOT copied: "
+          "core.hooksPath (%s) holds hooks in the new clone" % inv["hooks_path"])
     return 0
 
 
@@ -1120,7 +1116,7 @@ def cmd_restore(a):
     archive = a.archive_dir
     rec = load_json(os.path.join(archive, RECORD), "the rehome record", ("repo", "moves", "inv"))
     inv = rec["inv"]
-    if any(k not in inv for k in INV_KEYS):
+    if not isinstance(inv, dict) or any(k not in inv for k in INV_KEYS):
         raise Refuse("the rehome record is incomplete: %s" % os.path.join(archive, RECORD))
     if not a.exclusive:
         raise NotQuiet("--exclusive not given: stop every session, IDE and scheduled job that uses the new clone "
@@ -1130,15 +1126,15 @@ def cmd_restore(a):
 
 
 def restore_locked(archive, repo, moves, inv):
-    missing = [dst for _s, dst in moves if not os.path.isdir(dst)]
+    moved = [(s, d) for s, d in moves if os.path.isdir(d)]
+    missing = [d for s, d in moves if not os.path.isdir(d) and not os.path.isdir(s)]
     if missing:
         raise Refuse("archived folder(s) missing: %s" % ", ".join(missing))
-    kept = [w["path"] for w in inv["worktrees"] if not w["old"] and not w["main"]]
-    aside_src = [p for p in kept if os.path.lexists(p) and not inside(p, repo) and norm(p) != norm(repo)
-                 and not any(inside(p, q) for q in kept if norm(q) != norm(p))]
-    if os.path.lexists(repo):
-        aside_src.append(repo)
-    blocked = [s for s, _d in moves if os.path.lexists(s) and norm(s) not in {norm(x) for x in aside_src}]
+    aside_src = []
+    if len(moved) == len(moves):                              # every rename was done: a new clone may exist
+        aside_src = [w["path"] for w in inv["worktrees"] if not w["old"] and not w["main"] and
+                     os.path.lexists(w["path"])] + ([repo] if os.path.lexists(repo) else [])
+    blocked = [s for s, _d in moved if os.path.lexists(s) and norm(s) not in {norm(x) for x in aside_src}]
     if blocked:
         raise Refuse("in the way, and not the new clone or one of its worktrees (move it aside yourself): %s"
                      % ", ".join(blocked))
@@ -1149,8 +1145,8 @@ def restore_locked(archive, repo, moves, inv):
     os.makedirs(os.path.join(aside, "worktrees"))
     aside_wts = [(p, os.path.join(aside, "worktrees", "%d-%s" % (i, os.path.basename(os.path.normpath(p)))))
                  for i, p in enumerate(aside_src) if norm(p) != norm(repo)]
-    plan = aside_wts + ([(repo, os.path.join(aside, "repo"))] if os.path.lexists(repo) else [])
-    plan += [(dst, src) for src, dst in reversed(moves)]
+    plan = aside_wts + ([(repo, os.path.join(aside, "repo"))] if repo in aside_src else [])
+    plan += [(dst, src) for src, dst in reversed(moved)]
     done = []
     for src, dst in plan:
         try:
@@ -1173,8 +1169,9 @@ def restore_locked(archive, repo, moves, inv):
     if os.path.isdir(os.path.join(aside, "repo")):           # keep the set-aside clone usable too
         git(os.path.join(aside, "repo"), "worktree", "repair", *[d for _s, d in aside_wts], check=False)
     git(repo, "worktree", "repair", *[w["path"] for w in inv["worktrees"] if not w["main"]], check=False)
-    relink([(dst, src) for src, dst in moves], archive)
-    print("restored %s and %d linked worktree folder(s); the new clone is in %s" % (repo, len(moves) - 1, aside))
+    relink([(dst, src) for src, dst in moved], archive)
+    print("restored %s and %d linked worktree folder(s); the new clone (if any) is in %s" % (
+        repo, sum(1 for s, _d in moved if norm(s) != norm(repo)), aside))
     changed = diff_keys(inv["snapshot"], snapshot(repo))
     if changed:
         print("the restored checkout differs from the inventory:")

@@ -9,6 +9,11 @@ cannot carry across; `rehome` moves the whole checkout (every worktree) into the
 re-clones the purged remote in its place and brings kept work across from the archived copy. The
 "remote" of every rehome here is the purged bare mirror. Failures are injected through seams
 (os.rename, git(), device_of, wait_quiet) instead of racing real processes.
+
+v2.3 (round-6 narrowing): rehome carries ONE supported layout. Every other layout (unborn branch, nested
+worktree, initialised submodule or per-worktree ref in a kept worktree, kept detached HEAD no carried ref
+reaches, carried ref holding a purged object) is REFUSED by inventory, and each refusal's manual
+instruction is applied in a test that then sees inventory pass.
 """
 import contextlib
 import importlib.util
@@ -35,8 +40,8 @@ def git(repo, *args, check=True):
 
 
 def run(*args, cwd=None):
-    return subprocess.run([sys.executable, "-I", SCRIPT] + list(args), capture_output=True, encoding="utf-8",
-                          errors="replace", env=ENV, cwd=cwd)
+    return subprocess.run([sys.executable, "-I", "-X", "utf8", SCRIPT] + list(args), capture_output=True,
+                          encoding="utf-8", errors="replace", env=ENV, cwd=cwd)          # exact non-ASCII lines
 
 
 def write(path, data):
@@ -374,7 +379,7 @@ class InventoryClassifyTest(unittest.TestCase):
         # a second backup: an orphan commit pushed after the first backup holds the secret
         late_src = os.path.join(d, "late-src")
         subprocess.run(["git", "clone", "-q", S.src, late_src], check=True, env=ENV)
-        git(late_src, "checkout", "-q", "--orphan", "late")
+        git(late_src, "switch", "-q", "--orphan", "late")                       # empty index: holds no old blob
         write(os.path.join(late_src, "late.txt"), "secret pushed late\n")
         git(late_src, "add", "late.txt")
         git(late_src, "commit", "-q", "-m", "late push")
@@ -396,8 +401,8 @@ class InventoryClassifyTest(unittest.TestCase):
         cls.stash = reflog(live, "refs/stash")
         kw = cls.kw = os.path.join(d, "kw")
         git(live, "worktree", "add", "-q", "--detach", kw, nm)
-        git(kw, "update-ref", "refs/worktree/keep", nm)
-        git(kw, "update-ref", "refs/bisect/bad", c[1])
+        git(ow, "update-ref", "refs/worktree/keep", nm)                       # per-worktree refs of an OLD
+        git(ow, "update-ref", "refs/bisect/bad", c[1])                         # worktree stay in the archive
         cls.r1, cls.inv1 = inventory(live, os.path.join(d, "inv1.json"))
         cls.r2, cls.inv2 = inventory(live, os.path.join(d, "inv2.json"), cls.old2)
 
@@ -432,11 +437,12 @@ class InventoryClassifyTest(unittest.TestCase):
         self.assertEqual([e["old"] for e in self.inv1["stash"]], [False, True, False])
         self.assertNotIn("refs/stash", {x["name"] for x in self.inv1["refs"]})
 
-    def test_worktree_local_refs_recorded_per_worktree(self):
-        kw_id = [w["id"] for w in self.inv1["worktrees"] if norm(w["path"]) == norm(self.kw)][0]
-        flags = self.old_flags(self.inv1)
-        self.assertFalse(flags[("refs/worktree/keep", kw_id)])
-        self.assertTrue(flags[("refs/bisect/bad", kw_id)])
+    def test_old_worktrees_own_refs_neither_refused_nor_carried(self):        # v2.3: they stay in the archive
+        names = {x["name"] for x in self.inv1["refs"]}
+        self.assertFalse(names & {"refs/worktree/keep", "refs/bisect/bad"})
+        ow = [w for w in self.inv1["worktrees"] if norm(w["path"]) == norm(self.ow)][0]
+        self.assertEqual(sorted(ow["own_refs"]), ["refs/bisect/bad", "refs/worktree/keep"])
+        self.assertEqual(self.inv1["refusals"], [])
 
     def test_worktrees_classified(self):
         old = {norm(w["path"]): w["old"] for w in self.inv1["worktrees"]}
@@ -486,6 +492,17 @@ class InventoryRefusalTest(unittest.TestCase):
         git(ob, "bisect", "start")
         gone = add("k-gone", nm, "--detach")
         os.rename(gone, gone + "-moved")
+        # v2.3 refusals: layouts outside the supported set
+        nested = cls.wt["k-nested"] = os.path.join(live, ".wt", "k-nested")     # inside the main folder
+        git(live, "worktree", "add", "-q", "--detach", nested, nm)
+        host = add("o-host", c[2], "-b", "o-host-br")                           # OLD, holding a KEPT one
+        inner = cls.wt["k-in-old"] = os.path.join(host, "inner")
+        git(live, "worktree", "add", "-q", "-b", "inner-br", inner, nm)
+        git(live, "worktree", "add", "-q", "--orphan", "-b", "fresh", os.path.join(d, "k-unborn"))
+        cls.wt["k-unborn"] = os.path.join(d, "k-unborn")
+        pw = add("k-perwt", nm, "--detach")
+        git(pw, "update-ref", "refs/worktree/keep", nm)
+        add("k-lost", commit_on(live, nm, "no ref reaches this"), "--detach")
         cls.r, cls.inv = inventory(live, os.path.join(d, "inv.json"))
         cls.problems = {}
         for x in cls.inv["refusals"]:
@@ -509,8 +526,23 @@ class InventoryRefusalTest(unittest.TestCase):
     def test_kept_operation_in_progress_refused(self):
         self.assert_refused("k-busy", "in progress")
 
-    def test_kept_submodule_with_unpushed_commit_refused(self):
-        self.assert_refused("k-sub", "unpushed")
+    def test_kept_initialised_submodule_refused(self):                         # v2.3: never carried
+        self.assert_refused("k-sub", "initialised submodule")
+
+    def test_worktree_nested_in_the_main_folder_refused(self):                 # R5-02
+        self.assert_refused("k-nested", "nested inside %s" % self.live)
+
+    def test_kept_worktree_nested_in_an_old_worktree_refused(self):            # R5-08 (correctness F6)
+        self.assert_refused("k-in-old", "nested inside %s" % self.wt["o-host"])
+
+    def test_unborn_branch_refused(self):                                       # R5-03
+        self.assert_refused("k-unborn", "unborn")
+
+    def test_per_worktree_ref_in_a_kept_worktree_refused(self):
+        self.assert_refused("k-perwt", "per-worktree ref")
+
+    def test_kept_detached_head_no_carried_ref_reaches_refused(self):
+        self.assert_refused("k-lost", "no carried ref reaches")
 
     def test_operation_in_progress_in_an_old_worktree_refused(self):           # the rehome gate would refuse it
         self.assert_refused("o-busy", "in progress")
@@ -532,12 +564,134 @@ class InventoryRefusalTest(unittest.TestCase):
         self.assertFalse(os.path.exists(arch))
 
 
+class RefusalInstructionTest(unittest.TestCase):
+    """v2.3: each refusal prints a manual instruction; applied exactly as printed, inventory then passes."""
+
+    def live(self, name):
+        d = fresh(name)
+        return d, S.live(os.path.join(d, "live"))
+
+    def refused_then_fixed(self, d, live, instruction, fix, word, paths=None):
+        r, inv = inventory(live, os.path.join(d, "inv1.json"))
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertTrue(inv["refusals"] and all(word in x["problem"] for x in inv["refusals"]), inv["refusals"])
+        if paths:                                                               # every case named, by its worktree
+            self.assertEqual(sorted(norm(x["path"]) for x in inv["refusals"]), sorted(norm(p) for p in paths))
+        self.assertIn(instruction, r.stdout)
+        fix()
+        r, inv = inventory(live, os.path.join(d, "inv2.json"))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        return {x["name"]: x for x in inv["refs"]}
+
+    def test_unborn_branch_in_a_linked_worktree_then_commit(self):            # R5-03 (C)
+        d, live = self.live("fix-unborn-wt")
+        wt = os.path.join(d, "wt")
+        git(live, "worktree", "add", "-q", "--orphan", "-b", "fresh", wt)
+        refs_ = self.refused_then_fixed(d, live, "`git commit --allow-empty -m start`",
+                                        lambda: git(wt, "commit", "-q", "--allow-empty", "-m", "start"), "unborn")
+        self.assertTrue(refs_["refs/heads/fresh"]["carry"])
+
+    def test_unborn_branch_in_the_main_worktree_then_commit(self):             # R5-03 (B)
+        d, live = self.live("fix-unborn-main")
+        git(live, "switch", "-q", "--orphan", "fresh")
+        refs_ = self.refused_then_fixed(d, live, "`git commit --allow-empty -m start`",
+                                        lambda: git(live, "commit", "-q", "--allow-empty", "-m", "start"), "unborn")
+        self.assertTrue(refs_["refs/heads/fresh"]["carry"])
+
+    def test_nested_worktree_then_worktree_move(self):                          # R5-02
+        d, live = self.live("fix-nested")
+        inner = os.path.join(live, ".wt", "inner")
+        git(live, "worktree", "add", "-q", "-b", "inner-br", inner, S.new_main)
+        self.refused_then_fixed(d, live, "`git worktree move <path> <new path outside every worktree>`",
+                                lambda: git(live, "worktree", "move", inner, os.path.join(d, "inner")), "nested")
+
+    def test_kept_submodule_then_deinit_and_init_after_rehome(self):
+        d, live = self.live("fix-submodule")
+        k = os.path.join(d, "k")
+        git(live, "worktree", "add", "-q", "-b", "k-br", k, S.new_main)
+        add_submodule(k)
+        self.refused_then_fixed(d, live, "`git submodule deinit -f <sub>`",
+                                lambda: git(k, "submodule", "deinit", "-q", "-f", "sub"), "initialised submodule")
+        rh = run("rehome", live, os.path.join(d, "inv2.json"), os.path.join(d, "arch"), S.purged, *Q)
+        self.assertEqual(rh.returncode, 0, rh.stdout + rh.stderr)
+        git(k, "submodule", "update", "-q", "--init")                           # the step after rehome
+        self.assertEqual(read(os.path.join(k, "sub", "l.txt")), b"lib\n")
+
+    def test_per_worktree_refs_then_branch_and_delete(self):
+        d, live = self.live("fix-perwt")
+        wt = os.path.join(d, "wt")
+        git(live, "worktree", "add", "-q", "-b", "wt-br", wt, S.new_main)
+        git(wt, "update-ref", "refs/worktree/keep", S.new_main)
+        git(live, "update-ref", "refs/bisect/good", S.new_main)                 # the main worktree's own
+
+        def fix():
+            for where, ref, name in ((wt, "refs/worktree/keep", "keep-wt"), (live, "refs/bisect/good", "good-main")):
+                git(where, "branch", name, ref)
+                git(where, "update-ref", "-d", ref)
+        refs_ = self.refused_then_fixed(d, live, "`git branch <name> <ref>`, then `git update-ref -d <ref>`", fix,
+                                        "per-worktree ref", paths=[wt, live])
+        self.assertTrue(refs_["refs/heads/keep-wt"]["carry"] and refs_["refs/heads/good-main"]["carry"])
+
+    def test_detached_head_no_carried_ref_reaches_then_branch(self):           # was R4-04's detached main
+        d, live = self.live("fix-unreached")
+        wt = os.path.join(d, "wt")
+        git(live, "worktree", "add", "-q", "--detach", wt, commit_on(live, S.new_main, "only HEAD reaches it"))
+        git(live, "checkout", "-q", "--detach", commit_on(live, S.new_main, "main detached here"))
+        wt2, remote_only = os.path.join(d, "wt2"), commit_on(live, S.new_main, "only a remote-tracking ref")
+        git(live, "update-ref", "refs/remotes/other/x", remote_only)              # never carried
+        git(live, "worktree", "add", "-q", "--detach", wt2, remote_only)
+        refs_ = self.refused_then_fixed(d, live, "`git branch <name>` in that worktree", lambda: (
+            git(wt, "branch", "saved-wt"), git(live, "branch", "saved-main"), git(wt2, "branch", "saved-wt2")),
+            "no carried ref reaches", paths=[wt, live, wt2])
+        self.assertTrue(refs_["refs/heads/saved-wt"]["carry"])
+
+    def test_stash_entry_holding_a_purged_blob_is_old_and_stays_in_the_archive(self):
+        d, live = self.live("stash-purged-blob")
+        write(os.path.join(live, "f.txt"), "secret v1\n")                       # the very blob the purge dropped
+        git(live, "add", "f.txt")
+        git(live, "stash", "-q")
+        r, inv = inventory(live, os.path.join(d, "inv.json"))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual([e["old"] for e in inv["stash"]], [True])
+        rh = run("rehome", live, os.path.join(d, "inv.json"), os.path.join(d, "arch"), S.purged, *Q)
+        self.assertEqual(rh.returncode, 0, rh.stdout + rh.stderr)
+        self.assertEqual(git(live, "stash", "list"), "")
+        self.assertEqual(len(reflog(os.path.join(d, "arch", "repo"), "refs/stash")), 1)
+
+    def test_carried_ref_holding_a_purged_blob_then_rebuild(self):             # R5-04 (inventory check)
+        d, live = self.live("fix-purged-blob")
+        blob = git(live, "rev-parse", S.c[1] + ":f.txt")
+        tree = subprocess.run(["git", "-C", live, "mktree"], input="100644 blob %s\tf.txt\n" % blob,
+                              capture_output=True, encoding="utf-8", env=ENV, check=True).stdout.strip()
+        old_tip = git(live, "commit-tree", tree, "-p", S.new_main, "-m", "re-add")
+        git(live, "update-ref", "refs/heads/readd", old_tip)
+        refs_ = self.refused_then_fixed(d, live, "rebuild it without that content", lambda: git(
+            live, "update-ref", "refs/heads/readd", commit_on(live, S.new_main, "rebuilt"), old_tip), "purged")
+        self.assertTrue(refs_["refs/heads/readd"]["carry"])
+        self.assertIn(old_tip, reflog(live, "refs/heads/readd"))                 # the old tip stays in the reflog
+
+    def test_step_6_2_recipe_keeps_no_purged_object(self):                      # R5-04 (SKILL.md recipe)
+        d, live = self.live("fix-recipe")
+        git(live, "branch", "old-feature", "origin/old-feature")
+        old_tip = git(live, "rev-parse", "refs/heads/old-feature")
+        wrong = git(live, "commit-tree", old_tip + "^{tree}", "-p", S.new_main, "-m", "v2.2.1 recipe")
+        git(live, "update-ref", "refs/heads/old-feature", wrong, old_tip)       # the round-5 recipe: refused
+
+        def recipe():                                                           # SKILL.md Step 6 item 2 (v2.3)
+            cur = git(live, "rev-parse", "refs/heads/old-feature")
+            git(live, "fetch", "-q", S.purged, "refs/heads/old-feature")
+            git(live, "update-ref", "refs/heads/old-feature", git(live, "rev-parse", "FETCH_HEAD"), cur)
+        refs_ = self.refused_then_fixed(d, live, "SKILL.md Step 6 item 2", recipe, "purged")
+        self.assertTrue(refs_["refs/heads/old-feature"]["carry"])
+        self.assertEqual(refs_["refs/heads/old-feature"]["sha"], git(S.purged, "rev-parse", "refs/heads/old-feature"))
+
+
 # ==================================================================== rehome: happy path
 
 class RehomeHappyTest(unittest.TestCase):
-    """Main checkout (kept) with a worktree inside it, kept worktrees outside (one locked, one detached),
-    an old dirty worktree, kept and old stash entries, a kept unpushed branch, kept tags and notes.
-    Non-ASCII and space-containing paths and branch names throughout."""
+    """Main checkout (kept), kept linked worktrees (one locked, one detached), an old dirty worktree, kept and
+    old stash entries, a kept unpushed branch, kept tags and notes. Non-ASCII and space-containing paths and
+    branch names throughout."""
 
     @classmethod
     def setUpClass(cls):
@@ -566,14 +720,12 @@ class RehomeHappyTest(unittest.TestCase):
         git(live, "stash", "-q")
         write(os.path.join(ow, "f.txt"), "dirty old\n")
         write(os.path.join(ow, "new ü.txt"), "untracked old\n")
-        cls.inside = os.path.join(live, ".wt", "inside")
-        git(live, "worktree", "add", "-q", "-b", "in-br", cls.inside, nm)
         out = cls.out = os.path.join(d, "wts", "out ü")
         git(live, "worktree", "add", "-q", "-b", "out-br", out, kept)
         git(live, "worktree", "lock", "--reason", "busy reason", out)
         git(live, "config", "branch.out-br.remote", "origin")
         git(live, "config", "branch.out-br.merge", "refs/heads/out-br")
-        git(out, "update-ref", "refs/worktree/keep", nm)
+        git(live, "config", "branch.old-wt.remote", "origin")                  # an OLD branch's upstream
         det = cls.det = os.path.join(d, "wts", "det")
         git(live, "worktree", "add", "-q", "--detach", det, nm)              # not the main checkout's HEAD
         cls.refs_before = refs(live)
@@ -587,8 +739,8 @@ class RehomeHappyTest(unittest.TestCase):
         cls.overlap_after = run("overlap", live, S.old)
         cls.archived_repo = os.path.join(cls.arch, "repo")
 
-    CARRIED = ("refs/heads/main", "refs/heads/newmain", "refs/heads/kept/ü-1", "refs/heads/in-br",
-               "refs/heads/out-br", "refs/tags/kept-tag", "refs/tags/lt-kept", "refs/notes/commits")
+    CARRIED = ("refs/heads/main", "refs/heads/newmain", "refs/heads/kept/ü-1", "refs/heads/out-br",
+               "refs/tags/kept-tag", "refs/tags/lt-kept", "refs/notes/commits")
 
     def assert_new_clone(self):
         """live is now a clone of the purged remote and the old checkout is in the archive."""
@@ -634,12 +786,11 @@ class RehomeHappyTest(unittest.TestCase):
 
     def test_kept_worktrees_recreated_at_their_paths(self):
         rows = {w["path"]: w for w in wt_list(self.live)}
-        self.assertEqual(set(rows), {norm(self.live), norm(self.inside), norm(self.out), norm(self.det)})
-        self.assertEqual(rows[norm(self.inside)]["branch"], "refs/heads/in-br")
+        self.assertEqual(set(rows), {norm(self.live), norm(self.out), norm(self.det)})
         self.assertEqual(rows[norm(self.out)]["branch"], "refs/heads/out-br")
         self.assertTrue(rows[norm(self.det)]["detached"])
         self.assertEqual(rows[norm(self.det)]["head"], S.new_main)
-        for p in (self.inside, self.out, self.det):
+        for p in (self.out, self.det):
             self.assertEqual(git(p, "status", "--porcelain"), "", p)
 
     def test_locked_worktree_relocked_with_its_reason(self):
@@ -648,13 +799,12 @@ class RehomeHappyTest(unittest.TestCase):
         self.assertEqual(rows[norm(self.out)]["locked"], "busy reason")
         self.assertIsNone(rows[norm(self.det)]["locked"])
 
-    def test_worktree_local_ref_carried(self):
-        self.assert_new_clone()
-        self.assertEqual(git(self.out, "rev-parse", "refs/worktree/keep"), S.new_main)
-
     def test_branch_upstream_config_carried(self):
         self.assert_new_clone()
         self.assertEqual(git(self.live, "config", "branch.out-br.merge"), "refs/heads/out-br")
+
+    def test_old_branch_config_not_carried(self):                                # R5-06 (D11)
+        self.assertEqual(git(self.live, "config", "--get-all", "branch.old-wt.remote", check=False), "")
 
     def test_old_branch_and_worktree_only_in_the_archive(self):
         self.assertNotIn("refs/heads/old-wt", refs(self.live))
@@ -669,18 +819,33 @@ class RehomeHappyTest(unittest.TestCase):
         self.assertEqual(reflog(self.archived_repo, "refs/stash"), self.stash_before)
         self.assertIn(S.c[1], git(self.archived_repo, "log", "--format=%H", "old-wt").split())
         rows = wt_list(self.archived_repo)
-        self.assertEqual(len(rows), 5)
+        self.assertEqual(len(rows), 4)
         for w in rows:
             self.assertTrue(w["path"].startswith(norm(self.arch) + os.sep), w["path"])
             self.assertFalse(w["prunable"], w["path"])
 
-    def test_remotes_and_hooks_path_restored_hooks_not_copied(self):
-        self.assertEqual(norm(git(self.live, "config", "remote.origin.url")), norm(S.src))
-        self.assertEqual(git(self.live, "config", "remote.origin.pushurl"), "DISABLED-history-purge-x")
-        self.assertEqual(git(self.live, "config", "core.hooksPath"), "my hooks")
+    def test_remotes_restored_hooks_not_copied(self):
+        self.assertEqual([norm(u) for u in git(self.live, "config", "--get-all", "remote.origin.url").splitlines()],
+                         [norm(S.src)])                                        # R5-06 (D13): replaced, not added
+        self.assertEqual(git(self.live, "config", "--get-all", "remote.origin.pushurl"), "DISABLED-history-purge-x")
         self.assertFalse(os.path.exists(os.path.join(self.live, ".git", "hooks", "pre-push")))
         self.assertTrue(os.path.isfile(os.path.join(self.archived_repo, ".git", "hooks", "pre-push")))
-        self.assertIn("hook installer", self.rh.stdout)
+
+    def test_no_hooks_so_a_stub_refuses_every_push(self):                        # Blast F2
+        stub = os.path.join(self.arch, "hooks-stub")
+        self.assertEqual(norm(git(self.live, "config", "core.hooksPath")), norm(stub))
+        bare = os.path.join(self.d, "push-target.git")
+        subprocess.run(["git", "init", "-q", "--bare", bare], check=True, env=ENV)
+        r = subprocess.run(["git", "-C", self.live, "push", bare, "HEAD:refs/heads/x"], capture_output=True,
+                           encoding="utf-8", errors="replace", env=ENV)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("run the repo's hook installer first", r.stderr)
+        self.assertEqual(git(bare, "for-each-ref"), "")
+        self.assertIn("hooks were NOT copied: core.hooksPath now points at %s, whose pre-push refuses every push; "
+                      "run the repo's hook installer once on the new clone (see REHOME.md)" % stub,
+                      self.rh.stdout.splitlines())
+        lines = read(os.path.join(self.arch, "REHOME.md")).decode("utf-8").splitlines()
+        self.assertIn("The checkout's core.hooksPath was: my hooks. Its hooks stay in the archived copy.", lines)
 
     def test_rehome_md_says_what_moved_and_how_to_restore(self):
         text = read(os.path.join(self.arch, "REHOME.md")).decode("utf-8")
@@ -702,9 +867,39 @@ class RehomeHappyTest(unittest.TestCase):
         self.assertIn("- stash entry %s" % kept1, lines)
         self.assertIn("- stash entry %s" % kept2, lines)
         self.assertNotIn("- stash entry %s" % old, lines)
-        for p in (self.inside, self.out, self.det):
+        for p in (self.out, self.det):
             self.assertIn("- worktree %s" % p, lines)
         self.assertNotIn("- worktree %s" % self.ow, lines)
+
+    def test_rehome_md_lines_exact(self):                                       # R5-06 (K02-K07)
+        lines = read(os.path.join(self.arch, "REHOME.md")).decode("utf-8").splitlines()
+        live, arch = self.live, self.arch
+        for name in self.CARRIED:                                               # K04
+            self.assertIn("- %s %s" % (name, self.refs_before[name]), lines)
+        want = ["# Rehome record", "Result: verified", "Clone URL (purged remote): %s" % S.purged,   # K05
+                "Stop every session using %s, then run `python -I local_cleanup.py restore %s --exclusive`. It "
+                "moves the new clone and its re-created worktrees aside into this archive dir, renames every "
+                "archived folder back, runs `git worktree repair`, re-points every gitfile and submodule "
+                "`core.worktree`, and compares the result with the inventory (exit 0 = identical)." % (live, arch),
+                "1. Stop every session using %s." % live,                       # K07
+                "2. Rename the new clone and its re-created worktrees aside (into this archive dir; never delete).",
+                "3. Rename each archived folder above back to its original path.",
+                "4. In %s run `git worktree repair` with every linked worktree path." % live,           # K03
+                "5. Submodule `.git` files and each submodule repository's `core.worktree` (in its config under "
+                "`.git/modules/` or `.git/worktrees/<id>/modules/`) were re-pointed at the archive (relative "
+                "paths): after renaming back, point each `.git` file at its repository and each `core.worktree` "
+                "at its submodule folder again."]                               # K02
+        for line in want:
+            self.assertIn(line, lines)
+        self.assertNotIn("The main checkout was on old history: the new clone's main worktree is detached at the "
+                         "clone's HEAD; `git switch <branch>` there.", lines)
+
+    def test_console_lines_exact(self):                                         # R5-06 (E06 neighbours)
+        lines = self.rh.stdout.splitlines()
+        self.assertIn("carried: 7 ref(s), 2 stash entries, 2 worktree(s); overlap 0; every carried ref at its SHA",
+                      lines)
+        self.assertIn("archived copy: %s (worktrees in %s); record: %s" % (
+            self.archived_repo, os.path.join(self.arch, "worktrees"), os.path.join(self.arch, "REHOME.md")), lines)
 
     def test_restore_command_named_in_rehome_md(self):                          # R4-06
         text = read(os.path.join(self.arch, "REHOME.md")).decode("utf-8")
@@ -977,19 +1172,97 @@ class RehomeFailureTest(unittest.TestCase):
 
     # ---- after the clone: exit 5, the archive is complete
     def test_overlap_after_the_clone_exit_5_archive_intact(self):
-        blob = git(self.live, "rev-parse", S.c[1] + ":f.txt")                # old content re-added on new history
-        tree = subprocess.run(["git", "-C", self.live, "mktree"], input="100644 blob %s\tf.txt\n" % blob,
-                              capture_output=True, encoding="utf-8", env=ENV, check=True).stdout.strip()
-        readd = git(self.live, "commit-tree", tree, "-p", S.new_main, "-m", "re-add")
-        git(self.live, "update-ref", "refs/heads/readd", readd)
+        def replace(real, repo, args, kw):                                    # an old blob lands in the new clone
+            if args[:1] == ("fetch",):                                        # (a carried ref holding one is refused
+                res = real(repo, *args, **kw)                                 # by inventory since v2.3)
+                subprocess.run(["git", "-C", repo, "hash-object", "-w", "--stdin"], input=b"secret v1\n",
+                               check=True, env=ENV, capture_output=True)
+                return res
+        rc, out = self.rehome(replace=replace)
+        self.assertEqual(rc, 5, out)
+        self.assertIn("  overlap: 0 old commit(s) and 1 old blob/tree/tag object(s) in the new clone",
+                      out.splitlines())
+        self.assertEqual(refs(os.path.join(self.arch, "repo")), self.refs)
+        self.assertTrue(os.path.isfile(os.path.join(self.arch, "REHOME.md")))
+
+    def test_stash_order_changed_after_the_clone_exit_5(self):                  # R5-06 (P04)
+        write(os.path.join(self.live, "README.md"), "second kept stash\n")
+        git(self.live, "stash", "-q")
         r, _ = inventory(self.live, self.inv)
         self.assertEqual(r.returncode, 0, r.stdout)
-        refs_before = refs(self.live)
-        rc, out = self.rehome()
+        stored = []
+
+        def replace(real, repo, args, kw):
+            if args[:2] == ("stash", "store"):
+                stored.append(args)
+            elif args[:1] == ("checkout",) and len(stored) == 2:              # same entries, swapped order
+                real(repo, "update-ref", "-d", "refs/stash")
+                for a in reversed(stored):
+                    real(repo, *a)
+                stored.append(None)
+        rc, out = self.rehome(replace=replace)
         self.assertEqual(rc, 5, out)
-        self.assertIn(self.arch, out)
-        self.assertEqual(refs(os.path.join(self.arch, "repo")), refs_before)
-        self.assertTrue(os.path.isfile(os.path.join(self.arch, "REHOME.md")))
+        self.assertIn("  stash list differs from the kept entries", out.splitlines())
+
+    def test_branch_written_in_the_new_clone_during_worktree_add_exit_5(self):  # R5-06 (P05)
+        state = {}
+
+        def replace(real, repo, args, kw):
+            if args[:2] == ("worktree", "add") and not state:
+                state["x"] = git(self.live, "branch", "written-by-b", S.new_main)
+        rc, out = self.rehome(replace=replace)
+        self.assertEqual(rc, 5, out)
+        self.assertIn("refs/heads/written-by-b", out)
+        self.assertEqual(git(self.live, "rev-parse", "refs/heads/written-by-b"), S.new_main)   # kept
+
+    def test_failure_after_the_rename_names_the_new_clone_at_its_path(self):   # R5-06 (A02, A03)
+        def replace(real, repo, args, kw):
+            if args[:2] == ("worktree", "add"):
+                raise subprocess.CalledProcessError(128, ["git", "worktree"], "", "")
+        rc, out = self.rehome(replace=replace)
+        self.assertEqual(rc, 5, out)
+        lines = out.splitlines()
+        self.assertIn("AFTER THE CLONE (exit 5): the archived copy in %s is complete; the new clone at %s is not "
+                      "verified:" % (self.arch, self.live), lines)
+        self.assertIn("  CalledProcessError: git worktree", lines)
+        self.assertNotIn("recreated", out)
+
+    def test_interrupt_during_the_clone_rolls_back_and_reraises(self):         # R5-05
+        def replace(real, repo, args, kw):
+            if args[:1] == ("clone",):
+                raise KeyboardInterrupt
+        with self.assertRaises(KeyboardInterrupt):
+            self.rehome(replace=replace)
+        self.assert_original_layout()
+        self.assertFalse(os.path.exists(self.arch))
+        self.assertFalse(os.path.exists(self.live + ".rehome.lock"))
+
+    def test_interrupt_between_renames_rolls_back_and_reraises(self):          # R5-05
+        state = {"n": 0}
+
+        def fn(real, src, dst):
+            state["n"] += 1
+            if state["n"] == 3:
+                raise KeyboardInterrupt
+            return real(src, dst)
+        with patched_rename(fn), self.assertRaises(KeyboardInterrupt):
+            self.rehome()
+        self.assert_original_layout()
+        self.assertFalse(os.path.exists(self.arch))
+
+    def test_record_written_before_the_first_rename(self):                      # R5-05
+        seen = []
+
+        def fn(real, src, dst):
+            if not seen:
+                with open(os.path.join(self.arch, "rehome.json"), encoding="utf-8") as fh:
+                    seen.append(json.load(fh))
+            return real(src, dst)
+        with patched_rename(fn):
+            rc, out = self.rehome()
+        self.assertEqual(rc, 0, out)
+        self.assertEqual([norm(m[0]) for m in seen[0]["moves"]], sorted(norm(p) for p in (self.a, self.b, self.cw))
+                         + [norm(self.live)])
 
     def test_failure_bringing_work_across_exit_5_archive_intact(self):
         rc, out = self.rehome(replace=lambda real, repo, args, kw: fake_result(128) if args[:1] == ("fetch",)
@@ -1002,6 +1275,8 @@ class RehomeFailureTest(unittest.TestCase):
                   if l.startswith("Result:")]
         self.assertEqual(len(result), 1)
         self.assertTrue(result[0].startswith("Result: FAILED"), result)            # R4-09 (T25)
+        self.assertEqual(result[0], "Result: FAILED: CalledProcessError: git stash store")   # R5-06 (K08): the
+        #                                    fetch is faked as failed, so storing the never-fetched stash entry fails
 
 
     # ---- verification catches what did not come across (faults injected after the clone)
@@ -1169,6 +1444,9 @@ class RehomeFailureTest(unittest.TestCase):
         with patched_rename(self.fail_rename_of(self.live)):
             rc, out = self.rehome()
         self.assertEqual(rc, 3, out)
+        self.assertIn("STOPPED: rename of %s failed (PermissionError): close whatever holds it open (shell, editor, "
+                      "fsmonitor). Every rename was rolled back; the checkout matches the inventory again." % self.live,
+                      out.splitlines())
         self.assertFalse(os.path.exists(self.arch))
         rc, out = self.rehome()
         self.assertEqual(rc, 0, out)
@@ -1246,6 +1524,14 @@ class InventoryInputTest(unittest.TestCase):
         self.assertIn("separate git dir", r.stdout)
 
     # ---- the old-commits file (R4-08: T10, T11)
+    def test_missing_old_commits_file_refused(self):                             # R5-06 (I01)
+        nope = os.path.join(self.d, "no-such-old-commits.txt")
+        r, _ = inventory(self.live, os.path.join(self.d, "inv-nope.json"), nope)
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn("REFUSED: old-commits file not found: %s" % nope, r.stdout.splitlines())
+        r = run("overlap", self.live, nope)
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+
     def test_empty_old_commits_file_refused(self):
         empty = os.path.join(self.d, "empty.txt")
         write(empty, "")
@@ -1300,6 +1586,16 @@ class InventoryInputTest(unittest.TestCase):
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertNotIn("Traceback", r.stderr)
 
+    def test_incomplete_rehome_record_refused(self):                           # R5-06 (G10)
+        arch = os.path.join(self.d, "arch-half")
+        write(os.path.join(arch, "rehome.json"), json.dumps({"repo": os.path.join(self.d, "gone"), "moves": [],
+                                                             "inv": {"repo": os.path.join(self.d, "gone")}}))
+        r = run("restore", arch, "--exclusive")
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn("REFUSED: the rehome record is incomplete: %s" % os.path.join(arch, "rehome.json"),
+                      r.stdout.splitlines())
+        self.assertFalse(os.path.exists(os.path.join(self.d, "gone.rehome.lock")))
+
 
 class InventoryMoreRefusalTest(unittest.TestCase):
     """Cases a re-clone cannot carry, and one it can (R4-12: T02, T04, F6)."""
@@ -1315,7 +1611,7 @@ class InventoryMoreRefusalTest(unittest.TestCase):
         self.assertEqual(git(k, "status", "--porcelain"), "")
         r, inv = inventory(live, os.path.join(d, "inv.json"))
         self.assertEqual(r.returncode, 2, r.stdout)
-        self.assertTrue(any("submodule sub has changes" in x["problem"] for x in inv["refusals"]), inv["refusals"])
+        self.assertTrue(any("initialised submodule" in x["problem"] for x in inv["refusals"]), inv["refusals"])
 
     def test_uninitialised_submodule_not_inspected(self):                       # T04
         d = fresh("uninit")
@@ -1323,6 +1619,7 @@ class InventoryMoreRefusalTest(unittest.TestCase):
         k = os.path.join(d, "wts", "k")
         git(live, "worktree", "add", "-q", "-b", "k-br", k, S.new_main)
         add_submodule(k)
+        git(k, "submodule", "deinit", "-q", "-f", "sub")                         # v2.3: an initialised one is refused
         git(k, "update-ref", "refs/heads/k-local", commit_on(k, git(k, "rev-parse", "HEAD"), "local work"))
         k2 = os.path.join(d, "wts", "k2")
         git(live, "worktree", "add", "-q", "--detach", k2, "k-br")              # same commit, submodule NOT initialised
@@ -1388,13 +1685,17 @@ class RehomeLayoutTest(unittest.TestCase):
         self.assertEqual(git(ns.live, "rev-parse", "HEAD"), ns.info)
         self.assertEqual(git(ns.live, "diff", "--cached", "--stat"), "")
         self.assertEqual(read(os.path.join(ns.live, "local.txt")), b"local kept work\n")
+        lines = read(os.path.join(ns.arch, "REHOME.md")).decode("utf-8").splitlines()     # R5-06 (K01)
+        self.assertIn("The main checkout was on old history: the new clone's main worktree is detached at the "
+                      "clone's HEAD; `git switch <branch>` there.", lines)
 
-    def test_detached_main_at_a_local_only_commit(self):                        # R4-04
+    def test_detached_main_at_a_local_commit_a_branch_reaches(self):           # R4-04 (v2.3: a ref reaches it)
         def build(live, d):
             git(live, "checkout", "-q", "--detach")
             write(os.path.join(live, "w.txt"), "detached work\n")
             git(live, "add", "-A")
             git(live, "commit", "-q", "-m", "detached work")
+            git(live, "branch", "saved")
             return git(live, "rev-parse", "HEAD")
         ns = layout("detached-main", build)
         self.assert_ok(ns)
@@ -1413,11 +1714,6 @@ class RehomeLayoutTest(unittest.TestCase):
         self.assertEqual(rows[norm(ns.info)]["branch"], "refs/heads/main")
         self.assertTrue(rows[norm(ns.live)]["detached"])
 
-    def test_main_per_worktree_ref_carried(self):                               # R4-04 (D)
-        ns = layout("perwt-main", lambda live, d: git(live, "update-ref", "refs/worktree/mark", "HEAD"))
-        self.assert_ok(ns)
-        self.assertEqual(git(ns.live, "rev-parse", "refs/worktree/mark"), git(ns.live, "rev-parse", "HEAD"))
-
     def test_per_worktree_ref_of_an_old_worktree_not_carried(self):            # R4-04 (E)
         def build(live, d):
             wt = os.path.join(d, "wt-old")
@@ -1426,9 +1722,8 @@ class RehomeLayoutTest(unittest.TestCase):
             return wt
         ns = layout("perwt-old", build)
         self.assert_ok(ns)
-        row = [r for r in ns.inv["refs"] if r["name"] == "refs/worktree/mark"]
-        self.assertEqual([(r["old"], r["carry"]) for r in row], [(False, False)])
-        self.assertIn("stays in the archive", ns.inv_run.stdout)
+        self.assertNotIn("refs/worktree/mark", {r["name"] for r in ns.inv["refs"]})
+        self.assertEqual(git(ns.live, "for-each-ref", "refs/worktree"), "")
         moved = find_archived(ns.arch, "wt-old")
         self.assertEqual(git(moved, "rev-parse", "refs/worktree/mark"), S.new_main)
 
@@ -1436,8 +1731,6 @@ class RehomeLayoutTest(unittest.TestCase):
         def build(live, d):
             wt = os.path.join(d, "wt-k")
             git(live, "worktree", "add", "-q", "-b", "k", wt, "main")
-            git(wt, "update-ref", "refs/worktree/a", "HEAD")
-            git(wt, "update-ref", "refs/worktree/b", "HEAD")
             write(os.path.join(live, "README.md"), "x\n")
             git(live, "stash", "-q")
             first = git(live, "rev-parse", "refs/stash")
@@ -1448,7 +1741,6 @@ class RehomeLayoutTest(unittest.TestCase):
         ns = layout("dup-sha", build)
         self.assert_ok(ns)
         self.assertEqual(len(reflog(ns.live, "refs/stash")), 3)
-        self.assertEqual(git(ns.info, "rev-parse", "refs/worktree/b"), git(ns.info, "rev-parse", "HEAD"))
 
     def test_linked_worktrees_with_the_same_folder_name(self):                 # R4-12 (T16)
         def build(live, d):
@@ -1458,35 +1750,77 @@ class RehomeLayoutTest(unittest.TestCase):
         self.assert_ok(ns)
         self.assertEqual(sorted(os.listdir(os.path.join(ns.arch, "worktrees"))), ["0-app", "1-app"])
 
-    def test_kept_worktree_nested_in_a_kept_linked_worktree(self):            # R4-12 (T21)
+    def test_ignored_paths_named_exactly_as_git_reports_them(self):           # R4-03, R5-01
         def build(live, d):
-            outer = os.path.join(d, "wts", "outer")
-            git(live, "worktree", "add", "-q", "-b", "outer-br", outer, S.new_main)
-            git(live, "worktree", "add", "-q", "-b", "inner-br", os.path.join(outer, ".wt", "inner"), S.new_main)
-            return outer
-        ns = layout("nested-kept", build)
-        self.assert_ok(ns)
-        self.assertEqual(len(wt_list(ns.live)), 3)
-
-    def test_ignored_paths_named_in_the_inventory_and_rehome_md(self):        # R4-03
-        def build(live, d):
+            write(os.path.join(live, ".claude", "keep.txt"), "tracked\n")
+            write(os.path.join(live, "tools", "t.py"), "tracked\n")
+            git(live, "add", "-A")
+            git(live, "commit", "-q", "-m", "tracked folders")
+            write(os.path.join(live, ".git", "info", "exclude"), "_staging/\n__pycache__/\n*.local.json\n")
             write(os.path.join(live, "_staging", "PENDING_REIMPORT.md"), "# pending\n")
             write(os.path.join(live, "debug.log"), "x\n")                       # *.log is ignored
-            write(os.path.join(live, ".git", "info", "exclude"), "_staging/\n")
+            write(os.path.join(live, ".claude", "prefs.local.json"), "{}\n")
+            write(os.path.join(live, "tools", "__pycache__", "t.pyc"), "x\n")
+            write(os.path.join(live, "tools", "real-identifiers.local.json"), "{}\n")
+            wt = os.path.join(d, "wt")
+            git(live, "worktree", "add", "-q", "-b", "wt-br", wt, "main")
+            write(os.path.join(wt, "notes.local.json"), "{}\n")
+            return wt
         ns = layout("ignored", build)
         self.assert_ok(ns)
-        self.assertIn("_staging/", ns.inv_run.stdout)
-        self.assertIn("debug.log", ns.inv_run.stdout)
-        main = [w for w in ns.inv["worktrees"] if w["main"]][0]
-        self.assertEqual(main["ignored"], ["_staging/", "debug.log"])
-        text = read(os.path.join(ns.arch, "REHOME.md")).decode("utf-8")
-        self.assertIn(os.path.join(ns.arch, "repo", "_staging/"), text)
+        ign = {norm(w["path"]): w["ignored"] for w in ns.inv["worktrees"]}
+        main_ign = [".claude/prefs.local.json", "_staging/", "debug.log", "tools/__pycache__/",
+                    "tools/real-identifiers.local.json"]
+        self.assertEqual(ign[norm(ns.live)], main_ign)                          # never collapsed to `tools/`
+        self.assertEqual(ign[norm(ns.info)], ["notes.local.json"])
+        self.assertIn("        ignored, NOT carried (stays in the archive): " + ", ".join(main_ign),
+                      ns.inv_run.stdout.splitlines())
+        lines = read(os.path.join(ns.arch, "REHOME.md")).decode("utf-8").splitlines()
+
+        def at(base, rel):
+            return os.path.join(base, os.path.normpath(rel)) + (os.sep if rel.endswith("/") else "")
+        for rel in main_ign:
+            self.assertIn("- " + at(os.path.join(ns.arch, "repo"), rel), lines)
+        self.assertIn("- " + at(find_archived(ns.arch, "wt"), "notes.local.json"), lines)       # E08
+        self.assertIn("Copy back only the files the repo's tools need, one named path at a time, before resuming "
+                      "sessions or scheduled jobs (ora-skills: `_staging/` and `tools/real-identifiers.local.json`).",
+                      lines)                                                    # E07
+        self.assertIn("Never copy a `.git` file or a whole worktree folder back: the new clone's worktree would then "
+                      "point at the archive.", lines)
+        self.assertIn("ignored paths NOT carried: 6 (listed in REHOME.md); copy back only the named files the repo's "
+                      "tools need, never a `.git` file or a worktree folder", ns.rh.stdout.splitlines())   # E06
         self.assertFalse(os.path.exists(os.path.join(ns.live, "_staging")))
+        self.assertTrue(os.path.isfile(os.path.join(ns.live, "tools", "t.py")))
+
+    def test_ignored_folder_holding_a_worktree_never_listed(self):            # R5-01 (Blast F1), E01
+        def build(live, d):
+            write(os.path.join(live, ".git", "info", "exclude"), ".claude/worktrees/\n*.local.json\n")
+            write(os.path.join(live, ".claude", "prefs.local.json"), "{}\n")
+            git(live, "worktree", "add", "-q", "-b", "wt1", os.path.join(live, ".claude", "worktrees", "wt1"),
+                S.new_main)
+        ns = layout("ignored-holds-wt", build, rehome_it=False)
+        self.assertEqual(ns.inv_run.returncode, 2, ns.inv_run.stdout)          # the nested worktree is refused
+        main = [w for w in ns.inv["worktrees"] if w["main"]][0]
+        self.assertEqual(main["ignored"], [".claude/prefs.local.json"])
+
+    def test_hooks_path_holding_hooks_kept_no_stub(self):                       # Blast F2
+        def build(live, d):
+            write(os.path.join(live, ".githooks", "pre-commit"), "#!/bin/sh\nexit 0\n")
+            git(live, "add", "-A")
+            git(live, "commit", "-q", "-m", "tracked hooks")
+            git(live, "config", "core.hooksPath", ".githooks")
+        ns = layout("hooks-tracked", build)
+        self.assert_ok(ns)
+        self.assertEqual(git(ns.live, "config", "core.hooksPath"), ".githooks")
+        self.assertFalse(os.path.exists(os.path.join(ns.arch, "hooks-stub")))
+        lines = read(os.path.join(ns.arch, "REHOME.md")).decode("utf-8").splitlines()
+        self.assertIn("core.hooksPath (.githooks) holds hooks in the new clone.", lines)
 
     def test_old_worktree_submodule_outside_its_index_usable_in_the_archive(self):   # R4-05
         def build(live, d):
             git(live, "submodule", "add", "-q", S.lib, "lib")
             git(live, "commit", "-q", "-m", "lib")
+            git(live, "submodule", "deinit", "-q", "-f", "lib")                 # kept: never initialised (v2.3)
             git(live, "branch", "k")
             wk = os.path.join(d, "wk")
             git(live, "worktree", "add", "-q", wk, "k")
@@ -1517,11 +1851,11 @@ class RestoreTest(unittest.TestCase):
         live = cls.live = S.live(os.path.join(d, "live"))
         git(live, "submodule", "add", "-q", S.lib, "lib")
         git(live, "commit", "-q", "-m", "add lib")
+        git(live, "submodule", "deinit", "-q", "-f", "lib")                     # kept worktrees: never initialised
         git(live, "branch", "k")
         wk = cls.wk = os.path.join(d, "wt-kept")
         git(live, "worktree", "add", "-q", wk, "k")
-        git(wk, "submodule", "update", "-q", "--init")                         # repo under .git/worktrees/<id>/modules
-        wo = cls.wo = os.path.join(d, "wt-old")
+        wo = cls.wo = os.path.join(d, "wt-old")                                 # repo under .git/worktrees/<id>/modules
         git(live, "worktree", "add", "-q", wo, "old-feature")
         git(wo, "submodule", "add", "-q", S.lib, "lib")
         git(wo, "commit", "-q", "-m", "lib on old")
@@ -1529,8 +1863,7 @@ class RestoreTest(unittest.TestCase):
         git(os.path.join(wo, "lib"), "add", "-A")
         git(os.path.join(wo, "lib"), "commit", "-q", "-m", "unpushed sub commit")
         cls.unpushed = git(os.path.join(wo, "lib"), "rev-parse", "HEAD")
-        git(live, "worktree", "add", "-q", os.path.join(live, "nested"), "-b", "nest", "main")
-        write(os.path.join(live, ".gitignore"), "*.log\n.env\nnested/\n")
+        write(os.path.join(live, ".gitignore"), "*.log\n.env\n")
         git(live, "commit", "-q", "-am", "ignore")
         write(os.path.join(live, ".env"), "TOKEN=fake\n")
         write(os.path.join(live, "README.md"), "stashed\n")
@@ -1554,17 +1887,24 @@ class RestoreTest(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.arch, "repo")))
 
     def test_submodules_usable_at_their_original_paths(self):
-        for wt in (self.wk, self.wo):
-            sub = os.path.join(wt, "lib")
-            self.assertEqual(norm(git(sub, "rev-parse", "--show-toplevel")), norm(sub))
-            self.assertEqual(git(sub, "status", "--porcelain"), "")
-        self.assertTrue(exists(os.path.join(self.wo, "lib"), self.unpushed))
+        sub = os.path.join(self.wo, "lib")
+        self.assertEqual(norm(git(sub, "rev-parse", "--show-toplevel")), norm(sub))
+        self.assertEqual(git(sub, "status", "--porcelain"), "")
+        self.assertTrue(exists(sub, self.unpushed))
 
     def test_new_clone_kept_aside_in_the_archive(self):
         aside = [n for n in os.listdir(self.arch) if n.startswith("restored-aside")]
         self.assertEqual(len(aside), 1, os.listdir(self.arch))
         self.assertEqual(git(os.path.join(self.arch, aside[0], "repo"), "rev-parse", "refs/remotes/origin/main"),
                          S.new_main)
+
+    def test_set_aside_clone_and_its_worktree_still_open(self):                # R5-06 (G01)
+        aside = os.path.join(self.arch, "restored-aside-0")
+        wt = os.path.join(aside, "worktrees", "0-wt-kept")
+        self.assertEqual(norm(git(wt, "rev-parse", "--show-toplevel")), norm(wt))
+        rows = {w["path"]: w for w in wt_list(os.path.join(aside, "repo"))}
+        self.assertIn(norm(wt), rows)
+        self.assertFalse(rows[norm(wt)]["prunable"])
 
     def test_restore_needs_exclusive(self):
         r = run("restore", self.arch)
@@ -1573,17 +1913,16 @@ class RestoreTest(unittest.TestCase):
     def test_archived_submodules_usable_before_the_restore(self):              # R4-05 (core.worktree)
         d = fresh("restore-sub-archived")
         live = S.live(os.path.join(d, "live"))
-        git(live, "submodule", "add", "-q", S.lib, "lib")
-        git(live, "commit", "-q", "-m", "add lib")
-        wk = os.path.join(d, "wt-kept")
-        git(live, "worktree", "add", "-q", "-b", "k", wk, "main")
-        git(wk, "submodule", "update", "-q", "--init")
+        wo = os.path.join(d, "wt-old")
+        git(live, "worktree", "add", "-q", wo, "old-feature")
+        git(wo, "submodule", "add", "-q", S.lib, "lib")                         # an OLD worktree's submodule
+        git(wo, "commit", "-q", "-m", "lib on old")
         r, _ = inventory(live, os.path.join(d, "inv.json"))
         self.assertEqual(r.returncode, 0, r.stdout)
         arch = os.path.join(d, "arch")
         rh = run("rehome", live, os.path.join(d, "inv.json"), arch, S.purged, *Q)
         self.assertEqual(rh.returncode, 0, rh.stdout + rh.stderr)
-        archived = find_archived(arch, "wt-kept")
+        archived = find_archived(arch, "wt-old")
         self.assertEqual(git(archived, "status", "--porcelain"), "")          # recurses into lib/
         sub = os.path.join(archived, "lib")
         self.assertEqual(norm(git(sub, "rev-parse", "--show-toplevel")), norm(sub))
@@ -1601,6 +1940,136 @@ class RestoreTest(unittest.TestCase):
         self.assertEqual(rs.returncode, 1, rs.stdout + rs.stderr)
         self.assertIn("refs/heads/added-in-the-archive", rs.stdout)
         self.assertEqual(git(live, "rev-parse", "refs/heads/added-in-the-archive"), S.new_main)   # restored
+
+
+def rehomed(name):
+    """live + wts/k (kept, branch k-br) + wts/o (old, dirty), inventoried and rehomed. Returns a namespace."""
+    import types
+    d = fresh(name)
+    live = S.live(os.path.join(d, "live"))
+    ns = types.SimpleNamespace(d=d, live=live, k=os.path.join(d, "wts", "k"), o=os.path.join(d, "wts", "o"),
+                               inv=os.path.join(d, "inv.json"), arch=os.path.join(d, "arch"))
+    git(live, "worktree", "add", "-q", "-b", "k-br", ns.k, commit_on(live, S.new_main, "k work"))
+    git(live, "worktree", "add", "-q", "-b", "o-br", ns.o, S.c[2])
+    write(os.path.join(ns.o, "dirty.txt"), "old dirty\n")
+    ns.refs, ns.wts = refs(live), wt_paths(live)
+    r, _ = inventory(live, ns.inv)
+    assert r.returncode == 0, r.stdout
+    return ns
+
+
+class RestoreMoreTest(unittest.TestCase):
+    """restore: a failed rename is undone, the run lock, the aside name, and a rehome that crashed (R5-05, R5-06)."""
+
+    def rehome_and_check(self, ns):
+        rh = run("rehome", ns.live, ns.inv, ns.arch, S.purged, *Q)
+        self.assertEqual(rh.returncode, 0, rh.stdout + rh.stderr)
+
+    def assert_restored(self, ns, rs):
+        self.assertEqual(rs.returncode, 0, rs.stdout + rs.stderr)
+        self.assertIn("the restored checkout matches the inventory", rs.stdout.splitlines())
+        self.assertEqual(refs(ns.live), ns.refs)
+        self.assertEqual(wt_paths(ns.live), ns.wts)
+        self.assertEqual(read(os.path.join(ns.o, "dirty.txt")), b"old dirty\n")
+
+    def assert_new_clone_in_place(self, ns):
+        self.assertEqual(git(ns.live, "rev-parse", "refs/remotes/origin/main"), S.new_main)
+        self.assertEqual(norm(git(ns.k, "rev-parse", "--show-toplevel")), norm(ns.k))
+        self.assertTrue(os.path.isdir(os.path.join(ns.arch, "repo", ".git")))
+
+    def test_restore_rename_failure_is_undone_exit_3(self):                      # R5-06 (G08)
+        ns = rehomed("restore-undo")
+        self.rehome_and_check(ns)
+        state = {"n": 0}
+
+        def fn(real, src, dst):
+            state["n"] += 1
+            if state["n"] == 4:                                                 # after the clone and k moved aside
+                raise PermissionError(13, "held open")
+            return real(src, dst)
+        with patched_rename(fn):
+            rc, out = inproc(["restore", ns.arch, "--exclusive"])
+        self.assertEqual(rc, 3, out)
+        self.assertIn("Every rename of this restore was undone.", out.splitlines())
+        self.assert_new_clone_in_place(ns)
+        self.assert_restored(ns, run("restore", ns.arch, "--exclusive"))
+
+    def test_restore_while_a_run_holds_the_lock_exit_4(self):                    # R5-06 (B03)
+        ns = rehomed("restore-locked")
+        self.rehome_and_check(ns)
+        lock = ns.live + ".rehome.lock"
+        write(lock, "pid 1\n")
+        rs = run("restore", ns.arch, "--exclusive")
+        self.assertEqual(rs.returncode, 4, rs.stdout + rs.stderr)
+        self.assertTrue(os.path.isfile(lock))
+        self.assert_new_clone_in_place(ns)
+        self.assertFalse(any(n.startswith("restored-aside") for n in os.listdir(ns.arch)))
+
+    def test_restore_takes_the_next_free_aside_name(self):                       # R5-06 (G04)
+        ns = rehomed("restore-aside-name")
+        self.rehome_and_check(ns)
+        os.makedirs(os.path.join(ns.arch, "restored-aside-0"))
+        rs = run("restore", ns.arch, "--exclusive")
+        self.assert_restored(ns, rs)
+        self.assertEqual(os.listdir(os.path.join(ns.arch, "restored-aside-0")), [])
+        self.assertTrue(os.path.isdir(os.path.join(ns.arch, "restored-aside-1", "repo", ".git")))
+
+    def test_restore_refuses_a_missing_archived_folder_and_a_foreign_one_in_the_way(self):   # G02, G03
+        ns = rehomed("restore-refusals")
+        self.rehome_and_check(ns)
+        moved = find_archived(ns.arch, "o")
+        os.rename(moved, moved + "-away")                                       # an archived folder went missing
+        rs = run("restore", ns.arch, "--exclusive")
+        self.assertEqual(rs.returncode, 2, rs.stdout + rs.stderr)
+        self.assertIn("REFUSED: archived folder(s) missing: %s" % moved, rs.stdout.splitlines())
+        os.rename(moved + "-away", moved)
+        write(os.path.join(ns.o, "foreign.txt"), "not the new clone's\n")       # something else at an original path
+        rs = run("restore", ns.arch, "--exclusive")
+        self.assertEqual(rs.returncode, 2, rs.stdout + rs.stderr)
+        self.assertIn("REFUSED: in the way, and not the new clone or one of its worktrees (move it aside yourself): %s"
+                      % ns.o, rs.stdout.splitlines())
+        self.assert_new_clone_in_place(ns)
+        self.assertFalse(any(n.startswith("restored-aside") for n in os.listdir(ns.arch)))
+
+    CHILD = "\n".join([
+        "import importlib.util, os, sys",
+        "spec = importlib.util.spec_from_file_location('local_cleanup', sys.argv[1])",
+        "mod = importlib.util.module_from_spec(spec)",
+        "spec.loader.exec_module(mod)",
+        "when, real_git, real_rename, n = sys.argv[2], mod.git, os.rename, [0]",
+        "def git(repo, *args, **kw):",
+        "    if when == 'clone' and args[:1] == ('clone',):",
+        "        os._exit(9)                                  # a crash: no except, no finally",
+        "    return real_git(repo, *args, **kw)",
+        "def rename(src, dst):",
+        "    n[0] += 1",
+        "    if when == 'rename2' and n[0] == 2:",
+        "        os._exit(9)",
+        "    return real_rename(src, dst)",
+        "mod.git, os.rename = git, rename",
+        "sys.exit(mod.main(sys.argv[3:]))", ""])
+
+    def crash(self, ns, when):
+        child = os.path.join(ns.d, "crash_child.py")
+        write(child, self.CHILD)
+        r = subprocess.run([sys.executable, "-I", child, SCRIPT, when, "rehome", ns.live, ns.inv, ns.arch, S.purged]
+                           + list(Q), capture_output=True, encoding="utf-8", errors="replace", env=ENV)
+        self.assertEqual(r.returncode, 9, r.stdout + r.stderr)
+        self.assertTrue(os.path.isfile(os.path.join(ns.arch, "rehome.json")))   # written before the first rename
+        lock = ns.live + ".rehome.lock"
+        self.assertTrue(os.path.isfile(lock))                                    # a crash leaves its lock
+        rs = run("restore", ns.arch, "--exclusive")
+        self.assertEqual(rs.returncode, 4, rs.stdout + rs.stderr)                # documented: move the lock aside
+        os.rename(lock, os.path.join(ns.arch, "crashed-run.rehome.lock"))
+        return run("restore", ns.arch, "--exclusive")
+
+    def test_crash_during_the_clone_then_restore(self):                          # R5-05 (race P6, P7)
+        ns = rehomed("crash-clone")
+        self.assert_restored(ns, self.crash(ns, "clone"))
+
+    def test_crash_between_renames_then_restore(self):                           # R5-05
+        ns = rehomed("crash-rename")
+        self.assert_restored(ns, self.crash(ns, "rename2"))
 
 
 class UnitTest(unittest.TestCase):

@@ -1004,6 +1004,134 @@ class PurgeScanTest(unittest.TestCase):
         self.assertEqual(lines, ["OPAQUE %s path=%s commit=%s ref=refs/notes/commits reason=image (PNG)"
                                  % (png, head, notes_commit)], v.stdout)
 
+    # ---- round 6: OPAQUE ref= (L02, L03, L04, L05, correctness F5) ---------------------------
+    def _git_at(self, date, *args):
+        """git with fixed author and committer dates, so log order never depends on the clock."""
+        env = dict(ENV, GIT_AUTHOR_DATE=date, GIT_COMMITTER_DATE=date)
+        subprocess.run(["git", "-C", self.r.path] + list(args), capture_output=True, check=True, env=env)
+
+    def _hash(self, data):
+        return subprocess.run(["git", "-C", self.r.path, "hash-object", "-w", "--stdin"], input=data,
+                              capture_output=True, check=True, env=ENV).stdout.decode().strip()
+
+    def _opaque_lines(self):
+        self._empty_rules()
+        v = self.verify()
+        self.assertNotIn("Traceback", v.stderr)
+        self.assertNotIn("987653", v.stdout + v.stderr)
+        return v, sorted(l for l in v.stdout.splitlines() if l.startswith("OPAQUE "))
+
+    def test_round6_opaque_ref_is_the_ref_that_reaches_the_commit_not_the_newest_ref(self):
+        # L03 / L02: the PNG is only on refs/heads/side; a newer notes commit is the first thing log
+        # prints, so a ref= that sticks to the first ref seen names refs/notes/commits instead.
+        self.config(values=[987653], phones=False)
+        with open(os.path.join(self.r.path, "a.md"), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("x\n")
+        self._git_at("2020-01-01T00:00:00Z", "add", "-A")
+        self._git_at("2020-01-01T00:00:00Z", "commit", "-q", "-m", "a")
+        self._git_at("2020-01-02T00:00:00Z", "switch", "-q", "-c", "side")
+        with open(os.path.join(self.r.path, "scan.png"), "wb") as fh:
+            fh.write(b"\x89PNG\r\n\x1a\n" + bytes(300))
+        self._git_at("2020-01-02T00:00:00Z", "add", "-A")
+        self._git_at("2020-01-02T00:00:00Z", "commit", "-q", "-m", "png on side")
+        png_commit = git(self.r.path, "rev-parse", "HEAD").strip()
+        png = git(self.r.path, "rev-parse", "HEAD:scan.png").strip()
+        self._git_at("2020-01-03T00:00:00Z", "rm", "-q", "scan.png")
+        self._git_at("2020-01-03T00:00:00Z", "commit", "-q", "-m", "drop png")
+        self._git_at("2020-01-04T00:00:00Z", "switch", "-q", "main")
+        self._git_at("2020-01-09T00:00:00Z", "notes", "add", "-m", "plain note", "HEAD")
+        first = git(self.r.path, "log", "--format=%S", "--source", "--branches", "--tags",
+                    "--glob=refs/notes/*").split()[0]
+        self.assertEqual(first, "refs/notes/commits")          # the fixture really puts notes first
+        v, lines = self._opaque_lines()
+        self.assertEqual(lines, ["OPAQUE %s path=scan.png commit=%s ref=refs/heads/side reason=image (PNG)"
+                                 % (png, png_commit)], v.stdout)
+
+    def test_round6_opaque_ref_name_holding_a_value_is_masked(self):
+        # L05: ref= was printed unmasked; only refs/notes/commits (nothing to mask) was ever tested.
+        self.config(values=[987653], phones=False)
+        self.r.commit({"a.md": "x\n"})
+        git(self.r.path, "switch", "-q", "-c", "deal-987653")
+        self.r.commit({"scan.png": b"\x89PNG\r\n\x1a\n" + bytes(300)})
+        commit = git(self.r.path, "rev-parse", "HEAD").strip()
+        png = git(self.r.path, "rev-parse", "HEAD:scan.png").strip()
+        git(self.r.path, "switch", "-q", "main")
+        v, lines = self._opaque_lines()
+        self.assertEqual(lines, ["OPAQUE %s path=scan.png commit=%s ref=refs/heads/deal-[private] reason=image (PNG)"
+                                 % (png, commit)], v.stdout)
+
+    def test_round6_opaque_blob_reached_by_a_tag_on_a_blob_or_tree_names_the_tag(self):
+        # Correctness F5: a tag pointing straight at a blob, or at a tree holding it, publishes the
+        # blob on a tag push, but its OPAQUE line said commit=(unreachable) ref=(none). L04: a blob
+        # nothing reaches still says ref=(none).
+        self.config(values=[987653], phones=False)
+        self.r.commit({"a.md": "x\n"})
+        png1, png2, png3 = (self._hash(b"\x89PNG\r\n\x1a\n" + bytes(n)) for n in (300, 301, 302))
+        git(self.r.path, "tag", "blobtag", png1)                               # lightweight tag -> blob
+        mk = lambda text: subprocess.run(["git", "-C", self.r.path, "mktree"], input=text.encode(),
+                                         capture_output=True, check=True, env=ENV).stdout.decode().strip()
+        inner = mk("100644 blob %s\tscan-987653.png\n" % png2)
+        outer = mk("040000 tree %s\td\n" % inner)
+        git(self.r.path, "tag", "-a", "-m", "t", "treetag", outer)              # annotated tag -> tree
+        v, lines = self._opaque_lines()
+        self.assertEqual(v.returncode, 1, v.stdout)                            # the tree's file name holds the value
+        self.assertEqual(lines, sorted([
+            "OPAQUE %s path=(none) commit=(none) ref=refs/tags/blobtag reason=image (PNG)" % png1,
+            "OPAQUE %s path=d/scan-[private].png commit=(none) ref=refs/tags/treetag reason=image (PNG)" % png2,
+            "OPAQUE %s path=(none) commit=(unreachable) ref=(none) reason=image (PNG)" % png3]), v.stdout)
+
+    # ---- round 6: PDF string decoding (M01, M06, M12, M13, M14) -------------------------------
+    def _pdf_found(self, content):
+        """True if verify's search finds 987653 or 614-555-0124 in a PDF whose one Flate stream is
+        content. The raw content never holds the value, so only the decoded strings can."""
+        pats, _ = purge_scan.value_patterns({"values": [987653], "phone_numbers": ["6145550124"]})
+        for p in pats:
+            self.assertFalse(p.search(content), content)
+        pdf = self._pdf_objs(self._stream(zlib.compress(content), b" /Filter /FlateDecode"))
+        parts, _ = purge_scan.expand(pdf)
+        return any(p.search(x) for p in pats for x in parts)
+
+    def test_round6_pdf_escapes_n_r_t_b_f_are_decoded(self):
+        # M01: "\t" read as the letter t joined the phone's digit groups into one word; "\b" read as
+        # the letter b made seven hex characters, so the figure after it looked like part of a hash.
+        for esc in (b"n", b"r", b"t", b"f"):
+            self.assertTrue(self._pdf_found(b"BT (Call 614\\" + esc + b"555\\" + esc + b"0124) Tj ET"), esc)
+        for esc in (b"b", b"f"):
+            self.assertTrue(self._pdf_found(b"BT (ref abcdef\\" + esc + b"\\071\\070\\067\\066\\065\\063) Tj ET"), esc)
+
+    def test_round6_pdf_comment_inside_a_tj_array_is_skipped(self):
+        # M06: a comment holding "]" ended the array early and split the figure.
+        self.assertTrue(self._pdf_found(b"BT [(NOI 987,) % ](x\n (653)] TJ ET"))
+
+    def test_round6_pdf_percent_in_inline_image_data_hides_no_later_string(self):
+        # M06 (code): a "%" in binary inline image data on a content stream with no line breaks
+        # swallowed every string after it.
+        self.assertTrue(self._pdf_found(b"BT (a) Tj ET BI /W 1 /H 1 /CS /G /BPC 8 ID %\x01 EI BT (NOI 987\\054653) Tj ET"))
+
+    def test_round6_pdf_hex_string_with_tab_newline_or_nul_inside(self):
+        # M12: whitespace other than a space inside a hex string crashed the decode; NUL is PDF
+        # whitespace too and left the hex string unread.
+        for c in (b"BT <414\t> Tj <393\t83736\n3533> Tj ET", b"BT <3938\x003736\x003533> Tj ET",
+                  b"BT <3938\r\n3736\x0c3533> Tj ET"):
+            self.assertTrue(self._pdf_found(c), c)
+
+    def test_round6_pdf_identity_v_font_is_opaque(self):
+        # M13: a vertical (Identity-V) font was only covered by the Identity-H tests.
+        pdf = self._pdf_objs(self._stream(zlib.compress(b"BT /F1 12 Tf <00340035> Tj ET"), b" /Filter /FlateDecode"),
+                             b"<< /Type /Font /Subtype /Type0 /BaseFont /X /Encoding /Identity-V >>")
+        self.assertEqual(purge_scan.expand(pdf)[1], {"PDF text in font glyph codes (Identity-H/V)"})
+        for other in (b"/Identity-Vx", b"/Identity-HV1"):
+            pdf2 = self._pdf_objs(self._stream(b"BT (x) Tj ET"), b"<< /Encoding " + other + b" >>")
+            self.assertEqual(purge_scan.expand(pdf2)[1], set(), other)
+
+    def test_round6_pdf_unterminated_tj_array(self):
+        # M14: the pieces of an array still open at the end of the stream are joined too.
+        self.assertTrue(self._pdf_found(b"BT [(Price 987,)-15(653)"))
+        # M14 (code): an unclosed "[" glued every later string to the one before it, so a figure
+        # after a digit ("123" + "987,653") read as a longer number.
+        self.assertTrue(self._pdf_found(b"BT [(NOI 123) Tj (987\\054653) Tj ET"))
+        self.assertTrue(self._pdf_found(b"BT [(Unit 4) Tj (614\\055555\\0550124) Tj ET"))
+
     # ---- R3-06: renaming a tag whose name holds a value ------------------------------------
     def test_tag_rename_recipe_leaves_no_old_tag_object(self):
         self.config(values=[987653], phones=False)
