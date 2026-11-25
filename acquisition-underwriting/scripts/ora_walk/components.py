@@ -51,6 +51,7 @@ NEW_LEASE_LC = 0.05                       # Lease-Up Block: 5% of total lease co
 RENEWAL_LC = 0.025                        # v4.33 brokered renewal
 CONTRACT_BUMP_MIN = 0.03                  # in-model contractual minimum (SKILL.md Rollover Block (e))
 DEFAULT_LEASE_TERM_M = 60
+DC_UBT = {"rate": 0.0825, "exemption": 5000.0, "minimum": 250.0}   # D.C. Code 47-1808.03; OTR
 OFFICE_FINISH_DOWNTIME_M = 12             # v4.55 (RE-4.55-3) office-finish suite, Base; free rent on top
 APPEAL_FEE_DEFAULT = 0.30                # [EST] contingency fee, share of the first-year saving (property-tax-timing)
 MACRS_5 = (0.20, 0.32, 0.192, 0.1152, 0.1152, 0.0576)
@@ -786,6 +787,22 @@ def _override_flags(deal, r_floor, basis, legs_b, legs_d, flags) -> None:
                 trials.append((f"property_tax.{f}", replace(deal, property_tax={**pt, f: dv})))
     if deal.stabilization_year is not None:
         trials.append(("stabilization_year", replace(deal, stabilization_year=None)))
+    et = deal.entity_tax
+    if et is not None and (deal.state or "").strip().upper() == "DC":
+        dc = {"rate": DC_UBT["rate"], "exemption": DC_UBT["exemption"], "minimum": DC_UBT["minimum"]}
+        for f, dv in dc.items():
+            if et.get(f, 0.0) != dv:
+                trials.append((f"entity_tax.{f} (DC UBT)", replace(deal, entity_tax={**et, f: dv})))
+    # one deal-wide trial: overrides that look neutral one component at a time can loosen together (e.g. the same
+    # downtime on two vacant components moves the derived stabilization year)
+    every = replace(deal, components=[replace(c, **{f: dv for f, dv in _component_defaults(c).items()
+                                                     if getattr(c, f) != dv}) for c in deal.components])
+    if pt is not None:
+        every = replace(every, property_tax={**pt, "growth": 0.025, "appeal_fee_pct": APPEAL_FEE_DEFAULT})
+    if deal.stabilization_year is not None:
+        every = replace(every, stabilization_year=None)
+    if every != deal:
+        trials.append(("all overrides together", every))
 
     def clamp(ref):   # a reference may not read a stabilization year its own schedule would reject
         if ref.stabilization_year is not None and not (tax_reset_year(ref) <= ref.stabilization_year
@@ -887,6 +904,8 @@ def solve_components(deal: ComponentDeal, ust: float) -> dict:
         "irr_floor_addons": [[k, v] for k, v in irr_addons(mv, **addons)],
         "majority_vacant": mv,
         "tax_case": gov,
+        "tax_profile": (pt or {}).get("profile"),
+        "entity_tax_modeled": deal.entity_tax is not None,
         "input_tax_case": input_case,
         "input_case": rep,
         "flags": flags,

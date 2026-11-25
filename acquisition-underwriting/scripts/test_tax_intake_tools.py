@@ -40,6 +40,11 @@ class PropTaxTiming(unittest.TestCase):
         # Gabriel in-turn 2026-11-24 (revised): PW = 20/50/30 (A/B/C), reported only
         self.assertEqual(P.Deal("DC", dt.date(2027, 1, 1), 1, 1, 1).weights, (0.2, 0.5, 0.3))
 
+    def test_pw_is_the_weighted_mix(self):
+        d = P.Deal("DC", dt.date(2027, 1, 1), 2_100_000, 4_359_090, 4_359_090)
+        a, b, c, pw = (P.base_for(d, 2029, 1, k) for k in ("A", "B", "C", "PW"))
+        self.assertAlmostEqual(pw, 0.2 * a + 0.5 * b + 0.3 * c, places=6)
+
     def test_dc_class2_step(self):
         self.assertEqual(P.dc_rate(5_000_000), 0.0165)
         self.assertEqual(P.dc_rate(5_000_001), 0.0177)
@@ -57,7 +62,7 @@ class UwTieout(unittest.TestCase):
         except ImportError:
             raise unittest.SkipTest("openpyxl not installed")
 
-    def _run(self, cells, rows=None, corrupt=None):
+    def _run(self, cells, rows=None, corrupt=None, extra=None, ratios=None):
         import openpyxl
         tmp = tempfile.mkdtemp()
         wb = openpyxl.Workbook()
@@ -69,11 +74,14 @@ class UwTieout(unittest.TestCase):
         ws["B120"] = 0.041725
         if corrupt:
             ws[corrupt] = ws[corrupt].value + 500
+        for k, v in (extra or {}).items():
+            ws[k] = v
         xlsx = os.path.join(tmp, "m.xlsx")
         wb.save(xlsx)
         exp = os.path.join(tmp, "e.json")
         with open(exp, "w", encoding="utf-8") as fh:
-            json.dump({"tolerances": {"money": 1.0, "rate": 1e-4}, "cells": cells, "rows": rows or {}}, fh)
+            json.dump({"tolerances": {"money": 1.0, "rate": 1e-4}, "cells": cells, "rows": rows or {},
+                       "ratios": ratios or []}, fh)
         r = subprocess.run([sys.executable, "-B", os.path.join(HERE, "uw_tieout.py"), xlsx, exp],
                            capture_output=True, text=True, encoding="utf-8")
         return r.returncode, r.stdout
@@ -92,6 +100,26 @@ class UwTieout(unittest.TestCase):
         self.assertEqual(rc, 1, out)
         self.assertIn("FAIL", out)
 
+    def test_formula_error_fails(self):
+        for err in ("#REF!", "#SPILL!", "#CALC!"):
+            rc, out = self._run(self.CELLS, extra={"A1": err})
+            self.assertEqual(rc, 1, (err, out))
+            self.assertIn("Formula errors", out)
+
+    def test_empty_expected_is_input_error(self):
+        rc, out = self._run({})
+        self.assertEqual(rc, 2, out)
+
+    def test_row_length_mismatch_is_input_error(self):
+        rc, out = self._run(self.CELLS, {"PF_Base!C39:E39": [14336.13]})
+        self.assertEqual(rc, 2, out)
+
+    def test_ratio_cells_get_rate_tolerance(self):
+        rc, _ = self._run({"PF_Base!F1": 6.9}, extra={"F1": 6.0})
+        self.assertEqual(rc, 0)                       # vendored rule: >= 5 reads as money (+/-1.0)
+        rc, out = self._run({"PF_Base!F1": 6.9}, extra={"F1": 6.0}, ratios=["PF_Base!F1"])
+        self.assertEqual(rc, 1, out)
+
     def test_missing_cell_exit_2(self):
         rc, out = self._run({**self.CELLS, "PF_Base!Z99": 1.0})
         self.assertEqual(rc, 2, out)
@@ -108,6 +136,8 @@ class DcParcelOffline(unittest.TestCase):
 
     def test_class_rate(self):
         self.assertEqual(DCP.class_rate("2", 4_359_090), 0.0165)
+        self.assertEqual(DCP.class_rate("2", 5_000_000), 0.0165)        # whole-value step: <= USD 5M
+        self.assertEqual(DCP.class_rate("2", 5_000_001), 0.0177)
         self.assertEqual(DCP.class_rate("2", 6_000_000), 0.0177)
         self.assertEqual(DCP.class_rate("1", 1), 0.0085)
 

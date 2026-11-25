@@ -80,9 +80,9 @@ def render_components(res: dict, ust_note: str) -> str:
         f"## {res['name']} — Binding walk {_usd(res['binding_walk'])} (component lens; {res['binding_case']} binds)",
         f"Doctrine: {res['doctrine']} · UST {ust_note} · IRR floor {_pct(res['irr_floor'])}"
         + "".join(f" (+{v * 1e4:.0f} bps {k})" for k, v in res['irr_floor_addons'])
-        + f" · tax case {res['tax_case'] or '—'}",
+        + f" · tax case {res['tax_case'] if res.get('tax_profile') in ('DC', 'MI') else res.get('tax_profile') or '—'}",
         "",
-        "| Case | Basis | Yield | IRR (after entity tax) | Walk | Binds |",
+        f"| Case | Basis | Yield | IRR ({'after entity tax' if res.get('entity_tax_modeled') else 'no entity tax'}) | Walk | Binds |",
         "|---|---:|---:|---:|---:|---|",
         f"| Base | {_usd(res['legs_base']['basis'])} | {_usd(res['legs_base']['yield'])} | "
         f"{_usd(res['legs_base']['irr'])} | {_usd(res['base_walk'])} | {res['base_binding_leg']} |",
