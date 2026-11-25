@@ -1798,6 +1798,13 @@ class ComponentMode(unittest.TestCase):
         self.assertEqual(self.C._renewal_defaults(c, [])[1], band)          # not the 12-month office-finish value
         d = self._leased(comp=dict(use="flex warehouse with front office"))
         self.assertFalse([lb for lb in self.C.departure_labels(d) if lb.endswith(".office_finish")])
+        # the departure comparison reads use_class, never the free text, in both directions
+        flex_of = self._leased(comp=dict(use="flex warehouse with front office", office_finish=True))
+        self.assertIn("Flex.office_finish", self.C.departure_labels(flex_of))
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"][1].update(use="walk-up suites, full service", office_finish=False)
+        spec["components"][1].pop("renewal_downtime_m")
+        self.assertIn("Office (L3-L4).office_finish", self.C.departure_labels(self.C.from_dict(spec)))
 
     def test_use_class_required_and_names_reserved(self):
         spec = json.loads(json.dumps(self.spec))
