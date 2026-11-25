@@ -16,3 +16,14 @@ Both are stdlib-only (`zipfile` + `ElementTree`); no python-docx, no lxml. Run f
 |---|---|---|
 | `scripts/extract_revisions.py` | Detects revision encoding (OOXML tracked changes / compare-tool formatting / clean) and extracts revisions from all three. Parses the compare-tool summary block for the BASE document and the tool's own change tally. Exit 2 = ambiguous, hard stop. | Workflow 2 Step 0; legal-intelligence Module 6 |
 | `scripts/audit_completeness.py` | Exhibit population, exhibit/section cross-reference resolution, unfilled-blank detection (body vs. signature block). Exit 1 = blocking defect. | Workflow 2A Step 5; Workflow 2B Check D; 46-Point Gate |
+
+## essential_redline.py — Workflow 2C
+
+Stdlib only (`zipfile`, `re`, `json`). Applies a JSON spec of tracked changes to a counterparty `.docx` and optionally adds margin notes.
+
+- **Ops:** `insert` (`at`: `end`, `start` or an integer offset into the anchor), `delete`, `replace`, `new_para_after` (copies the anchor paragraph's `pPr`, so a numbered list auto-numbers the new section, and marks the paragraph mark inserted), `comment` (note on the anchor's whole paragraph; creates `word/comments.xml`, its relationship and content type if absent).
+- **Anchors:** matched against run text after adjacent identically-formatted runs are merged and `w:rsid*`/`proofErr` noise is stripped. Each must match exactly once, after earlier ops have run. Any 0- or multi-match exits 2 with the op number and nothing is written.
+- **Outputs:** run twice — once with notes (review copy) and once with `--strip-comments` (outbound copy). `--author` and `--initials` set the revision and comment author.
+- **Verify:** docx skill `scripts/office/validate.py <out> --original <in> --author "<author>"` reports any edit that is not tracked.
+- **Known limits:** an anchor must sit inside one run after merging (a span crossing bold/plain fails — shorten it); comments attach to whole paragraphs; headers, footers, fields and anchors inside tables are not targeted.
+- **Tests:** `tests/test_essential_redline.py` (builds a minimal `.docx` in memory; covers insert, replace, new numbered paragraph, comment, strip-comments and the exit-2 anchor failure).
