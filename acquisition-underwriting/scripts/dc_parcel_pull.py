@@ -2,7 +2,7 @@
 """dc_parcel_pull.py — standard DC intake step (ORA acquisition-underwriting, Stage -1 Rules 1/8/10).
 One call per parcel returns: owner, last sale, current + proposed assessment (land/improvement), the
 10-year real-property tax history with penalties/interest/fees, a late-payment flag, CAMA year built /
-GBA, FEMA flood zone at the parcel centroid, and the implied next bill.
+GBA, the implied next bill, and (ORA: only with --flood) the FEMA flood zone at the parcel centroid.
 
 Sources (no key, public ArcGIS REST; verified 2026-11-24):
   DCGIS Property_and_Land_WebMercator MapServer/40  (ITS public extract: assessments, sale, tax history)

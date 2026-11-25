@@ -5,6 +5,11 @@
   "ask_price": 2100000,
   "close_date": "2027-01-01",
   "state": "DC",
+  "cited_overrides": {
+    "Retail (L1-L2).renewal_at_contract": "OM p.20: two 5-yr options continuing the 2.5% contract bumps (Spot of Tea lease, no guaranty)",
+    "Office (L3-L4).downtime_m": "Gabriel ruling 2026-11-04: office-finish lease-up downtime 12 months Base",
+    "credit_loss": "v4.33 Rollover Block (d): 2.0% when >50% of in-place rent is from tenants without a guarantor (OM p.20)"
+  },
   "market": "Mid-Atlantic",
   "capex": 50000,
   "acquisition_tax_pct": 0.0145,

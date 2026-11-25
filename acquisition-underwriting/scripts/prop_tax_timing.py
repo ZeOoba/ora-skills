@@ -95,7 +95,7 @@ def excel_pattern(profile):
     """Formula pattern for an annual model row (CY in row 8; AV rows built per case)."""
     if profile == 'DC':
         return ("CY tax = (months of CY in TY=CY)/12 * AV(TY=CY) * rate(AV) + (months in TY=CY+1)/12 * AV(TY=CY+1) * rate(AV)\n"
-                "  full years: =0.75*AV_CY*IF(AV_CY>5e6,1.77%,1.65%)+0.25*AV_CY1*IF(AV_CY1>5e6,1.77%,1.65%)\n"
+                "  full years: =0.75*AV_CY*IF(AV_CY>1e7,1.89%,IF(AV_CY>5e6,1.77%,1.65%))+0.25*AV_CY1*IF(AV_CY1>1e7,1.89%,IF(AV_CY1>5e6,1.77%,1.65%))\n"   # ORA: 1.89% tier above USD 10M (dc_rate)
                 "  AV(TY): =IF(TY<=CloseTY, AV_inforce, IF(TY<ResetTY, AV_noticed, IF(Case=\"A\",Price*(1+g)^(TY-ResetTY), ...)))\n"
                 "  CloseTY = YEAR(Close)+IF(MONTH(Close)>=10,1,0); ResetTY = CloseTY+1 (file new-owner petition within 45 days)")
     return ("CY tax = IF(CY=YEAR(Close), TV_capped*mills*(DaysOwned/365), TV_uncapped(CY)*mills)\n"

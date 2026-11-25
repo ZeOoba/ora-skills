@@ -111,6 +111,8 @@ class ComponentDeal:
     market: Optional[str] = None
     close_date: Optional[str] = None      # ISO date; required with a DC/MI property_tax profile
     state: Optional[str] = None           # two-letter jurisdiction; DC and MI must use their own tax profile
+    cited_overrides: dict = field(default_factory=dict)   # {departure label: source}: every departure from a
+                                          # doctrine default must be declared here with its source (v4.61 gate)
     stabilization_year: Optional[int] = None   # year the Yield leg reads; None = derived from the schedule (first
                                                # year with every vacant-at-close lease paying all 12 months)
     capex: float = 0.0                    # day-1 capital (in all-in)
@@ -265,6 +267,9 @@ def validate(deal: ComponentDeal) -> None:
     if deal.stabilization_year is not None and deal.stabilization_year > _min_stab_year(deal):
         raise ValueError(f"stabilization_year {deal.stabilization_year} is later than the schedule's first full-rent, "
                          f"post-reset year {_min_stab_year(deal)}: the Yield leg would read a grown NOI (looser); omit it")
+    if not isinstance(deal.cited_overrides, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) and v.strip() for k, v in deal.cited_overrides.items()):
+        raise ValueError("cited_overrides must map each departure label to a non-empty source string")
     et = deal.entity_tax
     if et is not None:
         unknown = set(et) - {"rate", "exemption", "minimum", "land_share", "depr_years", "cost_seg_5yr",
@@ -284,6 +289,10 @@ def validate(deal: ComponentDeal) -> None:
         _num(et.get("cost_seg_15yr", 0.0), "entity_tax.cost_seg_15yr", 0, 1)
         if et.get("cost_seg_5yr", 0) + et.get("cost_seg_15yr", 0) > 1:
             raise ValueError("entity_tax cost-seg shares exceed 100%")
+    undeclared = [lb for lb in departure_labels(deal) if lb not in deal.cited_overrides]
+    if undeclared:
+        raise ValueError(f"undeclared departures from doctrine defaults: {undeclared}. Use the default, or add each "
+                         "label to cited_overrides with its source (lease, tenant, broker opinion, ruling)")
 
 
 def _whole_view(deal: ComponentDeal) -> _WholeDeal:
@@ -751,57 +760,109 @@ def _looser_flags(deal: ComponentDeal, market: Optional[str], flags: list) -> No
     flags.append("Component exit caps are per-deal judgment (Mixed-Use Component Lens): cite each")
 
 
-def _component_defaults(c: Component) -> dict:
-    """Doctrine default for every component input that has one (Lease-Up / Rollover Blocks, renewal economics,
-    lens (c)). Inputs not listed are facts (SF, rents, dates, exit caps) or stricter-only caps."""
-    d = dict(lease_term_m=DEFAULT_LEASE_TERM_M, renewal_capture=D.RENEWAL_CAPTURE, renewal_at_contract=False,
-             ti_psf=D.LEASE_UP_TI_PSF, lc_pct=NEW_LEASE_LC, free_m=D.LEASE_UP_FREE_MONTHS,
-             growth=D.MARKET_RENT_GROWTH, contract_bump=CONTRACT_BUMP_MIN, renewal_ti_psf=D.RENEWAL_TI_PSF,
-             renewal_lc_pct=RENEWAL_LC, renewal_p=None, renewal_downtime_m=None, office_finish=None, occ_cap=1.0)
-    if c.lease_expiry_month is None:
-        d["downtime_m"] = None
-    if "office" in (c.use or "").lower() or c.office_finish:
-        d["core"] = False
-    return d
+COMPONENT_DEFAULTS = dict(lease_term_m=DEFAULT_LEASE_TERM_M, renewal_capture=D.RENEWAL_CAPTURE,
+                          renewal_at_contract=False, ti_psf=D.LEASE_UP_TI_PSF, lc_pct=NEW_LEASE_LC,
+                          free_m=D.LEASE_UP_FREE_MONTHS, growth=D.MARKET_RENT_GROWTH, contract_bump=CONTRACT_BUMP_MIN,
+                          renewal_ti_psf=D.RENEWAL_TI_PSF, renewal_lc_pct=RENEWAL_LC, occ_cap=1.0)
+DEAL_DEFAULTS = dict(credit_loss=D.CREDIT_LOSS_EGI, mgmt_pct=D.MGMT_FEE_EGI, reserves_psf=D.RESERVES_PSF,
+                     expense_growth=D.EXPENSE_GROWTH)
+TAX_DEFAULTS = dict(growth=0.025, appeal_fee_pct=APPEAL_FEE_DEFAULT)
+ENTITY_DEFAULTS = dict(depr_years=39, improvements_life=15)
+COST_SEG_MAX = 0.15     # doctrine: 15% of building basis to MACRS, 85% on 39-yr straight line
+
+
+def _office_use(c: Component) -> bool:
+    return "office" in (c.use or "").lower() or bool(c.office_finish)
+
+
+def departures(deal: ComponentDeal) -> list:
+    """Every input that departs from its doctrine default, as (label, deal with that input reset to the default).
+    ONE table drives both the citation requirement (validate) and the LOOSER measurement (_override_flags).
+    Inputs not in the table are facts (SF, rents, dates, exit caps, assessments) or stricter-only caps."""
+    out = []
+    for i, c in enumerate(deal.components):
+        def put(f, dv, c=c, i=i):
+            comps = list(deal.components)
+            comps[i] = replace(c, **{f: dv})
+            out.append((f"{c.name}.{f}", replace(deal, components=comps)))
+        for f, dv in COMPONENT_DEFAULTS.items():
+            if getattr(c, f) != dv:
+                put(f, dv)
+        p_def, dm_def = _renewal_defaults(replace(c, renewal_p=None, renewal_downtime_m=None, office_finish=None), [])
+        if c.renewal_p is not None and c.renewal_p != p_def:
+            put("renewal_p", None)
+        if c.renewal_downtime_m is not None and c.renewal_downtime_m != dm_def:
+            put("renewal_downtime_m", None)
+        if c.office_finish is not None and c.office_finish != ("office" in (c.use or "").lower()):
+            put("office_finish", None)
+        if c.lease_expiry_month is None and c.downtime_m is not None and c.downtime_m != D.LEASE_UP_DOWNTIME_MONTHS:
+            put("downtime_m", None)
+        if c.core != (not _office_use(c)):            # lens (c): office non-core, buy-box uses core
+            put("core", not _office_use(c))
+    for f, dv in DEAL_DEFAULTS.items():
+        if getattr(deal, f) != dv:
+            out.append((f, replace(deal, **{f: dv})))
+    pt = deal.property_tax
+    if pt is not None:
+        for f, dv in TAX_DEFAULTS.items():
+            if pt.get(f, dv) != dv:
+                out.append((f"property_tax.{f}", replace(deal, property_tax={**pt, f: dv})))
+    if deal.stabilization_year is not None:
+        out.append(("stabilization_year", replace(deal, stabilization_year=None)))
+    et = deal.entity_tax
+    if et is not None:
+        for f, dv in ENTITY_DEFAULTS.items():
+            if et.get(f, dv) != dv:
+                out.append((f"entity_tax.{f}", replace(deal, entity_tax={**et, f: dv})))
+        cs5, cs15 = et.get("cost_seg_5yr", 0.0), et.get("cost_seg_15yr", 0.0)
+        if cs5 + cs15 > COST_SEG_MAX + 1e-9:
+            k = COST_SEG_MAX / (cs5 + cs15)
+            out.append(("entity_tax.cost_seg", replace(deal, entity_tax={**et, "cost_seg_5yr": cs5 * k,
+                                                                         "cost_seg_15yr": cs15 * k})))
+        if (deal.state or "").strip().upper() == "DC":
+            for f, dv in DC_UBT.items():
+                if et.get(f, 0.0) != dv:
+                    out.append((f"entity_tax.{f}", replace(deal, entity_tax={**et, f: dv})))
+    return out
+
+
+def departure_labels(deal: ComponentDeal) -> list:
+    return [label for label, _ in departures(deal)]
+
+
+def _all_defaults(deal: ComponentDeal) -> ComponentDeal:
+    """Every departure reset at once (each reset applied to the running deal)."""
+    ref = deal
+    for _ in range(3):                       # resets are independent; a few passes settle office_finish / core
+        deps = departures(ref)
+        if not deps:
+            break
+        ref = deps[0][1]
+        for label, _d in deps[1:]:
+            again = [r for lb, r in departures(ref) if lb == label]
+            if again:
+                ref = again[0]
+    return ref
 
 
 def _override_flags(deal, r_floor, basis, legs_b, legs_d, flags) -> None:
-    """Every input that departs from its doctrine default is measured ONE AT A TIME: reset it to the default, re-solve
-    both cases, and flag LOOSER when any leg was higher with the input (the direction of most of these depends on
-    market vs in-place rent, so it is measured, never assumed; solver._override_flag does the same)."""
-    trials = []
-    for i, c in enumerate(deal.components):
-        departs = {f: dv for f, dv in _component_defaults(c).items() if getattr(c, f) != dv}
-        for f, dv in departs.items():
-            comps = list(deal.components)
-            comps[i] = replace(c, **{f: dv})
-            trials.append((f"{c.name}.{f}", replace(deal, components=comps)))
-        if len(departs) > 1:     # inputs that look neutral one at a time can loosen together
-            comps = list(deal.components)
-            comps[i] = replace(c, **departs)
-            trials.append((f"{c.name} ({', '.join(sorted(departs))} together)", replace(deal, components=comps)))
-    pt = deal.property_tax
-    if pt is not None:
-        for f, dv in (("growth", 0.025), ("appeal_fee_pct", APPEAL_FEE_DEFAULT)):
-            if pt.get(f, dv) != dv:
-                trials.append((f"property_tax.{f}", replace(deal, property_tax={**pt, f: dv})))
-    if deal.stabilization_year is not None:
-        trials.append(("stabilization_year", replace(deal, stabilization_year=None)))
-    et = deal.entity_tax
-    if et is not None and (deal.state or "").strip().upper() == "DC":
-        dc = {"rate": DC_UBT["rate"], "exemption": DC_UBT["exemption"], "minimum": DC_UBT["minimum"]}
-        for f, dv in dc.items():
-            if et.get(f, 0.0) != dv:
-                trials.append((f"entity_tax.{f} (DC UBT)", replace(deal, entity_tax={**et, f: dv})))
-    # one deal-wide trial: overrides that look neutral one component at a time can loosen together (e.g. the same
-    # downtime on two vacant components moves the derived stabilization year)
-    every = replace(deal, components=[replace(c, **{f: dv for f, dv in _component_defaults(c).items()
-                                                     if getattr(c, f) != dv}) for c in deal.components])
-    if pt is not None:
-        every = replace(every, property_tax={**pt, "growth": 0.025, "appeal_fee_pct": APPEAL_FEE_DEFAULT})
-    if deal.stabilization_year is not None:
-        every = replace(every, stabilization_year=None)
-    if every != deal:
+    """Every departure from a doctrine default (the `departures` table) is measured: one at a time, per component
+    together, and all together; reset to the default, both cases re-solved, LOOSER flagged when any leg was higher
+    with the input. The direction of most of these depends on market vs in-place rent, so it is measured, never
+    assumed. A cited departure is still measured and flagged; the citation is quoted beside it."""
+    cites = deal.cited_overrides or {}
+    trials = departures(deal)
+    for c in deal.components:
+        own = [(lb, r) for lb, r in trials if lb.startswith(c.name + ".")]
+        if len(own) > 1:                     # inputs that look neutral one at a time can loosen together
+            ref = deal
+            for lb, _r in own:
+                again = [r for l2, r in departures(ref) if l2 == lb]
+                if again:
+                    ref = again[0]
+            trials.append((f"{c.name} ({', '.join(sorted(lb.split('.', 1)[1] for lb, _ in own))} together)", ref))
+    every = _all_defaults(deal)
+    if len(departures(deal)) > 1 and every != deal:
         trials.append(("all overrides together", every))
 
     def clamp(ref):   # a reference may not read a stabilization year its own schedule would reject
@@ -809,15 +870,14 @@ def _override_flags(deal, r_floor, basis, legs_b, legs_d, flags) -> None:
                                                        <= _min_stab_year(ref)):
             return replace(ref, stabilization_year=None)
         return ref
-    trials = [(label, clamp(ref)) for label, ref in trials]
-    for label, ref in trials:
+    for label, ref in [(lb, clamp(r)) for lb, r in trials]:
         up = []
         for case, legs, downside in (("Base", legs_b, False), ("Downside", legs_d, True)):
             r = _legs(ref, downside, r_floor, basis)
             up += [f"{case} {k} +USD {legs[k] - r[k]:,.0f}" for k in legs if legs[k] > r[k] + 0.5]
         if up:
-            flags.append(f"{LOOSE}: {label} raises legs above its doctrine default ({', '.join(up)}): cite the "
-                         "lease, tenant or leasing evidence")
+            cite = f" (cited: {cites[label]})" if label in cites else ""
+            flags.append(f"{LOOSE}: {label} raises legs above its doctrine default ({', '.join(up)}){cite}")
 
 
 def solve_components(deal: ComponentDeal, ust: float) -> dict:
