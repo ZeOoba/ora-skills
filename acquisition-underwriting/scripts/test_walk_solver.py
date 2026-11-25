@@ -1150,5 +1150,720 @@ class RolloverAndLeaseUpTiming(unittest.TestCase):
                 solve(d, UST)
 
 
+class ComponentMode(unittest.TestCase):
+    """v4.61 (RE-4.61-3): Mixed-Use Component Lens, property-tax timing and entity tax in the walk solver.
+    Fixture = 1500 21st St NW v02 inputs (public record + OM). Acceptance compares the IRR legs with the deal
+    engine's walks (2026-11-24, UST 5.00%); the Basis leg here runs on the synthetic RCT table."""
+    FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "walk_examples", "1500_21st_St_NW.json")
+    ENGINE_UST = 0.05
+
+    @classmethod
+    def setUpClass(cls):
+        from ora_walk import components as C
+        cls.C = C
+        with open(cls.FIXTURE, encoding="utf-8") as fh:
+            cls.spec = json.load(fh)
+        cls._cache = {}
+
+    def fd(self, spec):
+        """from_dict, citing every departure (tests exercise departures on purpose; the citation requirement
+        itself is tested in test_undeclared_departure_rejected)."""
+        d = self.C.from_dict(spec)
+        try:
+            labels = self.C.departure_labels(d)
+        except Exception:
+            return d
+        cites = {**(d.cited_overrides or {}), **{lb: "test" for lb in labels if lb not in (d.cited_overrides or {})}}
+        return self.C.replace(d, cited_overrides=cites)
+
+    def deal(self, **kw):
+        spec = json.loads(json.dumps(self.spec))
+        pt = kw.pop("tax_case", None)
+        if pt:
+            spec["property_tax"]["case"] = pt
+        spec.update(kw)
+        return self.fd(spec)
+
+    def solved(self, case):
+        if case not in self._cache:
+            self._cache[case] = self.C.solve_components(self.deal(tax_case=case), self.ENGINE_UST)
+        return self._cache[case]
+
+    def assertWithin(self, got, want, tol, label):
+        self.assertLessEqual(abs(got / want - 1), tol, f"{label}: {got:,.0f} vs engine {want:,.0f}")
+
+    # --- acceptance vs the deal engine (handoff section 8.5) ---
+    def test_fixture_base_tax_a_within_1pct(self):
+        self.assertWithin(self.solved("A")["input_case"]["legs_base"]["irr"], 1_188_896, 0.01, "Base tax A")
+
+    def test_fixture_downside_tax_a_within_1pct(self):
+        self.assertWithin(self.solved("A")["input_case"]["legs_downside"]["irr"], 788_380, 0.01, "Downside tax A")
+
+    def test_fixture_assessment_holds_within_1pct(self):
+        self.assertWithin(self.solved("C")["input_case"]["legs_base"]["irr"], 630_223, 0.01, "Base tax C")
+
+    def test_fixture_tax_b_within_2pct(self):
+        # 2%, not 1%: prop_tax_timing's case B is the midpoint of the price and the assessor value GROWN to the reset
+        # TY; the v02 engine took the midpoint with the in-force AV (WALK_SOLVER.md, Component mode, convention gaps).
+        self.assertWithin(self.solved("B")["input_case"]["legs_base"]["irr"], 953_850, 0.02, "Base tax B")
+        self.assertWithin(self.solved("B")["input_case"]["legs_downside"]["irr"], 532_529, 0.02, "Downside tax B (RE-4.61-6)")
+
+    # --- handoff section 8.6 ---
+    def test_component_split_sums_to_building_noi(self):
+        d = self.deal()
+        for downside in (False, True):
+            m = self.C.model(d, 1_000_000, downside)
+            for t in range(11):
+                total = sum(v[t] for v in m["component_noi"].values())
+                self.assertAlmostEqual(total, m["rows"]["noi"][t], places=6)
+
+    def test_downside_never_above_base(self):
+        for case in ("A", "B", "C"):
+            r = self.solved(case)
+            self.assertLessEqual(r["downside_walk"], r["base_walk"] + 0.5, case)
+            self.assertEqual(r["binding_walk"], r["downside_walk"], case)
+            self.assertAlmostEqual(r["spread"], r["base_walk"] - r["downside_walk"])
+            # the Basis leg binds both cases on the synthetic table, so check the legs a stall can move
+            for leg in ("yield", "irr"):
+                for side in (r, r["input_case"]):
+                    self.assertLessEqual(side["legs_downside"][leg], side["legs_base"][leg] + 0.5, (case, leg))
+
+    def test_dc_reset_ty_is_close_ty_plus_one(self):
+        from datetime import date
+        P = self.C._ptt()
+        self.assertEqual(P.dc_reset_ty(date(2027, 1, 1)), 2028)
+        self.assertEqual(P.dc_reset_ty(date(2027, 6, 15)), 2028)      # new-owner petition within 45 days
+        self.assertEqual(P.dc_reset_ty(date(2027, 9, 30)), 2028)
+        self.assertEqual(P.dc_reset_ty(date(2027, 10, 15)), 2029)     # TY2028 already in force at close
+        # In the model: a June close still reaches the price in TY2028 (Oct 2027), so model year 1 (Jun 2027 -
+        # May 2028) carries 4 months of the seller's base and 8 of the price, not 12 of the seller's base.
+        price = 2_100_000
+        d = self.deal(close_date="2027-06-01")
+        tax, _ = self.C.tax_by_year(d, price)
+        rate = 0.0165 + 0.000972
+        self.assertAlmostEqual(tax[0], 4 / 12 * 4_359_090 * rate + 8 / 12 * price * rate, places=2)
+
+    def test_tax_line_matches_prop_tax_timing_schedule(self):
+        from datetime import date
+        P = self.C._ptt()
+        for case in ("A", "B", "C", "PW"):
+            d = self.deal(tax_case=case)
+            tax, _ = self.C.tax_by_year(d, 2_100_000)
+            ref = P.schedule(P.Deal("DC", date(2027, 1, 1), 2_100_000, 4_359_090, 4_359_090, addon_rate=0.000972),
+                             11, case)
+            for t in range(11):
+                self.assertAlmostEqual(tax[t], ref[t]["tax"], delta=0.01, msg=f"{case} year {t + 1}")
+
+    def test_dc_tax_y1_is_seller_base_not_price(self):
+        tax, fee = self.C.tax_by_year(self.deal(), 2_100_000)
+        self.assertAlmostEqual(tax[0], 62_606.24 + 0.75 * 4_359_090 * 0.000972 + 0.25 * 2_100_000 * 0.000972, places=1)
+        self.assertGreater(fee[1], 0)            # appeal fee in the reset year
+        _, fee_c = self.C.tax_by_year(self.deal(tax_case="C"), 2_100_000)
+        self.assertEqual(sum(fee_c), 0)          # no appeal, no fee
+
+    def test_entity_tax_lowers_the_irr_walk(self):
+        with_tax = self.solved("A")["input_case"]["legs_base"]["irr"]
+        r = self.C.solve_components(self.deal(entity_tax=None), self.ENGINE_UST)
+        self.assertGreater(r["input_case"]["legs_base"]["irr"], with_tax)
+        self.assertTrue(any("no entity_tax on a DC deal" in f for f in r["flags"]))
+
+    def test_flags(self):
+        fa = self.solved("A")["flags"]
+        self.assertTrue(any("Tax case A is reported only" in f for f in fa))
+        self.assertFalse(any("is reported only: the walk is solved" in f for f in self.solved("B")["flags"]))
+        for case in ("A", "B", "C", "PW"):                              # assessment 4.36M > every walk: B governs
+            self.assertEqual(self.solved(case)["tax_case"], "B", case)
+            self.assertAlmostEqual(self.solved(case)["binding_walk"], self.solved("B")["binding_walk"], delta=1)
+        self.assertTrue(any("Retail (L1-L2).renewal_at_contract raises legs" in f and "cited: OM p.20" in f
+                            for f in fa))
+        self.assertTrue(self.solved("A")["majority_vacant"])            # office 3,638 of 5,216 SF vacant
+        self.assertAlmostEqual(self.solved("A")["irr_floor"], 0.125)    # 10.5% + 100 vacant + 100 single tenant
+
+    def test_validation(self):
+        bad_comp = json.loads(json.dumps(self.spec))
+        bad_comp["components"][1].pop("exit_cap")
+        bad_tax = json.loads(json.dumps(self.spec))
+        bad_tax["property_tax"]["case"] = "D"
+        no_core = json.loads(json.dumps(self.spec))
+        no_core["components"][0]["core"] = False
+        half_in_place = json.loads(json.dumps(self.spec))
+        half_in_place["components"][0].pop("lease_expiry_month")
+        for spec in (bad_comp, bad_tax, no_core, half_in_place):
+            with self.assertRaises(ValueError):
+                self.C.solve_components(self.fd(spec), UST)
+        with self.assertRaises(ValueError):
+            self.C.from_dict({**self.spec, "bogus": 1})
+
+    # --- adversarial review fixes (2026-11-24) ---
+    def _leased(self, **kw):
+        """One fully leased core component, flat inputs: a deal with nothing vacant."""
+        comp = dict(name="Flex", sf=20_000, use_class="flex", core=True, rent_psf=12, exit_cap=0.075, in_place_rent_monthly=20_000,
+                    in_place_bump=0.03, first_bump_month=13, lease_expiry_month=200, renewal_p=0.75,
+                    renewal_downtime_m=12)
+        comp.update(kw.pop("comp", {}))
+        spec = dict(name="leased", market="Columbus OH", state="OH", components=[comp], year_built=1990,
+                    single_tenant=True,
+                    satellite=False, environmental_heavy_use=False, new_operating_competency=False,
+                    property_tax={"profile": "at_price", "rate": 0.02})
+        spec.update(kw)
+        return self.fd(spec)
+
+    def test_vacancy_floor_every_year(self):
+        m = self.C.model(self._leased(), 1_000_000)
+        for t in range(11):
+            self.assertAlmostEqual(m["rows"]["vacancy"][t], 0.05 * m["rows"]["gpr"][t], places=6)
+
+    def test_stabilization_year_cannot_be_later_than_schedule(self):
+        with self.assertRaises(ValueError):
+            self.C.solve_components(self._leased(stabilization_year=3), UST)   # fully leased: first full year = 1
+        self.assertEqual(self.C.first_full_year(self.deal()), 3)              # office paying from month 15
+
+    def test_core_vacant_lease_up_carry_in_allin(self):
+        vac = self._leased(comp=dict(in_place_rent_monthly=None, lease_expiry_month=None, downtime_m=9))
+        m = self.C.model(vac, 1_000_000)
+        allin = self.C.lease_up_allin(vac, 1_000_000)
+        carry = 9 / 12 * m["rows"]["opex"][self.C._stab_year(vac) - 1] / 20_000 * 20_000
+        self.assertAlmostEqual(allin, m["allin"] + sum(m["rows"]["lease_up_cost"]) + carry, places=4)
+        self.assertGreater(carry, 0)
+
+    def test_basis_fields_validated(self):
+        for kw in (dict(adders=["cranes", "cranes"]), dict(adders=["site_work", "paving_lighting"]),
+                   dict(year_built=2040), dict(land_flood_cleared="false"), dict(renovation_spend=100_000)):
+            with self.assertRaises(ValueError, msg=repr(kw)):
+                self.C.solve_components(self._leased(**kw), UST)
+
+    def test_exit_caps_checked_against_market(self):
+        r = self.C.solve_components(self._leased(comp=dict(exit_cap=0.05)), UST)
+        self.assertTrue(any("LOOSER THAN DOCTRINE" in f and "exit cap 5.00%" in f for f in r["flags"]))
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"][1]["exit_cap"] = 0.07          # non-core office below the 7.25% Mid-Atlantic cap
+        with self.assertRaises(ValueError):
+            self.C.solve_components(self.fd(spec), UST)
+
+    def test_looser_inputs_flagged(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"][1].update(ti_psf=0, lc_pct=0, downtime_m=1, free_m=0, growth=0.05)
+        spec.update(reserves_psf=0, credit_loss=0, mgmt_pct=0)
+        flags = " | ".join(self.C.solve_components(self.fd(spec), self.ENGINE_UST)["flags"])
+        for needle in ("new-lease TI", "new-lease LC", "free rent", "lease-up downtime", "market rent growth",
+                       "reserves", "credit loss", "management"):
+            self.assertIn(needle, flags)
+
+    def test_renewal_override_measured(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"][1].update(renewal_p=0.95, renewal_downtime_m=0)
+        r = self.C.solve_components(self.fd(spec), self.ENGINE_UST)
+        self.assertTrue(any("Office (L3-L4).renewal_downtime_m raises legs" in f for f in r["flags"]))
+
+    def test_office_finish_default_downtime_12(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"][1].pop("renewal_downtime_m")
+        c = self.fd(spec).components[1]
+        self.assertEqual(self.C._renewal_defaults(c, [])[1], 12)
+
+    def test_renewal_at_contract_keeps_bump_calendar(self):
+        c = self.C.Component(name="R", sf=1000, rent_psf=12, exit_cap=0.075, in_place_rent_monthly=1000,
+                             in_place_bump=0.03, first_bump_month=13, lease_expiry_month=66, renewal_p=1.0,
+                             renewal_downtime_m=5, renewal_at_contract=True)
+        sch = self.C.schedule(c, [])
+        self.assertAlmostEqual(sch.rent[66], 1000 * 1.03 ** 5)        # bumps at 13, 25, 37, 49, 61
+        self.assertAlmostEqual(sch.rent[67], sch.rent[66])            # no bump at the expiry
+        self.assertAlmostEqual(sch.rent[73], 1000 * 1.03 ** 6)        # next anniversary, month 73
+
+    def test_appeal_fee_on_full_bill_saving(self):
+        tax, fee = self.C.tax_by_year(self.deal(), 2_100_000)
+        hold, a = 4_359_090 * 1.025, 2_100_000
+        saving = hold * (0.0165 + 0.000972) - a * (0.0165 + 0.000972)
+        self.assertAlmostEqual(fee[1], 0.30 * saving, places=2)
+
+    def test_case_b_flag_only_when_assessment_above_price(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["property_tax"].update(current_base=100_000, assessor_value=100_000)   # below every walk here
+        r = self.C.solve_components(self.fd(spec), self.ENGINE_UST)
+        self.assertEqual(r["tax_case"], "A")                         # assessment below the price: A governs
+        self.assertFalse(any("is reported only: the walk is solved" in f for f in r["flags"]))
+        spec["property_tax"]["case"] = "C"
+        r = self.C.solve_components(self.fd(spec), self.ENGINE_UST)
+        self.assertEqual(r["tax_case"], "A")
+        self.assertLessEqual(r["binding_walk"], r["input_case"]["downside_walk"] + 0.5)
+
+    def test_entity_tax_fields_validated(self):
+        for kw in (dict(improvements_life=0), dict(depr_years=2), dict(minimum=-1e5), dict(exemption=-1)):
+            spec = json.loads(json.dumps(self.spec))
+            spec["entity_tax"].update(kw)
+            with self.assertRaises(ValueError, msg=repr(kw)):
+                self.C.solve_components(self.fd(spec), UST)
+
+    def test_capture_below_default_measured(self):
+        r = self.C.solve_components(self._leased(comp=dict(rent_psf=6, renewal_capture=0.0, lease_expiry_month=40)),
+                                    UST)
+        self.assertTrue(any("renewal_capture raises legs" in f for f in r["flags"]))
+
+    def test_property_tax_fields_validated(self):
+        for kw in (dict(addon_rate=-0.02), dict(rate=-0.01), dict(rate=0.0), dict(growth=-0.5),
+                   dict(appeal_fee_pct=-5), dict(growth="x")):
+            spec = json.loads(json.dumps(self.spec))
+            spec["property_tax"].update(kw)
+            with self.assertRaises(ValueError, msg=repr(kw)):
+                self.C.solve_components(self.fd(spec), UST)
+
+    def test_contract_bump_and_missing_costs_flagged(self):
+        r = self.C.solve_components(self._leased(comp=dict(contract_bump=0.10)), UST)
+        flags = " | ".join(r["flags"])
+        self.assertIn("contract bump 10.0%", flags)
+        self.assertIn("no insurance modeled", flags)
+        self.assertIn("no R&M modeled", flags)
+
+    # --- refute round 3 fixes ---
+    def test_dc_flat_rate_rejected(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["property_tax"]["rate"] = 0.0177
+        with self.assertRaises(ValueError):
+            self.C.solve_components(self.fd(spec), UST)
+
+    def test_state_must_match_profile(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["property_tax"] = {"profile": "at_price", "rate": 0.0165}
+        with self.assertRaises(ValueError):
+            self.C.solve_components(self.fd(spec), UST)
+
+    def test_dc_selector_uses_assessor_value(self):
+        # high in-force base, low proposed assessment: B (midpoint with the low path) would be looser than A
+        spec = json.loads(json.dumps(self.spec))
+        spec["property_tax"].update(current_base=4_359_090, assessor_value=150_000)
+        r = self.C.solve_components(self.fd(spec), self.ENGINE_UST)
+        self.assertEqual(r["tax_case"], "A")
+
+    def test_yield_never_reads_the_seller_bill_year(self):
+        # all leased, DC close: Yield reads the first year past the reset TY, never Year 1
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"] = [spec["components"][0]]
+        d = self.fd(spec)
+        self.assertEqual(self.C.first_full_year(d), 1)
+        self.assertEqual(self.C.tax_reset_year(d), 2)
+        self.assertEqual(self.C._stab_year(d), 2)
+        oct_close = self.fd({**spec, "close_date": "2027-10-01"})
+        self.assertEqual(self.C.tax_reset_year(oct_close), 2)   # TY2028 in force at close; reset TY2029 from Oct 2028
+
+    def test_office_as_core_flagged(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"][1]["core"] = True
+        r = self.C.solve_components(self.fd(spec), self.ENGINE_UST)
+        self.assertTrue(any("is office but marked core" in f for f in r["flags"]))
+
+    def test_office_finish_false_is_measured(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"][1].pop("renewal_downtime_m")
+        spec["components"][1]["office_finish"] = False
+        r = self.C.solve_components(self.fd(spec), self.ENGINE_UST)
+        self.assertTrue(any("Office (L3-L4).office_finish raises legs" in f for f in r["flags"]))
+
+    # --- refute round 4 fixes ---
+    def test_stabilization_year_before_reset_rejected(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"] = [spec["components"][0]]                 # all leased: first full year 1, reset year 2
+        spec["stabilization_year"] = 1
+        with self.assertRaises(ValueError):
+            self.C.solve_components(self.fd(spec), UST)
+
+    def test_office_core_flag_ignores_office_finish(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"][1].update(core=True, office_finish=False)
+        flags = self.C.solve_components(self.fd(spec), self.ENGINE_UST)["flags"]
+        self.assertTrue(any("is office but marked core" in f for f in flags))
+        self.assertTrue(any("Office (L3-L4).core raises legs" in f for f in flags))
+
+    def test_short_lease_term_measured(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"][1]["lease_term_m"] = 13
+        flags = self.C.solve_components(self.fd(spec), self.ENGINE_UST)["flags"]
+        self.assertTrue(any("lease_term_m raises legs" in f for f in flags))
+
+    def test_state_required_with_property_tax(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec.pop("state")
+        with self.assertRaises(ValueError):
+            self.C.solve_components(self.fd(spec), UST)
+
+    # --- refute round 5 fixes ---
+    def test_occ_cap_does_not_shrink_lease_up_allin(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"][1]["occ_cap"] = 0.45
+        d = self.fd(spec)
+        self.assertAlmostEqual(self.C.lease_up_allin(d, 1_000_000), self.C.lease_up_allin(self.deal(), 1_000_000),
+                               places=4)
+
+    def test_property_tax_defaults_measured(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["property_tax"].update(growth=0.0, appeal_fee_pct=0.0)
+        flags = self.C.solve_components(self.fd(spec), self.ENGINE_UST)["flags"]
+        self.assertTrue(any("property_tax.growth raises legs" in f for f in flags))
+
+    def test_combined_overrides_measured(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"][1].update(office_finish=False, renewal_downtime_m=5)
+        flags = self.C.solve_components(self.fd(spec), self.ENGINE_UST)["flags"]
+        self.assertTrue(any("together) raises legs" in f for f in flags))
+
+    def test_dc_without_close_date_and_stab_year_is_a_clean_error(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec.pop("close_date")
+        spec["stabilization_year"] = 3
+        with self.assertRaises(ValueError):
+            self.C.solve_components(self.fd(spec), UST)
+
+    def test_dc_profile_needs_dc_state_and_ubt(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["state"] = "MD"
+        with self.assertRaises(ValueError):
+            self.C.solve_components(self.fd(spec), UST)
+        r = self.C.solve_components(self.deal(entity_tax=None), self.ENGINE_UST)
+        self.assertTrue(any("no entity_tax on a DC deal" in f for f in r["flags"]))
+
+    # --- merge gate round 1 (test validity, correctness) ---
+    def _land_lifted(self, case="B"):
+        """Fixture with a large cleared land credit, so the Basis leg no longer binds and Base != Downside."""
+        return self.deal(tax_case=case, market_land_value=5_000_000, land_comp_count=5, land_flood_cleared=True)
+
+    def test_basis_leg_pinned(self):
+        r = self.solved("B")
+        self.assertAlmostEqual(r["legs_base"]["basis"], 232_986, delta=2)      # synthetic RCT regression pin
+        self.assertAlmostEqual(r["binding_walk"], 232_986, delta=2)
+        # independent check: the all-in at the Basis-leg price equals the doctrine maximum all-in
+        from ora_walk.solver import max_allin_basis, basis_context
+        d = self.deal(tax_case="B")
+        b = basis_context(self.C._whole_view(d), "Mid-Atlantic", [])
+        self.assertAlmostEqual(self.C.lease_up_allin(d, r["legs_base"]["basis"]),
+                               max_allin_basis(b["replacement"], b["v_floor"], b["land"]), delta=5)
+
+    def test_downside_binds_when_it_differs(self):
+        r = self.C.solve_components(self._land_lifted(), self.ENGINE_UST)
+        self.assertLess(r["downside_walk"], r["base_walk"] - 1)
+        self.assertEqual(r["binding_walk"], r["downside_walk"])
+        self.assertEqual(r["binding_case"], "Downside")
+
+    def test_lease_up_allin_reads_base_case_and_no_noncore_carry(self):
+        d = self.deal()
+        full = self.C.replace(d, components=[self.C.replace(c, occ_cap=1.0) for c in d.components])
+        m = self.C.model(full, 1_000_000, False)
+        # office is non-core: no Lease-Up carry; TI/LC on the Base case, never the Downside's capped/cut figures
+        self.assertAlmostEqual(self.C.lease_up_allin(d, 1_000_000), m["allin"] + sum(m["rows"]["lease_up_cost"]),
+                               places=4)
+
+    def test_renewal_cost_booked_in_expiry_year(self):
+        c = self.C.Component(name="R", sf=1000, rent_psf=12, exit_cap=0.075, in_place_rent_monthly=1000,
+                             lease_expiry_month=12, renewal_p=1.0, renewal_downtime_m=5)
+        years = [y for y, cost, lu in self.C.schedule(c, []).costs if not lu and cost > 0]
+        self.assertEqual(years[0], 1)                 # December expiry: cost in year 1, not the renewal's year 2
+
+    def test_each_default_departure_is_measured(self):
+        vac = dict(in_place_rent_monthly=None, lease_expiry_month=None, downtime_m=9)
+        cases = [
+            ("ti_psf", dict(vac, ti_psf=0)), ("lc_pct", dict(vac, lc_pct=0)), ("free_m", dict(vac, free_m=0)),
+            ("downtime_m", dict(vac, downtime_m=1)), ("growth", dict(vac, growth=0.05)),
+            ("contract_bump", dict(vac, contract_bump=0.08)),
+            ("renewal_ti_psf", dict(lease_expiry_month=40, renewal_ti_psf=0)),
+            ("renewal_lc_pct", dict(lease_expiry_month=40, renewal_lc_pct=0)),
+            ("renewal_downtime_m", dict(lease_expiry_month=40, renewal_downtime_m=0)),
+            ("renewal_p", dict(lease_expiry_month=40, renewal_p=0.95)),
+        ]
+        for key, comp in cases:
+            r = self.C.solve_components(self._leased(comp=comp), UST)
+            self.assertTrue(any(f"Flex.{key} raises legs" in f for f in r["flags"]), (key, r["flags"]))
+
+    def test_same_override_on_two_components_is_measured(self):
+        comps = [dict(name=n, sf=sf, use_class="flex", core=True, rent_psf=12, exit_cap=0.075, downtime_m=12, renewal_p=0.75,
+                      renewal_downtime_m=12) for n, sf in (("WH", 20_000), ("WH2", 15_000))]
+        comps.append(dict(name="INPL", sf=40_000, use_class="flex", core=True, rent_psf=12, exit_cap=0.075,
+                          in_place_rent_monthly=40_000, in_place_bump=0.03, lease_expiry_month=200, renewal_p=0.75,
+                          renewal_downtime_m=12))
+        spec = dict(name="two-vacant", market="Columbus OH", state="OH", components=comps, year_built=1990,
+                    single_tenant=False, satellite=False, environmental_heavy_use=False,
+                    new_operating_competency=False, insurance_psf=0.5, rm_psf=0.5,
+                    property_tax={"profile": "at_price", "rate": 0.015})
+        r = self.C.solve_components(self.fd(spec), 0.03)
+        self.assertTrue(any("all overrides together raises legs" in f or "downtime_m raises legs" in f
+                            for f in r["flags"]), r["flags"])
+
+    def test_dc_ubt_below_default_measured(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec.update(market_land_value=5_000_000, land_comp_count=5, land_flood_cleared=True)
+        spec["entity_tax"]["rate"] = 0.0
+        r = self.C.solve_components(self.fd(spec), self.ENGINE_UST)
+        self.assertTrue(any("entity_tax.rate raises legs" in f for f in r["flags"]), r["flags"])
+
+    def test_entity_tax_nol_and_first_year_fraction(self):
+        d = self.deal()
+        noi = [-50_000.0] + [100_000.0] * 9
+        cap = [0.0] * 10
+        t = self.C._entity_tax(d, noi, cap, 1_000_000.0, 0.0)
+        self.assertEqual(t[0], 250.0)                                   # loss year: minimum tax
+        no_nol = self.C._entity_tax(d, [100_000.0] * 10, cap, 1_000_000.0, 0.0)
+        self.assertLess(t[1], no_nol[1])                                 # year-1 loss shelters year 2
+        jun = self.deal(close_date="2027-06-01")
+        self.assertGreater(self.C._entity_tax(jun, [100_000.0] * 10, cap, 1_000_000.0, 0.0)[0],
+                           no_nol[0])                                    # mid-month fraction 6.5/12 < 11.5/12
+
+    def test_year11_releasing_cost_comes_off_proceeds(self):
+        comp = dict(lease_expiry_month=126, renewal_ti_psf=10)
+        m = self.C.model(self._leased(comp=comp), 1_000_000)
+        self.assertGreater(m["rows"]["capital"][10], 0)
+        gross = m["exit_gross"] * (1 - self._leased(comp=comp).sale_cost_pct)
+        self.assertAlmostEqual(m["net_sale"], gross - m["rows"]["capital"][10], places=4)
+
+    def test_cli_labels(self):
+        import contextlib
+        import io
+        import tempfile
+        from ora_walk import cli
+        spec = dict(name="lbl", market="Columbus OH", state="OH", year_built=1990, single_tenant=True,
+                    satellite=False, environmental_heavy_use=False, new_operating_competency=False,
+                    property_tax={"profile": "at_price", "rate": 0.02, "case": "C"},
+                    components=[dict(name="Flex", sf=20_000, use_class="flex", core=True, rent_psf=12, exit_cap=0.075,
+                                     in_place_rent_monthly=20_000, lease_expiry_month=200)])
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
+            json.dump(spec, fh)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            cli.main([fh.name, "--ust", "0.045"])
+        out = buf.getvalue()
+        self.assertIn("tax case at_price", out)
+        self.assertIn("IRR (no entity tax)", out)
+
+    # --- merge gate round 2 ---
+    def test_undeclared_departure_rejected(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec.pop("cited_overrides")
+        with self.assertRaises(ValueError) as cm:
+            self.C.solve_components(self.C.from_dict(spec), UST)
+        self.assertIn("Office (L3-L4).downtime_m", str(cm.exception))
+        spec = json.loads(json.dumps(self.spec))
+        spec["cited_overrides"]["credit_loss"] = " "
+        with self.assertRaises(ValueError):
+            self.C.solve_components(self.C.from_dict(spec), UST)
+
+    def test_depreciation_departures_declared_and_measured(self):
+        for kw, label in ((dict(cost_seg_5yr=1.0, cost_seg_15yr=0.0), "entity_tax.cost_seg"),
+                          (dict(depr_years=27.5), "entity_tax.depr_years")):
+            spec = json.loads(json.dumps(self.spec))
+            spec.update(market_land_value=5_000_000, land_comp_count=5, land_flood_cleared=True)
+            spec["entity_tax"].update(kw)
+            self.assertIn(label, self.C.departure_labels(self.C.from_dict(spec)))
+            with self.assertRaises(ValueError):                       # undeclared
+                self.C.solve_components(self.C.from_dict(spec), UST)
+            r = self.C.solve_components(self.fd(spec), self.ENGINE_UST)
+            self.assertTrue(any(f"{label} raises legs" in f for f in r["flags"]), (label, r["flags"]))
+
+    def test_noncore_warehouse_is_a_departure(self):
+        d = self._leased(comp=dict(core=False))
+        self.assertIn("Flex.core", self.C.departure_labels(self.C.replace(d, cited_overrides={})))
+
+    def test_occ_cap_departure_measured(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"][1].update(occ_cap=0.45, services_psf=40)
+        r = self.C.solve_components(self.fd(spec), self.ENGINE_UST)
+        self.assertTrue(any("Office (L3-L4).occ_cap raises legs" in f for f in r["flags"]), r["flags"])
+
+    def test_base_binds_when_downside_is_higher(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec.update(market_land_value=5_000_000, land_comp_count=5, land_flood_cleared=True)
+        spec["components"][1]["services_psf"] = 40
+        r = self.C.solve_components(self.fd(spec), self.ENGINE_UST)
+        self.assertEqual(r["binding_case"], "Base")
+        self.assertEqual(r["binding_walk"], r["base_walk"])
+        self.assertTrue(any("Base walk below Downside walk" in f for f in r["flags"]))
+
+    def test_yield_leg_reads_lease_up_allin(self):
+        d = self._land_lifted()
+        r = self.C.solve_components(d, self.ENGINE_UST)
+        y = r["legs_base"]["yield"]
+        s = self.C._stab_year(d) - 1
+        noi = self.C.model(d, y, False)["rows"]["noi"][s]
+        self.assertAlmostEqual(noi, D.YOC_FLOOR * self.C.lease_up_allin(d, y), delta=1.0)
+
+    def test_supplied_stabilization_year_is_read(self):
+        comps = [dict(name="WH", sf=20_000, use_class="flex", core=True, rent_psf=12, exit_cap=0.075, downtime_m=12),
+                 dict(name="INPL", sf=20_000, use_class="flex", core=True, rent_psf=12, exit_cap=0.075,
+                      in_place_rent_monthly=20_000, in_place_bump=0.03, lease_expiry_month=200)]
+        base = dict(name="stab", market="Columbus OH", state="OH", components=comps, year_built=1990,
+                    single_tenant=False, satellite=False, environmental_heavy_use=False,
+                    new_operating_competency=False, insurance_psf=0.5, rm_psf=0.5,
+                    property_tax={"profile": "at_price", "rate": 0.015})
+        d_none = self.fd(base)
+        d_one = self.fd({**base, "stabilization_year": 1})
+        self.assertEqual(self.C._stab_year(d_one), 1)
+        self.assertGreater(self.C._stab_year(d_none), 1)
+        # the carry reads stabilized OpEx at the derived year either way (an earlier year never lowers it)
+        self.assertAlmostEqual(self.C.lease_up_allin(d_one, 1_000_000), self.C.lease_up_allin(d_none, 1_000_000),
+                               places=4)
+
+    def test_entity_tax_depreciation_terms_pinned(self):
+        d = self.deal()
+        cap = [0.0] * 10
+        base = self.C._entity_tax(d, [100_000.0] * 10, cap, 1_000_000.0, 0.0)
+        no_cs = self.C._entity_tax(self.C.replace(d, entity_tax={**d.entity_tax, "cost_seg_5yr": 0.0,
+                                                                 "cost_seg_15yr": 0.0}),
+                                   [100_000.0] * 10, cap, 1_000_000.0, 0.0)
+        self.assertLess(base[0], no_cs[0])                           # cost-seg front-loads depreciation
+        # same building basis (all-in minus capex) both ways, so only the capex depreciation can move the tax
+        more = self.C._entity_tax(self.C.replace(d, capex=d.capex + 100_000.0), [100_000.0] * 10, cap,
+                                  1_100_000.0, 0.0)
+        rate = d.entity_tax["rate"]
+        self.assertAlmostEqual(base[0] - more[0], rate * 100_000.0 / 15 / 2, places=4)   # year 1: half-year
+        self.assertAlmostEqual(base[1] - more[1], rate * 100_000.0 / 15, places=4)       # year 2: full year
+        # re-leasing capital depreciates the same way (15-yr SL, half-year)
+        capd = self.C._entity_tax(d, [100_000.0] * 10, [0.0, 30_000.0] + [0.0] * 8, 1_000_000.0, 0.0)
+        self.assertAlmostEqual(base[1] - capd[1], rate * 30_000.0 / 15 / 2, places=4)
+        # R3-T2: the 15-yr MACRS share is depreciated (year 1 = 5% of the 15-yr basis)
+        only15 = self.C.replace(d, entity_tax={**d.entity_tax, "cost_seg_5yr": 0.0, "cost_seg_15yr": 0.08})
+        none = self.C.replace(d, entity_tax={**d.entity_tax, "cost_seg_5yr": 0.0, "cost_seg_15yr": 0.0})
+        t15 = self.C._entity_tax(only15, [100_000.0] * 10, cap, 1_000_000.0, 0.0)
+        t0 = self.C._entity_tax(none, [100_000.0] * 10, cap, 1_000_000.0, 0.0)
+        b15 = (1_000_000.0 - d.capex) * (1 - d.entity_tax["land_share"]) * 0.08
+        dep39_saved = b15 / 39 * (11.5 / 12)                         # the 15-yr share leaves the 39-yr basis
+        self.assertAlmostEqual(t0[0] - t15[0], rate * (b15 * 0.05 - dep39_saved), places=4)
+
+    # --- merge gate round 3 ---
+    def test_deal_tax_entity_defaults_each_a_departure(self):
+        spec = json.loads(json.dumps(self.spec))
+        cases = [("credit_loss", lambda s: s.update(credit_loss=0.01)),
+                 ("mgmt_pct", lambda s: s.update(mgmt_pct=0.03)),
+                 ("reserves_psf", lambda s: s.update(reserves_psf=0.10)),
+                 ("expense_growth", lambda s: s.update(expense_growth=0.02)),
+                 ("property_tax.growth", lambda s: s["property_tax"].update(growth=0.0)),
+                 ("property_tax.appeal_fee_pct", lambda s: s["property_tax"].update(appeal_fee_pct=0.1)),
+                 ("entity_tax.improvements_life", lambda s: s["entity_tax"].update(improvements_life=20)),
+                 ("entity_tax.depr_years", lambda s: s["entity_tax"].update(depr_years=27.5)),
+                 ("entity_tax.rate", lambda s: s["entity_tax"].update(rate=0.05)),
+                 ("entity_tax.exemption", lambda s: s["entity_tax"].update(exemption=50_000)),
+                 ("entity_tax.minimum", lambda s: s["entity_tax"].update(minimum=0)),
+                 ("entity_tax.cost_seg", lambda s: s["entity_tax"].update(cost_seg_5yr=0.15, cost_seg_15yr=0.0)),
+                 ("stabilization_year", lambda s: s.update(stabilization_year=2))]
+        for label, mutate in cases:
+            sp = json.loads(json.dumps(spec))
+            sp.update(market_land_value=5_000_000, land_comp_count=5, land_flood_cleared=True)
+            mutate(sp)
+            sp["cited_overrides"].pop(label, None)          # the fixture cites its own credit_loss departure
+            self.assertIn(label, self.C.departure_labels(self.C.from_dict(sp)), label)
+            with self.assertRaises(ValueError, msg=label):
+                self.C.solve_components(self.C.from_dict(sp), UST)
+
+    def test_looser_deal_level_departures_flagged(self):
+        for label, kw in (("credit_loss", dict(credit_loss=0.005)), ("reserves_psf", dict(reserves_psf=0.05))):
+            r = self.C.solve_components(self.fd({**json.loads(json.dumps(self.spec)), **kw,
+                                                 "market_land_value": 5_000_000, "land_comp_count": 5,
+                                                 "land_flood_cleared": True}), self.ENGINE_UST)
+            self.assertTrue(any(f"{label} raises legs" in f for f in r["flags"]), (label, r["flags"]))
+        for kw, label in ((dict(exemption=50_000), "entity_tax.exemption"),
+                          (dict(minimum=0.0), "entity_tax.minimum")):
+            sp = json.loads(json.dumps(self.spec))
+            sp.update(market_land_value=5_000_000, land_comp_count=5, land_flood_cleared=True)
+            sp["entity_tax"].update(kw)
+            r = self.C.solve_components(self.fd(sp), self.ENGINE_UST)
+            self.assertTrue(any(f"{label} raises legs" in f for f in r["flags"]), (label, r["flags"]))
+
+    def test_cost_seg_default_is_seven_eight(self):
+        d = self.deal()
+        self.assertNotIn("entity_tax.cost_seg", self.C.departure_labels(d))            # fixture 0.07 / 0.08
+        absent = self.C.replace(d, entity_tax={k: v for k, v in d.entity_tax.items()
+                                               if k not in ("cost_seg_5yr", "cost_seg_15yr")})
+        self.assertNotIn("entity_tax.cost_seg", self.C.departure_labels(absent))       # absent = default
+        noi = [150_000.0] * 10
+        self.assertEqual(self.C._entity_tax(absent, noi, [0.0] * 10, 1_000_000.0, 0.0),
+                         self.C._entity_tax(d, noi, [0.0] * 10, 1_000_000.0, 0.0))        # engine applies 7/8 too
+        one = self.C.replace(d, entity_tax={**absent.entity_tax, "cost_seg_5yr": 0.95})    # 15-yr omitted = 0.08
+        with self.assertRaises(ValueError):
+            self.C.validate(self.C.replace(one, cited_overrides={"entity_tax.cost_seg": "t", **d.cited_overrides}))
+        for cs in ((0.08, 0.08), (0.0, 0.20), (0.15, 0.0), (0.0, 0.0), (0.07, 0.20), (0.07, 0.0)):
+            other = self.C.replace(d, entity_tax={**d.entity_tax, "cost_seg_5yr": cs[0], "cost_seg_15yr": cs[1]})
+            self.assertIn("entity_tax.cost_seg", self.C.departure_labels(other), cs)
+
+    def test_core_default_comes_from_use_class_only(self):
+        base = self._leased(comp=dict(in_place_rent_monthly=None, lease_expiry_month=None, downtime_m=9))
+        c = base.components[0]
+        # office_finish on a warehouse-class component never makes non-core the default
+        of = self.C.replace(base, components=[self.C.replace(c, office_finish=True, core=False)])
+        self.assertIn("Flex.core", self.C.departure_labels(of))
+        # free text mentioning an office never changes the default either
+        txt = self.C.replace(base, components=[self.C.replace(c, use="flex warehouse with front office",
+                                                               core=False)])
+        self.assertIn("Flex.core", self.C.departure_labels(txt))
+        ok = self.C.replace(base, components=[self.C.replace(c, use="flex warehouse with front office")])
+        self.assertNotIn("Flex.core", self.C.departure_labels(ok))
+
+    def test_office_finish_default_comes_from_use_class_only(self):
+        c = self.C.Component(name="WH2", sf=4_000, use="flex warehouse with front office", use_class="flex",
+                             core=True, rent_psf=12, exit_cap=0.075, downtime_m=9)
+        band = next(v for bound, v in D.ROLLOVER_DOWNTIME_BY_SF if 4_000 < bound)
+        self.assertEqual(self.C._renewal_defaults(c, [])[1], band)          # not the 12-month office-finish value
+        d = self._leased(comp=dict(use="flex warehouse with front office"))
+        self.assertFalse([lb for lb in self.C.departure_labels(d) if lb.endswith(".office_finish")])
+        # the departure comparison reads use_class, never the free text, in both directions
+        flex_of = self._leased(comp=dict(use="flex warehouse with front office", office_finish=True))
+        self.assertIn("Flex.office_finish", self.C.departure_labels(flex_of))
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"][1].update(use="walk-up suites, full service", office_finish=False)
+        spec["components"][1].pop("renewal_downtime_m")
+        self.assertIn("Office (L3-L4).office_finish", self.C.departure_labels(self.C.from_dict(spec)))
+
+    def test_use_class_required_and_names_reserved(self):
+        spec = json.loads(json.dumps(self.spec))
+        spec["components"][0].pop("use_class")
+        with self.assertRaises(ValueError):
+            self.C.solve_components(self.C.from_dict(spec), UST)
+        for bad in ("property_tax", "entity_tax", "credit_loss", "a.b"):
+            spec = json.loads(json.dumps(self.spec))
+            old = spec["components"][0]["name"]
+            spec["components"][0]["name"] = bad
+            spec["cited_overrides"] = {k.replace(old, bad, 1): v for k, v in spec["cited_overrides"].items()}
+            with self.assertRaisesRegex(ValueError, "reserved", msg=bad):
+                self.C.solve_components(self.C.from_dict(spec), UST)
+        ok = json.loads(json.dumps(self.spec))                       # control: a plain name with citations passes
+        self.C.validate(self.C.from_dict(ok))
+
+    def test_clamp_keeps_a_reference_valid(self):
+        # supplied stabilization_year 3 is valid with 12-month downtime; resetting downtime to 9 moves the derived
+        # year to 2, so the downtime trial must not read year 3 against its own schedule (clamp)
+        comps = [dict(name="WH", sf=20_000, use_class="flex", core=True, rent_psf=12, exit_cap=0.075, downtime_m=12),
+                 dict(name="INPL", sf=20_000, use_class="flex", core=True, rent_psf=12, exit_cap=0.075,
+                      in_place_rent_monthly=20_000, in_place_bump=0.03, lease_expiry_month=200)]
+        spec = dict(name="clamp", market="Columbus OH", state="OH", components=comps, year_built=1990,
+                    single_tenant=False, satellite=False, environmental_heavy_use=False,
+                    new_operating_competency=False, insurance_psf=0.5, rm_psf=0.5, stabilization_year=3,
+                    property_tax={"profile": "at_price", "rate": 0.015})
+        d = self.fd(spec)
+        ref = [r for lb, r in self.C.departures(d) if lb == "WH.downtime_m"][0]
+        self.assertEqual(self.C._min_stab_year(ref), 2)
+        r = self.C.solve_components(d, UST)
+        down = [f for f in r["flags"] if f.startswith("LOOSER THAN DOCTRINE: WH.downtime_m")]
+        self.assertTrue(down, r["flags"])
+        self.assertIn("Base yield", down[0])          # measured against the year-2 reference, not year 3
+
+    def test_dc_parcel_null_assessment_is_a_gap(self):
+        import dc_parcel_pull as DCP
+        attrs = {"SSL": "0067    0066", "PREMISEADD": "X", "CLASSTYPE": "2", "NEWTOTAL": None, "LANDAREA": 1100}
+        orig = DCP.get
+        DCP.get = lambda url, params, timeout=40: {"features": [{"attributes": attrs, "geometry": {}}]} \
+            if "MapServer/40" in url else {"features": []}
+        try:
+            out = DCP.pull(ssl="0067 0066")
+        finally:
+            DCP.get = orig
+        self.assertIsNone(out["next_bill"]["real_property_tax"])
+        self.assertIn("proposed [DATA-GAP]", DCP.to_md(out))
+
+    def test_cli_routes_components(self):
+        import contextlib
+        import io
+        from ora_walk import cli
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = cli.main([self.FIXTURE, "--ust", "0.05", "--json"])
+        self.assertEqual(rc, 0)
+        out = json.loads(buf.getvalue())
+        self.assertIn("binding_walk", out)
+        self.assertAlmostEqual(out["binding_walk"], self.solved("A")["binding_walk"], delta=1)
+
+
 if __name__ == "__main__":
     unittest.main()

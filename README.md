@@ -113,6 +113,7 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 | `retail-underwrite-lens` | Retail strip and neighborhood-center lens tabs for FULL-mode underwriting |
 | `cost-seg-tax-layer` | After-tax returns: cost-segregation allocation, recapture and a per-state tax layer |
 | `ora-millage-lookup` | Resolves a parcel's tax rate, assessed value and tax history from verified government sources |
+| `property-tax-timing` | Year-by-year tax line when the first year is billed on the seller's base (DC, Michigan): reset tax year and A/B/C/PW cases |
 | `ora-flood-zoning-dd` | FEMA flood determination and zoning/permitted-use verification for DD-critical screen items |
 | `deal-comparison` | Side-by-side comparison of two or more candidates and portfolio-fit scoring |
 | `model-bulk-edit` | Changes one input safely across many financial models and audits workbooks with no cached values |
