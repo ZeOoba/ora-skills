@@ -70,7 +70,8 @@ verify - exit 1 if any removed path is still reachable, any rule still matches a
          or filter (images in a PDF), PDF text drawn with a font's own glyph codes
          (Identity-H/V), a container nested more than one level deep, an image file, a
          gzip/bzip2/xz/7z/rar archive, a legacy Office (OLE2) file - is listed
-         at the end as OPAQUE <blob> path=<a path> commit=<a commit> reason=<why>; OPAQUE
+         at the end as OPAQUE <blob> path=<a path> commit=<a commit> ref=<a branch, tag or
+         notes ref that reaches the commit> reason=<why>; OPAQUE
          does not change the exit code: open each one and check it, or remove it by path.
          A configured phone number is found in ANY punctuated form: within a span of digit
          groups joined by 1-4 of ()[]./+-, whitespace, a Unicode dash or a no-break/thin
@@ -427,19 +428,21 @@ def mask(data, patterns):
 
 
 def blob_origins(repo, shas):
-    """sha -> (a path, a commit) that stored it, from branches and tags; absent if unreachable."""
-    want, out, commit = set(shas), {}, ""
-    toks = git(repo, "log", "-z", "--raw", "--no-abbrev", "--no-renames", "--root", "-m", "--format=%x01%H",
-               "--branches", "--tags", NOTES).split(b"\0")
+    """sha -> (a path, a commit, a ref reaching that commit) that stored it, from branches, tags
+    and notes refs; absent if unreachable."""
+    want, out, commit, ref = set(shas), {}, "", b""
+    toks = git(repo, "log", "-z", "--raw", "--no-abbrev", "--no-renames", "--root", "-m", "--source",
+               "--format=%x01%H %S", "--branches", "--tags", NOTES).split(b"\0")
     i = 0
     while i < len(toks):
         t = toks[i].lstrip(b"\n")
         if t.startswith(b"\x01"):
-            commit = t[1:].decode()
+            c, _, ref = t[1:].partition(b" ")
+            commit = c.decode()
         elif t.startswith(b":") and i + 1 < len(toks):
             new = t.split()[3].decode()
             if new in want and new not in out:
-                out[new] = (toks[i + 1], commit)
+                out[new] = (toks[i + 1], commit, ref)
             i += 1
         i += 1
     return out
@@ -758,9 +761,10 @@ def verify(repo, cfg, rules_path):
           "or remove it by path" % (len(opaque), res["opaque_at_tip"]))
     origins = blob_origins(repo, opaque) if opaque else {}
     for sha in sorted(opaque):
-        path, commit = origins.get(sha, (b"(none)", "(unreachable)"))
+        path, commit, ref = origins.get(sha, (b"(none)", "(unreachable)", b"(none)"))
         why = "; ".join(sorted(opaque[sha])).encode("utf-8", "surrogateescape")
-        print("OPAQUE %s path=%s commit=%s reason=%s" % (sha, printable(path), commit, printable(why)))
+        print("OPAQUE %s path=%s commit=%s ref=%s reason=%s"
+              % (sha, printable(path), commit, printable(ref), printable(why)))
     return 1 if (removed or hit_blobs or msg_hits or res["left"] or ref_hits) else 0
 
 

@@ -478,6 +478,25 @@ class PrepareTest(Base):
         self.assertEqual(code, 2)
         self.assertFalse(os.path.exists(os.path.join(work, "purge-backup-refs.txt")))
 
+    def test_prepare_refuses_a_copy_that_differs_from_the_snapshot(self):
+        # R4-07 (L09): the backup reads the same before and after the copy (it moved and moved back:
+        # ABA), but the copy holds another value for b1. The snapshot would then not describe the copy.
+        work = os.path.join(self.tmp.name, "aba.git")
+        real_sh, moved = leased_push.sh, []
+
+        def sh(args):
+            r = real_sh(args)
+            if not moved and "fetch" in args and work in args:
+                moved.append(1)
+                git(work, "update-ref", "refs/heads/b1", git(work, "rev-parse", "refs/heads/b0"))
+            return r
+        with mock.patch.object(leased_push, "sh", sh), mock.patch("sys.stdout"):
+            code = leased_push.prepare([self.mirror, work])
+        self.assertEqual(moved, [1])
+        self.assertNotEqual(git(work, "rev-parse", "refs/heads/b1"), git(self.mirror, "rev-parse", "refs/heads/b1"))
+        self.assertEqual(code, 2)
+        self.assertFalse(os.path.exists(os.path.join(work, "purge-backup-refs.txt")))
+
     def test_unreadable_remote_after_the_push_is_never_success(self):
         # R2-15 (P30): every ref pushed cleanly, but the re-check after the push (the second
         # `ls-remote refs/heads/* refs/tags/*`) fails as on a network drop: exit 2, never 0.

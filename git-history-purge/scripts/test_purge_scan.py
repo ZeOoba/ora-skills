@@ -720,7 +720,9 @@ class PurgeScanTest(unittest.TestCase):
             r.commit(delete=list(files))
             v = run("verify", r.path, cfg, self.rules)
             out = v.stdout + v.stderr
-            if v.returncode != 1 or any(s in out for s in ("987,653", "987653", LIT, "6145550124", "555-0124")):
+            # R4-07 (P05/P08): a crash also exits 1; only verify's own count says the value was found.
+            if v.returncode != 1 or "values still present: 1 (" not in v.stdout or "Traceback" in out or \
+                    any(s in out for s in ("987,653", "987653", LIT, "6145550124", "555-0124")):
                 missed.append("%s (exit %d)" % (name, v.returncode))
         return missed
 
@@ -836,6 +838,86 @@ class PurgeScanTest(unittest.TestCase):
         parts, why = purge_scan.expand(pdf)
         self.assertEqual(why, {"PDF text in font glyph codes (Identity-H/V)"})
 
+    # ---- R4-07: PDF layouts the round-4 mutants P01-P08 hid -----------------------------------
+    @staticmethod
+    def _pdf_objs(*objs):
+        """A minimal PDF from raw object bodies (see _stream)."""
+        out = b"%PDF-1.4\n"
+        for i, o in enumerate(objs, 1):
+            out += b"%d 0 obj\n" % i + o + b"\nendobj\n"
+        return out + b"trailer\n<< /Root 1 0 R >>\n%%EOF\n"
+
+    @staticmethod
+    def _stream(data, dict_extra=b"", nl=b"\n"):
+        return b"<< /Length %d%s >>\nstream" % (len(data), dict_extra) + nl + data + b"\nendstream"
+
+    def test_verify_finds_values_in_pdf_stream_and_string_layouts_round5(self):
+        fl = b" /Filter /FlateDecode"
+        text = zlib.compress(b"BT /F1 12 Tf (NOI 987,653) Tj ET")
+        layouts = {
+            "P01 'stream' keyword followed by CR LF": {"m.pdf": self._pdf_objs(self._stream(text, fl, b"\r\n"))},
+            "P02 /Filter in array form [/FlateDecode]": {
+                "m.pdf": self._pdf_objs(self._stream(text, b" /Filter [/FlateDecode]"))},
+            "P06 nested balanced parentheses in a TJ piece": {"m.pdf": self._pdf_objs(self._stream(zlib.compress(
+                b"BT [(Price (net) 987,)-15(653)] TJ ET"), fl))},
+            "P07 literal split by a backslash-newline continuation": {"m.pdf": self._pdf_objs(self._stream(
+                zlib.compress(b"BT (NOI 987,\\\n653) Tj ET"), fl))},
+            "P07 literal split by a backslash-CRLF continuation": {"m.pdf": self._pdf_objs(self._stream(
+                zlib.compress(b"BT (NOI 987,\\\r\n653) Tj ET"), fl))},
+            "P05 odd-length hex string before the value": {"m.pdf": self._pdf_objs(self._stream(zlib.compress(
+                b"BT <414> Tj (NOI 987,653) Tj ET"), fl))},
+            "P08 octal escape before the value": {"m.pdf": self._pdf_objs(self._stream(zlib.compress(
+                b"BT (caf\\351) Tj (NOI 987,653) Tj ET"), fl))},
+        }
+        for files in layouts.values():
+            for raw in (b"987,653", b"987653"):
+                self.assertNotIn(raw, files["m.pdf"])
+        self.assertEqual(self._verify_each_layout(layouts), [])
+
+    def test_verify_never_crashes_on_malformed_pdf_strings(self):
+        # P05 / P08: an odd-length hex string or an octal escape crashed verify, and a crash exits 1
+        # like a real find. With no value present verify must exit 0 with no traceback.
+        self.config(values=[987653], phones=False)
+        self.r.commit({"a.md": "x\n"})
+        for name, content in (("odd.pdf", b"BT <414> Tj [<4e4f4> 12 (x)] TJ ET"),
+                              ("octal.pdf", b"BT (caf\\351 \\0 \\777 \\8) Tj ET")):
+            self.r.commit({name: self._pdf_objs(self._stream(zlib.compress(content), b" /Filter /FlateDecode"))})
+            self.r.commit(delete=[name])
+        self._empty_rules()
+        v = self.verify()
+        self.assertEqual(v.returncode, 0, v.stdout + v.stderr)
+        self.assertNotIn("Traceback", v.stderr)
+        self.assertIn("values still present: 0 (0 occurrences)", v.stdout)
+
+    def test_identity_h_font_as_a_plain_object_is_opaque(self):
+        # P04: the font dictionary sits outside every stream.
+        pdf = self._pdf_objs(self._stream(zlib.compress(b"BT /F1 12 Tf <00340035> Tj ET"), b" /Filter /FlateDecode"),
+                             b"<< /Type /Font /Subtype /Type0 /BaseFont /X /Encoding /Identity-H >>")
+        self.assertEqual(purge_scan.expand(pdf)[1], {"PDF text in font glyph codes (Identity-H/V)"})
+
+    def test_identity_h_font_only_inside_a_compressed_object_stream_is_opaque(self):
+        # P03: the font dictionary is only inside a FlateDecode /ObjStm, so the raw bytes never show it.
+        objstm = zlib.compress(b"5 0 << /Type /Font /Subtype /Type0 /Encoding /Identity-H >>")
+        pdf = self._pdf_objs(self._stream(zlib.compress(b"BT /F1 12 Tf <00340035> Tj ET"), b" /Filter /FlateDecode"),
+                             self._stream(objstm, b" /Type /ObjStm /N 1 /First 4 /Filter /FlateDecode"))
+        self.assertNotIn(b"Identity", pdf)
+        self.assertEqual(purge_scan.expand(pdf)[1], {"PDF text in font glyph codes (Identity-H/V)"})
+
+    def test_zip_member_at_the_real_size_cap(self):
+        # P18: a member whose central directory declares exactly MAX_MEMBER bytes is read; one byte
+        # more is opaque. Only the declared size is forged (stored, the real data is small).
+        def forged(size):
+            z = bytearray(self._zip({"xl/s.xml": "<t>987,653</t>"}, zipfile.ZIP_STORED))
+            i = z.index(b"PK\x01\x02")
+            z[i + 24:i + 28] = size.to_bytes(4, "little")
+            return bytes(z)
+        parts, why = purge_scan.expand(forged(256 << 20))
+        self.assertEqual(why, set())
+        self.assertTrue(any(b"987,653" in p for p in parts))
+        parts, why = purge_scan.expand(forged((256 << 20) + 1))
+        self.assertEqual(why, {"zip member too large xl/s.xml"})
+        self.assertFalse(any(b"987,653" in p for p in parts))
+
     def test_opaque_line_masks_values_in_its_path_and_reason(self):
         # PS39 / PS40: the OPAQUE line printed the path and an encrypted member's name unmasked.
         self.config(values=[987653], phones=False)
@@ -888,6 +970,39 @@ class PurgeScanTest(unittest.TestCase):
         self.assertIn("blobs matching a rule: 1", v.stdout)
         self.assertIn("REF-NAME refs/notes/deal-[private]", v.stdout)
         self.assertNotIn("987653", v.stdout + v.stderr)
+
+    def test_rule_match_in_a_notes_commit_message_fails_verify(self):
+        # P22: the message is on a commit of refs/notes/commits only (no branch or tag reaches it),
+        # and the rule is not a configured value, so only the message check can catch it.
+        self.config(values=[987653], phones=False)
+        self.r.commit({"a.md": "x\n"})
+        git(self.r.path, "notes", "add", "-m", "plain note", "HEAD")
+        tree = git(self.r.path, "rev-parse", "refs/notes/commits^{tree}").strip()
+        parent = git(self.r.path, "rev-parse", "refs/notes/commits").strip()
+        c = git(self.r.path, "commit-tree", tree, "-p", parent, "-m", "notes: zq-marker-77 agreed").strip()
+        git(self.r.path, "update-ref", "refs/notes/commits", c)
+        self._rules_file("regex:zq-marker-77==>[gone]")
+        v = self.verify()
+        self.assertEqual(v.returncode, 1, v.stdout)
+        for line in ("removed paths still reachable: 0", "blobs matching a rule: 0", "message hits: 1",
+                     "values still present: 0", "names holding a value or matching a rule: 0"):
+            self.assertIn(line, v.stdout)
+
+    def test_opaque_blob_only_in_a_notes_ref_names_its_note_path_commit_and_ref(self):
+        # P21: a PNG stored only as a note: its OPAQUE line must say where it lives, not "(unreachable)".
+        self.config(values=[987653], phones=False)
+        self.r.commit({"a.md": "x\n"})
+        head = git(self.r.path, "rev-parse", "HEAD").strip()
+        png = subprocess.run(["git", "-C", self.r.path, "hash-object", "-w", "--stdin"], input=b"\x89PNG\r\n\x1a\n" +
+                             bytes(300), capture_output=True, check=True, env=ENV).stdout.decode().strip()
+        git(self.r.path, "notes", "add", "-C", png, "HEAD")
+        notes_commit = git(self.r.path, "rev-parse", "refs/notes/commits").strip()
+        self._empty_rules()
+        v = self.verify()
+        self.assertEqual(v.returncode, 0, v.stdout)
+        lines = [l for l in v.stdout.splitlines() if l.startswith("OPAQUE ")]
+        self.assertEqual(lines, ["OPAQUE %s path=%s commit=%s ref=refs/notes/commits reason=image (PNG)"
+                                 % (png, head, notes_commit)], v.stdout)
 
     # ---- R3-06: renaming a tag whose name holds a value ------------------------------------
     def test_tag_rename_recipe_leaves_no_old_tag_object(self):

@@ -688,6 +688,28 @@ class RehomeHappyTest(unittest.TestCase):
         self.assertIn(self.ow, text)
         self.assertIn("worktree repair", text)
         self.assertIn("refs/heads/kept/ü-1", text)
+        self.assertIn("Result: verified", text)
+
+    def test_rehome_md_names_where_each_folder_now_is(self):                    # R4-09 (T24)
+        text = read(os.path.join(self.arch, "REHOME.md")).decode("utf-8")
+        self.assertIn("- OLD %s -> %s" % (self.ow, find_archived(self.arch, "old wt")), text)
+        self.assertIn("- KEPT %s -> %s" % (self.out, find_archived(self.arch, "out ü")), text)
+        self.assertIn("- KEPT %s -> %s" % (self.live, self.archived_repo), text)
+
+    def test_rehome_md_lists_kept_stash_entries_and_worktrees(self):            # R4-09 (T26, T27)
+        lines = read(os.path.join(self.arch, "REHOME.md")).decode("utf-8").splitlines()
+        kept2, old, kept1 = self.stash_before
+        self.assertIn("- stash entry %s" % kept1, lines)
+        self.assertIn("- stash entry %s" % kept2, lines)
+        self.assertNotIn("- stash entry %s" % old, lines)
+        for p in (self.inside, self.out, self.det):
+            self.assertIn("- worktree %s" % p, lines)
+        self.assertNotIn("- worktree %s" % self.ow, lines)
+
+    def test_restore_command_named_in_rehome_md(self):                          # R4-06
+        text = read(os.path.join(self.arch, "REHOME.md")).decode("utf-8")
+        self.assertIn("local_cleanup.py restore", text)
+        self.assertIn("core.worktree", text)
 
     def test_relative_paths_resolved_against_the_working_directory(self):     # G1-18
         d = fresh("relative")
@@ -976,6 +998,10 @@ class RehomeFailureTest(unittest.TestCase):
         self.assertIn(self.arch, out)
         self.assertEqual(refs(os.path.join(self.arch, "repo")), self.refs)
         self.assertEqual(read(os.path.join(find_archived(self.arch, "b"), "dirty.txt")), b"old dirty\n")
+        result = [l for l in read(os.path.join(self.arch, "REHOME.md")).decode("utf-8").splitlines()
+                  if l.startswith("Result:")]
+        self.assertEqual(len(result), 1)
+        self.assertTrue(result[0].startswith("Result: FAILED"), result)            # R4-09 (T25)
 
 
     # ---- verification catches what did not come across (faults injected after the clone)
@@ -1012,6 +1038,189 @@ class RehomeFailureTest(unittest.TestCase):
         self.assertEqual(rc, 5, out)
         self.assertIn("recorded HEAD", out)
 
+    def test_recreated_worktree_on_another_branch_exit_5(self):                 # R4-12 (T22)
+        def replace(real, repo, args, kw):
+            if args[:2] == ("worktree", "add") and args[-1] == "a-br":
+                return real(repo, "worktree", "add", "-q", "-b", "not-a-br", args[-2], "a-br")
+        rc, out = self.rehome(replace=replace)
+        self.assertEqual(rc, 5, out)
+        self.assertIn("recorded HEAD/branch/lock", out)
+
+    def test_relock_skipped_exit_5(self):                                       # R4-12 (T23)
+        git(self.live, "worktree", "lock", "--reason", "held", self.a)
+        r, _ = inventory(self.live, self.inv)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        rc, out = self.rehome(replace=lambda real, repo, args, kw: fake_result(0) if args[:2] == ("worktree", "lock")
+                              else None)
+        self.assertEqual(rc, 5, out)
+        self.assertIn("recorded HEAD/branch/lock", out)
+
+    # ---- the quiet window really waits, 60 s by default (R4-08: T14, T15)
+    def fake_clock(self, slept):
+        import types
+
+        def sleep(seconds):
+            slept.append(seconds)
+            git(self.live, "branch", "late", S.new_main)                     # a writer inside the window
+        return lambda mod: setattr(mod, "time", types.SimpleNamespace(sleep=sleep, time=mod.time.time))
+
+    def test_quiet_window_sleeps_and_sees_a_writer_exit_4(self):
+        slept = []
+        rc, out = self.rehome(setup=self.fake_clock(slept))
+        self.refs = refs(self.live)
+        self.assertEqual(slept, [0.0])
+        self.assert_refused_before_change(rc, out, 4)
+        self.assertIn("quiet window", out)
+
+    def test_quiet_window_default_is_60_seconds(self):
+        slept = []
+        rc, out = self.rehome(setup=self.fake_clock(slept),
+                              argv=["rehome", self.live, self.inv, self.arch, S.purged, "--exclusive"])
+        self.refs = refs(self.live)
+        self.assertEqual(slept, [60.0])
+        self.assert_refused_before_change(rc, out, 4)
+
+    # ---- the snapshot sees each kind of change (R4-12: LC04, LC06, LC10, LC12, LC13)
+    def assert_change_detected(self, key_part):
+        rc, out = self.rehome()
+        self.assert_refused_before_change(rc, out, 4)
+        self.assertIn(key_part, out)
+
+    def test_pseudo_ref_written_after_inventory_exit_4(self):                  # LC04
+        write(os.path.join(self.live, ".git", "ORIG_HEAD"), S.c[0] + "\n")     # `git stash` left new_main there
+        self.assert_change_detected("pseudo|ORIG_HEAD")
+
+    def test_long_pseudo_ref_rewritten_after_inventory_exit_4(self):           # LC13
+        fh = os.path.join(self.live, ".git", "FETCH_HEAD")
+        write(fh, "%s\t\tbranch 'a' of x\n%s\t\tbranch 'b' of x\n" % (S.new_main, S.c[0]))
+        r, _ = inventory(self.live, self.inv)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        write(fh, "%s\t\tbranch 'a' of x\n%s\t\tbranch 'b' of x\n" % (S.c[0], S.new_main))
+        self.assert_change_detected("pseudo|FETCH_HEAD")
+
+    def test_reflog_rewritten_in_place_same_size_exit_4(self):                 # LC06
+        log = os.path.join(self.live, ".git", "logs", "HEAD")
+        data = bytearray(read(log))
+        data[-2] = ord("X") if data[-2] != ord("X") else ord("Y")             # last message character
+        write(log, bytes(data))
+        self.assert_change_detected("reflog|HEAD")
+
+    def test_untracked_file_added_after_inventory_exit_4(self):                # LC10
+        write(os.path.join(self.b, "late.txt"), "written after the inventory\n")
+        self.assert_change_detected("late.txt")
+
+    def test_status_failure_counts_as_a_change_exit_4(self):                   # LC12
+        clean = norm(self.a)                                                    # a CLEAN worktree: no file keys
+        rc, out = self.rehome(replace=lambda real, repo, args, kw: fake_result(128) if args[:1] == ("status",)
+                              and "--porcelain=v2" in args and norm(repo) == clean else None)
+        self.assert_refused_before_change(rc, out, 4)
+        self.assertIn("|file|", out)
+
+    # ---- one run at a time; a change after the gate is still caught (R4-10)
+    def test_second_rehome_during_the_first_exit_4(self):
+        arch2, state = os.path.join(self.d, "arch2"), {}
+
+        def fn(real, src, dst):
+            if not state:
+                state["b"] = run("rehome", self.live, self.inv, arch2, S.purged, *Q)
+            return real(src, dst)
+        with patched_rename(fn):
+            rc, out = self.rehome()
+        self.assertEqual(state["b"].returncode, 4, state["b"].stdout + state["b"].stderr)
+        self.assertIn("rehome.lock", state["b"].stdout)
+        self.assertFalse(os.path.exists(arch2))
+        self.assertEqual(rc, 0, out)
+        self.assertFalse(os.path.exists(self.live + ".rehome.lock"))          # released at the end
+
+    def test_existing_lock_file_exit_4(self):
+        lock = self.live + ".rehome.lock"
+        write(lock, "pid 1\n")
+        rc, out = self.rehome()
+        self.assert_refused_before_change(rc, out, 4)
+        self.assertTrue(os.path.isfile(lock))                                  # never removed: not ours
+        self.assertFalse(os.path.exists(self.arch))
+
+    def test_change_after_the_quiet_gate_exit_4(self):
+        def setup(mod):
+            real = mod.quiet_gate
+
+            def gate(repo, a):
+                snap = real(repo, a)
+                git(self.live, "branch", "after-gate", S.new_main)
+                return snap
+            mod.quiet_gate = gate
+        rc, out = self.rehome(setup=setup)
+        self.refs = refs(self.live)
+        self.assert_refused_before_change(rc, out, 4)
+        self.assertIn("refs/heads/after-gate", out)
+        self.assertFalse(os.path.exists(self.arch))
+
+    # ---- rollback details (R4-12: T18, T19, T32)
+    def test_repair_that_ran_then_failed_is_repaired_back_exit_3(self):
+        def replace(real, repo, args, kw):
+            if args[:2] == ("worktree", "repair") and norm(repo).startswith(norm(self.arch)):
+                real(repo, *args, **kw)                                       # links now point into the archive
+                return fake_result(1)
+        rc, out = self.rehome(replace=replace)
+        self.assertEqual(rc, 3, out)
+        self.assert_original_layout()
+
+    def test_rollback_leaves_no_archive_dir_so_a_retry_works(self):
+        with patched_rename(self.fail_rename_of(self.live)):
+            rc, out = self.rehome()
+        self.assertEqual(rc, 3, out)
+        self.assertFalse(os.path.exists(self.arch))
+        rc, out = self.rehome()
+        self.assertEqual(rc, 0, out)
+
+    def test_clone_url_inside_the_checkout_refused(self):
+        rc, out = self.rehome(argv=["rehome", self.live, self.inv, self.arch, os.path.join(self.live, ".git")]
+                              + list(Q))
+        self.assert_refused_before_change(rc, out)
+        self.assertFalse(os.path.exists(self.arch))
+
+    # ---- the new clone is prepared aside; nothing written at the path meanwhile is lost (R4-02)
+    def test_path_recreated_while_the_clone_is_prepared_exit_5_nothing_lost(self):
+        state = {}
+
+        def replace(real, repo, args, kw):
+            if args[:1] == ("clone",) and not state:
+                res = real(repo, *args, **kw)
+                state["x"] = 1
+                write(os.path.join(self.live, "README.md"), "B: written at the path after the clone\n")
+                return res
+        rc, out = self.rehome(replace=replace)
+        self.assertEqual(rc, 5, out)
+        self.assertEqual(read(os.path.join(self.live, "README.md")), b"B: written at the path after the clone\n")
+        self.assertEqual(os.listdir(self.live), ["README.md"])
+        self.assertTrue(os.path.isdir(os.path.join(self.arch, "new-clone", ".git")))
+        self.assertIn("new-clone", out)
+
+    def test_commit_in_the_new_clone_during_worktree_add_exit_5(self):
+        state = {}
+
+        def replace(real, repo, args, kw):
+            if args[:2] == ("worktree", "add") and not state:
+                write(os.path.join(self.live, "README.md"), "B committed\n")
+                git(self.live, "commit", "-q", "-am", "B: commit in the new clone")
+                state["b"] = git(self.live, "rev-parse", "HEAD")
+        rc, out = self.rehome(replace=replace)
+        self.assertEqual(rc, 5, out)
+        self.assertIn("reflog", out)
+        self.assertEqual(git(self.live, "rev-parse", "HEAD"), state["b"])      # the commit is kept
+
+    def test_new_clone_main_not_clean_when_main_was_old_exit_5(self):           # R4-01 verify
+        git(self.live, "checkout", "-q", "--detach", S.c[2])                  # the main checkout is OLD
+        r, _ = inventory(self.live, self.inv)
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+        def replace(real, repo, args, kw):
+            if args[:2] == ("worktree", "add"):
+                write(os.path.join(self.live, "README.md"), "edited in the new clone\n")
+        rc, out = self.rehome(replace=replace)
+        self.assertEqual(rc, 5, out)
+        self.assertIn("worktree %s is not clean" % self.live, out)
+
 
 class InventoryInputTest(unittest.TestCase):
     @classmethod
@@ -1035,6 +1244,363 @@ class InventoryInputTest(unittest.TestCase):
         r, _ = inventory(sep, os.path.join(self.d, "inv-sep.json"))
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertIn("separate git dir", r.stdout)
+
+    # ---- the old-commits file (R4-08: T10, T11)
+    def test_empty_old_commits_file_refused(self):
+        empty = os.path.join(self.d, "empty.txt")
+        write(empty, "")
+        r, _ = inventory(self.live, os.path.join(self.d, "inv-empty.json"), empty)
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn("empty", r.stdout)
+
+    def test_zero_commit_file_written_by_changed_accepted(self):
+        zero = os.path.join(self.d, "zero.txt")
+        self.assertEqual(run("changed", S.purged, S.purged, "--out", zero).returncode, 1)
+        r, _ = inventory(self.live, os.path.join(self.d, "inv-zero.json"), zero)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_malformed_old_commits_line_refused(self):
+        bad = os.path.join(self.d, "bad.txt")
+        write(bad, "".join(s + "\n" for s in read(S.old).decode().split()[:-1]) + S.c[1][:20] + "\n")
+        r, _ = inventory(self.live, os.path.join(self.d, "inv-bad.json"), bad)
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn("malformed", r.stdout)
+
+    def test_change_during_inventory_exit_4(self):                              # R4-08 (T09)
+        out = os.path.join(self.d, "inv-during.json")
+
+        def setup(mod):
+            real = mod.build_inventory
+
+            def wrapped(*a, **kw):
+                inv = real(*a, **kw)
+                git(self.live, "branch", "written-during-inventory", S.new_main)
+                return inv
+            mod.build_inventory = wrapped
+        try:
+            rc, text = inproc(["inventory", self.live, S.old, "--out", out], setup=setup)
+        finally:
+            git(self.live, "branch", "-D", "written-during-inventory")
+        self.assertEqual(rc, 4, text)
+        self.assertIn("refs/heads/written-during-inventory", text)
+        self.assertFalse(os.path.exists(out))
+
+    # ---- a missing or broken inventory / record (R4-12 F7)
+    def test_missing_or_invalid_inventory_exit_2(self):
+        bad = os.path.join(self.d, "broken.json")
+        write(bad, "{not json")
+        half = os.path.join(self.d, "half.json")
+        write(half, json.dumps({"repo": self.live}))
+        for inv in (os.path.join(self.d, "nope.json"), bad, half):
+            r = run("rehome", self.live, inv, os.path.join(self.d, "arch-x"), S.purged, *Q)
+            self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+            self.assertIn("REFUSED", r.stdout)
+            self.assertNotIn("Traceback", r.stderr)
+        r = run("restore", os.path.join(self.d, "no-archive"), "--exclusive")
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+
+
+class InventoryMoreRefusalTest(unittest.TestCase):
+    """Cases a re-clone cannot carry, and one it can (R4-12: T02, T04, F6)."""
+
+    def test_kept_submodule_dirty_with_ignore_dirty_refused(self):             # T02
+        d = fresh("dirty-sub-ign")
+        live = S.live(os.path.join(d, "live"))
+        k = os.path.join(d, "wts", "k")
+        git(live, "worktree", "add", "-q", "-b", "k-br", k, S.new_main)
+        sub = add_submodule(k)
+        git(live, "config", "submodule.sub.ignore", "dirty")                   # superproject status stays quiet
+        write(os.path.join(sub, "l.txt"), "uncommitted lib edit\n")
+        self.assertEqual(git(k, "status", "--porcelain"), "")
+        r, inv = inventory(live, os.path.join(d, "inv.json"))
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertTrue(any("submodule sub has changes" in x["problem"] for x in inv["refusals"]), inv["refusals"])
+
+    def test_uninitialised_submodule_not_inspected(self):                       # T04
+        d = fresh("uninit")
+        live = S.live(os.path.join(d, "live"))
+        k = os.path.join(d, "wts", "k")
+        git(live, "worktree", "add", "-q", "-b", "k-br", k, S.new_main)
+        add_submodule(k)
+        git(k, "update-ref", "refs/heads/k-local", commit_on(k, git(k, "rev-parse", "HEAD"), "local work"))
+        k2 = os.path.join(d, "wts", "k2")
+        git(live, "worktree", "add", "-q", "--detach", k2, "k-br")              # same commit, submodule NOT initialised
+        os.makedirs(os.path.join(k2, "sub"), exist_ok=True)
+        r, inv = inventory(live, os.path.join(d, "inv.json"))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual([w["submodules"] for w in inv["worktrees"] if norm(w["path"]) == norm(k2)], [[]])
+
+    def test_skip_worktree_file_with_local_changes_refused(self):              # F6
+        d = fresh("skipwt")
+        live = S.live(os.path.join(d, "live"))
+        write(os.path.join(live, "g.txt"), "LOCAL EDIT never committed\n")
+        git(live, "update-index", "--skip-worktree", "g.txt")
+        write(os.path.join(live, "README.md"), "hidden edit\n")
+        git(live, "update-index", "--assume-unchanged", "README.md")
+        self.assertEqual(git(live, "status", "--porcelain"), "")
+        sp = os.path.join(d, "wt-sparse")                                       # sparse: skip-worktree, absent: fine
+        git(live, "worktree", "add", "-q", "-b", "sp", sp, "main")
+        git(sp, "sparse-checkout", "set", "--no-cone", "/README.md")
+        r, inv = inventory(live, os.path.join(d, "inv.json"))
+        self.assertEqual(r.returncode, 2, r.stdout)
+        problems = [x["problem"] for x in inv["refusals"]]
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("g.txt", problems[0])
+        self.assertIn("README.md", problems[0])
+        self.assertIn("skip-worktree", problems[0])
+
+
+def layout(name, build, rehome_it=True):
+    """live = S.live(...); build(live, d) -> info; inventory; rehome. Returns a namespace."""
+    import types
+    d = fresh(name)
+    live = S.live(os.path.join(d, "live"))
+    info = build(live, d)
+    ns = types.SimpleNamespace(d=d, live=live, info=info, inv_path=os.path.join(d, "inv.json"),
+                               arch=os.path.join(d, "arch"))
+    ns.inv_run, ns.inv = inventory(live, ns.inv_path)
+    if rehome_it and ns.inv_run.returncode == 0:
+        ns.rh = run("rehome", live, ns.inv_path, ns.arch, S.purged, *Q)
+    return ns
+
+
+class RehomeLayoutTest(unittest.TestCase):
+    """Layouts inventory accepts must rehome to exit 0 (R4-01, R4-04, R4-12)."""
+
+    def assert_ok(self, ns):
+        self.assertEqual(ns.inv_run.returncode, 0, ns.inv_run.stdout)
+        self.assertEqual(ns.rh.returncode, 0, ns.rh.stdout + ns.rh.stderr)
+        self.assertEqual(git(ns.live, "status", "--porcelain"), "")
+        self.assertEqual(git(ns.live, "for-each-ref", "refs/rehome-tmp/"), "")
+
+    def test_old_main_checkout_with_kept_local_main_ahead(self):                # R4-01
+        def build(live, d):
+            write(os.path.join(live, "local.txt"), "local kept work\n")
+            git(live, "add", "-A")
+            git(live, "commit", "-q", "-m", "local kept")
+            kept = git(live, "rev-parse", "main")
+            git(live, "checkout", "-q", "old-feature")
+            return kept
+        ns = layout("old-main-ahead", build)
+        self.assert_ok(ns)
+        self.assertEqual(git(ns.live, "rev-parse", "refs/heads/main"), ns.info)
+        self.assertEqual(git(ns.live, "rev-parse", "HEAD"), ns.info)
+        self.assertEqual(git(ns.live, "diff", "--cached", "--stat"), "")
+        self.assertEqual(read(os.path.join(ns.live, "local.txt")), b"local kept work\n")
+
+    def test_detached_main_at_a_local_only_commit(self):                        # R4-04
+        def build(live, d):
+            git(live, "checkout", "-q", "--detach")
+            write(os.path.join(live, "w.txt"), "detached work\n")
+            git(live, "add", "-A")
+            git(live, "commit", "-q", "-m", "detached work")
+            return git(live, "rev-parse", "HEAD")
+        ns = layout("detached-main", build)
+        self.assert_ok(ns)
+        self.assertEqual(git(ns.live, "rev-parse", "HEAD"), ns.info)
+        self.assertEqual(git(ns.live, "symbolic-ref", "-q", "HEAD", check=False), "")
+
+    def test_old_main_checkout_and_a_kept_worktree_on_main(self):              # R4-04
+        def build(live, d):
+            git(live, "checkout", "-q", "old-feature")
+            wt = os.path.join(d, "wt-main")
+            git(live, "worktree", "add", "-q", wt, "main")
+            return wt
+        ns = layout("old-main-wt-main", build)
+        self.assert_ok(ns)
+        rows = {w["path"]: w for w in wt_list(ns.live)}
+        self.assertEqual(rows[norm(ns.info)]["branch"], "refs/heads/main")
+        self.assertTrue(rows[norm(ns.live)]["detached"])
+
+    def test_main_per_worktree_ref_carried(self):                               # R4-04 (D)
+        ns = layout("perwt-main", lambda live, d: git(live, "update-ref", "refs/worktree/mark", "HEAD"))
+        self.assert_ok(ns)
+        self.assertEqual(git(ns.live, "rev-parse", "refs/worktree/mark"), git(ns.live, "rev-parse", "HEAD"))
+
+    def test_per_worktree_ref_of_an_old_worktree_not_carried(self):            # R4-04 (E)
+        def build(live, d):
+            wt = os.path.join(d, "wt-old")
+            git(live, "worktree", "add", "-q", wt, "old-feature")
+            git(wt, "update-ref", "refs/worktree/mark", S.new_main)
+            return wt
+        ns = layout("perwt-old", build)
+        self.assert_ok(ns)
+        row = [r for r in ns.inv["refs"] if r["name"] == "refs/worktree/mark"]
+        self.assertEqual([(r["old"], r["carry"]) for r in row], [(False, False)])
+        self.assertIn("stays in the archive", ns.inv_run.stdout)
+        moved = find_archived(ns.arch, "wt-old")
+        self.assertEqual(git(moved, "rev-parse", "refs/worktree/mark"), S.new_main)
+
+    def test_duplicate_shas_every_temp_ref_deleted(self):                      # R4-12 (F5)
+        def build(live, d):
+            wt = os.path.join(d, "wt-k")
+            git(live, "worktree", "add", "-q", "-b", "k", wt, "main")
+            git(wt, "update-ref", "refs/worktree/a", "HEAD")
+            git(wt, "update-ref", "refs/worktree/b", "HEAD")
+            write(os.path.join(live, "README.md"), "x\n")
+            git(live, "stash", "-q")
+            first = git(live, "rev-parse", "refs/stash")
+            write(os.path.join(live, "README.md"), "y\n")
+            git(live, "stash", "-q")
+            git(live, "stash", "store", "-q", "-m", "dup", first)               # the same SHA twice
+            return wt
+        ns = layout("dup-sha", build)
+        self.assert_ok(ns)
+        self.assertEqual(len(reflog(ns.live, "refs/stash")), 3)
+        self.assertEqual(git(ns.info, "rev-parse", "refs/worktree/b"), git(ns.info, "rev-parse", "HEAD"))
+
+    def test_linked_worktrees_with_the_same_folder_name(self):                 # R4-12 (T16)
+        def build(live, d):
+            for i in (1, 2):
+                git(live, "worktree", "add", "-q", "-b", "app%d" % i, os.path.join(d, "wts%d" % i, "app"), S.new_main)
+        ns = layout("same-name", build)
+        self.assert_ok(ns)
+        self.assertEqual(sorted(os.listdir(os.path.join(ns.arch, "worktrees"))), ["0-app", "1-app"])
+
+    def test_kept_worktree_nested_in_a_kept_linked_worktree(self):            # R4-12 (T21)
+        def build(live, d):
+            outer = os.path.join(d, "wts", "outer")
+            git(live, "worktree", "add", "-q", "-b", "outer-br", outer, S.new_main)
+            git(live, "worktree", "add", "-q", "-b", "inner-br", os.path.join(outer, ".wt", "inner"), S.new_main)
+            return outer
+        ns = layout("nested-kept", build)
+        self.assert_ok(ns)
+        self.assertEqual(len(wt_list(ns.live)), 3)
+
+    def test_ignored_paths_named_in_the_inventory_and_rehome_md(self):        # R4-03
+        def build(live, d):
+            write(os.path.join(live, "_staging", "PENDING_REIMPORT.md"), "# pending\n")
+            write(os.path.join(live, "debug.log"), "x\n")                       # *.log is ignored
+            write(os.path.join(live, ".git", "info", "exclude"), "_staging/\n")
+        ns = layout("ignored", build)
+        self.assert_ok(ns)
+        self.assertIn("_staging/", ns.inv_run.stdout)
+        self.assertIn("debug.log", ns.inv_run.stdout)
+        main = [w for w in ns.inv["worktrees"] if w["main"]][0]
+        self.assertEqual(main["ignored"], ["_staging/", "debug.log"])
+        text = read(os.path.join(ns.arch, "REHOME.md")).decode("utf-8")
+        self.assertIn(os.path.join(ns.arch, "repo", "_staging/"), text)
+        self.assertFalse(os.path.exists(os.path.join(ns.live, "_staging")))
+
+    def test_old_worktree_submodule_outside_its_index_usable_in_the_archive(self):   # R4-05
+        def build(live, d):
+            git(live, "submodule", "add", "-q", S.lib, "lib")
+            git(live, "commit", "-q", "-m", "lib")
+            git(live, "branch", "k")
+            wk = os.path.join(d, "wk")
+            git(live, "worktree", "add", "-q", wk, "k")
+            git(wk, "submodule", "update", "-q", "--init")
+            sub = os.path.join(wk, "lib")
+            git(sub, "checkout", "-q", "-b", "x")
+            write(os.path.join(sub, "u.txt"), "u\n")
+            git(sub, "add", "-A")
+            git(sub, "commit", "-q", "-m", "unpushed")
+            up = git(sub, "rev-parse", "HEAD")
+            git(wk, "checkout", "-q", "-f", "old-feature")                     # lib/ is no longer in its index
+            return up
+        ns = layout("sub-outside-index", build)
+        self.assertEqual(ns.inv_run.returncode, 0, ns.inv_run.stdout)
+        self.assertEqual(ns.rh.returncode, 0, ns.rh.stdout + ns.rh.stderr)
+        sub = os.path.join(find_archived(ns.arch, "wk"), "lib")
+        self.assertEqual(git(sub, "rev-parse", "refs/heads/x"), ns.info)
+        self.assertEqual(norm(git(sub, "rev-parse", "--show-toplevel")), norm(sub))
+        self.assertEqual(git(sub, "status", "--porcelain"), "")
+
+
+class RestoreTest(unittest.TestCase):
+    """rehome, then `restore`: the archived checkout is back at its paths and equals the inventory (R4-06)."""
+
+    @classmethod
+    def setUpClass(cls):
+        d = cls.d = fresh("restore")
+        live = cls.live = S.live(os.path.join(d, "live"))
+        git(live, "submodule", "add", "-q", S.lib, "lib")
+        git(live, "commit", "-q", "-m", "add lib")
+        git(live, "branch", "k")
+        wk = cls.wk = os.path.join(d, "wt-kept")
+        git(live, "worktree", "add", "-q", wk, "k")
+        git(wk, "submodule", "update", "-q", "--init")                         # repo under .git/worktrees/<id>/modules
+        wo = cls.wo = os.path.join(d, "wt-old")
+        git(live, "worktree", "add", "-q", wo, "old-feature")
+        git(wo, "submodule", "add", "-q", S.lib, "lib")
+        git(wo, "commit", "-q", "-m", "lib on old")
+        write(os.path.join(wo, "lib", "u.txt"), "unpushed\n")
+        git(os.path.join(wo, "lib"), "add", "-A")
+        git(os.path.join(wo, "lib"), "commit", "-q", "-m", "unpushed sub commit")
+        cls.unpushed = git(os.path.join(wo, "lib"), "rev-parse", "HEAD")
+        git(live, "worktree", "add", "-q", os.path.join(live, "nested"), "-b", "nest", "main")
+        write(os.path.join(live, ".gitignore"), "*.log\n.env\nnested/\n")
+        git(live, "commit", "-q", "-am", "ignore")
+        write(os.path.join(live, ".env"), "TOKEN=fake\n")
+        write(os.path.join(live, "README.md"), "stashed\n")
+        git(live, "stash", "-q")
+        cls.refs_before, cls.wts_before = refs(live), wt_paths(live)
+        cls.inv_run, _ = inventory(live, os.path.join(d, "inv.json"))
+        cls.arch = os.path.join(d, "arch")
+        cls.rh = run("rehome", live, os.path.join(d, "inv.json"), cls.arch, S.purged, *Q)
+        cls.rs = run("restore", cls.arch, "--exclusive")
+
+    def test_rehome_then_restore_exit_0(self):
+        self.assertEqual(self.inv_run.returncode, 0, self.inv_run.stdout)
+        self.assertEqual(self.rh.returncode, 0, self.rh.stdout + self.rh.stderr)
+        self.assertEqual(self.rs.returncode, 0, self.rs.stdout + self.rs.stderr)
+        self.assertIn("matches the inventory", self.rs.stdout)
+
+    def test_original_layout_back(self):
+        self.assertEqual(refs(self.live), self.refs_before)
+        self.assertEqual(wt_paths(self.live), self.wts_before)
+        self.assertEqual(read(os.path.join(self.live, ".env")), b"TOKEN=fake\n")
+        self.assertFalse(os.path.exists(os.path.join(self.arch, "repo")))
+
+    def test_submodules_usable_at_their_original_paths(self):
+        for wt in (self.wk, self.wo):
+            sub = os.path.join(wt, "lib")
+            self.assertEqual(norm(git(sub, "rev-parse", "--show-toplevel")), norm(sub))
+            self.assertEqual(git(sub, "status", "--porcelain"), "")
+        self.assertTrue(exists(os.path.join(self.wo, "lib"), self.unpushed))
+
+    def test_new_clone_kept_aside_in_the_archive(self):
+        aside = [n for n in os.listdir(self.arch) if n.startswith("restored-aside")]
+        self.assertEqual(len(aside), 1, os.listdir(self.arch))
+        self.assertEqual(git(os.path.join(self.arch, aside[0], "repo"), "rev-parse", "refs/remotes/origin/main"),
+                         S.new_main)
+
+    def test_restore_needs_exclusive(self):
+        r = run("restore", self.arch)
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+
+    def test_archived_submodules_usable_before_the_restore(self):              # R4-05 (core.worktree)
+        d = fresh("restore-sub-archived")
+        live = S.live(os.path.join(d, "live"))
+        git(live, "submodule", "add", "-q", S.lib, "lib")
+        git(live, "commit", "-q", "-m", "add lib")
+        wk = os.path.join(d, "wt-kept")
+        git(live, "worktree", "add", "-q", "-b", "k", wk, "main")
+        git(wk, "submodule", "update", "-q", "--init")
+        r, _ = inventory(live, os.path.join(d, "inv.json"))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        arch = os.path.join(d, "arch")
+        rh = run("rehome", live, os.path.join(d, "inv.json"), arch, S.purged, *Q)
+        self.assertEqual(rh.returncode, 0, rh.stdout + rh.stderr)
+        archived = find_archived(arch, "wt-kept")
+        self.assertEqual(git(archived, "status", "--porcelain"), "")          # recurses into lib/
+        sub = os.path.join(archived, "lib")
+        self.assertEqual(norm(git(sub, "rev-parse", "--show-toplevel")), norm(sub))
+
+    def test_restore_reports_a_difference_from_the_inventory_exit_1(self):
+        d = fresh("restore-differs")
+        live = S.live(os.path.join(d, "live"))
+        r, _ = inventory(live, os.path.join(d, "inv.json"))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        arch = os.path.join(d, "arch")
+        rh = run("rehome", live, os.path.join(d, "inv.json"), arch, S.purged, *Q)
+        self.assertEqual(rh.returncode, 0, rh.stdout + rh.stderr)
+        git(os.path.join(arch, "repo"), "branch", "added-in-the-archive", S.new_main)
+        rs = run("restore", arch, "--exclusive")
+        self.assertEqual(rs.returncode, 1, rs.stdout + rs.stderr)
+        self.assertIn("refs/heads/added-in-the-archive", rs.stdout)
+        self.assertEqual(git(live, "rev-parse", "refs/heads/added-in-the-archive"), S.new_main)   # restored
 
 
 class UnitTest(unittest.TestCase):
