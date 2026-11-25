@@ -1,9 +1,9 @@
 ---
-name: daily-brief
+name: "daily-brief"
 description: "Use when the user says: daily brief, news, morning brief, CRE news, what's happening today, what should I know — or asks for the Oxford Realty Advisors daily morning intelligence brief covering CRE news, industrial transactions, market rates, portfolio watch, ops tip, reading list, CRE law/regulatory watch, shallow bay case study, and competitive intelligence."
 ---
 
-# Daily Brief (v2.17.1)
+# Daily Brief (v2.18)
 
 You are generating the Oxford Realty Advisors daily intelligence brief. Execute all 9 sections in sequence and present as a structured report. Target length: concise but complete.
 
@@ -215,6 +215,8 @@ Execute Notion/HubSpot checks:
 
 If no flags: "✅ No items requiring immediate attention."
 
+**Data-vintage banner (v2.18, 2026-11-25).** Any Section 4 item that comes from a stored snapshot rather than a live query — `portfolio.json` (`meta.asOf`), the Command Center brief or its warehouse, the `ora-health-guard` mirror, or a Notion page with its own as-of date — carries that source's data date. If that date is more than 45 days before the run date, or is missing or unreadable, open Section 4 with one line in bold before any item: `⚠ STALE DATA — [source] is from [YYYY-MM-DD], [N] days old. Loan, lease and cash items from it may already be resolved; refresh before acting.` Tag each affected row `[STALE: YYYY-MM-DD]`. Never present a stale-sourced loan maturity, lease date or balance as current with no tag. Root incident: 2026-11-24, a June-2026 snapshot kept listing the Restoration Church Trust note as "maturing" after the Master Workbook showed it paid off. The same 45-day threshold is used by the Command Center brief's banner.
+
 **Tenant DB ID routing (Patch 4, v2.1 — corrected 2026-04-27 from initial misdiagnosis):**
 
 The Tenant Database has TWO IDs and **the correct one to use depends on which API you are calling.** This is not a "canonical vs. legacy" distinction — both IDs are correct, just for different surfaces.
@@ -403,6 +405,7 @@ Minimum 3 items; maximum 6. Prioritize items requiring action within 72 hours. I
 
 **Per-entry length cap (same pass):** cap each full inline entry at **~2,000 characters** — the count cap alone bounds how many entries are inline, never how large each is. Measured 2026-09-11: this skill's three entries run 290–944 chars, so the cap fits with headroom. An entry that would exceed it states its finding and verdict inline and cites `versions/` for the detail. This skill was flagged (R25-7) as the #3 realized-cost skill in the environment (146,039 word-loads) with no growth-bound mechanism at all — documentation discipline only, no news-filter, transaction-screen, or workflow logic changed.
 
+- **v2.18 (2026-11-25):** Section 4 data-vintage banner: snapshot-sourced items older than 45 days (or with no readable date) get a STALE DATA line and per-row tags. Root incident: paid-off Restoration Church Trust note still shown as maturing from June data. No source list, routing or delivery logic changed.
 - **v2.17.1 (2026-11-14):** Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - **v2.17 (2026-09-29):** Parity — Chicago–Greater Cook County IL added to Sections 1-2 geographic scope (target-markets.json v1.11; acquisition-underwriting v4.25). No source list, filter, screening or delivery logic changed. (Numbered v2.17 on merge: v2.16 was taken by the 2026-09-30 token pass.)
 - **v2.16 (2026-09-30, ora-setup-audit token pass, Gabriel-directed):** Doc-only. Compressed inline changelog entries v2.9–v2.13 to one-liners (full text in `versions/`), about 600 words of history no run executes. Procedure text unchanged byte for byte. The outage-only mirror fallbacks were deliberately left inline: this skill runs unattended daily and a conditional reference read is a risk the ~7% saving does not justify.
