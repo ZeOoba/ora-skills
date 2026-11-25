@@ -1,5 +1,5 @@
 ---
-name: deal-execution
+name: "deal-execution"
 description: 'Use when the user mentions: PSA, purchase and sale agreement, generate PSA, draft PSA, due diligence, DD checklist, redline analysis, seller response, seller redlines, closing checklist, title review, under contract, closing statement, post-closing, review PSA draft, PSA vs LOI, LOI conformance, lease-chain integrity, estoppel DD conformance (drafting a certificate routes to estoppel-request-generation). Also before SENDING any draft: send the PSA, pre-send check, clear to send. Covers executed LOI through closing; pre-LOI work routes to acquisition-underwriting, LOIs to loi-generation. Workflow 2A is the funnel for ANY inbound PSA draft or redline, incl. Litera/Workshare compares; Workflow 2B gates every OUTBOUND draft.'
 ---
 
@@ -152,7 +152,7 @@ CategoryDefinitionAction**ACCEPT**Immaterial clarification, consistent with ORA 
 
 ## WORKFLOW 2A — INBOUND DRAFT REVIEW (LOI CONFORMANCE)
 
-**Walk-price check (v1.14).** At the start of Workflows 2A, 3 (DD) and 4 (closing), and on each outbound 2B round, compare the PSA contract price with the current walk, read from the deal's Deal Sourcing Log row (`collection://9a6ae219-85a3-4621-899c-c757fd062f8b`; the last `RE-SOLVED v4.37 (YYYY-MM-DD): $X` line appended in `Notes / Flags` if present, otherwise a `Walk Price` solved under v4.37 or later, and re-solved under v4.53 or later when the deal carries a v4.53 IRR add-on — single tenant / tenant >50% of rent, tertiary market or satellite, environmental-heavy use without a clean Phase II, new operating competency — or a land credit (re-solve if neither); on a Mixed-Use Component Lens deal, the lens's binding walk, never the Base walk, and a stored walk on a deal that meets any lens trigger (`acquisition-underwriting` Mixed-Use Component Lens, "Fires when") is stale and re-solved with the v4.58 lens first when it has no `COMPONENT LENS` line (solved before v4.57, or without the lens) or was a v4.57 lens walk (IRR leg only); an exception ratified against such a walk is re-ratified). If the price exceeds it and no exception is ratified against a walk solved under v4.37 or later, stop and raise the live-offer exception trigger (`acquisition-underwriting`, Pre-v4.37 walks) before the next step.
+**Walk-price check (v1.14).** At the start of Workflows 2A, 3 (DD) and 4 (closing), and on each outbound 2B round, compare the PSA contract price with the current walk, read from the deal's Deal Sourcing Log row (`collection://9a6ae219-85a3-4621-899c-c757fd062f8b`; the last `RE-SOLVED v4.37 (YYYY-MM-DD): $X` line appended in `Notes / Flags` if present, otherwise a `Walk Price` solved under v4.37 or later, and re-solved under v4.53 or later when the deal carries a v4.53 IRR add-on — single tenant / tenant >50% of rent, tertiary market or satellite, environmental-heavy use without a clean Phase II, new operating competency — or a land credit (re-solve if neither)). If the price exceeds it and no exception is ratified against a walk solved under v4.37 or later, stop and raise the live-offer exception trigger (`acquisition-underwriting`, Pre-v4.37 walks) before the next step.
 
 When ANY PSA draft arrives that this skill did not generate — own counsel's initial draft, seller counsel's first draft, or a counter-draft — review it BEFORE it circulates. Own-counsel drafts get the same scrutiny as seller paper: a recycled template that ships today is an executed contract next month. Origin (754 Old State, 2026-06-11 — USD 50K deposit error, 9 LOI-conformance failures, linchpin easement omitted): references/rationale-and-incidents.md.
 
@@ -257,6 +257,258 @@ Dispatch the `psa-redline-checker` agent (read-only; pin the dispatch model) on 
 
 ### Output
 A short pre-send memo — no more than a page — with a single verdict line: **CLEAR TO SEND** or **HOLD**, followed by the Check A table and any STOPs. Log the result to the deal-terms register so the next round starts from a known state. A CLEAR TO SEND execution version under which ORA sells or changes Oxford's share of an asset, or that carries a loan: follow the INTERIM checklist (Workflow 2A Step 5). Then stamp the Notion pipeline row per the standing rule below.
+
+---
+
+## WORKFLOW 2C — ESSENTIAL-ONLY OUTBOUND REDLINE (ORA markup of counterparty paper)
+
+Use when ORA marks up an instrument the counterparty drafted (easement, REA, shared-maintenance agreement, termination, PSA, amendment, estoppel) and the markup must be tracked changes limited to essential items (Gabriel's standing preference: push back only on provisions that protect against real loss). Origin: 754 Old State Parking Easement & Shared Maintenance Agreement, 2026-11-25.
+
+1. **Ground truth.** Read the deal decision log, including section 10 (agreed outside the documents, `deal-decision-log` v1.1+), the deal-terms register, the governing contract section that defines the instrument (for example PSA §31), and the last review memo. Note any contractual response clock ("within five (5) days after receipt").
+2. **Review and tier.** Tier 1 = essential (real loss: rights, access, insurance, lender subordination, preservation of recorded easements, notice mechanics that start deemed approvals). Tier 2 = optional or housekeeping (caps, typos, preparer lines). Mark Tier 2 only if Gabriel selects it.
+3. **Ask before drafting.** Run `ora-open-decisions` once, before the redline: scope tier, wording that could reveal confidential strategy, how to paper any NOT PAPERED side agreement, insurance limits or blanks, and format (tracked-change author; margin notes or not). If a decision turns on what was agreed, answer it from decision-log section 10, cite the row, and backfill rows found by fresh search.
+4. **Write the spec.** A JSON list of ops for the tool below: `insert` (anchor + `at` end/start/offset), `delete`, `replace`, `new_para_after` (copies the anchor paragraph's numbering so new sections auto-number), `comment` (margin note on the anchor paragraph). Each anchor must match exactly once in run text. Order ops so no anchor is text an earlier op split. Tracked text never carries confidential rationale; margin notes may cite internal emails, so they are for the review copy only.
+5. **Run, validate, inspect.** Save the script below as `scripts/essential_redline.py` if it is not already in the skill folder, then run:
+   - `python3 scripts/essential_redline.py spec.json in.docx review.docx --author "Gabriel Goldberg"` (review copy, with notes)
+   - `python3 scripts/essential_redline.py spec.json in.docx outbound.docx --author "Gabriel Goldberg" --strip-comments` (outbound copy)
+   - exit 2 names the failing op and anchor; fix the anchor and rerun. Nothing is written on failure.
+   - Validate both with the docx skill: `scripts/office/validate.py <out> --original in.docx --author "<author>"` (every edit tracked).
+   - Render to PDF and look at one changed page; export to text with LibreOffice and confirm new sections carry the expected numbers.
+6. **File and hold.** Deal-file naming schema, save to the deal folder `outputs/`, add a register row and update the review memo and decision log. Nothing is sent: an outbound counterparty send needs Gabriel's or Eric's in-turn confirmation. If the instrument is PSA paper, run Workflow 2B on the outbound copy first.
+
+Tool (stdlib only; tested 2026-11-25 by reproducing the 754 redline: 12 tracked ops + 12 notes; both copies pass `validate.py --author`):
+
+```python
+#!/usr/bin/env python3
+"""essential_redline.py — apply an essential-only tracked-change redline (plus optional
+margin comments) to a counterparty .docx from a JSON spec. Self-contained; stdlib only.
+
+Usage:
+  python3 essential_redline.py spec.json in.docx out.docx [--author "Gabriel Goldberg"] [--strip-comments]
+
+Spec (JSON list; ops applied in order; every anchor must match EXACTLY ONCE in run text):
+  {"op":"insert",   "anchor":"text", "at":"end"|"start"|<int offset into anchor>, "text":"new text"}
+  {"op":"delete",   "anchor":"text containing the deletion", "text":"exact substring to strike"}
+  {"op":"replace",  "anchor":"text containing old", "old":"old text", "new":"new text"}
+  {"op":"new_para_after", "anchor":"text in the paragraph to follow",
+                    "segments":[["Heading. ", true], ["Body text.", false]]}
+  {"op":"comment",  "anchor":"text in the paragraph to annotate", "text":"note"}
+
+Behaviour:
+  * Merges adjacent identically-formatted runs first so visible text is findable.
+  * Inserted runs copy the formatting of the run they split; new paragraphs copy the
+    anchor paragraph's paragraph properties (so numbered lists auto-number) and mark the
+    paragraph mark as inserted.
+  * Anchors are matched against run text AFTER earlier ops — do not anchor on text that
+    an earlier op split (anchor on text left intact, or order ops accordingly).
+  * Fails loudly (exit 2) on any anchor that matches 0 or >1 times; nothing is written.
+  * --strip-comments writes the same redline without comments (the outbound copy).
+Validate afterwards with the docx skill: scripts/office/validate.py out.docx --original in.docx --author "<author>".
+"""
+import json, re, sys, zipfile, datetime, argparse
+from xml.sax.saxutils import escape as xesc
+
+W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+
+class SpecError(Exception):
+    pass
+
+def merge_runs(d):
+    pat = re.compile(r'<w:r>(<w:rPr>(?:(?!</w:rPr>).)*</w:rPr>)?<w:t(?: xml:space="preserve")?>([^<]*)</w:t></w:r>'
+                     r'<w:r>(<w:rPr>(?:(?!</w:rPr>).)*</w:rPr>)?<w:t(?: xml:space="preserve")?>([^<]*)</w:t></w:r>', re.S)
+    while True:
+        def rep(m):
+            if (m.group(1) or '') == (m.group(3) or ''):
+                return f'<w:r>{m.group(1) or ""}<w:t xml:space="preserve">{m.group(2)}{m.group(4)}</w:t></w:r>'
+            return m.group(0)
+        nd = pat.sub(rep, d)
+        if nd == d:
+            return d
+        d = nd
+
+class Redliner:
+    def __init__(self, xml, author, date):
+        # normalise run openings like <w:r w:rsidR="..."> to <w:r> so runs are uniform
+        xml = re.sub(r'<w:r [^>]*?(?<!/)>', '<w:r>', xml)
+        xml = re.sub(r'<w:proofErr [^>]*/>', '', xml)
+        self.d = merge_runs(xml)
+        self.A = f'w:author="{xesc(author, {chr(34): "&quot;"})}" w:date="{date}"'
+        self.nid = 7000
+        self.comments = []   # (anchor, text)
+
+    def _id(self):
+        self.nid += 1
+        return self.nid
+
+    def _find_once(self, anchor):
+        a = xesc(anchor)
+        n = self.d.count(a)
+        if n != 1:
+            raise SpecError(f'anchor matched {n} times (need exactly 1): {anchor[:80]!r}')
+        return self.d.find(a), a
+
+    def _run_at(self, i):
+        rs = self.d.rfind('<w:r>', 0, i)
+        re_ = self.d.find('</w:r>', i) + 6
+        r = self.d[rs:re_]
+        m_rpr = re.search(r'<w:rPr>.*?</w:rPr>', r, re.S)
+        m_t = re.search(r'<w:t(?: [^>]*)?>(.*)</w:t>', r, re.S)
+        if not m_t or (m_rpr and m_rpr.start() > m_t.start()):
+            raise SpecError('anchor is not inside a single text run; shorten the anchor')
+        return rs, re_, (m_rpr.group(0) if m_rpr else ''), m_t.group(1)
+
+    @staticmethod
+    def _run(rpr, t):
+        return f'<w:r>{rpr}<w:t xml:space="preserve">{t}</w:t></w:r>' if t else ''
+
+    def _ins(self, rpr, t_esc):
+        return f'<w:ins w:id="{self._id()}" {self.A}>{self._run(rpr, t_esc)}</w:ins>'
+
+    def _del(self, rpr, t_esc):
+        return (f'<w:del w:id="{self._id()}" {self.A}><w:r>{rpr}'
+                f'<w:delText xml:space="preserve">{t_esc}</w:delText></w:r></w:del>')
+
+    def insert(self, anchor, text, at='end'):
+        i, a = self._find_once(anchor)
+        rs, re_, rpr, t = self._run_at(i)
+        base = t.find(a)
+        if base < 0:
+            raise SpecError(f'anchor spans runs; shorten it: {anchor[:80]!r}')
+        p = base + (len(a) if at == 'end' else 0 if at == 'start' else len(xesc(anchor[:int(at)])))
+        self.d = self.d[:rs] + self._run(rpr, t[:p]) + self._ins(rpr, xesc(text)) + self._run(rpr, t[p:]) + self.d[re_:]
+
+    def delete(self, anchor, text, new=None):
+        i, a = self._find_once(anchor)
+        rs, re_, rpr, t = self._run_at(i)
+        s = xesc(text)
+        if t.count(s) != 1:
+            raise SpecError(f'deletion text must occur once in the anchor run: {text[:60]!r}')
+        p = t.find(s)
+        mid = self._del(rpr, s) + (self._ins(rpr, xesc(new)) if new else '')
+        self.d = self.d[:rs] + self._run(rpr, t[:p]) + mid + self._run(rpr, t[p + len(s):]) + self.d[re_:]
+
+    def _para_bounds(self, anchor):
+        i, _ = self._find_once(anchor)
+        ps = max(self.d.rfind('<w:p ', 0, i), self.d.rfind('<w:p>', 0, i))
+        pe = self.d.find('</w:p>', i) + 6
+        return ps, pe
+
+    def new_para_after(self, anchor, segments):
+        ps, pe = self._para_bounds(anchor)
+        para = self.d[ps:pe]
+        m = re.search(r'<w:pPr>.*?</w:pPr>', para, re.S)
+        ppr = m.group(0) if m else '<w:pPr></w:pPr>'
+        mark = f'<w:ins w:id="{self._id()}" {self.A}/>'
+        if '<w:rPr>' in ppr:
+            ppr = ppr.replace('<w:rPr>', '<w:rPr>' + mark, 1)
+        else:
+            ppr = ppr.replace('</w:pPr>', f'<w:rPr>{mark}</w:rPr></w:pPr>')
+        # base run formatting = first text run of the anchor paragraph, minus bold
+        m_r = re.search(r'<w:r>(<w:rPr>.*?</w:rPr>)?<w:t', para, re.S)
+        base = (m_r.group(1) or '<w:rPr></w:rPr>') if m_r else '<w:rPr></w:rPr>'
+        plain = re.sub(r'<w:b/>|<w:bCs/>|<w:i/>|<w:iCs/>|<w:u [^>]*/>', '', base)
+        bold = plain.replace('<w:rPr>', '<w:rPr><w:b/><w:bCs/>', 1)
+        body = ''.join(self._ins(bold if b else plain, xesc(t)) for t, b in segments)
+        self.d = self.d[:pe] + f'<w:p>{ppr}{body}</w:p>' + self.d[pe:]
+
+    def comment(self, anchor, text):
+        self._find_once(anchor)  # validate now
+        self.comments.append((anchor, text))
+
+    def place_comments(self, files, author, initials, date):
+        if not self.comments:
+            return
+        cx = files.get('word/comments.xml')
+        start = 0
+        if cx:
+            ids = [int(x) for x in re.findall(r'<w:comment [^>]*w:id="(\d+)"', cx)]
+            start = max(ids) + 1 if ids else 0
+        else:
+            cx = f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:comments xmlns:w="{W}"></w:comments>'
+            ct = files['[Content_Types].xml']
+            if 'comments+xml' not in ct:
+                files['[Content_Types].xml'] = ct.replace('</Types>',
+                    '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/></Types>')
+            rels = files['word/_rels/document.xml.rels']
+            if 'relationships/comments"' not in rels:
+                files['word/_rels/document.xml.rels'] = rels.replace('</Relationships>',
+                    '<Relationship Id="rIdEssRedlineComments" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/></Relationships>')
+        add = ''
+        for k, (anchor, text) in enumerate(self.comments):
+            cid = start + k
+            add += (f'<w:comment w:id="{cid}" w:author="{xesc(author)}" w:date="{date}" w:initials="{xesc(initials)}">'
+                    f'<w:p><w:r><w:t xml:space="preserve">{xesc(text)}</w:t></w:r></w:p></w:comment>')
+            ps, pe = self._para_bounds(anchor)
+            para = self.d[ps:pe]
+            k2 = para.find('</w:pPr>')
+            k2 = k2 + 8 if k2 >= 0 else para.find('>') + 1
+            para = (para[:k2] + f'<w:commentRangeStart w:id="{cid}"/>' + para[k2:-6] +
+                    f'<w:commentRangeEnd w:id="{cid}"/><w:r><w:commentReference w:id="{cid}"/></w:r></w:p>')
+            self.d = self.d[:ps] + para + self.d[pe:]
+        files['word/comments.xml'] = cx.replace('</w:comments>', add + '</w:comments>')
+
+def run(spec_path, src, dst, author, initials, strip_comments):
+    spec = json.load(open(spec_path, encoding='utf-8'))
+    zin = zipfile.ZipFile(src)
+    files = {n: zin.read(n) for n in zin.namelist() if not n.endswith('/')}
+    text = {n: files[n].decode('utf-8') for n in
+            ('word/document.xml', '[Content_Types].xml', 'word/_rels/document.xml.rels', 'word/comments.xml') if n in files}
+    date = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    r = Redliner(text['word/document.xml'], author, date)
+    for n, op in enumerate(spec, 1):
+        try:
+            o = op['op']
+            if o == 'insert':
+                r.insert(op['anchor'], op['text'], op.get('at', 'end'))
+            elif o == 'delete':
+                r.delete(op['anchor'], op['text'])
+            elif o == 'replace':
+                r.delete(op['anchor'], op['old'], op['new'])
+            elif o == 'new_para_after':
+                r.new_para_after(op['anchor'], op['segments'])
+            elif o == 'comment':
+                if not strip_comments:
+                    r.comment(op['anchor'], op['text'])
+            else:
+                raise SpecError(f'unknown op {o!r}')
+        except (SpecError, KeyError) as e:
+            print(f'FAIL op #{n} ({op.get("op")}): {e}', file=sys.stderr)
+            sys.exit(2)
+        print(f'OK   op #{n} {op["op"]}: {str(op.get("anchor", ""))[:60]!r}')
+    r.place_comments(text, author, initials, date)
+    text['word/document.xml'] = r.d
+    with zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as z:
+        for n, b in files.items():
+            z.writestr(n, text[n].encode('utf-8') if n in text else b)
+        for n in text:
+            if n not in files:
+                z.writestr(n, text[n].encode('utf-8'))
+    print(f'WROTE {dst}  ({len(spec)} ops, {0 if strip_comments else len(r.comments)} comments, author {author!r})')
+
+if __name__ == '__main__':
+    ap = argparse.ArgumentParser()
+    ap.add_argument('spec'); ap.add_argument('src'); ap.add_argument('dst')
+    ap.add_argument('--author', default='Gabriel Goldberg')
+    ap.add_argument('--initials', default='GG')
+    ap.add_argument('--strip-comments', action='store_true')
+    a = ap.parse_args()
+    run(a.spec, a.src, a.dst, a.author, a.initials, a.strip_comments)
+```
+
+Example spec (from the 754 redline):
+
+```json
+[
+ {"op": "insert", "anchor": "as the same may exist from time to time", "at": "end",
+  "text": ", but excluding the truck court, loading docks, ... (the \"Owner 1 Loading Areas\")"},
+ {"op": "insert", "anchor": "Owner , at its sole cost", "at": 6, "text": "1"},
+ {"op": "new_para_after", "anchor": "Waiver of Subrogation. ",
+  "segments": [["Insurance. ", true], ["Each Owner shall maintain commercial general liability insurance ...", false]]},
+ {"op": "comment", "anchor": "Waiver of Subrogation. ", "text": "New Section 5.3: the draft has no insurance requirement ..."}
+]
+```
+
+Known limits: an anchor must sit inside one text run after merging (anchors that cross a bold/plain boundary fail; shorten them); comments attach to whole paragraphs; fields, tables-in-anchors and headers/footers are not edited.
 
 ---
 
@@ -366,18 +618,18 @@ Where a workflow produces several dated obligations at once, `Next Action Date` 
 
 ## SCRIPTS
 
-Both are stdlib-only; run from the skill directory. `scripts/extract_revisions.py` — Workflow 2 Step 0 and legal-intelligence Module 6 (exit 2 = ambiguous, hard stop). `scripts/audit_completeness.py` — Workflow 2A Step 5, Workflow 2B Check D, 46-Point Gate (exit 1 = blocking defect). Details: references/scripts.md.
+All three are stdlib-only; run from the skill directory. `scripts/essential_redline.py` — Workflow 2C (JSON-spec tracked-change redline with optional margin notes; exit 2 = an anchor did not match exactly once, nothing written; source embedded in Workflow 2C if the file is absent). `scripts/extract_revisions.py` — Workflow 2 Step 0 and legal-intelligence Module 6 (exit 2 = ambiguous, hard stop). `scripts/audit_completeness.py` — Workflow 2A Step 5, Workflow 2B Check D, 46-Point Gate (exit 1 = blocking defect). Details: references/scripts.md.
 
 ## Changelog
 
-- v1.17 (2026-11-23): Walk-price check names the Mixed-Use Component Lens walk: the lens's binding walk, never its Base walk, and a stored walk on a lens-trigger deal without a `COMPONENT LENS` line, or a v4.57 lens walk (IRR leg only), is re-solved under `acquisition-underwriting` v4.58 first, with any exception re-ratified. No workflow, gate or governor change.
+- v1.17 (2026-11-25): **Workflow 2C — essential-only outbound redline** (Gabriel's request, 2026-11-25). Procedure for ORA markup of counterparty paper: ground truth including the decision-log side-agreement ledger, Tier 1/Tier 2 split, one `ora-open-decisions` batch before drafting, JSON-spec tool `scripts/essential_redline.py` (insert/delete/replace/new paragraph/margin note; review and `--strip-comments` outbound copies), docx `validate.py --author`, file-and-hold. Tested by reproducing the 754 Old State Parking Easement redline. Retention: v1.11 compressed to one line (full text in git history; append to `versions/` on the next repo pass). **No DD checklist item, buyer protection or 46-Point Gate check changed. No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).**
 - v1.16 (2026-11-15): Walk-price check: a walk on a deal that carries a v4.53 IRR add-on or a land credit must be re-solved under `acquisition-underwriting` v4.53 or later (consumer sweep for v4.53, Gabriel in-turn ratification 2026-11-14; RE-4.53-1, RE-4.53-2; the sweep had missed this check). No governor constant changed.
 - v1.15.1 (2026-11-14): Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - v1.15 (2026-11-08; Gabriel in-turn approval of the fix, 2026-11-08): **Check D: bare rule in a data exhibit blocks.** `scripts/audit_completeness.py` classed a line of only underscores as a signature rule unconditionally and counted the underscores toward exhibit population, so a post-signature Legal Description exhibit holding nothing but `________` passed the gate (not even THIN). Now, in a data-captioned exhibit (and after a Form-of region ends) a bare rule, or an unfilled `Name:`/`Title:`/`Date:` label, is a signature blank only inside a signature stack anchored by a strong cue judged on the whole line — an unfilled `By: ____`; a filled `By:` naming a person (`By: Jane Q. Doe, Manager`, `By: JOHN SMITH`, `By: José Núñez`; never an entity word or a placeholder such as `To Be Provided`, `See Schedule`, `TBD`, `Pending`, `To Follow`) or with a `Name:`/`Title:`/`Its:` line directly beside it; a seal-only line (`____ (SEAL)`, `[SEAL]`, `(Corporate Seal)`, `(L.S.)`); a Notary Public title or commission line; a full venue line (`STATE OF OHIO )`, `COUNTY OF FRANKLIN ) ss:`); or `(Signature)`/Signature/Authorized Signatory/Printed Name as a whole label followed by nothing, a blank or a personal name — never a mid-prose match (`…, to wit:`, `County of Franklin (the "County")`, `Monument stamped (SEAL)`, `I hereby certify …`, `Signature Aviation LLC`, `By: Acme LLC`) (no `$` or value word), reached through at most three adjacent signature-label lines (reach 3 = By/Name/Title/Date stack) with at most one rule per stack (round-2 R1); otherwise it is a body blank. Filled or unfilled `Name:`/`Title:`/`Date:`/`Dated:`/`Witness`/`Attest` lines never clear a rule on their own (merge-gate REFUTE C3: `Date: October 31, 2026`, `Name: Acme LLC` are rent-roll data). Signature-only words standing alone (`Its`, `Attest`, `Witness`, `Date Signed`, `Name and Title`, `Dated as of …`, `Executed this … day of …`) stay exempt per the 2026-11-06 line-level ruling. A Form-of region is no longer ended by an inline cross-reference to a separately attached exhibit or schedule (`Legal Description: See Exhibit A attached hereto.` in a Form of Deed; REFUTE C2); a reference into the exhibit (`Leases: see Schedule 1 below`) still ends it and the schedule that follows is judged as data (round-2 R2). Round 3 and final refute: the cross-reference exception holds only for an Exhibit reference whose id has exactly one EXHIBIT heading, outside the form exhibit, and rejects below/following/herein in both shapes; a Schedule reference, a missing or duplicated heading ends the region, fail closed (`Leases: see Schedule 1 attached` + headingless schedule, with or without an unrelated `SCHEDULE 1` / `Schedule 1 - Wire Instructions` in another exhibit, `attached as Schedule 1 below`, `as described in Exhibit Z attached` with no Exhibit Z all block); a filled `By:`/caption naming a placeholder (`To Be Provided`, `See Schedule Two`, `To Follow`, `Not Yet Available`, `Information Forthcoming`, `Seller Counsel`) never clears a rule; all-caps and Unicode personal names (`JOHN SMITH`, `José Núñez`, `Seán O'Brien-Murphy`) and `[SEAL]`/`(Corporate Seal)` lines do; `Dated`/`Executed`/`Signed` link a stack only in label, `as of`, `this … day of` shape (not `Signed leases are on file`). **Accepted by design under the Form-of ruling:** inside a Form-of region kept open by a valid cross-reference, form-field blanks such as `Rent: $____` or `Parcel No. ____` are form blanks and do not block (merge-gate X6/X7). **Accepted residuals:** (i) capitalised entity or geographic names on a filled `By:`/Printed Name line read as a person (`By: North Coast`, `By: Acme Warehouse`; origin/main passes them too); (ii) after a valid single-target Exhibit cross-reference, headingless inline data later in the same Form-of exhibit is judged as form (follows from the C2 decision); (iii) a full venue line alone (`STATE OF OHIO )`) clears an adjacent rule (origin/main passes it too); (iv) fail-closed false block: an all-caps signer line with no `By:` label (`JOHN SMITH, MANAGER` under a rule) blocks; (v) the pre-existing flaky timing test `rulings4::TestCueLookupIsLinear::test_ten_thousand_venue_lines_in_one_cell` (about 0.86s median on origin/main against a 1.0s threshold) is left untouched. Gabriel's in-turn ruling (2026-11-08): the 2026-11-06 line-level exemption of signature-only words standing alone is kept unchanged. Accepted fail-closed: a typed signer in a data exhibit with no `By:` (`SELLER:` / entity / rule / `John Smith, Managing Member`) blocks. Underscore runs no longer count toward exhibit population (rule-only exhibit = EMPTY; parcel number plus rule = THIN). Form-of exhibits, non-data exhibits and `(SEAL)` rules unchanged. Check D items 1 and 3 and `references/scripts.md` updated. **No DD checklist item, buyer protection or 46-Point Gate check changed. No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).**
 - v1.14 (2026-11-06; Gabriel in-turn 2026-10-28, re-landed from stranded PR #173 with `acquisition-underwriting` v4.43): walk-price check at the start of Workflows 2A, 3 and 4 and each 2B round, read from the Deal Sourcing Log row (PSA price vs a walk solved under `acquisition-underwriting` v4.37 or later; no exception ratified against a pre-v4.37 walk carries over). No other step changed. **No governor constant changed.**
 - v1.13 (2026-11-06): **Check D: Form-of exemption, data-caption override and line-level signature rules** (Gabriel's in-turn rulings, 2026-11-06: Form-of exemption; data captions override it; plus three merge-gate REFUTE rounds). Exhibits captioned "Form of …" (deed, assignment, estoppel, bill of sale, notice letter) are templates completed at closing and their blanks no longer block; a data caption (rent roll, legal/property description, any schedule, tenant list, leases, service contracts, permitted exceptions) overrides that and blocks. `scripts/audit_completeness.py`: post-signature exhibit ranges come only from headings after IN WITNESS WHEREOF; the caption is the first non-blank block, and a form region ends at the next exhibit/schedule/annex/rider opener or data-caption block; blanks are judged line by line — party labels need an adjacent signature line and never pass in a data exhibit, notary sentences need a notary cue, and `$`, value words or a second value label are never exempt; OH/IN/MD/MO/KS/WI/TN acknowledgment forms exempt (long TN/MD/MO corporate forms included); matching is linear (no ReDoS, no quadratic cue scan); a DMS-stamp-only or placeholder-only grid is EMPTY. Check D items 1 and 3 and `references/scripts.md` updated. **No DD checklist item, buyer protection or 46-Point Gate check changed. No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).**
 - v1.12 (2026-11-06): **Check D blocking rules widened** (Gabriel's in-turn ruling, 2026-11-06). `scripts/audit_completeness.py` now blocks two cases it used to pass: (1) an exhibit whose only content is an empty table grid (zero rows, every cell blank, or struck-only cells) is EMPTY; (2) an unfilled blank inside an exhibit placed after IN WITNESS WHEREOF is a body blank, with a narrow exemption for genuine signature/notary lines (line-start `By:`/`Name:`/`Title:`/`Its:`/`Date:`/`Dated:`/`Signature:`/`Printed Name:`/`Witness:`, a bare signature rule, notary-acknowledgement wording; never a line carrying `$`). Signature-page blanks before the first exhibit and the advisory THIN rule are unchanged. Check D items 1 and 3 and `references/scripts.md` updated. **No DD checklist item, buyer protection or 46-Point Gate check changed. No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).**
-- v1.11 (2026-10-26): **INTERIM aggregate-LTV pointers** (Gabriel, in-turn, 2026-10-26). Workflow 2A Step 5 and 2B Output point a PSA under which ORA sells or changes Oxford's share of an asset, or that carries a loan to the `debt-management` INTERIM checklist, and a terminated PSA's row to WITHDRAWN; Post-Closing item 11 points the deal's rows to BOOKED-VERIFIED under it. Pointer only. **No DD checklist item, buyer protection or 46-Point Gate check changed. No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).**
+- **v1.11 (2026-10-26):** INTERIM aggregate-LTV pointers (2A Step 5, 2B Output, Post-Closing item 11 → `debt-management` INTERIM checklist). Pointer only. Full text in git history; append to `versions/CHANGELOG-v1.11-v1.17.md` on the next repo pass.
 - **v1.10 (2026-10-16) — full text: `versions/CHANGELOG-v1.8-v1.10.md`.** ENTITY VERIFICATION added to Workflow 3.
 - **v1.9 (2026-09-30) — full text: `versions/CHANGELOG-v1.8-v1.10.md`.** independent agent passes wired in.
 - **v1.8 (2026-09-10) — full text: `versions/CHANGELOG-v1.8-v1.10.md`.** retention rule adopted (ORA Automation Audit R24-11).
