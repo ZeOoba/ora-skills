@@ -14,7 +14,9 @@ purge-config.json lives OUTSIDE every repo (it holds the private values):
    "tip_ref": "refs/heads/main"}          # optional; the tree the purge must not change
 
 Every blob is examined under EVERY path it was ever stored at (git log --raw over all
-branches and tags), not just the first path rev-list reports. A blob is scanned when at
+branches, tags and notes refs), not just the first path rev-list reports. Notes refs
+(refs/notes/*) are read like branches wherever present: their note blobs, commit messages and
+ref names (scan and verify print "notes refs read: <n>"). A blob is scanned when at
 least one of its paths is kept. Text vs binary is decided by content, as filter-repo does
 (a NUL byte in the first 8192 bytes means binary); binary files holding private data must
 be removed by path. Commit messages and annotated-tag messages are scanned too.
@@ -50,24 +52,28 @@ scan   - writes one rule per form ACTUALLY present, drops any rule that matches 
          or rename those by path.
 verify - exit 1 if any removed path is still reachable, any rule still matches a blob, a
          commit message or a tag message, OR the independent search finds a configured
-         value, literal or phone number anywhere in the object store, OR a branch or tag
-         name holds a configured value or matches a rule (filter-repo never renames refs;
+         value, literal or phone number anywhere in the object store, OR a branch, tag or
+         notes ref name holds a configured value or matches a rule (filter-repo never renames refs;
          each is printed as REF-NAME with the value masked: rename or delete it in the
          rewritten copy). The object search reads every object, not walked by ref or path:
          text blobs and commit and tag objects ("text objects"), binary blobs ("binary"),
          and every tree object's file and directory names; the three are reported
          separately and each one fails verify. A binary blob is searched as raw bytes plus
          what verify can decode from it: every member of a zip container (xlsx, docx, pptx,
-         zip; a zip inside it one level deep, e.g. an embedded workbook) and the member
-         names; UTF-16 LE/BE text (byte-order mark, or mostly-NUL odd/even bytes); a PDF's
-         FlateDecode streams (best effort: text drawn with a font's own glyph codes is not
-         found). A blob verify cannot read inside - an encrypted zip member or PDF, a zip
-         member or PDF stream under another compression or filter (images in a PDF), an
-         image file, a gzip/bzip2/xz/7z/rar archive, a legacy Office (OLE2) file - is listed
+         zip; a zip or PDF inside it one level deep, e.g. an embedded workbook), each member
+         again with its XML tags removed (a figure Word split across runs reads whole), and
+         the member names; UTF-16 LE/BE text (byte-order mark, or mostly-NUL odd/even bytes);
+         a PDF's FlateDecode (or /Fl) and unfiltered streams, each decoded stream read again
+         the same way (an attached xlsx is opened), plus the text of its literal (...) and hex
+         <...> strings with the pieces of a TJ array joined. A blob verify cannot read inside -
+         an encrypted zip member or PDF, a zip member or PDF stream under another compression
+         or filter (images in a PDF), PDF text drawn with a font's own glyph codes
+         (Identity-H/V), a container nested more than one level deep, an image file, a
+         gzip/bzip2/xz/7z/rar archive, a legacy Office (OLE2) file - is listed
          at the end as OPAQUE <blob> path=<a path> commit=<a commit> reason=<why>; OPAQUE
          does not change the exit code: open each one and check it, or remove it by path.
          A configured phone number is found in ANY punctuated form: within a span of digit
-         groups joined by 1-3 of ()[]./+-, whitespace, a Unicode dash or a no-break/thin
+         groups joined by 1-4 of ()[]./+-, whitespace, a Unicode dash or a no-break/thin
          space, consecutive whole groups whose digits equal the number (or 1 + the number).
          Anything also present in the tip (tip_ref's blobs, what verify decodes from them,
          or its trees' names) is accepted and counted as kept at tip. Values skipped by
@@ -113,9 +119,13 @@ def git(repo, *a, inp=None):
     return subprocess.run(["git", "-C", repo] + list(a), input=inp, capture_output=True, check=True).stdout
 
 
+NOTES = "--glob=refs/notes/*"   # R3-05: notes refs are read like branches and tags wherever present
+
+
 def refs_of(repo):
+    """Branches, tags and notes refs (whose commits hold each note as a blob)."""
     return [r for r in git(repo, "for-each-ref", "--format=%(refname)").decode().split()
-            if r.startswith(("refs/heads/", "refs/tags/"))]
+            if r.startswith(("refs/heads/", "refs/tags/", "refs/notes/"))]
 
 
 def blob_paths(repo, refs):
@@ -125,7 +135,7 @@ def blob_paths(repo, refs):
         return out
     # --branches --tags instead of listing refs: hundreds of ref names exceed the Windows command line.
     raw = git(repo, "log", "-z", "--raw", "--no-abbrev", "--no-renames", "--root", "-m", "--format=",
-              "--branches", "--tags")
+              "--branches", "--tags", NOTES)
     toks = raw.split(b"\0")
     i = 0
     while i < len(toks):
@@ -214,13 +224,17 @@ def utf16_text(data):
     return data[:len(data) // 2 * 2].decode(enc, "replace").encode("utf-8")
 
 
+STREAM_RE = re.compile(rb"(?<![A-Za-z])stream\r?\n")
+
+
 def pdf_streams(data):
-    """(decoded streams, opaque reasons) for a PDF: FlateDecode streams are decompressed (best
-    effort); a stream under any other filter, damaged Flate data or encryption is opaque."""
+    """(streams, opaque reasons) for a PDF: each stream as (content, filtered); FlateDecode (or
+    its /Fl abbreviation) is decompressed and an unfiltered stream is taken as is (best effort); a
+    stream under any other filter, damaged Flate data or encryption is opaque."""
     if re.search(rb"/Encrypt\b", data):
         return [], {"encrypted PDF"}
-    parts, opaque = [], set()
-    for m in re.finditer(rb"(?<![A-Za-z])stream\r?\n", data):
+    streams, opaque = [], set()
+    for m in STREAM_RE.finditer(data):
         end = data.find(b"endstream", m.end())
         if end < 0:
             break
@@ -228,24 +242,127 @@ def pdf_streams(data):
         f = re.search(rb"/Filter\s*(\[[^\]]*\]|/[A-Za-z0-9]+)", head)
         names = re.findall(rb"/([A-Za-z0-9]+)", f.group(1)) if f else []
         if not names:
-            continue                                   # unfiltered: already in the raw bytes
+            streams.append((data[m.end():end], False))
+            continue
         if names in ([b"FlateDecode"], [b"Fl"]):
             try:
-                parts.append(zlib.decompressobj().decompress(data[m.end():end]))
+                streams.append((zlib.decompressobj().decompress(data[m.end():end]), True))
                 continue
             except zlib.error:
                 opaque.add("PDF stream with damaged Flate data")
                 continue
         opaque.add("PDF stream filter " + "+".join(n.decode("ascii") for n in names))
-    return parts, opaque
+    return streams, opaque
+
+
+PDF_TOKEN = re.compile(rb"[\[\]()<%]")
+PDF_ESC = {b"n": b"\n", b"r": b"\r", b"t": b"\t", b"b": b"\b", b"f": b"\f"}
+
+
+LITERAL_STOP = re.compile(rb"[()\\]")
+HEX_STRING = re.compile(rb"<([0-9A-Fa-f\s]*)>")
+
+
+def pdf_literal(data, i):
+    """(decoded bytes, index after it) of the PDF literal string starting at data[i] == "(":
+    balanced parentheses, backslash escapes and 1-3 digit octal codes."""
+    out, depth, i = bytearray(), 1, i + 1
+    while True:
+        m = LITERAL_STOP.search(data, i)
+        if not m:
+            out += data[i:]
+            return bytes(out), len(data)
+        out += data[i:m.start()]
+        i = m.start()
+        c = data[i:i + 1]
+        if c == b"\\":
+            nxt = data[i + 1:i + 2]
+            octal = re.match(rb"[0-7]{1,3}", data[i + 1:i + 4])
+            if octal:
+                out.append(int(octal.group(0), 8) & 0xFF)
+                i += 1 + len(octal.group(0))
+            elif nxt in (b"\r", b"\n"):                     # line continuation
+                i += 2 + (data[i + 1:i + 3] == b"\r\n")
+            else:
+                out += PDF_ESC.get(nxt, nxt)
+                i += 2
+            continue
+        depth += 1 if c == b"(" else -1
+        if not depth:
+            return bytes(out), i + 1
+        out += c
+        i += 1
+
+
+def pdf_strings(data):
+    """The text a PDF content holds in its strings: every literal (...) and hex <...> string
+    decoded; the pieces of one TJ array (or any [...] array) joined with nothing between them, so
+    a figure split by kerning ([(987,)-15(653)] TJ) reads whole; separate strings on separate
+    lines. Empty if there are none."""
+    lines, cur, depth, i = [], [], 0, 0
+    while True:
+        m = PDF_TOKEN.search(data, i)
+        if not m:
+            break
+        c, i = m.group(0), m.start()
+        if c == b"(":
+            s, i = pdf_literal(data, i)
+            (cur if depth else lines).append(s)
+            continue
+        if c == b"<":
+            if data[i + 1:i + 2] == b"<":                  # a dictionary, not a string
+                i += 2
+                continue
+            h = HEX_STRING.match(data, i)
+            if h:
+                digits = re.sub(rb"\s", b"", h.group(1))
+                s = bytes.fromhex((digits + b"0" * (len(digits) % 2)).decode("ascii"))
+                (cur if depth else lines).append(s)
+                i = h.end()
+                continue
+        elif c == b"[":
+            depth += 1
+        elif c == b"]" and depth:
+            depth -= 1
+            if not depth:
+                lines.append(b"".join(cur))
+                cur = []
+        elif c == b"%":                                   # a comment runs to the end of the line
+            e = re.compile(rb"[\r\n]").search(data, i)
+            i = e.start() if e else len(data)
+            continue
+        i += 1
+    if cur:
+        lines.append(b"".join(cur))
+    return b"\n".join(l for l in lines if l)
+
+
+# Closing a paragraph, table cell or spreadsheet cell, or a tab or line break, ends a piece of
+# text; every other tag (a run, its properties, a proofing mark) sits INSIDE one, so it is removed
+# with nothing in its place. "Price 987,</w:t></w:r><w:r><w:t>653" then reads "Price 987,653".
+XML_TAG = re.compile(rb"<(/?)(?:[A-Za-z0-9_.-]+:)?([A-Za-z0-9_.-]+)[^<>]*>")
+XML_BREAK = {b"p", b"tc", b"tr", b"td", b"th", b"tab", b"br", b"cr", b"c", b"si", b"row", b"li", b"div"}
+
+
+def xml_text(data):
+    """data with its XML tags removed (see XML_BREAK), or None if it has none."""
+    if b"<" not in data or not XML_TAG.search(data):
+        return None
+    return XML_TAG.sub(lambda m: b"\n" if m.group(2) in XML_BREAK else b"", data)
+
+
+GLYPH_CODES = re.compile(rb"/Identity-[HV](?![A-Za-z0-9])")
 
 
 def expand(data, depth=0):
     """(parts, opaque): the byte strings verify searches for one blob, and the reasons any part
     of it could not be read (empty if none). A zip container (xlsx/docx/pptx/zip) gives every
-    member's content and name, opening a zip inside it one level deep; a PDF gives its raw bytes
-    plus its FlateDecode streams; UTF-16 text gives its raw bytes plus the text as UTF-8; an
-    image, another compressed format or a legacy Office (OLE2) file is opaque."""
+    member's name, content, and content with its XML tags removed (text split across runs), opening
+    a zip or PDF inside it one level deep. A PDF gives its raw bytes, each FlateDecode or
+    unfiltered stream run through expand() again (an attached xlsx is read), and the text of its
+    literal and hex strings with TJ array pieces joined; text drawn with a font's glyph codes
+    (Identity-H/V) is opaque. UTF-16 text gives its raw bytes plus the text as UTF-8; an image,
+    another compressed format or a legacy Office (OLE2) file is opaque."""
     if data[:4] in (b"PK\x03\x04", b"PK\x05\x06"):
         if depth >= 2:
             return [data], {"zip nested more than one level"}
@@ -271,11 +388,27 @@ def expand(data, depth=0):
                 continue
             sub, why = expand(member, depth + 1)
             parts += sub
+            text = None if is_binary(member) else xml_text(member)
+            if text is not None:
+                parts.append(text)
             opaque |= {info.filename + ": " + w for w in why}
         return parts, opaque
     if data[:5] == b"%PDF-":
-        parts, opaque = pdf_streams(data)
-        return [data] + parts, opaque
+        if depth >= 2:
+            return [data], {"PDF nested more than one level"}
+        streams, opaque = pdf_streams(data)
+        pieces = STREAM_RE.split(data)                   # the strings outside every stream too
+        parts = [data, pdf_strings(pieces[0] + b"".join(p.split(b"endstream", 1)[-1] for p in pieces[1:]))]
+        for content, filtered in streams:
+            sub, why = expand(content, depth + 1)
+            parts += [p for p in sub if filtered or p is not content]
+            parts.append(pdf_strings(content))
+            opaque |= {"PDF stream: " + w for w in why}
+            if GLYPH_CODES.search(content):
+                opaque.add("PDF text in font glyph codes (Identity-H/V)")
+        if GLYPH_CODES.search(data):
+            opaque.add("PDF text in font glyph codes (Identity-H/V)")
+        return [p for p in parts if p], opaque
     text = utf16_text(data) if is_binary(data) or data[:2] in (b"\xff\xfe", b"\xfe\xff") else None
     if text is not None:
         return [data, text], set()
@@ -297,7 +430,7 @@ def blob_origins(repo, shas):
     """sha -> (a path, a commit) that stored it, from branches and tags; absent if unreachable."""
     want, out, commit = set(shas), {}, ""
     toks = git(repo, "log", "-z", "--raw", "--no-abbrev", "--no-renames", "--root", "-m", "--format=%x01%H",
-               "--branches", "--tags").split(b"\0")
+               "--branches", "--tags", NOTES).split(b"\0")
     i = 0
     while i < len(toks):
         t = toks[i].lstrip(b"\n")
@@ -316,7 +449,7 @@ def messages(repo, refs):
     """Commit messages plus annotated-tag messages, as one bytes blob."""
     if not refs:
         return b""
-    msgs = git(repo, "log", "--format=%B%x00", "--branches", "--tags")
+    msgs = git(repo, "log", "--format=%B%x00", "--branches", "--tags", NOTES)
     tags = git(repo, "for-each-ref", "--format=%(objecttype)%00%(contents)%00", "refs/tags").split(b"\0")
     for kind, body in zip(tags[0::2], tags[1::2]):
         if kind.strip() == b"tag":
@@ -388,13 +521,13 @@ def number_phone_pattern(n):
 class PhoneDigits:
     """Verify's loose search for one configured phone number, in any punctuated form.
 
-    A span is digit groups joined by 1-3 of ()[]./+-, whitespace, a Unicode dash (U+2010..U+2015,
+    A span is digit groups joined by 1-4 of ()[]./+-, whitespace, a Unicode dash (U+2010..U+2015,
     U+2212) or a no-break/thin space (U+00A0, U+2009, U+202F). Any run of consecutive WHOLE
     groups whose digits equal the number (or 1 + the number) is one occurrence, so the number is
     never found inside a longer digit run. Same search/findall/sub API as a regex.
     """
     JOIN = rb"(?:[\s()\[\]./+-]|\xe2\x80[\x90-\x95\x89\xaf]|\xe2\x88\x92|\xc2\xa0)"
-    SPAN = re.compile(rb"[0-9]+(?:" + JOIN + rb"{1,3}[0-9]+)*")
+    SPAN = re.compile(rb"[0-9]+(?:" + JOIN + rb"{1,4}[0-9]+)*")
     GROUP = re.compile(rb"[0-9]+")
 
     def __init__(self, n):
@@ -496,6 +629,7 @@ def scan(repo, cfg, out):
         fh.write("\n".join(sorted(hit_paths)) + "\n")
     count = lambda rows, k: sum(1 for kind, _ in rows if kind == k)
     print("blobs scanned: %d; affected paths: %d" % (len(texts), len(hit_paths)))
+    print("notes refs read: %d" % sum(1 for r in refs if r.startswith("refs/notes/")))
     print("found: numbers %d, literals %d, phones %d"
           % (count(present, "number"), count(present, "literal"), count(present, "phone")))
     print("rules written: %d; dropped (present at tip): %d" % (len(keep), len(present) - len(keep)))
@@ -608,6 +742,7 @@ def verify(repo, cfg, rules_path):
     ref_hits = [n for n in names if any(p.search(n) for p in rxs + res["searched"])]
     printable = lambda b: mask(b, rxs + res["all"]).decode("utf-8", "backslashreplace")
     print("removed paths still reachable: %d" % len(removed))
+    print("notes refs read: %d" % sum(1 for r in refs if r.startswith("refs/notes/")))
     print("blobs checked: %d; blobs matching a rule: %d; message hits: %d" % (len(kept), hit_blobs, msg_hits))
     print("independent search of every object: values still present: %d (%d occurrences); "
           "kept at tip (accepted): %d" % (res["left"], res["occ"], res["at_tip"]))

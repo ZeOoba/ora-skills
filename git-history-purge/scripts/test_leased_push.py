@@ -327,6 +327,56 @@ class LeasedPushTest(Base):
         self.assertIn("MOVED refs/heads/late-new", r.stdout)
         self.assertEqual(git(self.remote, "rev-parse", "refs/heads/main"), git(self.mirror, "rev-parse", "refs/heads/main"))
 
+    def test_done_ref_put_back_during_the_push_is_moved(self):
+        # R3-08: b0 was pushed by an earlier run (done, skipped now); between the check and the push
+        # another session force-pushes b0's pre-purge SHA back. The re-check must read b0 too.
+        old_b0 = git(self.mirror, "rev-parse", "refs/heads/b0")
+        git(self.work, "push", "-q", "--force-with-lease=refs/heads/b0:%s" % old_b0, self.remote,
+            "refs/heads/b0:refs/heads/b0")
+        code = ("import subprocess\n"
+                "subprocess.run(['git', '-C', %r, 'push', '-q', '--force', %r, '%s:refs/heads/b0'], check=True)\n"
+                % (self.mirror, self.remote, old_b0))
+        r = self.run_push(env={"LEASED_PUSH_TEST_BEFORE_PUSH": self.hook_cmd(code)})
+        self.assertRegex(r.stdout, r"refs: \d+ to push, 1 already done")
+        self.assertEqual(git(self.remote, "rev-parse", "refs/heads/b0"), old_b0)
+        self.assertEqual(r.returncode, 3, r.stdout + r.stderr)
+        self.assertIn("MOVED refs/heads/b0", r.stdout)
+        self.assertIn("the remote moved DURING the push", r.stdout)
+
+    def test_rejected_deletion_is_a_rejection_not_moved(self):
+        # LP05: the remote refuses a --delete-removed deletion: exit 1 (fix and rerun), not 3.
+        self.add_notes_only_branch()
+        self.reject_on_remote("refs/heads/notesonly")
+        r = self.run_push("--delete-removed")
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("REJECTED", r.stdout)
+        self.assertIn("refs/heads/notesonly", "\n".join(l for l in r.stdout.splitlines() if l.startswith("REJECTED")))
+        self.assertNotIn("MOVED", r.stdout)
+        self.assertEqual(git(self.remote, "for-each-ref", "--format=%(refname)", "refs/heads/notesonly"),
+                         "refs/heads/notesonly")
+
+    def test_tag_rename_recipe_pushes_no_old_tag_object(self):
+        # R3-06: renaming a tag in work.git (its name held a value) the SKILL.md way, then pushing.
+        msg = os.path.join(self.tmp.name, "tagmsg.txt")
+        write(msg, git(self.work, "tag", "-l", "--format=%(contents)", "v1") + "\n")
+        git(self.work, "tag", "-a", "v1-renamed", "-F", msg, "v1^{}")
+        git(self.work, "tag", "-d", "v1")
+        git(self.work, "reflog", "expire", "--expire=now", "--all")
+        git(self.work, "gc", "-q", "--prune=now")
+        r = self.run_push()
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+        self.assertIn("DELETED-BY-REWRITE refs/tags/v1", r.stdout)
+        r = self.run_push("--delete-removed")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assert_remote_matches_work()
+        fresh = os.path.join(self.tmp.name, "fresh.git")
+        subprocess.run(["git", "clone", "-q", "--bare", "--no-local", self.remote, fresh], check=True, env=ENV)
+        self.assertEqual(git(fresh, "for-each-ref", "--format=%(refname)", "refs/tags"), "refs/tags/v1-renamed")
+        tags = [l.split()[0] for l in git(fresh, "cat-file", "--batch-all-objects",
+                                          "--batch-check=%(objectname) %(objecttype)").splitlines() if l.endswith(" tag")]
+        self.assertEqual([git(fresh, "cat-file", "-p", t).splitlines()[2] for t in tags], ["tag v1-renamed"])
+        self.assertEqual(git(fresh, "rev-parse", "v1-renamed^{}"), git(self.work, "rev-parse", "refs/heads/main"))
+
     def test_batch_failing_without_porcelain_is_a_failure(self):
         code = "import os\nos.rename(%r, %r)\n" % (self.remote, self.remote + ".gone")
         r = self.run_push(env={"LEASED_PUSH_TEST_BEFORE_PUSH": self.hook_cmd(code)})
@@ -394,6 +444,22 @@ class PrepareTest(Base):
         for obj in (pr, blob):
             self.assertNotEqual(subprocess.run(["git", "-C", work, "cat-file", "-e", obj],
                                                capture_output=True, env=ENV).returncode, 0, obj)
+
+    def test_prepare_refuses_a_backup_with_refs_outside_heads_tags_and_pull(self):
+        # R3-05: refs/notes (and any other namespace) are never copied, rewritten or pushed, so the
+        # data they hold would stay on the remote while every later step passes.
+        git(self.src, "notes", "add", "-m", "secret note", "HEAD")
+        git(self.src, "push", "-q", self.remote, "refs/notes/commits:refs/notes/commits",
+            "HEAD:refs/pull/1/head", "HEAD:refs/keep/x")
+        git(self.mirror, "fetch", "-q", self.remote, "+refs/*:refs/*")
+        work = os.path.join(self.tmp.name, "notes.git")
+        r = self.run_prepare(self.mirror, work)
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn("OTHER-NAMESPACE refs/notes/commits", r.stdout)
+        self.assertIn("OTHER-NAMESPACE refs/keep/x", r.stdout)
+        self.assertNotIn("refs/pull/1/head", r.stdout)
+        self.assertIn("nothing copied", r.stdout)
+        self.assertFalse(os.path.lexists(work))
 
     def test_prepare_refuses_a_backup_that_changes_during_the_copy(self):
         # G1-16 (P02): the backup's refs move after prepare read them, while the copy is being made.

@@ -11,10 +11,13 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from unittest import mock
 import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, "purge_scan.py")
+sys.path.insert(0, HERE)
+import purge_scan  # noqa: E402  (in-process checks where a git fixture cannot reach, e.g. a 256 MB member)
 FIG = "123,457"
 LIT = "Project Blue Heron"
 PHONE = "614-555-0199"
@@ -631,13 +634,14 @@ class PurgeScanTest(unittest.TestCase):
         return buf.getvalue()
 
     @staticmethod
-    def _pdf(*streams):
-        """A minimal PDF; each stream is (filter or None, raw stream bytes)."""
+    def _pdf(*streams, trailer=b""):
+        """A minimal PDF; each stream is (filter or None, raw stream bytes); trailer is added to the
+        trailer dictionary."""
         out = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"
         for i, (flt, data) in enumerate(streams, 1):
             f = b" /Filter /" + flt.encode() if flt else b""
             out += b"%d 0 obj\n<< /Length %d%s >>\nstream\n" % (i, len(data), f) + data + b"\nendstream\nendobj\n"
-        return out + b"trailer\n<< /Root 1 0 R >>\n%%EOF\n"
+        return out + b"trailer\n<< /Root 1 0 R" + trailer + b" >>\n%%EOF\n"
 
     def test_verify_finds_values_inside_zip_utf16_and_pdf_flate_blobs(self):
         self.config(values=[987653], literals=[LIT], phone_numbers=["6145550124"], phones=False)
@@ -698,6 +702,221 @@ class PurgeScanTest(unittest.TestCase):
             self.assertIn(why, line[0])
             self.assertIn("commit=%s" % commit, line[0])
         self.assertTrue(v.stdout.rstrip().splitlines()[-1].startswith("OPAQUE "), v.stdout)
+
+    # ---- R3-07 / R3-10: each layout verify decodes, checked one history at a time ----------
+    def _verify_each_layout(self, layouts):
+        """layouts: {name: {path: bytes}}. Each goes into its OWN history (added, then deleted, so
+        never at the tip) and verify runs with no rules. Returns the names verify let through
+        (exit 0, or a value printed)."""
+        cfg = os.path.join(self.tmp.name, "private", "layouts.json")
+        with open(cfg, "w", encoding="utf-8") as fh:
+            json.dump({"values": [987653], "literals": [LIT], "phone_numbers": ["6145550124"], "phones": False}, fh)
+        self._empty_rules()
+        missed = []
+        for n, (name, files) in enumerate(sorted(layouts.items())):
+            r = Repo(os.path.join(self.tmp.name, "layout-%02d" % n))
+            r.commit({"a.md": "x\n"})
+            r.commit(files)
+            r.commit(delete=list(files))
+            v = run("verify", r.path, cfg, self.rules)
+            out = v.stdout + v.stderr
+            if v.returncode != 1 or any(s in out for s in ("987,653", "987653", LIT, "6145550124", "555-0124")):
+                missed.append("%s (exit %d)" % (name, v.returncode))
+        return missed
+
+    def test_verify_finds_values_in_layouts_pdf_embedded_files_tj_arrays_hex_strings_split_runs(self):
+        # R3-07: each of these held the value and verify exited 0.
+        xlsx = self._zip({"[Content_Types].xml": "<Types/>", "xl/sharedStrings.xml": "<sst><si><t>Price 987,653</t></si></sst>"})
+        docx = self._zip({"[Content_Types].xml": "<Types/>", "word/document.xml":
+                          '<w:document><w:body><w:p><w:r><w:t xml:space="preserve">Price 987,</w:t></w:r>'
+                          '<w:r w:rsidR="00A1"><w:t>653</w:t></w:r></w:p></w:body></w:document>'})
+        layouts = {
+            "xlsx embedded in a PDF": {"memo.pdf": self._pdf(("FlateDecode", zlib.compress(xlsx)))},
+            "PDF TJ array split inside the figure": {
+                "memo.pdf": self._pdf(("FlateDecode", zlib.compress(b"BT /F1 12 Tf [(Price 987,)-15(653)] TJ ET")))},
+            "PDF TJ array, escaped parentheses and octal": {
+                "memo.pdf": self._pdf(("FlateDecode", zlib.compress(b"BT [(\\(NOI\\) 98)12(\\067,653)] TJ ET")))},
+            "PDF hex string": {
+                "memo.pdf": self._pdf(("FlateDecode", zlib.compress(b"BT /F1 12 Tf <507269636520393837363533> Tj ET")))},
+            "PDF hex string outside every stream": {
+                "memo.pdf": self._pdf((None, b"BT (cover) Tj ET"), trailer=b" /Info << /Title <4e4f4920393837363533> >>")},
+            "PDF hex string in an unfiltered stream": {
+                "memo.pdf": self._pdf((None, b"BT [<5072696365203938> 7 <37363533>] TJ ET"))},
+            "docx with the figure split across runs": {"memo.docx": docx},
+            "xlsx with (614) - 555-0124": {"deal.xlsx": self._zip({"xl/sharedStrings.xml": "<t>Call (614) - 555-0124</t>"})},
+        }
+        self.assertEqual(self._verify_each_layout(layouts), [])
+
+    def test_verify_finds_values_in_each_decoded_layout_the_mutants_hid(self):
+        # R3-10: PS01 / PS12 / PS13 / PS15 / PS22 / PS24 / PS25 / PS56 each turned verify's exit 1 into 0.
+        two = self._pdf(("FlateDecode", zlib.compress(b"BT (cover page) Tj ET")),
+                        ("FlateDecode", zlib.compress(b"BT (NOI 987,653) Tj ET")))
+        layouts = {
+            "PS01 value only in a zip member name": {"deal.zip": self._zip({"rent-roll-987653.csv": "a,b\n" + "x\n" * 40})},
+            "PS12 UTF-16LE without a byte-order mark": {"export.csv": ("tenant,noi\r\nA,987653\r\n" * 3).encode("utf-16-le")},
+            "PS13 UTF-16LE, half CJK, no byte-order mark": {
+                "export.csv": (("Tenant 大楼租金大楼 " * 20) + " NOI 987,653\r\n").encode("utf-16-le")},
+            "PS15 UTF-16 with a byte-order mark, no NUL in the first 8 KB": {
+                "export.txt": b"\xff\xfe" + ("大楼租金" * 1100 + " NOI 987,653").encode("utf-16-le")},
+            "PS22 PDF value in unfiltered XMP metadata (raw bytes only)": {
+                "memo.pdf": self._pdf((None, b"<x:xmpmeta><dc:title>NOI 987,653</dc:title></x:xmpmeta>"))},
+            "PS24 PDF stream under the /Fl abbreviation": {"memo.pdf": self._pdf(("Fl", zlib.compress(b"BT (NOI 987,653) Tj ET")))},
+            "PS25 PDF value in the second stream": {"memo.pdf": two},
+            "PS56 phone with narrow no-break spaces": {"c.md": "call 614 555 0124 today\n".encode("utf-8")},
+        }
+        self.assertEqual(self._verify_each_layout(layouts), [])
+
+    def test_every_blob_verify_cannot_read_is_listed_opaque_with_its_reason(self):
+        # R3-11: PS02-04 / PS08 / PS19 / PS20 / PS28-33 dropped one of these OPAQUE lines silently.
+        self.config(values=[987653], phones=False)
+        enc = bytearray(self._zip({"x.xml": "<t>hidden</t>"}, zipfile.ZIP_STORED))
+        for sig, off in ((b"PK\x03\x04", 6), (b"PK\x01\x02", 8)):          # the "encrypted" flag bit
+            i = enc.index(sig)
+            enc[i + off] |= 1
+        d64 = bytearray(self._zip({"s.xml": "<t>x</t>" * 20}))
+        for sig, off in ((b"PK\x03\x04", 8), (b"PK\x01\x02", 10)):         # compression method 9 (Deflate64)
+            i = d64.index(sig)
+            d64[i + off:i + off + 2] = (9).to_bytes(2, "little")
+        lvl1 = self._zip({"s.xml": "<t>x</t>" * 20})
+        lvl3 = self._zip({"word/embeddings/pack.docx": self._zip({"embed/inner.xlsx": lvl1})})
+        pad = bytes(300)
+        expect = {      # path -> words its OPAQUE reason must hold
+            "nested-encrypted.docx": "word/embeddings/inner.xlsx: encrypted zip member x.xml",
+            "broken.xlsx": "unreadable zip",
+            "deflate64.xlsx": "unknown compression or damaged s.xml",
+            "too-deep.docx": "zip nested more than one level",
+            "locked.pdf": "encrypted PDF",
+            "damaged.pdf": "damaged Flate data",
+            "nested.pdf": "PDF stream: PDF stream: PDF nested more than one level",
+            "i.png": "image (PNG)", "i.jpg": "image (JPEG)", "i.gif": "image (GIF)", "i-le.tif": "image (TIFF)",
+            "i-be.tif": "image (TIFF)", "i.bmp": "image (BMP)", "a.gz": "compressed (gzip)", "a.bz2": "compressed (bzip2)",
+            "a.xz": "compressed (xz)", "a.7z": "compressed (7z)", "a.rar": "compressed (rar)",
+            "old.xls": "legacy Office/OLE2 file",
+        }
+        files = {
+            "nested-encrypted.docx": self._zip({"word/document.xml": "<w/>", "word/embeddings/inner.xlsx": bytes(enc)}),
+            "broken.xlsx": b"PK\x03\x04" + bytes(200),
+            "deflate64.xlsx": bytes(d64),
+            "too-deep.docx": lvl3,
+            "locked.pdf": self._pdf((None, b"\x8a\x13\xfe" + bytes(100)), trailer=b" /Encrypt 9 0 R"),
+            "damaged.pdf": self._pdf(("FlateDecode", b"\x00\x01garbage" * 10)),
+            "nested.pdf": self._pdf(("FlateDecode", zlib.compress(self._pdf(("FlateDecode", zlib.compress(
+                self._pdf((None, b"BT (x) Tj ET")))))))),
+            "i.png": b"\x89PNG\r\n\x1a\n" + pad, "i.jpg": b"\xff\xd8\xff\xe0" + pad, "i.gif": b"GIF89a" + pad,
+            "i-le.tif": b"II*\x00" + pad, "i-be.tif": b"MM\x00*" + pad, "i.bmp": b"BM" + pad,
+            "a.gz": b"\x1f\x8b\x08\x00" + pad, "a.bz2": b"BZh9" + pad, "a.xz": b"\xfd7zXZ\x00" + pad,
+            "a.7z": b"7z\xbc\xaf\x27\x1c" + pad, "a.rar": b"Rar!\x1a\x07\x00" + pad,
+            "old.xls": b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + pad,
+        }
+        self.r.commit({"a.md": "x\n"})
+        self.r.commit(files)
+        self.r.commit(delete=list(files))
+        self._empty_rules()
+        v = self.verify()
+        self.assertEqual(v.returncode, 0, v.stdout)
+        self.assertIn("opaque blobs (NOT searched inside): %d" % len(files), v.stdout)
+        lines = [l for l in v.stdout.splitlines() if l.startswith("OPAQUE ")]
+        for path, why in expect.items():
+            line = [l for l in lines if (" path=%s " % path) in l]
+            self.assertEqual(len(line), 1, "%s: %s" % (path, v.stdout))
+            self.assertIn(why, line[0], path)
+
+    def test_zip_member_over_the_size_cap_is_opaque(self):
+        # PS05: a 256 MB member cannot sit in a fixture, so the cap is lowered for this check only.
+        xlsx = self._zip({"xl/s.xml": "<t>987,653</t>" + "<x/>" * 50})
+        with mock.patch.object(purge_scan, "MAX_MEMBER", 100):
+            parts, why = purge_scan.expand(xlsx)
+        self.assertEqual(why, {"zip member too large xl/s.xml"})
+        self.assertFalse(any(b"987,653" in p for p in parts))
+
+    def test_pdf_text_in_font_glyph_codes_is_opaque(self):
+        # R3-07: text drawn with a font's own glyph codes (Identity-H) cannot be read: say so.
+        pdf = self._pdf(("FlateDecode", zlib.compress(b"BT /F1 12 Tf <00340035> Tj ET")),
+                        (None, b"<< /Type /Font /Subtype /Type0 /Encoding /Identity-H >>"))
+        parts, why = purge_scan.expand(pdf)
+        self.assertEqual(why, {"PDF text in font glyph codes (Identity-H/V)"})
+
+    def test_opaque_line_masks_values_in_its_path_and_reason(self):
+        # PS39 / PS40: the OPAQUE line printed the path and an encrypted member's name unmasked.
+        self.config(values=[987653], phones=False)
+        enc = bytearray(self._zip({"noi-987653.xml": "<t>hidden</t>"}, zipfile.ZIP_STORED))
+        for sig, off in ((b"PK\x03\x04", 6), (b"PK\x01\x02", 8)):
+            i = enc.index(sig)
+            enc[i + off] |= 1
+        self.r.commit({"a.md": "x\n"})
+        self.r.commit({"d/noi-987653.png": b"\x89PNG\r\n\x1a\n" + bytes(200), "d/locked.xlsx": bytes(enc)})
+        self.r.commit(delete=["d"])
+        self._empty_rules()
+        v = self.verify()
+        self.assertNotIn("987653", v.stdout + v.stderr)
+        self.assertIn(" path=d/noi-[private].png ", v.stdout)
+        self.assertIn("reason=encrypted zip member noi-[private].xml", v.stdout)
+
+    # ---- R3-13: PS53 (U+202F in the scan rule), PS46 (7 hex characters before a figure) ------
+    def test_scan_rule_purges_a_configured_phone_written_with_narrow_no_break_spaces(self):
+        self.config(phones=False, phone_numbers=["6145550124"])
+        self.r.commit({"c.md": "p 614 555 0124 x\np (614) 555-0124 x\n"})
+        self.r.commit({"c.md": "x\n"})
+        self.scan()
+        self.r.filter(self.rules)
+        self.assertEqual(show_bytes(self.r.path, "main~1:c.md").decode("utf-8"), "p [phone: private] x\n" * 2)
+        self.assertEqual(self.verify().returncode, 0)
+
+    def test_figure_right_after_seven_hex_characters_is_part_of_a_hash(self):
+        self.config(values=[987653], phones=False)
+        self.r.commit({"a.md": "id a1b2c3d987653 x\nsha abcdefa987,653 x\n"})
+        self.r.commit({"a.md": "x\n"})
+        s = self.scan()
+        self.assertIn("found: numbers 0", s.stdout)
+        self._empty_rules()
+        v = self.verify()
+        self.assertEqual(v.returncode, 0, v.stdout)
+        self.assertIn("values still present: 0 (0 occurrences)", v.stdout)
+
+    # ---- R3-05: refs/notes ----------------------------------------------------------------
+    def test_verify_and_scan_read_notes_refs(self):
+        self.config(values=[987653], phones=False)
+        self.r.commit({"a.md": "x\n"})
+        git(self.r.path, "notes", "add", "-m", "agreed zq-marker-77 and 987,653", "HEAD")
+        git(self.r.path, "notes", "--ref", "refs/notes/deal-987653", "add", "-m", "x", "HEAD")
+        s = self.scan()
+        self.assertIn("found: numbers 1", s.stdout)
+        self._rules_file("regex:zq-marker-77==>[gone]")
+        v = self.verify()
+        self.assertEqual(v.returncode, 1, v.stdout)
+        self.assertIn("notes refs read: 2", v.stdout)
+        self.assertIn("blobs matching a rule: 1", v.stdout)
+        self.assertIn("REF-NAME refs/notes/deal-[private]", v.stdout)
+        self.assertNotIn("987653", v.stdout + v.stderr)
+
+    # ---- R3-06: renaming a tag whose name holds a value ------------------------------------
+    def test_tag_rename_recipe_leaves_no_old_tag_object(self):
+        self.config(values=[987653], phones=False)
+        self.r.commit({"a.md": "x\n"})
+        git(self.r.path, "tag", "-a", "v-987653", "-m", "release notes")
+        self._empty_rules()
+        self.assertEqual(self.verify().returncode, 1)
+        # The old recipe (a lightweight tag on the old tag) keeps the old tag object and its name.
+        git(self.r.path, "tag", "v-lightweight", "v-987653")
+        git(self.r.path, "tag", "-d", "v-987653")
+        v = self.verify()
+        self.assertEqual(v.returncode, 1, v.stdout)
+        self.assertIn("values still present: 1", v.stdout)
+        git(self.r.path, "tag", "-d", "v-lightweight")
+        # The recipe: a NEW annotated tag on the peeled commit, delete the old, expire reflogs, prune.
+        git(self.r.path, "tag", "-a", "v-987653", "-m", "release notes", "HEAD")
+        msg = os.path.join(self.tmp.name, "private", "tagmsg.txt")
+        with open(msg, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(git(self.r.path, "tag", "-l", "--format=%(contents)", "v-987653"))
+        git(self.r.path, "tag", "-a", "v-renamed", "-F", msg, "v-987653^{}")
+        git(self.r.path, "tag", "-d", "v-987653")
+        self.assertEqual(self.verify().returncode, 1)          # the old tag object is still in the store
+        git(self.r.path, "reflog", "expire", "--expire=now", "--all")
+        git(self.r.path, "gc", "-q", "--prune=now")
+        v = self.verify()
+        self.assertEqual(v.returncode, 0, v.stdout)
+        self.assertEqual(git(self.r.path, "cat-file", "-p", "v-renamed").splitlines()[2], "tag v-renamed")
+        self.assertEqual(git(self.r.path, "rev-parse", "v-renamed^{}"), git(self.r.path, "rev-parse", "HEAD"))
 
 
 if __name__ == "__main__":

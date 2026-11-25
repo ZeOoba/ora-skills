@@ -1,24 +1,11 @@
-"""Remove purged ("old") history from a local checkout, then prove it at object level (SKILL.md Step 6).
+"""Move a checkout with purged ("old") history into the archive and re-clone it from the purged remote (Step 6).
 
   python -I local_cleanup.py changed <purged.git> <backup.git> [<backup2.git> ...] --out <old-commits.txt>
-  python -I local_cleanup.py plan <repo> <old-commits.txt> --out <plan.json> [--min-age-hours 24] [--include-locked]
-  python -I local_cleanup.py archive <repo> <plan.json> <archive-dir> --exclusive [--quiet-seconds 60]
-                                     [--include-locked]
-  python -I local_cleanup.py gc <repo> <old-commits.txt> <archive-dir> --exclusive [--quiet-seconds 60]
-                                [--prune-floor 1.hour.ago]
+  python -I local_cleanup.py inventory <repo> <old-commits.txt> --out <inv.json>
+  python -I local_cleanup.py rehome <repo> <inv.json> <archive-dir> <clone-url> --exclusive [--quiet-seconds 60]
   python -I local_cleanup.py overlap <repo> <old-commits.txt>
 
-Every path argument is resolved against the current directory before use.
-
-archive and gc are EXCLUSIVE MAINTENANCE: they do not try to be safe against other writers. They refuse
-unless --exclusive is passed (the operator's statement that every session, IDE and scheduled job using
-this checkout and its worktrees is stopped), no *.lock file exists in the common dir or any worktree git
-dir, no rebase/merge/cherry-pick/revert/bisect is in progress, and two full-state snapshots taken
---quiet-seconds apart are identical. A snapshot covers every ref (all namespaces, every worktree's
-per-worktree refs and HEAD/ORIG_HEAD/FETCH_HEAD/MERGE_HEAD/... files), every reflog file (sha256),
-every index (size + sha256), every worktree's `git status --porcelain=v2` (with each listed file's
-size and mtime) and the worktree list. Every change they make is checked against a snapshot afterwards;
-anything they did not make is reported loudly with the safety bundle to recover from.
+Every path argument is resolved against the current directory before use. Nothing is ever deleted.
 
 "Old history" = reaches a commit the purge CHANGED or DROPPED: every commit reachable from any ref of
 any backup, minus every commit reachable from any ref of the purged copy. A clean first commit keeps
@@ -26,44 +13,43 @@ its SHA through filter-repo, so branches sharing only that root are NOT old; an 
 old either. Several backups: a second one is made when someone pushed after the first (never fetch
 into an existing backup); `changed` takes their union.
 
-changed  writes the sorted old set; exit 1 if it is empty (refuse to guess). Also writes
-         <out>.objects: the changed/dropped NON-commit objects (blobs, trees, tag objects reachable
-         from the backups minus those reachable from the purged copy); plan, gc and overlap read it
-         when it sits next to the old-commits file.
-plan     (read-only) every ref in every namespace (annotated tags peeled; a ref whose object or
-         peeled object is in <old>.objects counts as old), every stash entry, every linked
-         worktree. Linked worktrees on old history are skipped (with their branch) when locked
-         (unless --include-locked), missing/prunable, or dirty with a change newer than
-         --min-age-hours. A main worktree on old history is a BLOCKER (re-point it first, Step 6.2).
-         Records the full-state snapshot. Exit 0 if every old item is planned and there is no
-         blocker, 1 if not, 4 if the checkout changed while planning.
-archive  quiet gate, then refuses (exit 4) unless the live snapshot equals the plan's. Writes the
-         SAFETY BUNDLE <archive>/safety.bundle: every ref, plus temp refs (refs/purge-archive/obj/<sha>)
-         for every object named by any reflog entry (old and new values, every reflog of every
-         worktree), every worktree's per-worktree refs and HEAD/ORIG_HEAD/FETCH_HEAD/... files; then
-         verifies it and its heads. Saves each planned worktree's staged-only content (index differs
-         from both HEAD and the file). Moves each planned worktree folder intact (ignored files
-         included) to <archive>/dirs/ with os.rename only (the archive dir must be on the same volume;
-         refused up front otherwise), prunes, and removes the planned refs in ONE leased update-ref
-         transaction. A snapshot check runs before the first move, after the moves, after the prune
-         and at the end. Nothing is deleted.
-gc       quiet gate; needs the archive's safety bundle (`git bundle verify` must pass, and every
-         entry of each reflog it edits must be in the bundle). Deletes ONLY the reflog entries (every
-         reflog of every worktree, refs/stash included) whose new value reaches an old commit or is a
-         listed old object, or whose previous value still would after the edit; highest index first
-         (`reflog delete --rewrite`); every other entry is kept. Pins every linked worktree's
-         per-worktree refs with temp refs (refs/purge-keep/<n>), runs gc --prune=<floor> (reflog
-         expiry and worktree pruning off), removes the pins, then checks that every ref still
-         resolves and nothing else changed. The floor (default 1.hour.ago) protects fresh objects.
-overlap  objects in the object store that are in the old set (commits) or, when <old>.objects
-         exists, in that set (blobs, trees, tags): exit 0 when 0, else 1. Names each reflog that
-         still holds old entries (including entries whose previous value is old).
+changed    writes the sorted old set; exit 1 if it is empty (refuse to guess). Also writes
+           <out>.objects: the changed/dropped NON-commit objects (blobs, trees, tag objects reachable
+           from the backups minus those reachable from the purged copy); inventory and overlap read it
+           when it sits next to the old-commits file.
+inventory  (read-only) the main checkout and every linked worktree (branch or detached HEAD, locked,
+           modified, untracked, staged-only, operation in progress, submodules), every local ref in
+           every namespace (per-worktree refs included) and every stash entry, each OLD (reaches an
+           old commit, or is/peels to a listed old object) or KEPT; remotes, branch upstreams,
+           core.hooksPath and the hooks dir; and a full-state snapshot. Prints a table. Exit 2 with
+           a REFUSED list when something cannot be carried across without loss: a KEPT worktree that
+           has modified, untracked or staged-only files, an operation in progress, or a submodule
+           with unpushed commits or changes; or an operation in progress in ANY worktree (the rehome
+           gate refuses it). OLD worktrees may be dirty: they stay intact in the archive.
+rehome     EXCLUSIVE MAINTENANCE. Refuses (exit 4) unless --exclusive is passed (every session, IDE
+           and scheduled job using the checkout is stopped), no *.lock file exists, nothing is in
+           progress, and two snapshots --quiet-seconds apart equal each other and the inventory's.
+           Refuses (exit 2) an archive dir that exists, is inside the checkout or a worktree, or is
+           on another volume. Then renames every linked worktree outside the main folder to
+           <archive>/worktrees/<n>-<name>/ and the main folder to <archive>/repo/, and runs
+           `git worktree repair` there (a failed rename, repair or clone renames everything back: exit 3).
+           Clones <clone-url> (the PURGED remote) into the main path, re-points the archived submodules'
+           .git files at their archived repositories,
+           restores remotes, branch upstreams and core.hooksPath (hooks are NOT copied), fetches the
+           KEPT refs from the archived repo with an explicit refspec list (branches, tags, notes and
+           other namespaces; never remote-tracking or old refs, never --tags), stores the kept stash
+           entries oldest first, re-creates each kept worktree at its path (detached if it was,
+           re-locked with its reason) with its per-worktree refs, and verifies: overlap 0, every
+           carried ref at its SHA, every re-created worktree clean at its HEAD. Writes
+           <archive>/REHOME.md (what moved, what came across, how to restore).
+overlap    objects in the object store that are in the old set (commits) or, when <old>.objects
+           exists, in that set (blobs, trees, tags): exit 0 when 0, else 1.
 
-Prints counts and ref names only, never file contents.
-Exit codes: 0 ok, 1 work left/found (or gc's git step failed), 2 bad input (nothing changed),
-3 archive stopped at a failed move (nothing else moved, no ref removed), 4 not quiet / changed since
-the plan or the archive (nothing changed), 5 a change this run did not make was found after it started
-(recover from the safety bundle it names).
+Prints counts, ref names and paths only, never file contents.
+Exit codes: 0 ok, 1 work left/found, 2 bad input or REFUSED (nothing changed), 3 rehome stopped before
+the clone and rolled every rename back (original layout confirmed), 4 not exclusive / not quiet / changed
+since the inventory (nothing changed), 5 a step after the clone failed (the archive is complete; see
+REHOME.md), 6 the rollback itself failed (folders listed where they are now).
 """
 import argparse
 import hashlib
@@ -75,14 +61,14 @@ import sys
 import time
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}([0-9a-f]{24})?$")
-NULL_RE = re.compile(r"^0+$")
-TEMP_NS = "refs/purge-archive/"
-PIN_NS = "refs/purge-keep/"
 MAIN = "."                                  # snapshot id of the main worktree (never a worktree admin id)
 PSEUDO = ("HEAD", "ORIG_HEAD", "FETCH_HEAD", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REBASE_HEAD", "REVERT_HEAD",
           "BISECT_HEAD", "AUTO_MERGE")
-BUSY = ("rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG", "sequencer")
-EXIT_PARTIAL, EXIT_NOT_QUIET, EXIT_UNPLANNED = 3, 4, 5
+BUSY = ("rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG", "BISECT_START",
+        "sequencer")
+PER_WORKTREE = ("refs/worktree/", "refs/bisect/", "refs/rewritten/")
+TMP_NS = "refs/rehome-tmp/"
+EXIT_ROLLED_BACK, EXIT_NOT_QUIET, EXIT_AFTER_CLONE, EXIT_ROLLBACK_FAILED = 3, 4, 5, 6
 
 
 class Refuse(Exception):
@@ -90,24 +76,20 @@ class Refuse(Exception):
 
 
 class NotQuiet(Exception):
-    """Not exclusive / not quiet / changed since the plan: exit 4, nothing changed."""
+    """Not exclusive / not quiet / changed since the inventory: exit 4, nothing changed."""
 
     def __init__(self, msg, keys=()):
         Exception.__init__(self, msg)
         self.keys = list(keys)
 
 
-def git(repo, *args, check=True, binary=False, stdin=None):
+def git(repo, *args, check=True, stdin=None):
     r = subprocess.run(["git", "--no-optional-locks", "-C", repo, "-c", "core.quotepath=false"] + list(args),
-                       capture_output=True,
-                       input=stdin if binary or stdin is None else stdin.encode("utf-8", "surrogateescape"))
-    if check and r.returncode != 0:
-        raise subprocess.CalledProcessError(r.returncode, ["git"] + list(args)[:2], r.stdout,
-                                            r.stderr.decode("utf-8", "replace"))
-    if binary:
-        return r
+                       capture_output=True, input=None if stdin is None else stdin.encode("utf-8", "surrogateescape"))
     r.stdout = r.stdout.decode("utf-8", "surrogateescape")
     r.stderr = r.stderr.decode("utf-8", "replace")
+    if check and r.returncode != 0:
+        raise subprocess.CalledProcessError(r.returncode, ["git"] + list(args)[:2], r.stdout, r.stderr)
     return r
 
 
@@ -117,6 +99,10 @@ def out(repo, *args):
 
 def norm(path):
     return os.path.normcase(os.path.normpath(os.path.abspath(path)))
+
+
+def inside(path, folder):
+    return norm(path).startswith(norm(folder) + os.sep)
 
 
 def require_repo(path):
@@ -170,21 +156,9 @@ def device_of(path):
     return os.stat(path).st_dev
 
 
-# ---------------------------------------------------------------- helpers shared by plan / archive
-
 def index_only(xy):
     """Index differs from BOTH HEAD and the work tree (MM, AM, RM, MD, AD ...)."""
     return len(xy) == 2 and xy[0] not in " ?!" and xy[1] != " "
-
-
-def missing_heads(expected, listed_text):
-    """Refs in `expected` (name -> sha) that `git bundle list-heads` output lacks or lists at another SHA."""
-    listed = {}
-    for line in listed_text.splitlines():
-        parts = line.split(" ", 1)
-        if len(parts) == 2:
-            listed[parts[1].strip()] = parts[0]
-    return sorted(n for n, sha in expected.items() if listed.get(n) != sha)
 
 
 class OldTest:
@@ -199,24 +173,17 @@ class OldTest:
             self.cache[sha] = r.returncode == 0 and not self.old.isdisjoint(r.stdout.split())
         return self.cache[sha]
 
-    def obj(self, sha):
-        return sha in self.objs
-
-    def any(self, sha):
-        """A reflog value: reaches an old commit or is a listed old object (never the null id)."""
-        return bool(sha) and not NULL_RE.match(sha) and (self.obj(sha) or self(sha))
-
     def ref(self, sha, commit, peeled):
         """A ref (object sha, peeled commit or None, peeled object) is old history."""
         if commit:
-            return self(commit) or self.obj(sha)
-        return self.obj(sha) or self.obj(peeled)
+            return self(commit) or sha in self.objs
+        return sha in self.objs or peeled in self.objs
 
 
 def ref_kind(name):
-    if name == "refs/stash":
-        return "stash"
     parts = name.split("/")
+    if name.startswith(PER_WORKTREE):
+        return "worktree"
     if len(parts) >= 3 and parts[1] in ("heads", "remotes", "tags", "notes", "original"):
         return parts[1]
     return "other"
@@ -241,9 +208,11 @@ def list_refs(repo):
 
 
 def stash_entries(repo):
+    """[(sha, message)] newest first."""
     if git(repo, "rev-parse", "--verify", "-q", "refs/stash", check=False).returncode != 0:
         return []
-    return out(repo, "reflog", "show", "--format=%H", "refs/stash").split()
+    rows = out(repo, "reflog", "show", "--format=%H%x00%gs", "refs/stash", "--").splitlines()
+    return [tuple(l.split("\0", 1)) for l in rows if l]
 
 
 def common_dir(repo):
@@ -269,7 +238,7 @@ def list_worktrees(repo):
     blocks, cur = [], None
     for line in out(repo, "worktree", "list", "--porcelain").splitlines():
         if line.startswith("worktree "):
-            cur = {"path": line[9:], "head": None, "branch": None, "detached": False, "bare": False,
+            cur = {"path": os.path.normpath(line[9:]), "head": None, "branch": None, "detached": False, "bare": False,
                    "locked": False, "lock_reason": "", "prunable": False, "raw": []}
             blocks.append(cur)
         elif cur is None or not line:
@@ -294,37 +263,6 @@ def list_worktrees(repo):
         w["id"] = None if i == 0 else ids.get(norm(w["path"]), os.path.basename(w["path"]))
         w["raw"] = "\n".join(w["raw"])
     return blocks
-
-
-def dirty_state(path):
-    """[{status, path, mtime_ns or None}] from git status (untracked included, ignored excluded)."""
-    raw = git(path, "status", "--porcelain=v1", "-uall", "-z").stdout.split("\0")
-    entries, i = [], 0
-    while i < len(raw):
-        item = raw[i]
-        i += 1
-        if len(item) < 4:
-            continue
-        xy, rel = item[:2], item[3:]
-        if xy[0] in "RC":
-            i += 1                                       # skip the rename/copy source path
-        full = os.path.join(path, rel)
-        try:
-            mtime = os.lstat(full).st_mtime_ns
-        except (OSError, ValueError):
-            mtime = None
-        entries.append({"status": xy, "path": rel, "mtime_ns": mtime})
-    return entries
-
-
-def wt_snapshot(w):
-    dirty = dirty_state(w["path"])
-    times = [d["mtime_ns"] for d in dirty if d["mtime_ns"] is not None]
-    return {"id": w["id"], "path": w["path"], "head": w["head"], "branch": w["branch"],
-            "detached": w["detached"], "locked": w["locked"], "lock_reason": w["lock_reason"],
-            "dirty_count": len(dirty), "dirty": dirty,
-            "index_only": [d["path"] for d in dirty if index_only(d["status"])],
-            "newest_change": max(times) / 1e9 if times else None}
 
 
 # ---------------------------------------------------------------- full-state snapshot
@@ -401,7 +339,9 @@ def pseudo_value(path):
 
 
 def snapshot(repo):
-    """Deterministic, JSON-able {key: value} of everything another session could change. See module doc."""
+    """Deterministic, JSON-able {key: value} of everything another session could change: every ref (all
+    namespaces, every worktree's per-worktree refs and pseudo-refs), every reflog (sha256), every index,
+    lock files, operations in progress, and every worktree's status (with each listed file's size and mtime)."""
     s = {}
     for w in list_worktrees(repo):
         s["wtlist|" + norm(w["path"])] = w["raw"]
@@ -483,92 +423,508 @@ def quiet_gate(repo, a):
     return second
 
 
-def unexpected(before, after, temp_ok=False, moved=(), moved_gone=False, removed=frozenset()):
-    """Keys that differ between two snapshots in a way this run did not make.
-    temp_ok: our temp refs may exist. moved: snapshot ids + paths of worktrees whose folder we moved
-    (moved_gone: and whose admin dir was pruned). removed: keys we deleted on purpose."""
-    ids = tuple("wt|%s|" % wid for wid, _p in moved)
-    listed = {"wtlist|" + norm(p) for _w, p in moved}
-    inside = tuple(norm(p) + os.sep for _w, p in moved)
-    main_dir = before.get("wt|%s|path" % MAIN, "")
-    bad = []
-    for k in diff_keys(before, after):
-        if temp_ok and k not in before and (k.startswith("ref|" + TEMP_NS) or
-                                            k.startswith("wt|%s|reflog|%s" % (MAIN, TEMP_NS))):
+# ---------------------------------------------------------------- inventory
+
+def admin_dir(path):
+    return out(path, "rev-parse", "--absolute-git-dir").strip()
+
+
+def submodules(path, prefix=""):
+    """[{path, unpushed, dirty}] for every initialised submodule under path (recursive)."""
+    found = []
+    for entry in filter(None, out(path, "ls-files", "-s", "-z").split("\0")):
+        meta, rel = entry.split("\t", 1)
+        if not meta.startswith("160000 "):
             continue
-        if inside and main_dir and k.startswith("wt|%s|file|" % MAIN) and k not in after and \
-                (norm(os.path.join(main_dir, k.split("|", 3)[3])) + os.sep).startswith(inside):
-            continue                                        # a moved worktree nested in the main folder
-        if k.startswith(ids) or k in listed:
-            if moved_gone and k not in after:
-                continue
-            rest = k.split("|", 2)[2] if k.startswith(ids) else ""
-            if not moved_gone and (k in listed or rest == "folder" or rest.startswith("file|")):
-                continue                                    # folder gone, lock released, now prunable
-        if k in removed and k not in after:
+        sub = os.path.join(path, rel)
+        if not os.path.exists(os.path.join(sub, ".git")):
+            continue                                         # not initialised: nothing local to lose
+        unpushed = len(out(sub, "rev-list", "--all", "--not", "--remotes").split())
+        dirty = len([l for l in out(sub, "status", "--porcelain", "-uall").splitlines() if l])
+        found.append({"path": prefix + rel, "unpushed": unpushed, "dirty": dirty})
+        found += submodules(sub, prefix + rel + "/")
+    return found
+
+
+def worktree_state(path, nested):
+    """modified / untracked / staged-only paths (registered worktrees nested in it are not untracked),
+    operations in progress, submodules and the count of ignored entries."""
+    st = {"modified": [], "untracked": [], "staged_only": []}
+    raw = git(path, "status", "--porcelain=v1", "-uall", "-z").stdout.split("\0")
+    i = 0
+    while i < len(raw):
+        item = raw[i]
+        i += 1
+        if len(item) < 4:
             continue
-        bad.append(k)
-    return bad
+        xy, rel = item[:2], item[3:]
+        if xy[0] in "RC":
+            i += 1                                           # skip the rename/copy source path
+        if xy == "??":
+            if rel.rstrip("/") not in nested:
+                st["untracked"].append(rel)
+        elif index_only(xy):
+            st["staged_only"].append(rel)
+        else:
+            st["modified"].append(rel)
+    g = admin_dir(path)
+    st["busy"] = [n for n in BUSY if os.path.exists(os.path.join(g, n))]
+    st["submodules"] = submodules(path)
+    ignored = git(path, "ls-files", "-o", "-i", "--exclude-standard", "--directory", "-z").stdout
+    st["ignored"] = len([x for x in ignored.split("\0") if x and x.rstrip("/") not in nested])
+    return st
 
 
-def loud(stage, keys, bundle, extra=""):
-    print("UNPLANNED CHANGE %s: %d item(s) changed that this run did not change. %s" % (stage, len(keys), extra))
-    show_keys(keys)
-    print("Recover from the safety bundle: %s  (git fetch <bundle> 'refs/*:refs/restored/*')" % bundle)
-    return EXIT_UNPLANNED
+FIXES = {
+    "modified": "commit it on a kept branch, or `git stash` it",
+    "untracked": "commit it, `git stash -u` it, or move the files out of the checkout",
+    "staged-only": "commit the staged version, or unstage it",
+    "in progress": "finish or abort it (`git <op> --continue` / `--abort`, `git bisect reset`)",
+    "unpushed": "push the submodule's commits, or move them onto a branch its remote has",
+    "submodule changes": "commit (and push) inside the submodule",
+}
 
 
-# ---------------------------------------------------------------- reflogs
+def refusals_for(w):
+    rows, path = [], w["path"]
 
-def reflog_files(repo):
-    """[(name as `git reflog` addresses it from the main worktree, file path)] for every reflog."""
-    common = common_dir(repo)
-    rows = [(rel, os.path.join(common, "logs", rel)) for rel in walk_files(os.path.join(common, "logs"))]
-    base = os.path.join(common, "worktrees")
-    if os.path.isdir(base):
-        for wid in sorted(os.listdir(base)):
-            logs = os.path.join(base, wid, "logs")
-            rows += [("worktrees/%s/%s" % (wid, rel), os.path.join(logs, rel)) for rel in walk_files(logs)]
+    def add(problem, items, key):
+        rows.append({"path": path, "problem": "%s (%d): %s" % (problem, len(items), ", ".join(items[:5])),
+                     "fix": FIXES[key]})
+    if w["busy"]:
+        add("operation in progress", w["busy"], "in progress")
+    if w["old"]:
+        return rows                                          # stays intact in the archive
+    if w["modified"]:
+        add("modified files", w["modified"], "modified")
+    if w["untracked"]:
+        add("untracked files", w["untracked"], "untracked")
+    if w["staged_only"]:
+        add("staged-only content", w["staged_only"], "staged-only")
+    for s in w["submodules"]:
+        if s["unpushed"]:
+            add("submodule %s has unpushed commits" % s["path"], ["%d commit(s)" % s["unpushed"]], "unpushed")
+        if s["dirty"]:
+            add("submodule %s has changes" % s["path"], ["%d file(s)" % s["dirty"]], "submodule changes")
     return rows
 
 
-def read_reflog(path):
-    """[(old, new)] newest first, so position i is what `git reflog delete <name>@{i}` addresses."""
-    rows = []
+def config_entries(repo, pattern):
+    r = git(repo, "config", "-z", "--get-regexp", pattern, check=False)
+    return [list(e.split("\n", 1)) if "\n" in e else [e, ""] for e in r.stdout.split("\0") if e]
+
+
+def build_inventory(repo, old, objs):
+    is_old = OldTest(repo, old, objs)
+    wts = list_worktrees(repo)
+    main = wts[0]
+    if norm(common_dir(repo)) != norm(os.path.join(main["path"], ".git")):
+        raise Refuse("the git dir is not <repo>/.git (separate git dir): moving the folder would not move it")
+    if main["bare"] or norm(main["path"]) != norm(repo):
+        raise Refuse("give the main worktree's top folder (%s), not a linked worktree or a subfolder" % main["path"])
+    inv = {"repo": os.path.abspath(repo), "created": time.time(), "worktrees": [], "refs": [], "stash": [],
+           "refusals": []}
+    paths = [w["path"] for w in wts]
+    for w in wts:
+        if w["prunable"] or not os.path.isdir(w["path"]):
+            inv["refusals"].append({"path": w["path"], "problem": "worktree folder missing (prunable)",
+                                    "fix": "restore the folder, or `git worktree prune` it yourself first"})
+            continue
+        containers = [p for p in paths if inside(w["path"], p)]
+        if w["main"] and containers:
+            raise Refuse("the main checkout is inside worktree %s" % containers[0])
+        nested = {os.path.relpath(p, w["path"]).replace(os.sep, "/") for p in paths if inside(p, w["path"])}
+        rec = {k: w[k] for k in ("path", "id", "main", "head", "branch", "detached", "locked", "lock_reason")}
+        rec["old"] = bool(w["head"]) and is_old(w["head"])
+        rec["container"] = max(containers, key=len) if containers else None
+        rec.update(worktree_state(w["path"], nested))
+        inv["worktrees"].append(rec)
+        inv["refusals"] += refusals_for(rec)
+        if not w["main"]:
+            for name, sha, commit, symref, peeled in list_refs(w["path"]):
+                if name.startswith(PER_WORKTREE) and not symref:
+                    inv["refs"].append({"name": name, "sha": sha, "kind": "worktree", "worktree": w["id"],
+                                        "old": is_old.ref(sha, commit, peeled)})
+    for name, sha, commit, symref, peeled in list_refs(repo):
+        if symref or name == "refs/stash":
+            continue
+        inv["refs"].append({"name": name, "sha": sha, "kind": ref_kind(name), "worktree": None,
+                            "old": is_old.ref(sha, commit, peeled)})
+    for i, (sha, msg) in enumerate(stash_entries(repo)):
+        inv["stash"].append({"index": i, "sha": sha, "message": msg, "old": is_old(sha)})
+    for r in inv["refs"]:
+        r["carry"] = not r["old"] and r["kind"] != "remotes"
+    inv["remotes"] = config_entries(repo, r"^remote\.")
+    inv["branch_config"] = config_entries(repo, r"^branch\.")
+    hp = git(repo, "config", "--get", "core.hooksPath", check=False).stdout.strip()
+    inv["hooks_path"] = hp or None
+    hooks = os.path.join(common_dir(repo), "hooks")
+    inv["hooks"] = sorted(f for f in os.listdir(hooks) if not f.endswith(".sample")) if os.path.isdir(hooks) else []
+    return inv
+
+
+def label(old):
+    return "OLD " if old else "KEPT"
+
+
+def print_inventory(inv):
+    print("worktrees:")
+    for w in inv["worktrees"]:
+        flags = [w["branch"] or "detached@" + (w["head"] or "?")[:12]]
+        if w["main"]:
+            flags.append("main")
+        if w["locked"]:
+            flags.append("locked")
+        for k in ("modified", "untracked", "staged_only", "busy"):
+            if w[k]:
+                flags.append("%s %d" % (k, len(w[k])))
+        if w["submodules"]:
+            flags.append("submodules %d" % len(w["submodules"]))
+        if w["ignored"]:
+            flags.append("ignored %d (stay in the archive)" % w["ignored"])
+        print("  %s  %s  [%s]" % (label(w["old"]), w["path"], ", ".join(flags)))
+        if w["old"] and (w["modified"] or w["untracked"] or w["staged_only"]):
+            print("        uncommitted changes here stay only in the archive")
+    print("refs:")
+    for r in inv["refs"]:
+        where = "" if r["worktree"] is None else "  (worktree %s)" % r["worktree"]
+        how = "" if r["old"] else ("  carried" if r["carry"] else "  fresh from the clone")
+        print("  %s  %-8s %s%s%s" % (label(r["old"]), r["kind"], r["name"], where, how))
+    for e in inv["stash"]:
+        print("  %s  stash    stash@{%d}" % (label(e["old"]), e["index"]))
+    print("remotes: %d config entr%s; core.hooksPath: %s; hooks: %s" % (
+        len(inv["remotes"]), "y" if len(inv["remotes"]) == 1 else "ies", inv["hooks_path"] or "(default)",
+        ", ".join(inv["hooks"]) or "none"))
+    print("old refs: %d, kept refs carried: %d, stash entries kept: %d of %d" % (
+        sum(r["old"] for r in inv["refs"]), sum(r["carry"] for r in inv["refs"]),
+        sum(not e["old"] for e in inv["stash"]), len(inv["stash"])))
+    for x in inv["refusals"]:
+        print("REFUSED %s: %s -> %s" % (x["path"], x["problem"], x["fix"]))
+
+
+def cmd_inventory(a):
+    require_repo(a.repo)
+    old = read_old(a.old_commits)
+    before = snapshot(a.repo)
+    inv = build_inventory(a.repo, old, read_old_objects(a.old_commits))
+    inv["snapshot"] = snapshot(a.repo)
+    changed = diff_keys(before, inv["snapshot"])
+    if changed:
+        raise NotQuiet("the checkout changed during the inventory: something is writing; stop it, then run "
+                       "inventory again", changed)
+    inv["old_commits"] = os.path.abspath(a.old_commits)
+    with open(a.out, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(inv, fh, indent=1)
+    print_inventory(inv)
+    if inv["refusals"]:
+        print("%d case(s) cannot be carried across without loss: resolve each, then run inventory again"
+              % len(inv["refusals"]))
+        return 2
+    return 0
+
+
+# ---------------------------------------------------------------- rehome
+
+def move_plan(inv, archive):
+    """[(original, archived)] renames: linked worktrees not inside another worktree (sorted), then main."""
+    moves, n = [], 0
+    for w in sorted(inv["worktrees"], key=lambda w: norm(w["path"])):
+        if not w["main"] and w["container"] is None:
+            moves.append((w["path"], os.path.join(archive, "worktrees", "%d-%s" % (
+                n, os.path.basename(os.path.normpath(w["path"]))))))
+            n += 1
+    main = [w for w in inv["worktrees"] if w["main"]][0]
+    return moves + [(main["path"], os.path.join(archive, "repo"))]
+
+
+def archived_path(path, moves):
+    """Where a worktree folder is after the moves (it may be nested in a moved folder)."""
+    for src, dst in moves:
+        if norm(path) == norm(src):
+            return dst
+        if inside(path, src):
+            return os.path.join(dst, os.path.relpath(path, src))
+    return path
+
+
+def rollback(repo, inv, archive, done, repaired, why):
+    """Rename done moves back in reverse; repair; confirm the inventory's snapshot. Returns an exit code."""
+    stuck = []
+    for src, dst in reversed(done):
+        try:
+            os.rename(dst, src)
+        except OSError as exc:
+            stuck.append((src, dst, type(exc).__name__))
+    if stuck:
+        print("ROLLBACK FAILED after: %s" % why)
+        for src, dst, err in stuck:
+            print("  %s is now at %s (rename back failed: %s)" % (src, dst, err))
+        back = [s for s, _d in done if s not in {x[0] for x in stuck}]
+        for src in back:
+            print("  %s is back at its original path" % src)
+        print("Nothing was deleted. Rename each folder back by hand, then run `git worktree repair` in %s." % repo)
+        return EXIT_ROLLBACK_FAILED
+    if repaired:
+        git(repo, "worktree", "repair", *[w["path"] for w in inv["worktrees"] if not w["main"]], check=False)
+    changed = diff_keys(inv["snapshot"], snapshot(repo))
+    if changed:
+        print("ROLLBACK FAILED after: %s. Every folder is back, but the checkout differs from the inventory:" % why)
+        show_keys(changed)
+        return EXIT_ROLLBACK_FAILED
+    for d in (os.path.join(archive, "worktrees"), archive):
+        try:
+            os.rmdir(d)                                       # only removes an EMPTY dir this run made
+        except OSError:
+            pass
+    print("STOPPED: %s. Every rename was rolled back; the checkout matches the inventory again." % why)
+    return EXIT_ROLLED_BACK
+
+
+def check_archive_dir(inv, archive, url):
+    if os.path.exists(archive):
+        raise Refuse("archive dir exists (never reused): %s" % archive)
+    for w in inv["worktrees"]:
+        if norm(archive) == norm(w["path"]) or inside(archive, w["path"]):
+            raise Refuse("the archive dir is inside %s; put it outside every checkout" % w["path"])
+        if len({device_of(archive), device_of(w["path"])}) != 1:
+            raise Refuse("the archive dir is on another volume than %s: a rename would copy; put it on the "
+                         "same volume" % w["path"])
+    if os.path.exists(url) and any(norm(url) == norm(w["path"]) or inside(url, w["path"])
+                                   for w in inv["worktrees"]):
+        raise Refuse("the clone URL is this checkout: clone the purged remote, never the old copy")
+
+
+def carry(inv, archived_repo, path):
+    """Fetch the kept refs (explicit refspecs) and temp refs for stash entries and per-worktree refs."""
+    specs = ["+%s:%s" % (r["name"], r["name"]) for r in inv["refs"] if r["carry"] and r["kind"] != "worktree"]
+    temp = {}
+    for r in inv["refs"]:
+        if r["carry"] and r["kind"] == "worktree":
+            temp["%sw%d" % (TMP_NS, len(temp))] = r["sha"]
+    for e in inv["stash"]:
+        if not e["old"]:
+            temp["%ss%d" % (TMP_NS, e["index"])] = e["sha"]
+    specs += ["+%s:%s" % (sha, name) for name, sha in sorted(temp.items())]
+    if specs:
+        git(path, "fetch", "--no-tags", "--update-head-ok", "--no-write-fetch-head", "--no-recurse-submodules",
+            "--stdin", archived_repo, stdin="".join(s + "\n" for s in specs))
+    return temp
+
+
+def restore_config(inv, path):
+    carried = {r["name"][len("refs/heads/"):] for r in inv["refs"] if r["carry"] and r["kind"] == "heads"}
+    entries = list(inv["remotes"])
+    for key, value in inv["branch_config"]:
+        name = key[len("branch."):].rsplit(".", 1)[0]
+        if name in carried:
+            entries.append([key, value])
+    for key in sorted({k for k, _v in entries}):
+        git(path, "config", "--unset-all", key, check=False)
+    for key, value in entries:
+        git(path, "config", "--add", key, value)
+    if inv["hooks_path"]:
+        git(path, "config", "core.hooksPath", inv["hooks_path"])
+
+
+def recreate(inv, path, temp):
+    """Stash entries (oldest first), main's branch, kept linked worktrees, per-worktree refs; temp refs dropped."""
+    by_sha = {sha: name for name, sha in temp.items()}
+    for e in reversed(inv["stash"]):
+        if not e["old"]:
+            git(path, "stash", "store", "-q", "-m", e["message"], e["sha"])
+    main = [w for w in inv["worktrees"] if w["main"]][0]
+    if not main["old"]:
+        if main["branch"]:
+            git(path, "checkout", "-q", "-f", main["branch"][len("refs/heads/"):])
+        else:
+            git(path, "checkout", "-q", "-f", "--detach", main["head"])
+    for w in sorted(inv["worktrees"], key=lambda w: len(w["path"])):
+        if w["main"] or w["old"]:
+            continue
+        if w["branch"]:
+            git(path, "worktree", "add", "-q", w["path"], w["branch"][len("refs/heads/"):])
+        else:
+            git(path, "worktree", "add", "-q", "--detach", w["path"], w["head"])
+        if w["locked"]:
+            git(path, "worktree", "lock", *(["--reason", w["lock_reason"]] if w["lock_reason"] else []), w["path"])
+        for r in inv["refs"]:
+            if r["carry"] and r["worktree"] == w["id"]:
+                git(w["path"], "update-ref", r["name"], r["sha"])
+    if temp:
+        git(path, "update-ref", "--stdin", stdin="start\n" + "".join(
+            "delete %s %s\n" % (by_sha[sha], sha) for sha in by_sha) + "commit\n")
+
+
+def overlap_counts(repo, old, objs):
+    listing = out(repo, "cat-file", "--batch-all-objects", "--batch-check=%(objecttype) %(objectname)")
+    commits, others = set(), set()
+    for line in listing.splitlines():
+        typ, _, sha = line.partition(" ")
+        (commits if typ == "commit" else others).add(sha)
+    return len(commits & old), len(others & objs)
+
+
+def verify(inv, path):
+    """Problems found in the new clone (empty list = verified)."""
+    bad = []
+    old_path = inv["old_commits"]
+    n_c, n_o = overlap_counts(path, read_old(old_path), read_old_objects(old_path))
+    if n_c or n_o:
+        bad.append("overlap: %d old commit(s) and %d old blob/tree/tag object(s) in the new clone" % (n_c, n_o))
+    wts = {w["id"]: w for w in inv["worktrees"]}
+    for r in inv["refs"]:
+        if r["carry"]:
+            where = path if r["worktree"] is None else wts[r["worktree"]]["path"]
+            got = git(where, "rev-parse", "--verify", "-q", r["name"], check=False).stdout.strip()
+            if got != r["sha"]:
+                bad.append("ref %s is %s, expected %s" % (r["name"], got or "missing", r["sha"]))
+    want = [e["sha"] for e in inv["stash"] if not e["old"]]
+    have = git(path, "reflog", "show", "--format=%H", "refs/stash", "--", check=False).stdout.split()
+    if have != want:
+        bad.append("stash list differs from the kept entries")
+    paths = [w["path"] for w in inv["worktrees"] if not w["old"]]
+    listed = {norm(w["path"]): w for w in list_worktrees(path)}
+    for w in inv["worktrees"]:
+        if w["old"]:
+            continue
+        now = listed.get(norm(w["path"]))
+        nested = {os.path.relpath(p, w["path"]).replace(os.sep, "/") for p in paths if inside(p, w["path"])}
+        if not now or now["head"] != w["head"] or now["branch"] != w["branch"] or \
+                (now["locked"], now["lock_reason"]) != (w["locked"], w["lock_reason"]):
+            bad.append("worktree %s is not at its recorded HEAD/branch/lock" % w["path"])
+            continue
+        st = worktree_state(w["path"], nested)
+        if st["modified"] or st["untracked"] or st["staged_only"]:
+            bad.append("worktree %s is not clean" % w["path"])
+    return bad
+
+
+def repair_submodules(inv, moves):
+    """Point each archived submodule's .git file and core.worktree at its archived location: git writes them
+    as relative paths, which break when a worktree and its admin dir move to different folders."""
+    for w in inv["worktrees"]:
+        for sm in w["submodules"]:
+            old_sub = os.path.join(w["path"], sm["path"])
+            new_sub = archived_path(old_sub, moves)
+            gitfile = os.path.join(new_sub, ".git")
+            if not os.path.isfile(gitfile):
+                continue                                     # a plain .git dir moved with its work tree
+            with open(gitfile, "r+", encoding="utf-8", newline="\n") as fh:   # "w" fails on a hidden file
+                target = fh.read().strip()[len("gitdir: "):]
+                gitdir = archived_path(target if os.path.isabs(target) else os.path.join(old_sub, target), moves)
+                fh.seek(0)
+                fh.write("gitdir: %s\n" % os.path.relpath(gitdir, new_sub).replace(os.sep, "/"))
+                fh.truncate()
+            git(os.path.dirname(gitdir), "config", "--file", os.path.join(gitdir, "config"), "core.worktree",
+                os.path.relpath(new_sub, gitdir).replace(os.sep, "/"))
+
+
+def write_rehome_md(inv, archive, moves, url, result):
+    carried = [r for r in inv["refs"] if r["carry"]]
+    lines = ["# Rehome record", "", "Result: %s" % result, "", "Clone URL (purged remote): %s" % url, "",
+             "## What moved where (renames only; nothing was deleted)", ""]
+    for w in inv["worktrees"]:
+        lines.append("- %s %s -> %s" % (label(w["old"]).strip(), w["path"], archived_path(w["path"], moves)))
+    lines += ["", "## Carried into the new clone", ""]
+    lines += ["- %s %s" % (r["name"], r["sha"]) + ("" if r["worktree"] is None else " (worktree %s)" % r["worktree"])
+              for r in carried]
+    lines += ["- stash entry %s" % e["sha"] for e in inv["stash"] if not e["old"]]
+    lines += ["- worktree %s" % w["path"] for w in inv["worktrees"] if not w["old"] and not w["main"]]
+    lines += ["", "Everything else (old refs, reflogs, unreachable objects, ignored files, hooks, other config, "
+              "ORIG_HEAD/FETCH_HEAD, submodule repositories) is only in the archived copy.", "",
+              "## How to restore", "",
+              "1. Stop every session using %s." % inv["repo"],
+              "2. Rename the new clone and its re-created worktrees aside (into this archive dir; never delete).",
+              "3. Rename each archived folder above back to its original path.",
+              "4. In %s run `git worktree repair` with every linked worktree path." % inv["repo"],
+              "5. Submodule `.git` files under the archived worktrees were re-pointed at the archive (relative "
+              "paths): after renaming back, point each at its repository under <repo>/.git/ again.", ""]
+    with open(os.path.join(archive, "REHOME.md"), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("\n".join(lines))
+
+
+def cmd_rehome(a):
+    require_repo(a.repo)
+    with open(a.inv, encoding="utf-8") as fh:
+        inv = json.load(fh)
+    if norm(inv.get("repo", "")) != norm(a.repo) or "snapshot" not in inv:
+        raise Refuse("the inventory is for another checkout (or incomplete): %s" % inv.get("repo"))
+    if inv["refusals"]:
+        raise Refuse("the inventory has %d REFUSED case(s): resolve them and run inventory again"
+                     % len(inv["refusals"]))
+    archive, repo = a.archive_dir, a.repo
+    check_archive_dir(inv, archive, a.clone_url)
+    changed = diff_keys(inv["snapshot"], quiet_gate(repo, a))
+    if changed:
+        raise NotQuiet("the checkout changed since the inventory: run inventory again (and find who changed it)",
+                       changed)
+
+    moves = move_plan(inv, archive)
+    os.makedirs(os.path.join(archive, "worktrees"))
+    done = []
+    for src, dst in moves:
+        try:
+            os.rename(src, dst)
+        except OSError as exc:
+            return rollback(repo, inv, archive, done, False, "rename of %s failed (%s): close whatever holds it "
+                            "open (shell, editor, fsmonitor)" % (src, type(exc).__name__))
+        done.append((src, dst))
+    archived_repo = os.path.join(archive, "repo")
+    linked = [archived_path(w["path"], moves) for w in inv["worktrees"] if not w["main"]]
+    r = git(archived_repo, "worktree", "repair", *linked, check=False)
+    rows = {norm(w["path"]): w for w in list_worktrees(archived_repo)} if r.returncode == 0 else {}
+    if r.returncode != 0 or any(norm(p) not in rows or rows[norm(p)]["prunable"] for p in linked):
+        return rollback(repo, inv, archive, done, True, "`git worktree repair` in the archive failed")
+
+    parent = os.path.dirname(os.path.abspath(repo))
+    r = git(parent, "clone", "-q", "--no-recurse-submodules", a.clone_url, repo, check=False)
+    if r.returncode != 0:
+        why = "clone failed (exit %d)" % r.returncode
+        if os.path.exists(repo):
+            try:
+                os.rename(repo, os.path.join(archive, "failed-clone"))
+                why += "; its leftover is in %s" % os.path.join(archive, "failed-clone")
+            except OSError:
+                why += "; its leftover at %s could not be moved aside" % repo   # the rollback then lists it
+        return rollback(repo, inv, archive, done, True, why)
     try:
-        with open(path, "rb") as fh:
-            for line in fh:
-                parts = line.split(b" ", 2)
-                if len(parts) == 3:
-                    o, n = parts[0].decode("ascii", "replace"), parts[1].decode("ascii", "replace")
-                    if SHA_RE.match(o) and SHA_RE.match(n):
-                        rows.append((o, n))
-    except OSError:
-        return []
-    return rows[::-1]
+        repair_submodules(inv, moves)
+        restore_config(inv, repo)
+        temp = carry(inv, archived_repo, repo)
+        recreate(inv, repo, temp)
+        bad = verify(inv, repo)
+    except (subprocess.CalledProcessError, OSError) as exc:
+        bad = ["%s: %s" % (type(exc).__name__, " ".join(getattr(exc, "cmd", []) or [str(exc)]))]
+    write_rehome_md(inv, archive, moves, a.clone_url, "FAILED: " + "; ".join(bad) if bad else "verified")
+    print("archived copy: %s (worktrees in %s); record: %s" % (archived_repo, os.path.join(archive, "worktrees"),
+                                                             os.path.join(archive, "REHOME.md")))
+    if bad:
+        print("AFTER THE CLONE (exit 5): the archived copy in %s is complete; the new clone at %s is not "
+              "verified:" % (archive, repo))
+        for b in bad:
+            print("  " + b)
+        print("Fix the cause, or restore the archive as REHOME.md says. Never delete the archive.")
+        return EXIT_AFTER_CLONE
+    print("carried: %d ref(s), %d stash entr%s, %d worktree(s); overlap 0; every carried ref at its SHA" % (
+        sum(r["carry"] for r in inv["refs"]), sum(not e["old"] for e in inv["stash"]),
+        "y" if sum(not e["old"] for e in inv["stash"]) == 1 else "ies",
+        sum(1 for w in inv["worktrees"] if not w["old"] and not w["main"])))
+    print("hooks were NOT copied: run the repo's hook installer once on the new clone (a v1.0 old_history_guard "
+          "is no longer needed there; the archived copy keeps its own hooks)")
+    return 0
 
 
-def reflog_deletions(entries, bad):
-    """Indexes to delete, highest first: entries whose new value is bad, plus entries whose previous value
-    is still bad once `--rewrite` has relinked the kept ones (R2-14). With no deletion there is no rewrite,
-    so an entry whose recorded previous value is bad is deleted itself."""
-    drop = {i for i, (_o, n) in enumerate(entries) if bad(n)}
-    while True:
-        kept = [i for i in range(len(entries)) if i not in drop]
-        more = set()
-        for j, i in enumerate(kept):
-            if drop:
-                prev = entries[kept[j + 1]][1] if j + 1 < len(kept) else None
-            else:
-                prev = entries[i][0]
-            if prev and bad(prev):
-                more.add(i)
-        if not more:
-            return sorted(drop, reverse=True)
-        drop |= more
+def cmd_overlap(a):
+    require_repo(a.repo)
+    objs = read_old_objects(a.old_commits)
+    n_c, n_o = overlap_counts(a.repo, read_old(a.old_commits), objs)
+    print("old commits still in the object store: %d" % n_c)
+    if objs:
+        print("changed/dropped blobs, trees and tags still in the object store: %d" % n_o)
+    if n_c or n_o:
+        print("hint: this copy still holds old history: rehome it (inventory, then rehome --exclusive)")
+    return 0 if n_c + n_o == 0 else 1
 
-
-# ---------------------------------------------------------------- modes
 
 def cmd_changed(a):
     require_repo(a.purged)
@@ -594,481 +950,6 @@ def cmd_changed(a):
     return 0
 
 
-def build_plan(repo, old, min_age_hours, include_locked, objs=frozenset()):
-    is_old = OldTest(repo, old, objs)
-    plan = {"repo": os.path.abspath(repo), "created": time.time(), "refs": [], "symrefs": [], "stash": [],
-            "worktrees": [], "skipped": [], "blockers": [], "main_head": None, "main_branch": None}
-    skip_branches = {}
-    cutoff = time.time() - min_age_hours * 3600
-    for w in list_worktrees(repo):
-        if w["main"]:
-            plan["main_head"], plan["main_branch"] = w["head"], w["branch"]
-            if not w["bare"] and w["head"] and is_old(w["head"]):
-                plan["blockers"].append({"item": w["path"], "reason": "main worktree HEAD is on old history: "
-                                         "re-point it first (SKILL.md Step 6 item 2)"})
-                if w["branch"]:
-                    skip_branches[w["branch"]] = "checked out in the main worktree (BLOCKER)"
-            continue
-        if not w["head"] or not is_old(w["head"]):
-            continue
-        reason = None
-        if w["prunable"] or not os.path.isdir(w["path"]):
-            reason = "prunable or missing directory"
-        elif w["locked"] and not include_locked:
-            reason = "locked (%s); pass --include-locked on its own yes" % (w["lock_reason"] or "no reason")
-        snap = None
-        if reason is None:
-            snap = wt_snapshot(w)
-            if snap["dirty_count"] and snap["newest_change"] and snap["newest_change"] > cutoff:
-                reason = "dirty with a recent change (newer than %g h): someone may be using it" % min_age_hours
-        if reason:
-            plan["skipped"].append({"item": w["path"], "reason": reason})
-            if w["branch"]:
-                skip_branches[w["branch"]] = reason
-            continue
-        plan["worktrees"].append(snap)
-    by_name = {}
-    rows = list_refs(repo)
-    for name, sha, commit, symref, peeled in rows:
-        if symref:
-            continue
-        by_name[name] = sha
-        if not is_old.ref(sha, commit, peeled):
-            continue
-        if name in skip_branches:
-            plan["skipped"].append({"item": name, "reason": skip_branches[name]})
-            continue
-        plan["refs"].append({"name": name, "sha": sha, "commit": commit, "kind": ref_kind(name)})
-    planned = {r["name"] for r in plan["refs"]}
-    for name, sha, commit, symref, _p in rows:
-        if symref and symref in planned:
-            plan["symrefs"].append({"name": name, "target": symref})
-    entries = stash_entries(repo)
-    if any(is_old(s) for s in entries):
-        plan["stash"] = [{"index": i, "sha": s, "old": is_old(s)} for i, s in enumerate(entries)]
-        if "refs/stash" not in planned and "refs/stash" in by_name:
-            plan["refs"].append({"name": "refs/stash", "sha": by_name["refs/stash"],
-                                 "commit": by_name["refs/stash"], "kind": "stash"})
-    return plan
-
-
-def cmd_plan(a):
-    require_repo(a.repo)
-    old = read_old(a.old_commits)
-    before = snapshot(a.repo)
-    plan = build_plan(a.repo, old, a.min_age_hours, a.include_locked, read_old_objects(a.old_commits))
-    plan["snapshot"] = snapshot(a.repo)
-    changed = diff_keys(before, plan["snapshot"])
-    if changed:
-        raise NotQuiet("the checkout changed while planning: something is writing; stop it, then plan again",
-                       changed)
-    plan["old_commits"] = os.path.abspath(a.old_commits)
-    plan["include_locked"] = a.include_locked
-    with open(a.out, "w", encoding="utf-8", newline="\n") as fh:
-        json.dump(plan, fh, indent=1)
-    kinds = {}
-    for r in plan["refs"]:
-        kinds[r["kind"]] = kinds.get(r["kind"], 0) + 1
-    print("refs to archive: %d (%s)" % (len(plan["refs"]), ", ".join("%s %d" % kv for kv in sorted(kinds.items()))))
-    print("stash entries: %d (%d on old history)" % (len(plan["stash"]), sum(e["old"] for e in plan["stash"])))
-    print("symrefs to remove with their target: %d" % len(plan["symrefs"]))
-    print("worktrees to archive: %d (dirty %d, with staged-only files %d)" % (
-        len(plan["worktrees"]), sum(1 for w in plan["worktrees"] if w["dirty_count"]),
-        sum(1 for w in plan["worktrees"] if w["index_only"])))
-    print("skipped: %d" % len(plan["skipped"]))
-    for s in plan["skipped"]:
-        print("  SKIP %s: %s" % (s["item"], s["reason"]))
-    for b in plan["blockers"]:
-        print("BLOCKER %s: %s" % (b["item"], b["reason"]))
-    return 1 if plan["skipped"] or plan["blockers"] else 0
-
-
-def safe_join(base, rel):
-    full = os.path.normpath(os.path.join(base, rel))
-    if os.path.commonpath([os.path.abspath(base), os.path.abspath(full)]) != os.path.abspath(base):
-        raise ValueError("path escapes the archive: %s" % rel)
-    return full
-
-
-def save_staged(wt, dest):
-    """Write each index-only path's staged blob(s) under dest. Returns the count of files written."""
-    n = 0
-    for rel in wt["index_only"]:
-        listing = git(wt["path"], "ls-files", "-s", "-z", "--", rel).stdout.split("\0")
-        for entry in filter(None, listing):
-            meta, path = entry.split("\t", 1)
-            mode, sha, stage = meta.split()
-            if mode == "160000":
-                continue                                    # submodule: a commit, not content
-            target = safe_join(dest, path if stage == "0" else "%s.stage%s" % (path, stage))
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            data = git(wt["path"], "cat-file", "blob", sha, binary=True).stdout
-            with open(target, "wb") as fh:
-                fh.write(data)
-            n += 1
-    return n
-
-
-def safety_sources(repo):
-    """sha -> [where it is named] for everything only reflogs, per-worktree refs or pseudo-refs hold."""
-    src = {}
-    for name, path in reflog_files(repo):
-        for i, (o, n) in enumerate(read_reflog(path)):
-            for sha in (o, n):
-                if not NULL_RE.match(sha):
-                    src.setdefault(sha, []).append("%s@{%d}" % (name, i))
-    for wid, g, _path in git_dirs(repo):
-        if wid != MAIN:
-            for rel in walk_files(os.path.join(g, "refs")):
-                try:
-                    sha = pseudo_value(os.path.join(g, "refs", rel))
-                except OSError:
-                    continue
-                if SHA_RE.match(sha):
-                    src.setdefault(sha, []).append("worktree %s refs/%s" % (wid, rel))
-        for name in PSEUDO:
-            try:
-                with open(os.path.join(g, name), encoding="utf-8", errors="replace") as fh:
-                    for k, line in enumerate(fh):
-                        sha = line.split("\t", 1)[0].strip()
-                        if SHA_RE.match(sha):
-                            src.setdefault(sha, []).append("worktree %s %s line %d" % (wid, name, k))
-            except OSError:
-                continue
-    return src
-
-
-def object_types(repo, shas):
-    if not shas:
-        return {}
-    listing = git(repo, "cat-file", "--batch-check=%(objectname) %(objecttype)",
-                  stdin="".join(s + "\n" for s in shas), check=False).stdout.split("\n")
-    types = {}
-    for line in listing:
-        parts = line.split()
-        if len(parts) == 2 and parts[1] != "missing":
-            types[parts[0]] = parts[1]
-    return types
-
-
-def live_refs(repo):
-    return {name: sha for name, sha, _c, symref, _p in list_refs(repo) if not symref}
-
-
-def write_safety_bundle(repo, archive_dir):
-    """Temp refs + bundle of every ref; returns (bundle path, temp {name: sha}, manifest rows).
-    Raises Refuse with every temp ref dropped again on any failure."""
-    held = set(live_refs(repo).values())
-    src = safety_sources(repo)
-    types = object_types(repo, sorted(s for s in src if s not in held))
-    temp = {"%sobj/%s" % (TEMP_NS, sha): sha for sha in sorted(types)}
-    rows = [("keep", name, sha, "", "; ".join(src[sha][:3]) + (" (+%d)" % (len(src[sha]) - 3)
-                                                              if len(src[sha]) > 3 else ""))
-            for name, sha in sorted(temp.items())]
-    if temp:
-        txt = "start\n" + "".join("create %s %s\n" % kv for kv in sorted(temp.items())) + "commit\n"
-        if git(repo, "update-ref", "--stdin", stdin=txt, check=False).returncode != 0:
-            raise Refuse("could not create temp refs under %s (name taken?); nothing changed" % TEMP_NS)
-    bundle = os.path.join(archive_dir, "safety.bundle")
-    try:
-        expected = live_refs(repo)
-        r = git(repo, "bundle", "create", bundle, "--stdin", stdin="".join(n + "\n" for n in sorted(expected)),
-                check=False)
-        if r.returncode != 0:
-            raise Refuse("git bundle create failed; nothing changed")
-        if git(repo, "bundle", "verify", bundle, check=False).returncode != 0:
-            raise Refuse("git bundle verify failed; nothing changed")
-        lacking = missing_heads(expected, out(repo, "bundle", "list-heads", bundle))
-        if lacking:
-            raise Refuse("bundle lacks %d ref(s) (%s); nothing changed" % (len(lacking), ", ".join(lacking[:5])))
-    except Refuse:
-        drop_refs(repo, temp)
-        raise
-    return bundle, temp, expected, rows
-
-
-def drop_refs(repo, refs):
-    if refs:
-        txt = "start\n" + "".join("delete %s %s\n" % kv for kv in sorted(refs.items())) + "commit\n"
-        return git(repo, "update-ref", "--stdin", stdin=txt, check=False).returncode == 0
-    return True
-
-
-def write_manifest(archive_dir, rows):
-    with open(os.path.join(archive_dir, "manifest.tsv"), "w", encoding="utf-8", newline="\n") as fh:
-        fh.write("".join("\t".join(row) + "\n" for row in rows))
-
-
-def manifest_bundle(archive_dir):
-    path = os.path.join(archive_dir, "manifest.tsv")
-    try:
-        with open(path, encoding="utf-8") as fh:
-            for line in fh:
-                parts = line.rstrip("\n").split("\t")
-                if parts[0] == "bundle" and len(parts) == 5:
-                    return parts[4]
-    except OSError:
-        pass
-    raise Refuse("no safety bundle recorded in %s: run archive first" % path)
-
-
-def cmd_archive(a):
-    require_repo(a.repo)
-    repo = a.repo
-    if not a.exclusive:
-        quiet_gate(repo, a)                                          # raises with the --exclusive message
-    if os.path.exists(a.archive_dir):
-        raise Refuse("archive dir exists (never reused): %s" % a.archive_dir)
-    with open(a.plan, encoding="utf-8") as fh:
-        plan = json.load(fh)
-    if "snapshot" not in plan:
-        raise Refuse("the plan has no snapshot (made by an older local_cleanup.py): plan again")
-    if norm(plan.get("repo", "")) != norm(repo):
-        raise Refuse("the plan is for another checkout: %s" % plan.get("repo"))
-    if plan.get("blockers"):
-        raise Refuse("plan has %d BLOCKER(s): re-point the main worktree, then plan again" % len(plan["blockers"]))
-    wts = plan["worktrees"]
-    locked = [w["path"] for w in wts if w["locked"]]
-    if locked and not a.include_locked:
-        raise Refuse("the plan includes %d locked worktree(s) (%s); pass --include-locked on its own yes"
-                     % (len(locked), ", ".join(locked[:3])))
-    planned_paths = {norm(w["path"]) for w in wts}
-    for w in list_worktrees(repo):
-        if norm(a.archive_dir).startswith(norm(w["path"]) + os.sep):
-            raise Refuse("the archive dir is inside worktree %s; put it outside every checkout" % w["path"])
-        if w["prunable"] and norm(w["path"]) not in planned_paths:
-            raise Refuse("worktree %s is prunable and not in the plan: restore its folder or prune it "
-                         "yourself first" % w["path"])
-    if wts and len({device_of(a.archive_dir)} | {device_of(w["path"]) for w in wts}) != 1:
-        raise Refuse("the archive dir is on another volume than a planned worktree: a move would copy; "
-                     "put the archive dir on the same volume")
-    snap = quiet_gate(repo, a)
-    changed = diff_keys(plan["snapshot"], snap)
-    if changed:
-        raise NotQuiet("the checkout changed since the plan: plan again (and find who changed it)", changed)
-
-    os.makedirs(a.archive_dir)
-    bundle, temp, expected, keep_rows = write_safety_bundle(repo, a.archive_dir)
-    manifest = [("kind", "id", "sha", "ref", "original_path"), ("bundle", "safety", "", "", bundle)] + keep_rows
-    write_manifest(a.archive_dir, manifest)
-    try:
-        for w in wts:
-            label = "%s-%s" % (w["id"], os.path.basename(os.path.normpath(w["path"])))
-            save_staged(w, os.path.join(a.archive_dir, "staged-index", label))
-            for rel in w["index_only"]:
-                manifest.append(("staged", w["id"], "", "", os.path.join(w["path"], rel)))
-    except (OSError, ValueError, subprocess.CalledProcessError) as exc:
-        drop_refs(repo, temp)
-        raise Refuse("could not save staged-only content (%s); nothing moved" % type(exc).__name__)
-    changed = unexpected(snap, snapshot(repo), temp_ok=True)
-    if changed:
-        drop_refs(repo, temp)
-        raise NotQuiet("the checkout changed while the bundle was written: nothing moved; find the writer", changed)
-
-    # move each planned worktree folder intact (os.rename only); stop at the first failure
-    moved, failed = [], None
-    for w in wts:
-        label = "%s-%s" % (w["id"], os.path.basename(os.path.normpath(w["path"])))
-        dest = os.path.join(a.archive_dir, "dirs", label)
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
-        if w["locked"] and git(repo, "worktree", "unlock", w["path"], check=False).returncode != 0:
-            failed = (w, "could not unlock it")
-            break
-        try:
-            os.rename(w["path"], dest)
-        except OSError as exc:
-            if w["locked"]:
-                git(repo, "worktree", "lock", "--reason", w["lock_reason"] or "restored", w["path"], check=False)
-            failed = (w, "move failed (%s)" % type(exc).__name__)
-            break
-        moved.append((w["id"], w["path"]))
-        manifest.append(("worktree", w["id"], w["head"], w["branch"] or "(detached)", w["path"]))
-    write_manifest(a.archive_dir, manifest)
-    changed = unexpected(snap, snapshot(repo), temp_ok=True, moved=moved)
-    if changed:
-        return loud("after moving %d worktree folder(s)" % len(moved), changed, bundle,
-                    "Nothing was pruned or removed; the moved folders are in %s (move them back to restore)."
-                    % os.path.join(a.archive_dir, "dirs"))
-    if moved:
-        git(repo, "worktree", "prune", check=False)                   # result is checked just below
-    changed = unexpected(snap, snapshot(repo), temp_ok=True, moved=moved, moved_gone=True)
-    if changed:
-        return loud("after the prune", changed, bundle, "No ref was removed.")
-
-    removed = set()
-    if failed:
-        drop_refs(repo, temp)
-        w, why = failed
-        print("STOPPED: %s: %s. That worktree and its admin dir are untouched; no ref was removed; "
-              "%d worktree(s) before it were moved and pruned. Fix the cause, then plan again."
-              % (w["path"], why, len(moved)))
-        rc = EXIT_PARTIAL
-    else:
-        txt = ["start"]
-        for s in plan["symrefs"]:
-            txt += ["option no-deref", "delete %s" % s["name"]]
-        for r in plan["refs"]:
-            txt.append("delete %s %s" % (r["name"], r["sha"]))
-        for n in sorted(temp):
-            txt.append("delete %s %s" % (n, temp[n]))
-        txt.append("commit")
-        if git(repo, "update-ref", "--stdin", stdin="\n".join(txt) + "\n", check=False).returncode != 0:
-            write_manifest(a.archive_dir, manifest)
-            return loud("at ref removal", ["REF REMOVAL FAILED: a planned ref moved during the run; no ref "
-                                           "was removed"], bundle)
-        for r in plan["refs"]:
-            manifest.append(("ref:" + r["kind"], r["name"], r["sha"], r["name"], ""))
-            removed |= {"ref|" + r["name"], "wt|%s|reflog|%s" % (MAIN, r["name"])}
-        for s in plan["symrefs"]:
-            manifest.append(("symref", s["name"], "", s["target"], ""))
-            removed |= {"ref|" + s["name"], "wt|%s|reflog|%s" % (MAIN, s["name"])}
-        rc = 0
-    write_manifest(a.archive_dir, manifest)
-    changed = unexpected(snap, snapshot(repo), moved=moved, moved_gone=True, removed=removed)
-    if changed:
-        return loud("after the run", changed, bundle)
-    print("safety bundle: %s (%d refs incl. %d temp)" % (bundle, len(expected), len(temp)))
-    print("refs removed: %d, symrefs removed: %d, stash entries archived: %d" % (
-        0 if failed else len(plan["refs"]), 0 if failed else len(plan["symrefs"]),
-        0 if failed else len(plan["stash"])))
-    print("worktrees moved: %d (staged-only files saved: %d)" % (
-        len(moved), sum(len(w["index_only"]) for w in wts)))
-    print("verified: nothing changed except what this run did")
-    return rc
-
-
-def uncovered(repo, bundle, shas):
-    """Objects among shas (present in the repo) that the bundle does not hold."""
-    heads = {l.split(" ", 1)[0] for l in out(repo, "bundle", "list-heads", bundle).splitlines() if l}
-    types = object_types(repo, sorted(s for s in shas if s not in heads))
-    lost = [s for s, t in types.items() if t != "commit"]
-    commits = [s for s, t in types.items() if t == "commit"]
-    if commits:
-        head_types = object_types(repo, sorted(heads))
-        neg = [h for h, t in head_types.items() if t in ("commit", "tag")]
-        r = git(repo, "rev-list", "--ignore-missing", "--stdin",
-                stdin="".join(s + "\n" for s in commits) + "--not\n" + "".join(h + "\n" for h in neg), check=False)
-        lost += r.stdout.split() if r.returncode == 0 else commits
-    return sorted(set(lost))
-
-
-def cmd_gc(a):
-    require_repo(a.repo)
-    repo = a.repo
-    if not a.exclusive:
-        quiet_gate(repo, a)
-    is_old = OldTest(repo, read_old(a.old_commits), read_old_objects(a.old_commits))
-    bundle = manifest_bundle(a.archive_dir)
-    if not os.path.isfile(bundle) or git(repo, "bundle", "verify", bundle, check=False).returncode != 0:
-        raise Refuse("the safety bundle is missing or fails `git bundle verify`: %s" % bundle)
-    snap = quiet_gate(repo, a)
-
-    work = []                                               # (name, path, entries, indexes to delete)
-    for name, path in reflog_files(repo):
-        entries = read_reflog(path)
-        idx = reflog_deletions(entries, is_old.any)
-        if idx:
-            work.append((name, path, entries, idx))
-    lost = uncovered(repo, bundle, {s for _n, _p, e, _i in work for pair in e for s in pair
-                                    if not NULL_RE.match(s)})
-    if lost:
-        raise NotQuiet("%d object(s) in the reflogs gc would edit are not in the safety bundle (changed since "
-                       "the archive): plan and archive again for a fresh bundle" % len(lost))
-    pins, n = {}, 0
-    for k, v in sorted(snap.items()):
-        if k.startswith("wt|") and not k.startswith("wt|%s|" % MAIN) and key_kind(k) == "ref" and SHA_RE.match(v):
-            pins["%s%d" % (PIN_NS, n)] = v
-            n += 1
-    if pins:
-        txt = "start\n" + "".join("create %s %s\n" % kv for kv in sorted(pins.items())) + "commit\n"
-        if git(repo, "update-ref", "--stdin", stdin=txt, check=False).returncode != 0:
-            raise Refuse("could not create pin refs under %s (name taken?); nothing changed" % PIN_NS)
-
-    removed = failed = 0
-    expect, gone, moved_to = {}, set(), {}
-    for name, path, entries, idx in work:
-        args = ["reflog", "delete", "--rewrite"] + (["--updateref"] if name == "refs/stash" else [])
-        r = git(repo, *(args + ["%s@{%d}" % (name, i) for i in idx]), check=False)   # highest index first
-        rel = name.split("/", 2)
-        key = ("wt|%s|reflog|%s" % (rel[1], rel[2]) if name.startswith("worktrees/") else
-               "wt|%s|reflog|%s" % (MAIN, name))
-        if r.returncode != 0:
-            print("reflog delete failed for %s (exit %d)" % (name, r.returncode))
-            failed += 1
-            continue
-        removed += len(idx)
-        expect[key] = (path, [n_ for i, (_o, n_) in enumerate(entries) if i not in idx])
-        if name == "refs/stash" and len(idx) == len(entries):              # every stash entry was old
-            git(repo, "update-ref", "-d", "refs/stash", entries[0][1], check=False)
-            gone |= {"ref|refs/stash", key}
-        elif name == "refs/stash" and 0 in idx:                            # --updateref moved it down
-            moved_to["ref|refs/stash"] = expect[key][1][0]
-    print("reflog entries on old history removed: %d (in %d reflogs); every other entry kept" % (removed, len(expect)))
-    r = git(repo, "-c", "gc.reflogExpire=never", "-c", "gc.reflogExpireUnreachable=never",
-            "-c", "gc.worktreePruneExpire=never", "gc", "--quiet", "--prune=" + a.prune_floor, check=False)
-    print("gc --prune=%s: exit %d" % (a.prune_floor, r.returncode))
-    gc_rc = r.returncode
-    if not drop_refs(repo, pins):
-        print("could not remove the pin refs under %s" % PIN_NS)
-        failed += 1
-
-    after = snapshot(repo)
-    values = set()
-    for k, v in after.items():                     # every ref of every worktree, and each worktree's HEAD
-        if key_kind(k) == "ref" or (key_kind(k) == "pseudo" and k.endswith("|HEAD")):
-            sha = v.split(" -> ")[0]
-            if SHA_RE.match(sha):
-                values.add(sha)
-    present = object_types(repo, sorted(values))
-    dangling = sorted(s for s in values if s not in present)
-    if dangling:
-        return loud("after gc", ["a ref or HEAD names a missing object %s" % s for s in dangling], bundle)
-    bad = []
-    for k in diff_keys(snap, after):
-        if k in gone and k not in after:
-            continue
-        if k in moved_to and after.get(k) == moved_to[k]:
-            continue
-        if k in expect:
-            path, want = expect[k]
-            got = read_reflog(path)
-            if [n_ for _o, n_ in got] == want and not any(is_old.any(o) for o, _n in got):
-                continue
-        bad.append(k)
-    if bad:
-        return loud("after gc", bad, bundle)
-    return 0 if gc_rc == 0 and not failed else 1
-
-
-def cmd_overlap(a):
-    require_repo(a.repo)
-    old = read_old(a.old_commits)
-    objs = read_old_objects(a.old_commits)
-    listing = out(a.repo, "cat-file", "--batch-all-objects", "--batch-check=%(objecttype) %(objectname)")
-    commits, others = set(), set()
-    for line in listing.splitlines():
-        typ, _, sha = line.partition(" ")
-        (commits if typ == "commit" else others).add(sha)
-    n = len(commits & old) + len(others & objs)
-    print("old commits still in the object store: %d" % len(commits & old))
-    if objs:
-        print("changed/dropped blobs, trees and tags still in the object store: %d" % len(others & objs))
-    if n:
-        is_old = OldTest(a.repo, old, objs)
-        for name, path in reflog_files(a.repo):
-            entries = read_reflog(path)
-            new = sum(1 for _o, s in entries if is_old.any(s))
-            prev = sum(1 for o, s in entries if not is_old.any(s) and is_old.any(o))
-            if new:
-                print("reflog %s: %d entr%s on old history; `gc` removes them" % (name, new, "y" if new == 1 else "ies"))
-            if prev:
-                print("reflog %s: %d entr%s whose previous value is old history (held only through the reflog); "
-                      "`gc` removes them" % (name, prev, "y" if prev == 1 else "ies"))
-        print("hint: a ref, stash entry or worktree still reaches them (run plan again), a reflog holds them "
-              "(run gc), or they are younger than the prune floor (re-run gc after the floor passes)")
-    return 0 if n == 0 else 1
-
-
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = p.add_subparsers(dest="mode", required=True)
@@ -1077,30 +958,21 @@ def main(argv=None):
     c.add_argument("backups", nargs="+")
     c.add_argument("--out", required=True)
     c.set_defaults(fn=cmd_changed)
-    c = sub.add_parser("plan")
+    c = sub.add_parser("inventory")
     c.add_argument("repo")
     c.add_argument("old_commits")
     c.add_argument("--out", required=True)
-    c.add_argument("--min-age-hours", type=float, default=24.0)
-    c.add_argument("--include-locked", action="store_true")
-    c.set_defaults(fn=cmd_plan)
-    for mode, fn in (("archive", cmd_archive), ("gc", cmd_gc)):
-        c = sub.add_parser(mode)
-        c.add_argument("repo")
-        if mode == "archive":
-            c.add_argument("plan")
-        else:
-            c.add_argument("old_commits")
-        c.add_argument("archive_dir")
-        c.add_argument("--exclusive", action="store_true",
-                       help="every session, IDE and scheduled job using this checkout and its worktrees is stopped")
-        c.add_argument("--quiet-seconds", type=float, default=60.0,
-                       help="gap between the two snapshots that must be identical (default 60)")
-        if mode == "archive":
-            c.add_argument("--include-locked", action="store_true")
-        else:
-            c.add_argument("--prune-floor", default="1.hour.ago")
-        c.set_defaults(fn=fn)
+    c.set_defaults(fn=cmd_inventory)
+    c = sub.add_parser("rehome")
+    c.add_argument("repo")
+    c.add_argument("inv")
+    c.add_argument("archive_dir")
+    c.add_argument("clone_url", help="the PURGED remote (never the archive or this checkout)")
+    c.add_argument("--exclusive", action="store_true",
+                   help="every session, IDE and scheduled job using this checkout and its worktrees is stopped")
+    c.add_argument("--quiet-seconds", type=float, default=60.0,
+                   help="gap between the two snapshots that must be identical (default 60)")
+    c.set_defaults(fn=cmd_rehome)
     c = sub.add_parser("overlap")
     c.add_argument("repo")
     c.add_argument("old_commits")
@@ -1109,11 +981,13 @@ def main(argv=None):
         a = p.parse_args(argv)
     except SystemExit as exc:
         return 2 if exc.code else 0
-    for attr in ("purged", "repo", "out", "plan", "archive_dir", "old_commits"):   # never resolved against -C
+    for attr in ("purged", "repo", "out", "inv", "archive_dir", "old_commits"):   # never resolved against -C
         if getattr(a, attr, None):
             setattr(a, attr, os.path.abspath(getattr(a, attr)))
     if getattr(a, "backups", None):
         a.backups = [os.path.abspath(b) for b in a.backups]
+    if getattr(a, "clone_url", None) and os.path.exists(a.clone_url):
+        a.clone_url = os.path.abspath(a.clone_url)
     try:
         return a.fn(a)
     except Refuse as exc:

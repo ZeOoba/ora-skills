@@ -9,6 +9,9 @@ prepare  makes the copy filter-repo runs on: refuses (exit 2) if <work.git> exis
          ONLY (no refs/pull/* or other namespaces, nor objects reachable only from them), and
          <work.git>/purge-backup-refs.txt = "# backup <abs path>" plus the backup's heads and tags
          ("<sha> <ref>") at copy time. A backup that changes during the copy is refused (exit 2).
+         A backup holding any ref outside refs/heads, refs/tags and refs/pull (refs/notes/*, for
+         example) is refused before anything is made: each is printed as OTHER-NAMESPACE <ref>, exit 2.
+         Nothing would ever rewrite or push those refs, so their data would stay on the remote.
          Run filter-repo on <work.git> afterwards (it leaves filter-repo/ref-map: old SHA,
          new SHA, ref; a second filter-repo pass on the same copy keeps the original "old" SHAs).
 
@@ -36,7 +39,8 @@ Push mode checks every link before anything is pushed:
 
   after    - once the last push is done, `ls-remote` again: a branch or tag on the remote that is
              neither in <work.git> nor deleted by the rewrite (created during the push), or a
-             pushed ref whose remote value is not the pushed SHA -> exit 3 MOVED (same recovery).
+             pushed or already-done ref whose remote value is not the rewritten SHA (or, for a
+             deletion, is not gone) -> exit 3 MOVED (same recovery).
 
 Every lease is against the backup's SHA (as snapshotted), never against what the remote shows
 at push time. Refspecs carry NO "+": a "+" forces past its own lease. All refs except the
@@ -46,7 +50,8 @@ else was rejected.
 
 Exit: 0 everything pushed or already done; 1 a rejection or the default branch held (rerun
 after fixing: finished refs are skipped); 2 bad arguments, unreadable repo, failed ls-remote,
-missing or stale snapshot or ref-map, default-branch problem, existing prepare target;
+missing or stale snapshot or ref-map, default-branch problem, existing prepare target, a backup
+with refs outside refs/heads, refs/tags and refs/pull;
 3 remote moved since backup (before the push, or found by the re-check after it); 4 refs deleted
 by the rewrite (see above).
 
@@ -81,6 +86,16 @@ def local_refs(repo):
     return {ref: sha for sha, ref in (l.split(" ", 1) for l in r.stdout.splitlines() if l)}
 
 
+def other_namespaces(repo):
+    """Every ref outside refs/heads, refs/tags and refs/pull (None if unreadable): notes,
+    refs/keep-around, refs/changes and the like, which prepare never copies and push never touches."""
+    r = sh(["git", "-C", repo, "for-each-ref", "--format=%(refname)"])
+    if r.returncode:
+        return None
+    return [ref for ref in r.stdout.splitlines()
+            if ref and not ref.startswith(("refs/heads/", "refs/tags/", "refs/pull/"))]
+
+
 def read_ref_map(work):
     path = os.path.join(work, "filter-repo", "ref-map")
     try:
@@ -99,9 +114,18 @@ def prepare(argv):
     if os.path.lexists(a.work):
         print("%s already exists: never reuse a copy; pick a new directory" % a.work)
         return 2
-    backup = local_refs(a.backup)
-    if not backup:
+    backup, others = local_refs(a.backup), other_namespaces(a.backup)
+    if not backup or others is None:
         print("cannot read refs from %s" % a.backup)
+        return 2
+    if others:
+        # R3-05: these are never copied, rewritten or pushed, so their data would stay on the remote.
+        for ref in others:
+            print("OTHER-NAMESPACE " + ref)
+        print("nothing copied: the backup holds refs outside refs/heads, refs/tags and refs/pull. Their "
+              "content is never rewritten or pushed, so it would stay on the remote. Delete or purge "
+              "each on the remote first (its own yes), make a NEW backup directory (Step 1) and run "
+              "prepare from it; keep this backup")
         return 2
     # Heads and tags ONLY (G1-11): a GitHub --mirror backup also holds refs/pull/*, which scan
     # never reads and which are never pushed; objects reachable only from them stay out of the copy.
@@ -317,6 +341,8 @@ def main():
         late = set(after) - set(work) - (set(to_delete) - set(accepted))
         late |= {ref for ref, f in accepted.items()
                  if after.get(ref) != (None if f == "-" else work.get(ref))}   # overwritten after ours
+        # R3-08: refs an earlier run pushed (done, skipped here) can be put back meanwhile too.
+        late |= {ref for ref in done if after.get(ref) != work[ref]}
         if late:
             for ref in sorted(late):
                 print("MOVED " + ref)
