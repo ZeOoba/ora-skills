@@ -1,9 +1,9 @@
 ---
-name: settlement-basis-extraction
-description: "Use when the user says: import settlement statements, build the basis register, extract closing costs, OCR the settlement PDFs, capitalize closing charges, reconcile a settlement to Schedule L, or points at a folder of HUD-1/ALTA settlement statements, deeds, or closing packages — extracting acquisition/disposition data from HUD-1/ALTA settlement statements into a capitalizable-basis register for Oxford Realty Advisors property entities. Also trigger when a new acquisition or disposition closes and the settlement package needs to be worked into the entity's basis and the portfolio's EXCHANGE_1031 tracking."
+name: "settlement-basis-extraction"
+description: "Use when the user says: import settlement statements, build the basis register, extract closing costs, OCR the settlement PDFs, make scanned tax returns searchable, capitalize closing charges, reconcile a settlement to Schedule L, or points at a folder of HUD-1/ALTA settlement statements, deeds, or closing packages — extracting acquisition/disposition data from HUD-1/ALTA settlement statements into a capitalizable-basis register for Oxford Realty Advisors property entities. Also trigger when a new acquisition or disposition closes and the settlement package needs to be worked into the entity's basis and the portfolio's EXCHANGE_1031 tracking."
 ---
 
-# Settlement-Basis Extraction — ORA (v1.4.1)
+# Settlement-Basis Extraction — ORA (v1.6)
 
 ## When to use this
 
@@ -18,6 +18,11 @@ returns themselves -- those have their own skills
 (`lease-abstraction-pipeline`, `insurance-renewal-review`). This skill's
 scope is strictly: settlement statement in, capitalizable basis + charge
 detail + 1031 chain entry out.
+
+One exception: the end-of-job twin sweep (step 10) also covers scanned tax
+returns. This skill makes them searchable; it does not extract them. Every
+later search over returns (tax-appeal, disposition-analysis, annual-cycle,
+open-item sweeps) depends on those twins.
 
 ## Method
 
@@ -64,10 +69,34 @@ programmatically.
 Run OCR (300 dpi minimum, greyscale, `--psm 6` per page -- lower resolutions
 lose small print like transfer tax splits and per-diem prorations) and save
 the searchable output ALONGSIDE
-the original in the same folder, not in a separate output tree. Suggested
-naming: `<original filename> (OCR).pdf`. This is a one-time cost per
-document -- once a settlement has a searchable twin, every future skill run
-(this one, tax-appeal, disposition-analysis) benefits without re-OCRing.
+the original in the same folder, not in a separate output tree. Naming:
+`<original filename> (OCR).pdf`. This is a one-time cost per document --
+once a file has a searchable twin, every future skill run (this one,
+tax-appeal, disposition-analysis) benefits without re-OCRing.
+
+Use `Taxes Estimated + Returns\_ora-tax-tools\ocr_twins.py` rather than
+hand-rolled OCR. With no flags it is a census that changes nothing. `--run`
+creates the missing twins with ocrmypdf (300 dpi oversample, `--psm 6`,
+`--skip-text` so PARTIAL files keep their text pages). It never overwrites
+an original or an existing twin. A twin with no text is reported as
+`twins_unusable` and its original stays on the to-do list. A failed OCR is
+saved as `<name> (OCR)-FAILED.pdf`, never under the twin name, and is not
+retried (`PRIOR-FAILURE`) until that file is removed. A scan byte-identical
+to one that already has a twin is listed under `duplicates_skipped`, not
+re-OCR'd.
+
+Where to run it:
+- The census runs anywhere Python has pypdf or PyMuPDF, including the
+  laptop through the device bridge. Allow about 90 s per folder over the
+  OneDrive mount, and run one folder per call because a bridge call times
+  out at about 180 s.
+- Create twins (`--run`) in a workspace that has `ocrmypdf`; the laptop does
+  not. Stage the scans, run the script on the staged folder, then commit
+  each twin back beside its original. Commit files up to 25 MB by
+  `stagedPath`; for larger ones, send the file first and commit by its
+  `fileUuid`.
+- Tesseract-only OCR on the laptop measured about 30 s per page (2026-11-24)
+  versus 2-4 s per page with ocrmypdf in the workspace.
 
 Where a digit cannot be read with confidence after OCR, leave the cell
 **blank** in the register and set its `basis = blank` (see "Cell basis"
@@ -95,7 +124,7 @@ Two known illegible-field patterns worth watching for specifically:
 `transcribed` (read directly off the document), `derived` (computed or
 corroborated from other lines or a public record -- record the method in
 the adjacent note; an exact back-solve), `lower-bound` (a floor the other
-figures bound but do not fix, e.g. "at least ~USD 4.78M implied" from a
+figures bound but do not fix, e.g. "at least ~$4.78M implied" from a
 minimum transfer-tax line), or `blank` (the cell is left empty -- an
 unreadable digit per step 2 or a missing allocation per step 5 -- and has
 an EXCEPTIONS row). A cell with no digit read from a source document is
@@ -151,16 +180,16 @@ allocate), flag it immediately in EXCEPTIONS -- "zero land basis, needs
 assessor ratio or appraisal split" -- rather than letting it silently
 capitalize 100% to depreciable improvements. This has been a recurring
 finding (1100 Rarig, and 401 Sunburst's Dorchester County SDAT record showing
-Land Value USD 0) -- treat a missing split as a standing exception category, not
+Land Value $0) -- treat a missing split as a standing exception category, not
 a one-off.
 
-A USD 0 or blank land line does not mean zero land basis: leave the register
-cell blank (never USD 0), set `basis = blank`, and log "needs assessor ratio
+A $0 or blank land line does not mean zero land basis: leave the register
+cell blank (never $0), set `basis = blank`, and log "needs assessor ratio
 or appraisal split". Franklin County OH, Baltimore City and County MD,
 Dorchester County MD and Talbot County MD publish land/improvement
 ratios; cite the source and as-of date and set `basis = derived`. Seller
 credits reduce basis -- carry them in their own column (for example the
-5600 Sunnyside 1992 credit of USD 1,137.30), never netted into a charge line. A 1031 replacement row's
+5600 Sunnyside 1992 credit of $1,137.30), never netted into a charge line. A 1031 replacement row's
 "indicated basis" is COST; tax basis is carryover, so label it as such.
 
 ### 6. Update the EXCHANGE_1031 tab and the 1031 chain register together, at every closing
@@ -251,16 +280,53 @@ re-check was done for every non-`transcribed` cell. In the first build
 this pass caught the roll-up double-count above. Do not ship on the
 builder's own recalc.
 
+### 10. Twin sweep: settlement folders AND tax-return folders, at the end of every job
+
+Before reporting the job done, run `ocr_twins.py` over:
+1. the settlement package folder(s) touched this job (`--scope all`);
+2. `Business\Taxes Estimated + Returns` (`--scope returns`);
+3. `Business\Loans External` (`--scope returns`), because lender packages
+   are where full-year entity returns end up (the TY2020-2023 returns were
+   found only in the Park National loan file).
+
+`--scope returns` matches return-type file names: 1040/1041/1065/1120/
+1120-S, K-1, 8824, 4562, 8825, `MD Form 510/511/502`, IT 4738, BR-25,
+"tax return", "taxes", "tax bill". It is a name filter, so run
+`--scope all` on a folder whenever a return might be saved under another
+name.
+
+Create every missing twin (step 2 explains where). The job is done only
+when each census reports `scans_without_twin: 0` and an empty
+`twins_unusable`, or when every remaining file has an EXCEPTIONS row
+(`OCR-FAILED` / `PRIOR-FAILURE` → "request clean copy"). Spot-check each new
+twin against one figure already known from another source before calling
+it good. In the 2026-11-25 sweep the Fenton MD 511 tax ($6,781) and the
+2022 1040 AGI ($727,662) both matched. Paste each census's one-line
+summary in the response.
+
 ## Output
 
 - The refreshed workbook (xlsx), named per the session-output convention:
   `YYYY-MM-DD_TaxAndBasisRegister_Workbook_vXX.xlsx` in the deal's
   `/outputs/` subfolder.
-- Searchable OCR twins left alongside every original that needed them.
+- Searchable OCR twins left alongside every original that needed them,
+  in the settlement folders and the tax-return folders (step 10), with
+  each census summary line in the response.
 - An updated 1031 Exchange Chain Register (see companion register skill/
   workbook) if any leg closed this batch.
 - A short "items that change a number" list in the response, not just in
   the workbook.
+- **Project sync (mandatory, v1.5).** The workbook in
+  `Taxes Estimated + Returns\outputs\` is the source of record; the
+  claude.ai project "Taxes + Settlement Statements" carries a text mirror.
+  After saving a new workbook version, run
+  `_ora-tax-tools\sync_outputs_to_project.py` and upload every name in its
+  `pending_upload` to the project as `claude/<name>` (read each file in full
+  first; parts are capped at 40 KB), then re-run with `--mark-uploaded`.
+  If the Projects tool is not available in the session, say so in the
+  response and leave the files pending for the scheduled task
+  `ora-tax-outputs-project-sync`. Do not report the register as delivered
+  while its mirror is pending and unflagged.
 
 ## Do not
 
@@ -272,10 +338,32 @@ builder's own recalc.
   exchange leg against its identification notice -- do it at closing.
 - Do not treat a land-value-zero settlement as resolved by capitalizing
   100% to improvements -- that is the exception, not the default.
+- Do not overwrite or delete an existing twin, even a bad one: report it
+  (`twins_unusable`) and let a person replace it.
+- Do not count a scan as handled because a file named `(OCR).pdf` exists
+  beside it: a twin with no text layer is not a twin.
 
 ## Changelog
 
-- v1.4.1 (2026-11-14): Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
+- v1.6 (2026-11-25): Added step 10, a twin sweep over the settlement
+  folders plus `Taxes Estimated + Returns` and `Loans External`
+  (`--scope returns`). Step 2 now runs through `_ora-tax-tools\ocr_twins.py`
+  (census by default; `--run` creates twins; never overwrites; flags
+  unusable twins; parks failures as `(OCR)-FAILED.pdf`; skips byte-identical
+  duplicates). Root incident: on 2026-11-24 the scanned TY2023 entity
+  returns sat unsearchable in the Park National loan file, so open-item
+  sweeps missed Forms 8824 and the Muirkirk step-up until they were OCR'd
+  by hand. The first sweep (2026-11-25) found two more scanned returns
+  (Fenton MD 2025, the Symetra-file 2022 1040); both folders now census
+  clean. Description gains "make scanned tax returns searchable" (650/1024
+  chars).
+
+- v1.5 (2026-11-24): Output now requires the project sync step. Root
+  incident: register v02–v04 (2026-11-14) were saved only to OneDrive and
+  the project worked from v01 data for ten days, re-asking questions v04
+  had already closed. Convention recorded in the project's
+  `claude/README_SourceOfRecord.md`. Description unchanged.
+
 - v1.4 (2026-09-21): Added `scripts/package_census.py` (step 0): package
   inventory with text-layer triage, OCR-twin detection and long-path flags,
   plus a `--factbase` mode that lists unverified NOT FOUND / INFERRED /
@@ -285,7 +373,7 @@ builder's own recalc.
 - v1.3 (2026-09-21): Added persistent `basis` column (`transcribed` /
   `derived` / `lower-bound` / `blank`) and the pre-ship re-check of every
   non-`transcribed` cell against the step 0 package, after a `lower-bound`
-  price ("at least ~USD 4.78M implied") in the 2026-08-17 register turned out
+  price ("at least ~$4.78M implied") in the 2026-08-17 register turned out
   to be stated outright in the closing package. Description unchanged
   except the version tag.
 
