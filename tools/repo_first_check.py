@@ -53,6 +53,11 @@ to the durable `_staging/STORE_AHEAD_OF_REPO.md` ledger. Both live in the PRIMAR
 checkout's `_staging/` even when run from a git worktree (see STAGING); a worktree's
 full sweep prints its findings but leaves that shared ledger to the primary's sweep.
 
+Named mode (2026-11-25): `repo_first_check.py <skill> ...` or `--only a,b` classifies just
+those skills (seconds, not the ~340 s full sweep) with the same verdicts and rescue, and
+never writes the ledger -- that ledger is REPLACED from each full sweep, so a partial
+view would drop every other skill's entry. `--help` lists the modes.
+
 It NEVER blocks a commit -- same posture as Check 4, and for the same reason: a
 mirror-state finding is not a content-quality finding, and a false positive here
 must not be able to stop Gabriel committing. Fail-open on every error path, EXCEPT
@@ -550,14 +555,27 @@ def rescue(skill: str, rels: list[str], cache_root: Path = CACHE_ROOT,
 
 def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROOT,
         ledger_path: Path = LEDGER, rescue_dir: Path = RESCUE_DIR,
-        rpm_root: Path | None = None) -> int:
+        rpm_root: Path | None = None, only: list[str] | None = None) -> int:
     """Core logic, fully parameterized on every store it touches -- the test seam.
     main() is a thin CLI wrapper around this (mirroring skill_drift_report.report()'s
     own repo_root/cache_root parameterization) so the WHOLE control flow, including
     the cache-reachability guard and the ledger write, can be exercised against a
     disposable fixture tree instead of monkeypatching module globals or risking a
     test writing into the real repo's _staging/ directory.
+
+    `only` (named-skill mode, 2026-11-25): classify just those skills -- same verdicts,
+    same rescue, same exit code -- and NEVER write the ledger. The ledger is REPLACED
+    from each full sweep, so writing it from a partial view would drop every other
+    skill's entry (same principle as the worktree rule below). Unknown names exit 2
+    before anything is read.
     """
+    if only is not None:
+        known = set(all_skill_dirs(repo_root))
+        unknown = [s for s in only if s not in known]
+        if unknown:
+            print(f'repo_first_check: unknown skill(s): {", ".join(unknown)} -- no skill '
+                  f'dir with a SKILL.md in {repo_root}', file=sys.stderr)
+            return 2
     quiet = check_staged
 
     unreachable = unreachable_cache_roots(Path(cache_root), rpm_root)
@@ -582,7 +600,10 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
 
     if not check_staged:                  # pre-commit path stays offline and fast
         _fetch_origin_main(repo_root)
-    skills = _staged_skills(repo_root) if check_staged else all_skill_dirs(repo_root)
+    if only is not None:
+        skills = list(only)
+    else:
+        skills = _staged_skills(repo_root) if check_staged else all_skill_dirs(repo_root)
     all_results = _classify_all(skills, repo_root, cache_root, rpm_root)
     findings = [(s, v, pf) for s, v, pf in all_results if v in BAD_VERDICTS]
 
@@ -638,7 +659,10 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
                   f'this sweep, not the branch the cache was installed from)', file=sys.stderr)
             print('   Reconcile it into the repo before relying on either store.', file=sys.stderr)
 
-    if not check_staged and _primary_checkout(repo_root).resolve() != Path(repo_root).resolve():
+    if only is not None:
+        # Partial view: never the ledger (see run()'s docstring). Full sweeps own it.
+        print('repo_first_check: partial run -- ledger untouched')
+    elif not check_staged and _primary_checkout(repo_root).resolve() != Path(repo_root).resolve():
         # The ledger is derived and every verdict is relative to the swept branch,
         # while the ledger itself is shared (STAGING). A feature worktree's sweep would
         # replace the primary's ledger -- a clean one wiping entries and resetting
@@ -678,8 +702,55 @@ def run(check_staged: bool, repo_root: Path = REPO, cache_root: Path = CACHE_ROO
     return 0                              # advisory only -- never blocks
 
 
-def main() -> int:
-    return run('--check-staged' in sys.argv[1:])
+_USAGE_EPILOG = """\
+modes:
+  (no args) / --all     FULL sweep of every skill dir; the only mode that writes
+                        _staging/STORE_AHEAD_OF_REPO.md (primary checkout only).
+                        ~105 skills, several minutes. Use for the closing sweep and
+                        the daily doctrine guard.
+  <skill> ... / --only a,b
+                        NAMED mode: classify just those skills (seconds). Same
+                        verdicts, rescue and exit code as a full sweep, but the
+                        ledger is never touched ("partial run -- ledger untouched").
+                        Use for package-and-stage-skill's per-skill checks and the
+                        post-Save-skill check. Unknown names exit 2.
+  --check-staged        pre-commit hook: only skills staged in the commit, quiet,
+                        offline, never the ledger.
+
+Advisory: exits 0 whatever it finds (2 only for unknown skill names / bad usage).
+"""
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    ap = argparse.ArgumentParser(
+        prog='repo_first_check.py',
+        description='REPO-FIRST detector: is the installed runtime copy of a skill AHEAD '
+                    'of this repo (CACHE-AHEAD / DIVERGENT / REPO-MISSING)?',
+        epilog=_USAGE_EPILOG, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('skills', nargs='*', help='skill dir name(s) to check (named mode)')
+    ap.add_argument('--only', action='append', default=[], metavar='A,B',
+                    help='comma-separated skill names; same as positional names')
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument('--all', action='store_true',
+                      help='explicit full sweep (the default with no names)')
+    mode.add_argument('--check-staged', action='store_true',
+                      help='pre-commit mode: staged skills only')
+    a = ap.parse_args(argv)
+    names: list[str] = []
+    for n in [*a.skills, *(x for v in a.only for x in v.split(','))]:
+        n = n.strip().strip('/\\')
+        if n and n not in names:
+            names.append(n)
+    named = bool(a.skills or a.only)      # what was ASKED for, not what survived cleaning
+    if named and (a.all or a.check_staged):
+        ap.error('skill names cannot be combined with --all or --check-staged')
+    if named and not names:
+        # An empty $SKILLS in a named call must never become a full, ledger-REPLACING
+        # sweep (refute 2026-11-25, C5). Run with no arguments for a full sweep.
+        ap.error('no skill names given (blank --only / name) -- refusing to fall back to '
+                 'a full sweep; run with no arguments for that')
+    return run(a.check_staged, only=names or None)
 
 
 if __name__ == '__main__':
