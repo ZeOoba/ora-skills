@@ -953,5 +953,124 @@ class RpmStorePluginInstalls(FixtureTestCase):
         self.assertEqual((dest / 'SKILL.md').read_text(encoding='utf-8'), 'rpm bytes\n')
 
 
+class NamedSkillMode(FixtureTestCase):
+    """2026-11-25: `repo_first_check.py <skill> ...` (or --only a,b) classifies only the
+    named skills -- the full ~105-skill sweep took ~340 s for a two-skill post-Save check.
+    Same classification and rescue, same exit code, but the STORE_AHEAD_OF_REPO ledger is
+    REPLACED from each full sweep, so a partial run must never write it."""
+
+    def setUp(self):
+        super().setUp()
+        self.ledger = self.tmp / 'STORE_AHEAD_OF_REPO.md'
+        self.rescue_dir = self.tmp / 'rescue'
+        for s in ('alpha', 'beta', 'gamma'):
+            _commit(self.repo, f'{s}/SKILL.md', f'name: {s}\n', f'add {s}')
+            _write(self.cache / s / 'SKILL.md', f'name: {s}\n')
+        # gamma drifted cache-ahead, and the ledger already records it from a full sweep
+        _write(self.cache / 'gamma' / 'SKILL.md', 'name: gamma\nnever committed\n')
+        rfc.record_ledger([('gamma', 'CACHE-AHEAD', [('SKILL.md', 'CACHE-AHEAD')])],
+                          ledger_path=self.ledger)
+
+    def _run(self, only):
+        import contextlib
+        import io
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), \
+                mock.patch.object(rfc, '_fetch_origin_main'):
+            code = rfc.run(False, repo_root=self.repo, cache_root=self.cache,
+                           ledger_path=self.ledger, rescue_dir=self.rescue_dir, only=only)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_named_run_classifies_only_the_named_skills(self):
+        seen = []
+        real = rfc.classify_skill
+
+        def spy(skill, *a, **kw):
+            seen.append(skill)
+            return real(skill, *a, **kw)
+
+        with mock.patch.object(rfc, 'classify_skill', side_effect=spy):
+            code, out, _ = self._run(['alpha', 'beta'])
+        self.assertEqual(code, 0)
+        self.assertEqual(seen, ['alpha', 'beta'])
+        self.assertIn('alpha', out)
+        self.assertNotIn('gamma', out)
+
+    def test_named_run_leaves_the_ledger_byte_identical(self):
+        before = self.ledger.read_bytes()
+        code, out, _ = self._run(['alpha'])         # alpha is clean: a full sweep would
+        self.assertEqual(code, 0)                   # keep gamma, but a REPLACE from this
+        self.assertEqual(self.ledger.read_bytes(), before)   # partial view would drop it
+        self.assertIn('partial run -- ledger untouched', out)
+
+    def test_named_run_with_a_finding_still_rescues_but_never_ledgers(self):
+        before = self.ledger.read_bytes()
+        _write(self.cache / 'beta' / 'SKILL.md', 'name: beta\nedited in cowork\n')
+        code, out, err = self._run(['beta'])
+        self.assertEqual(code, 0)
+        self.assertIn('REPO-FIRST CACHE-AHEAD: beta', err)
+        self.assertTrue(list((self.rescue_dir / 'beta').glob('*/SKILL.md')))
+        self.assertEqual(self.ledger.read_bytes(), before)
+        self.assertIn('partial run -- ledger untouched', out)
+
+    def test_unknown_skill_name_fails_and_names_it(self):
+        before = self.ledger.read_bytes()
+        with mock.patch.object(rfc, 'classify_skill') as cls:
+            code, _, err = self._run(['alpha', 'no-such-skill', 'nope2'])
+        self.assertNotEqual(code, 0)
+        self.assertIn('no-such-skill', err)
+        self.assertIn('nope2', err)
+        cls.assert_not_called()
+        self.assertEqual(self.ledger.read_bytes(), before)
+
+    def test_full_run_is_unchanged_and_still_owns_the_ledger(self):
+        code, out, _ = self._run(None)
+        self.assertEqual(code, 0)
+        self.assertIn('gamma', read_entries(self.ledger))
+        self.assertNotIn('partial run', out)
+        _write(self.cache / 'gamma' / 'SKILL.md', 'name: gamma\n')   # reconciled
+        code, out, _ = self._run(None)
+        self.assertFalse(self.ledger.exists())       # full sweep self-clears the entry
+        self.assertIn('cleared 1 resolved ledger entry', out)
+
+
+class CliParsing(unittest.TestCase):
+    """main()'s argparse layer: positional names, --only, and the legacy flags."""
+
+    def _parse(self, *argv):
+        with mock.patch.object(rfc, 'run', return_value=0) as run:
+            code = rfc.main(list(argv))
+        return code, run
+
+    def test_positional_names_become_only(self):
+        _, run = self._parse('deal-execution', 'deal-decision-log')
+        self.assertEqual(run.call_args.kwargs['only'], ['deal-execution', 'deal-decision-log'])
+        self.assertFalse(run.call_args.args[0])
+
+    def test_only_flag_comma_list_merges_with_positionals(self):
+        _, run = self._parse('a', '--only', 'b,c', '--only', 'a')
+        self.assertEqual(run.call_args.kwargs['only'], ['a', 'b', 'c'])
+
+    def test_bare_and_legacy_all_are_full_sweeps(self):
+        for argv in ((), ('--all',)):
+            _, run = self._parse(*argv)
+            self.assertIsNone(run.call_args.kwargs['only'])
+            self.assertFalse(run.call_args.args[0])
+
+    def test_check_staged_still_works(self):
+        _, run = self._parse('--check-staged')
+        self.assertTrue(run.call_args.args[0])
+        self.assertIsNone(run.call_args.kwargs['only'])
+
+    def test_names_conflict_with_all_and_check_staged(self):
+        import contextlib
+        import io
+        for argv in (('--all', 'x'), ('--check-staged', 'x')):
+            with contextlib.redirect_stderr(io.StringIO()), \
+                    self.assertRaises(SystemExit) as cm:
+                self._parse(*argv)
+            self.assertNotEqual(cm.exception.code, 0)
+
+
 if __name__ == '__main__':
     unittest.main()
