@@ -1,4 +1,4 @@
-"""ORA Disposition Template builder (live formulas). Four paths: A1 hold, A2 hold+refi,
+"""ORA Disposition Template builder (live formulas). Paths: A1 hold, A2 hold+refi,
 B seller-financed installment sale (two variants), C cash sale + 1031, D taxable cash sale (base).
 Usage: python build_template.py OUT.xlsx   — then fill blue input cells on the Inputs sheet."""
 import sys
@@ -28,7 +28,7 @@ D='$#,##0;($#,##0)'; P='0.00%'
 spec=[
 ('Property name','55 New Plant Ct','PropName',None,'Text'),
 ('Rentable SF',34534,'SF','#,##0',''),
-('Base rent year 1 (t=1)',466209,'Rent1',D,'Override the 10-yr schedule on Calc row 6 if the lease has fixed steps'),
+('Base rent year 1 (t=1)',466209,'Rent1',D,'Override the 10-yr schedule on Calc row 5 if the lease has fixed steps'),
 ('Rent growth / yr',0.025,'RentG',P,''),
 ('Abatement in year 1',77701.5,'Abate1',D,''),
 ('Management fee % of collected rent',0.03,'Mgmt',P,''),
@@ -74,6 +74,10 @@ for lab,v1,v2,n,f in [('Price',7500000,7500000,'BPrice',D),('Down payment',15000
         c=ws.cell(r,j,v); c.font=INF; c.fill=IFILL; c.number_format=f
     wb.defined_names[n+'1']=DefinedName(n+'1',attr_text=f"Inputs!$B${r}"); wb.defined_names[n+'2']=DefinedName(n+'2',attr_text=f"Inputs!$C${r}")
     r+=1
+from openpyxl.worksheet.datavalidation import DataValidation
+dv=DataValidation(type='whole',operator='between',formula1='2',formula2='10',showErrorMessage=True,error='Balloon term must be 2-10 years'); ws.add_data_validation(dv)
+for rr_ in range(1,r):
+    if ws.cell(rr_,1).value and str(ws.cell(rr_,1).value).startswith('Term to balloon'): dv.add(f'B{rr_}:C{rr_}')
 r+=1; sec(r,'1031 REPLACEMENT'); r+=1
 for lab,v,n,f,note in [('Replacement cap rate',0.0825,'RCap',P,'Must be a screened, verified target'),('Replacement NOI growth',0.025,'RG',P,''),('Acquisition cost %',0.015,'RAcq',P,''),('Idle months before income',3,'RIdle','0',''),('Exit cost %',0.03,'RExit',P,'')]:
     inp(r,lab,v,n,f,note); r+=1
@@ -109,12 +113,12 @@ R('a2tax','A2 tax',lambda t,col,prev: f'=({g("noi",col)}-{g("int",col)}-Dep-Comm
 R('a2cf','A2 after-tax cash',lambda t,col,prev: f'={g("noi",col)}-DS-{g("alw",col)}-{g("a2tax",col)}',True,t0='=-Comm+Loan*(1-RefiC)')
 for v in (1,2):
     c.cell(len(row)+5,1,f'— B{v} SELLER-FINANCED SALE —').font=BF; row[f'_b{v}']=len(row)+5
-    R(f'b{v}pr',f'B{v} principal received',lambda t,col,prev,v=v: f'=IF({col}$4<BTerm{v},-CUMPRINC(BRate{v}/12,BAm{v}*12,BPrice{v}-BDown{v},({col}$4-1)*12+1,{col}$4*12,0),IF({col}$4=BTerm{v},BPrice{v}-BDown{v}+CUMPRINC(BRate{v}/12,BAm{v}*12,BPrice{v}-BDown{v},1,({col}$4-1)*12,0)*({col}$4>1),0))',t0=f'=BDown{v}')
+    R(f'b{v}pr',f'B{v} principal received',lambda t,col,prev,v=v: f'=IF({col}$4<BTerm{v},-CUMPRINC(BRate{v}/12,BAm{v}*12,BPrice{v}-BDown{v},({col}$4-1)*12+1,{col}$4*12,0),IF({col}$4=BTerm{v},BPrice{v}-BDown{v}+IF({col}$4>1,CUMPRINC(BRate{v}/12,BAm{v}*12,BPrice{v}-BDown{v},1,({col}$4-1)*12,0),0),0))',t0=f'=BDown{v}')
     R(f'b{v}int',f'B{v} interest received',lambda t,col,prev,v=v: f'=IF({col}$4<=BTerm{v},-CUMIPMT(BRate{v}/12,BAm{v}*12,BPrice{v}-BDown{v},({col}$4-1)*12+1,{col}$4*12,0),0)')
     R(f'b{v}cg',f'B{v} cumulative gain recognized',lambda t,col,prev,v=v: f'={prev}{row[f"b{v}cg"]}+{g(f"b{v}pr",col)}*GP{v}',t0=f'=C{row[f"b{v}pr"]}*GP{v}')
     R(f'b{v}c1250',f'B{v} cumulative §1250 recognized',lambda t,col,prev,v=v: f'=MIN({g(f"b{v}cg",col)},S1250AMT{v})',t0=f'=MIN(C{row[f"b{v}cg"]},S1250AMT{v})')
     R(f'b{v}tax',f'B{v} tax on gain',lambda t,col,prev,v=v: f'=({g(f"b{v}c1250",col)}-{prev}{row[f"b{v}c1250"]})*R1250+(({g(f"b{v}cg",col)}-{g(f"b{v}c1250",col)})-({prev}{row[f"b{v}cg"]}-{prev}{row[f"b{v}c1250"]}))*LTCG',t0=f'=C{row[f"b{v}c1250"]}*R1250+(C{row[f"b{v}cg"]}-C{row[f"b{v}c1250"]})*LTCG+S1245*ORD')
-    R(f'b{v}453',f'B{v} §453A interest charge',lambda t,col,prev,v=v: f'=IF({col}$4<=BTerm{v},(BTotTax{v}-SUM($C{row[f"b{v}tax"]}:{prev}{row[f"b{v}tax"]}))*MAX(0,(BPrice{v}-BDown{v}-T453)/(BPrice{v}-BDown{v}))*U453,0)')
+    R(f'b{v}453',f'B{v} §453A interest charge',lambda t,col,prev,v=v: f'=IF({col}$4<=BTerm{v},(BTotTax{v}-(SUM($C{row[f"b{v}tax"]}:{prev}{row[f"b{v}tax"]})-S1245*ORD))*MAX(0,(BPrice{v}-BDown{v}-T453)/(BPrice{v}-BDown{v}))*U453,0)')
     R(f'b{v}cf',f'B{v} after-tax cash',lambda t,col,prev,v=v: f'={g(f"b{v}pr",col)}+{g(f"b{v}int",col)}*(1-ORD)-{g(f"b{v}tax",col)}-{g(f"b{v}453",col)}',True,t0=f'=BDown{v}-BPrice{v}*BSell{v}-Comm-C{row[f"b{v}tax"]}')
 c.cell(len(row)+5,1,'— C CASH SALE + 1031 —').font=BF; row['_c']=len(row)+5
 R('cnoi','C replacement NOI',lambda t,col,prev: f'=RPrice*RCap*(1+RG)^({col}$4-1)*IF({col}$4=1,1-RIdle/12,1)')
@@ -133,21 +137,22 @@ scal=[
 ('Refi annual debt service','=-PMT(RefiR/12,RefiAm*12,Loan)*12','DS'),
 ('Exit value yr 10 (yr-11 buyer NOI / cap)','=(Calc!M%d*(1+RentG)-OtherLL-ResSF*SF)/Cap'%row['rent'],'TV'),
 ('D: taxable cash sale, amount realized','=V0*(1-SellC)-Comm','D_AR'),
-('D: tax on sale','=MIN(MAX(D_AR-Basis,0),AccDep)*R1250+(MAX(D_AR-Basis,0)-MIN(MAX(D_AR-Basis,0),AccDep))*LTCG+S1245*ORD','D_Tax'),
+('D: tax on sale','=MIN(MAX(D_AR-Basis-S1245,0),AccDep)*R1250+(MAX(D_AR-Basis-S1245,0)-MIN(MAX(D_AR-Basis-S1245,0),AccDep))*LTCG+MIN(S1245,MAX(D_AR-Basis,0))*ORD','D_Tax'),
 ('D: after-tax proceeds today (IRR investment base)','=D_AR-D_Tax','D0'),
 ('After-tax reinvestment rate','=Reinv*(1-ORD)','RA'),
 ('Hold: basis at yr 10','=Basis-10*Dep+Allow','Basis10'),
-('Hold: liquidation tax at yr 10','=MIN(MAX(TV*(1-SellC)-Basis10,0),AccDep+10*Dep)*R1250+(MAX(TV*(1-SellC)-Basis10,0)-MIN(MAX(TV*(1-SellC)-Basis10,0),AccDep+10*Dep))*LTCG','HoldTax10'),
+('Hold: liquidation tax at yr 10','=MIN(MAX(TV*(1-SellC)-Basis10-S1245,0),AccDep+10*Dep)*R1250+(MAX(TV*(1-SellC)-Basis10-S1245,0)-MIN(MAX(TV*(1-SellC)-Basis10-S1245,0),AccDep+10*Dep))*LTCG+MIN(S1245,MAX(TV*(1-SellC)-Basis10,0))*ORD','HoldTax10'),
 ('C: exchange proceeds to QI','=D_AR','CExch'),
 ('C: replacement price','=CExch/(1+RAcq)','RPrice'),
 ('C: exit equity yr 10','=RPrice*(1+RG)^10*(1-RExit)','CEq'),
-('C: liquidation tax yr 10','=MIN(MAX(CEq-(Basis+RPrice*RAcq-10*Dep),0),AccDep+10*Dep)*R1250+(MAX(CEq-(Basis+RPrice*RAcq-10*Dep),0)-MIN(MAX(CEq-(Basis+RPrice*RAcq-10*Dep),0),AccDep+10*Dep))*LTCG','CTax10'),
+('C: basis yr 10 (carryover + acq cost, less 10 yrs depreciation)','=Basis+RPrice*RAcq-10*(Dep+RPrice*RAcq/39)','CBasis10'),
+('C: liquidation tax yr 10','=MIN(MAX(CEq-CBasis10-S1245,0),AccDep+10*Dep)*R1250+(MAX(CEq-CBasis10-S1245,0)-MIN(MAX(CEq-CBasis10-S1245,0),AccDep+10*Dep))*LTCG+MIN(S1245,MAX(CEq-CBasis10,0))*ORD','CTax10'),
 ]
 for v in (1,2):
     scal+= [(f'B{v}: total gain','=BPrice%d*(1-BSell%d)-Comm-Basis'%(v,v),f'BGain{v}'),
-            (f'B{v}: gross-profit ratio',f'=BGain{v}/BPrice{v}',f'GP{v}'),
-            (f'B{v}: §1250 portion of gain',f'=MIN(BGain{v},AccDep)',f'S1250AMT{v}'),
-            (f'B{v}: total tax on gain',f'=S1250AMT{v}*R1250+(BGain{v}-S1250AMT{v})*LTCG',f'BTotTax{v}'),
+            (f'B{v}: gross-profit ratio (excl. §1245, recognized at sale)',f'=MAX(BGain{v}-S1245,0)/BPrice{v}',f'GP{v}'),
+            (f'B{v}: §1250 portion of gain',f'=MIN(MAX(BGain{v}-S1245,0),AccDep)',f'S1250AMT{v}'),
+            (f'B{v}: total installment tax (excl. §1245)',f'=S1250AMT{v}*R1250+(MAX(BGain{v}-S1245,0)-S1250AMT{v})*LTCG',f'BTotTax{v}'),
             (f'B{v}: note',f'=BPrice{v}-BDown{v}',f'BNote{v}'),
             (f'B{v}: note ÷ value today',f'=BNote{v}/V0',f'BNoteLTV{v}'),
             (f'B{v}: cash-equivalent value @ market rate',f'=BDown{v}-PV(MktR/12,BTerm{v}*12,PMT(BRate{v}/12,BAm{v}*12,-BNote{v}))+(BNote{v}+CUMPRINC(BRate{v}/12,BAm{v}*12,BNote{v},1,BTerm{v}*12,0))/(1+MktR/12)^(BTerm{v}*12)',f'BCEV{v}'),
@@ -165,7 +170,6 @@ paths=[('A1 Hold, no debt','a1cf','+TV*(1-SellC)-HoldTax10','+TV*(1-SellC)'),
        ('A2 Hold + refi','a2cf','+TV*(1-SellC)-Calc!M%d-HoldTax10'%row['bal'],'+TV*(1-SellC)-Calc!M%d'%row['bal']),
        ('B1 Seller-financed','b1cf','',''),('B2 Seller-financed','b2cf','',''),
        ('C Cash sale + 1031','ccf','+CEq-CTax10','+CEq')]
-irr_row=rr+8
 for i,(lab,k,liq,step) in enumerate(paths):
     s.cell(rr,1,lab).font=BF
     s.cell(rr,2,f'=Calc!C{row[k]}'); s.cell(rr,3,f'=Calc!D{row[k]}'); s.cell(rr,4,f'=SUM(Calc!D{row[k]}:M{row[k]})')
@@ -174,8 +178,8 @@ for i,(lab,k,liq,step) in enumerate(paths):
     fr=60+i; c.cell(fr,1,f'IRR flows {lab}').font=NF
     c.cell(fr,3,f'=-D0+C{row[k]}')
     for t in range(1,11):
-        col=L(3+t); extra = liq.replace('+','+',1) if t==10 else ''
-        c[f'{col}{fr}']=f'={col}{row[k]}'+(extra if t==10 else '')
+        col=L(3+t)
+        c[f'{col}{fr}']=f'={col}{row[k]}'+(liq if t==10 else '')
     s.cell(rr,7,f'=IRR(Calc!C{fr}:M{fr})')
     for j in range(2,7): s.cell(rr,j).number_format=D
     s.cell(rr,7).number_format=P; rr+=1
