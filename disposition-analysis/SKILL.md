@@ -1,7 +1,6 @@
 ---
-
 name: disposition-analysis
-description: "Use when the user mentions: should we sell, hold or sell, disposition, dispose of, exit an asset, recycle or prune the portfolio, 1031, like-kind exchange, replace an asset, refinance vs sell, harvest gains, cash out, when to sell, keeping vs selling a property, depreciation recapture, or estate step-up — the Oxford Realty Advisors hold / refinance / 1031 / sell decision engine. Defaults to HOLD + cash-out refinance for liquidity (ORA generational-hold doctrine); when capital is recycled the default exit is a 1031 exchange; a taxable sale is the rare exception that must clear a high bar. Refi execution (term sheets, lender selection) routes to debt-management."
+description: "Use when the user mentions: should we sell, hold or sell, disposition, dispose of, exit an asset, recycle or prune the portfolio, 1031, like-kind exchange, replace an asset, refinance vs sell, harvest gains, cash out, when to sell, keeping vs selling a property, seller financing, depreciation recapture, or estate step-up — the Oxford Realty Advisors hold / refinance / 1031 / sell decision engine."
 ---
 
 # Disposition Analysis — Oxford Realty Advisors (v1.4)
@@ -14,6 +13,22 @@ You are evaluating whether ORA should HOLD, REFINANCE, 1031-EXCHANGE, or make a 
 3. **A taxable sale is the exception** — only when no like-kind replacement fits, the asset is structurally impaired, or a non-deferrable need exists. It must clear a high bar because it forfeits the step-up and crystallizes recapture.
 
 ## Workflow
+
+### Step 0 — Pre-discussion fact pull (MANDATORY before any price, buyer or structure discussion)
+No sale price, buyer approach, seller-financing term or 1031 plan is discussed until this block is filled. Each line cites its source document (executed copy, not drafts); anything not found = `[DATA-GAP: item]` and is listed as an open item, never estimated silently. Search the property folder (`Business\<Property>\`), the Corporate and Settlement folder, the Notion Property Register / Tenant Database rows, and the live Master Workbook.
+
+| # | Item | What to pull | Typical source |
+|---|---|---|---|
+| 1 | **Ownership entity** | Title holder (deed), members/beneficiaries (operating agreement), trust status (grantor vs non-grantor; estate inclusion → step-up availability), who signs | Deed, operating agreement, trust docs; Property Register notes |
+| 2 | **Tax basis** | Purchase price/date, 1031 chain (replacement? carryover basis from which property), accumulated depreciation, cost-seg (§1245 portion), capital improvements; adjusted basis | Settlement statement/HUD-1, QI exchange docs, depreciation schedule from CPA (Klein) |
+| 3 | **Debt** | Balance, rate, maturity, prepay/defeasance, due-on-sale, guaranties; or confirm unencumbered | Payoff statement, loan docs, Master Workbook, title |
+| 4 | **Leases** | EXECUTED lease: expiry, renewal options + notice deadlines, rent schedule, recoveries, guaranties/deposits, **ROFR/ROFO/purchase options**, assignment on sale | Executed lease + amendments (OCR scans if needed) |
+| 5 | **Broker agreements** | Every listing agreement and commission letter touching the property: tail periods, **tenant-purchase clauses**, exclusives still open; compare signed copy vs redlines | Property folder: search Commission / Listing / Brokerage; email |
+| 6 | **Other encumbrances** | Solar/roof leases, easements, ground lease, recorded restrictions, environmental | Title, CapEx log, Notion |
+| 7 | **Taxes on transfer & reassessment** | Current assessed value vs likely sale price (reassessment risk to buyer/tenant); state + county transfer and recordation rates | Tax bill; county/state rate pages |
+| 8 | **Market** | Current cap-rate range and $/SF sale comps for the submarket, dated and cited | Broker research (CBRE/C&W/Lee), recorded sales |
+
+Output the block as a table at the top of every disposition memo, then proceed.
 
 ### Step 1 — Why is a sale on the table?
 Classify the trigger: liquidity need (→ refi first), underperformance / structural impairment (→ 1031 into better basis), market-peak harvesting (→ 1031, rarely taxable), portfolio rebalance / concentration, or forced (partnership, estate, lender). The trigger sets which paths are live.
@@ -32,7 +47,8 @@ Side by side, after-tax to ORA:
 - **HOLD + refi:** tax-free liquidity now; keeps step-up; continued NOI growth.
 - **1031 exchange (default recycle):** defers gain + recapture; carryover basis (depreciation does NOT reset — continue old schedule on the replacement); net equity rolls 100%. Model the replacement's basis and go-forward depreciation. Watch **boot** (cash or debt relief = taxable to that extent) — structure to avoid.
 - **Taxable sale:** net proceeds AFTER the Step-3 tax charge; only wins if the redeployment return on the smaller after-tax pile beats hold + 1031.
-- **Estate/transfer (generational):** for next-gen assets, the step-up at death eliminates all recapture — usually dominates a lifetime sale; layer valuation-discount gifting of LLC interests (balance vs forgone step-up).
+- **Estate/transfer (generational):** for next-gen assets, the step-up at death eliminates all recapture — usually dominates a lifetime sale; layer valuation-discount gifting of LLC interests (balance vs forgone step-up). Confirm the owner actually gets a step-up: assets of a non-grantor irrevocable trust outside the estate generally do not.
+- **Seller-financed (installment) sale:** price it at its **cash-equivalent value** (PV of down payment + note payments + balloon at the buyer's market loan rate), never at headline. Required checks: (a) note rate ≥ applicable federal rate for the note term at contract (else imputed interest re-characterizes price); (b) **§453A** interest charge if installment notes arising in the year exceed $5M at year-end — size the note ≤ $5M where possible; (c) §1245/cost-seg recapture is recognized in the year of sale; unrecaptured §1250 gain comes out of the first payments (Reg. 1.453-12); (d) **the note is boot — it cannot be 1031-exchanged**; only cash at closing can go through a QI (hybrid: down payment via QI, note on installment method); (e) balloon refinanceability: buyer's balance at maturity vs 65% of realistic value; (f) collateral cushion: note ÷ market value (not ÷ contract price); (g) guaranty, escrows, due-on-sale, no secondary debt.
 
 ### Step 5 — 1031 execution guardrails (when recycling)
 - Like-kind = any US real property held for investment/business → broad (industrial ↔ flex ↔ land ↔ retail all qualify).
@@ -49,15 +65,23 @@ Append one row to `memory/disposition-ledger.md` — the post-acquisition lifecy
 
 ## Conventions
 - Pull defaults from the ORA Taxpayer Profile (REPS qualified, 1031 default, rates) and the Tax-Inclusive Underwriting Standard.
-- Rates: §1245 ordinary 37% + 3.8% NIIT · unrecaptured §1250 25% + NIIT · LTCG 20% + NIIT · + OH state. Confirm current law / state with CPA.
+- Rates: §1245 ordinary 37% + 3.8% NIIT · unrecaptured §1250 25% + NIIT · LTCG 20% + NIIT · + state of the property/owner (OH apportionment; **MD: up to 6.5% + 2% capital-gains surtax, which reaches fiduciaries**). Confirm current law / state with CPA.
+- Refi comparison uses the acquisition-underwriting refi rule (10-yr UST + 200 bps; ~7.0% in Nov 2026), never the retired fixed 6.50%. Value held assets at the market exit cap for their market from acquisition-underwriting (MD/DC 7.25%; sale-valuation band 6.75–7.50% in Nov 2026), cited and dated.
 - Never present a disposition without the forfeited-step-up + recapture charge. Refi-before-sale is the default. 1031-before-taxable-sale is the default for recycling.
-- Output: concise decision memo (paths table + recommendation); for a live decision, build the four-path after-tax comparison in the IRR model.
+- Output: concise decision memo (paths table + recommendation). For a live decision, build the after-tax comparison in the **ORA Disposition Template v1.0** (live formulas), never in a values-only sheet:
+  - Template: `ora-skills/disposition-analysis/templates/ORA_Disposition_Template_v1.0.xlsx`; regenerate with `python build_template.py <out.xlsx>` in the same folder.
+  - Fill only the blue cells on `Inputs` (named ranges). Paths computed: A1 hold, A2 hold + refi (MIN of LTV and DSCR sizing), B1/B2 seller-financed installment sale (gross-profit ratio, §1250-first recognition, §453A charge, cash-equivalent value, balloon), C cash sale + 1031, D taxable cash sale (IRR investment base).
+  - Decide on the `Summary` wealth columns (liquidate vs step-up), not IRR: IRR ignores what early cash earns.
+  - Pull basis, depreciation, filer and 1031 chain from the Property Register `Basis & Tax` field first, then the Tax & Basis Register workbook (`Business\Taxes Estimated + Returns\outputs\…TaxAndBasisRegister_Workbook_v*.xlsx`: BASIS_REGISTER, EXCHANGE_1031, DEPR_COSTSEG). Every input carries a source; unknowns stay `[DATA-GAP]`.
+  - Save the filled copy as `ORA. Disposition-Model_[Property]_[MMDDYYYY].xlsx`, recalculate, and confirm zero formula errors before presenting.
 
 ## Cross-skill
 acquisition-underwriting (replacement-asset underwrite for 1031 targets) · deal-comparison (replacement vs hold) · the IRR model's Tax Analysis tab (recapture block) · portfolio-reporting (concentration/rebalance triggers) · disposition-ledger.md (Step 7 log, new 2026-07-29).
 
 ## Changelog
 
+- v1.6 (2026-11-24): Output now requires the live-formula ORA Disposition Template v1.0 (templates/ in the ora-skills repo), reconciled to the 55 New Plant Court values model within rounding. Step 0 basis pull now starts from the Property Register `Basis & Tax` field. No governor constant changed.
+- v1.5 (2026-11-24): Added Step 0 mandatory pre-discussion fact pull (ownership entity, basis, debt, leases, broker agreements, encumbrances, transfer/reassessment, market) after the 55 New Plant Court review required each item to be dug up by hand — including a signed 2022 JLL letter granting 2% on a tenant purchase. Added the seller-financed/installment-sale path (cash-equivalent pricing, AFR, §453A $5M, note-is-boot 1031 conflict, balloon refinance test), MD tax rates, and the current refi/cap references. No governor constant changed.
 - v1.4 (2026-10-26): Step 6 pointer: a SELL or 1031 PSA follows the `debt-management` v1.6 INTERIM aggregate-LTV checklist. Pointer only; no model, tax treatment, or trigger vocabulary changed. No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).
 - v1.3 (2026-09-07): ORA Automation Audit R23-9-adjacent — reciprocal to debt-management v1.4. Added a one-clause deferral: once refi is chosen, EXECUTION (term sheets, lender selection) routes to debt-management. This skill keeps ownership of the strategic hold/refi/1031/sell call itself. No model, tax treatment, or trigger vocabulary otherwise changed.
 - v1.2 (2026-08-24): Description trimmed to restore headroom (was 1001/1024,
@@ -65,4 +89,3 @@ acquisition-underwriting (replacement-asset underwrite for 1031 targets) · deal
   clause naming the ledger file path (the ledger itself, and every tax/exchange
   rule clause, is unchanged); no trigger vocabulary removed.
   `description_budget.py` now reports headroom 73.
-
