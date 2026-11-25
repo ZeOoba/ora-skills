@@ -13,7 +13,8 @@ NOT in these layers: BID tax, public-space fees, special assessments -> confirm 
 Usage:
   python dc_parcel_pull.py --ssl "0067 0066"            # square + lot (suffix optional, e.g. "0199 0821" or "5128N 0012")
   python dc_parcel_pull.py --address "1500 21ST ST NW"
-  options: --json out.json  --md out.md
+  options: --json out.json  --md out.md  --flood (opt-in FEMA NFHL centroid pre-check; ORA: off by default, flood
+           determinations belong to ora-flood-zoning-dd, Gabriel 2026-11-24)
 """
 import argparse, json, sys, urllib.parse, urllib.request, datetime as dt
 BASE="https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Property_and_Land_WebMercator"
@@ -35,7 +36,7 @@ def class_rate(cls,av):
         for cap,r in CLASS2:
             if av<=cap: return r
     return RATES.get(str(cls))
-def pull(ssl=None,address=None):
+def pull(ssl=None,address=None,flood=False):
     where=f"SSL='{ssl_key(ssl)}'" if ssl else f"PREMISEADD LIKE '{address.upper().strip()}%'"
     d=get(f"{BASE}/MapServer/40/query",dict(where=where,outFields='*',returnGeometry='true',outSR=4326,f='json'))
     feats=d.get('features',[])
@@ -85,9 +86,9 @@ def pull(ssl=None,address=None):
                 out['cama']=dict(layer=lyr,**{k:v for k,v in c['features'][0]['attributes'].items() if v is not None}); break
         except Exception as e:
             out.setdefault('warnings',[]).append(f"CAMA layer {lyr}: {e}")
-    # FEMA at centroid
+    # FEMA at centroid (ORA: opt-in only; never called by default)
     try:
-        ring=geom.get('rings',[[]])[0]
+        ring=geom.get('rings',[[]])[0] if flood else None
         if ring:
             x=sum(p[0] for p in ring)/len(ring); y=sum(p[1] for p in ring)/len(ring)
             f=get(NFHL,dict(geometry=f"{x},{y}",geometryType='esriGeometryPoint',inSR=4326,spatialRel='esriSpatialRelIntersects',
@@ -97,6 +98,7 @@ def pull(ssl=None,address=None):
                               note="Centroid query; a pad-level determination still needs the building footprint (ora-flood-zoning-dd).")
     except Exception as e:
         out.setdefault('warnings',[]).append(f"FEMA NFHL: {e}")
+    if not flood: out['flood_note']="FEMA not queried (pass --flood for a centroid pre-check); flood determination: ora-flood-zoning-dd."
     out['not_covered']="BID tax, public-space rental fees, special assessments, assessment history before the current/proposed pair (use tax history ÷ the year's Class rate as an implied AV, [EST]): confirm on MyTax.DC."
     return out
 def to_md(o):
@@ -118,7 +120,8 @@ def to_md(o):
 if __name__=='__main__':
     ap=argparse.ArgumentParser(); g=ap.add_mutually_exclusive_group(required=True)
     g.add_argument('--ssl'); g.add_argument('--address'); ap.add_argument('--json'); ap.add_argument('--md')
-    A=ap.parse_args(); o=pull(A.ssl,A.address)
+    ap.add_argument('--flood',action='store_true',help='ORA: also query FEMA NFHL at the parcel centroid (pre-check only)')
+    A=ap.parse_args(); o=pull(A.ssl,A.address,A.flood)
     if hasattr(sys.stdout,'reconfigure'): sys.stdout.reconfigure(encoding='utf-8')   # ORA: Windows console (cp1252) cannot print the report
     if A.json: json.dump(o,open(A.json,'w',encoding='utf-8'),indent=1)
     md=to_md(o); print(md)

@@ -134,6 +134,32 @@ class DcParcelOffline(unittest.TestCase):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             DCP.ssl_key("00670066")
 
+    def _pull_with(self, flood):
+        calls = []
+        attrs = {"SSL": "0067    0066", "PREMISEADD": "X", "CLASSTYPE": "2", "NEWTOTAL": 1_000_000}
+        feat = {"attributes": attrs, "geometry": {"rings": [[[-77.0, 38.9], [-77.0, 38.91], [-77.01, 38.9]]]}}
+
+        def fake_get(url, params, timeout=40):
+            calls.append(url)
+            return {"features": [feat]} if "MapServer/40" in url else {"features": []}
+        orig = DCP.get
+        DCP.get = fake_get
+        try:
+            out = DCP.pull(ssl="0067 0066", flood=flood)
+        finally:
+            DCP.get = orig
+        return out, calls
+
+    def test_fema_not_called_by_default(self):
+        out, calls = self._pull_with(False)
+        self.assertFalse(any("hazards.fema.gov" in u for u in calls), calls)
+        self.assertNotIn("flood", out)
+        self.assertIn("flood_note", out)
+
+    def test_fema_only_with_flood_flag(self):
+        _, calls = self._pull_with(True)
+        self.assertTrue(any("hazards.fema.gov" in u for u in calls), calls)
+
     def test_class_rate(self):
         self.assertEqual(DCP.class_rate("2", 4_359_090), 0.0165)
         self.assertEqual(DCP.class_rate("2", 5_000_000), 0.0165)        # whole-value step: <= USD 5M
