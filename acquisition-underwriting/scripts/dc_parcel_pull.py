@@ -74,9 +74,9 @@ def pull(ssl=None,address=None,flood=False):
     out['flags']=dict(late_payment_years=late, late_payment_count=len(late), years_checked=len([h for h in hist if h['tax']]),
                       unpaid_balance=round(sum(h['unpaid'] for h in hist),2),
                       ask_side_note="Late payments are a Seller/Motivation signal (tax delinquency/distress), not a buyer cost.")
-    pa=out['assessment']['proposed_total'] or 0
-    r=class_rate(a.get('CLASSTYPE'),pa)
-    out['next_bill']=dict(assessment=pa,rate=r,real_property_tax=round(pa*r,2) if r else None,
+    pa=out['assessment']['proposed_total']   # ORA: a null proposed AV is a data gap, never USD 0
+    r=class_rate(a.get('CLASSTYPE'),pa) if pa is not None else None
+    out['next_bill']=dict(assessment=pa,rate=r,real_property_tax=round(pa*r,2) if (r and pa is not None) else None,
                           note="Next TY bill on the proposed assessment (TY = Oct-Sep; halves due 3/31 and 9/15). Excludes BID / public space / special assessments.")
     # CAMA
     for lyr in (23,25,24):
@@ -102,11 +102,12 @@ def pull(ssl=None,address=None,flood=False):
     out['not_covered']="BID tax, public-space rental fees, special assessments, assessment history before the current/proposed pair (use tax history ÷ the year's Class rate as an implied AV, [EST]): confirm on MyTax.DC."
     return out
 def to_md(o):
-    a=o['assessment']; L=[f"# DC parcel intake — {o['premise']} (SSL {' '.join(o['ssl'])})",
+    a=o['assessment']; u=lambda v: '[DATA-GAP]' if v is None else f"${v:,.0f}"   # ORA: None-safe
+    L=[f"# DC parcel intake — {o['premise']} (SSL {' '.join(o['ssl'])})",
       f"- Owner: {o['owner']} · mailing {o['owner_mailing']}",
-      f"- Use {o['use']} · Class {o['tax_class']} · {o['neighborhood']} · Ward {o['ward']} · land {o['land_sf']:,.0f} SF",
+      f"- Use {o['use']} · Class {o['tax_class']} · {o['neighborhood']} · Ward {o['ward']} · land {'[DATA-GAP]' if o['land_sf'] is None else format(o['land_sf'], ',.0f')} SF",
       f"- Last sale: {o['sale']['date']} ${o['sale']['price']:,.0f} ({o['sale']['code']}, {o['sale']['type']})" if o['sale']['price'] else "- Last sale: [DATA-GAP]",
-      f"- Assessment current ${a['current_total']:,.0f} (land ${a['current_land']:,.0f}) → proposed ${a['proposed_total']:,.0f} (land ${a['proposed_land']:,.0f})",
+      f"- Assessment current {u(a['current_total'])} (land {u(a['current_land'])}) → proposed {u(a['proposed_total'])} (land {u(a['proposed_land'])})",
       f"- Next real property bill on proposed: ${o['next_bill']['real_property_tax']:,.2f} at {o['next_bill']['rate']*100:.2f}%" if o['next_bill']['real_property_tax'] else "",
       f"- Late payment in {o['flags']['late_payment_count']} of {o['flags']['years_checked']} years: {o['flags']['late_payment_years']} · unpaid ${o['flags']['unpaid_balance']:,.2f}",
       ]

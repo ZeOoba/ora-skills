@@ -76,6 +76,9 @@ class Component:
     name: str
     sf: float
     use: str = ""
+    use_class: Optional[str] = None       # REQUIRED: office | flex | warehouse | industrial | retail | other.
+                                          # Drives the core default (office non-core, every other class core)
+                                          # and the office-finish default; free-text `use` is never parsed.
     core: bool = True
     rent_psf: float = 0.0                 # market rent at close, USD/SF/yr (gross or net, consistently with costs)
     growth: float = D.MARKET_RENT_GROWTH  # market rent growth
@@ -167,6 +170,14 @@ def validate(deal: ComponentDeal) -> None:
     names = [c.name for c in deal.components]
     if len(set(names)) != len(names):
         raise ValueError("component names must be unique")
+    reserved = {"property_tax", "entity_tax", "stabilization_year", "all overrides together", *DEAL_DEFAULTS}
+    for n in names:
+        if not isinstance(n, str) or not n.strip() or "." in n or n in reserved:
+            raise ValueError(f"component name {n!r} is reserved or contains '.': departure labels must not collide")
+    for c in deal.components:
+        if c.use_class not in USE_CLASSES:
+            raise ValueError(f"{c.name}.use_class must be one of {sorted(USE_CLASSES)} (got {c.use_class!r}): it sets "
+                             "the core and office-finish defaults")
     if not any(c.core for c in deal.components):
         raise ValueError("at least one component must be core (the buy-box use)")
     for c in deal.components:
@@ -308,7 +319,7 @@ def _whole_view(deal: ComponentDeal) -> _WholeDeal:
 
 
 def _office_finish(c: Component) -> bool:
-    return c.office_finish if c.office_finish is not None else "office" in (c.use or "").lower()
+    return c.office_finish if c.office_finish is not None else c.use_class == "office"
 
 
 def first_full_year(deal: ComponentDeal) -> int:
@@ -503,7 +514,8 @@ def _entity_tax(deal: ComponentDeal, noi: list, capital: list, allin: float, net
     close = _close(deal)
     frac1 = (12 - (close.month if close else 1) + 0.5) / 12
     basis = (allin - deal.capex) * (1 - et["land_share"])
-    b5, b15 = basis * et.get("cost_seg_5yr", 0.0), basis * et.get("cost_seg_15yr", 0.0)
+    b5 = basis * et.get("cost_seg_5yr", COST_SEG_DEFAULT[0])
+    b15 = basis * et.get("cost_seg_15yr", COST_SEG_DEFAULT[1])
     b39 = basis - b5 - b15
     imps = [capital[t] + (deal.capex if t == 0 else 0.0) for t in range(D.HOLD_YEARS)]
     out, nol, cum = [], 0.0, 0.0
@@ -725,7 +737,7 @@ def _looser_flags(deal: ComponentDeal, market: Optional[str], flags: list) -> No
             what = "renewal_at_contract" if c.renewal_at_contract else f"renewal_capture {c.renewal_capture:.0%}"
             flags.append(f"{c.name}: {what} replaces the 50% doctrine capture: cite the option terms (measured "
                          "against the default below)")
-        if c.core and ("office" in (c.use or "").lower() or c.office_finish):
+        if c.core and c.use_class == "office":
             flags.append(f"{LOOSE}: {c.name} is office but marked core: office, and upper-floor office above all, is "
                          "non-core under the Mixed-Use Component Lens (c) and gets the Downside; cite why it is core")
         if c.lease_term_m != DEFAULT_LEASE_TERM_M:
@@ -768,11 +780,14 @@ DEAL_DEFAULTS = dict(credit_loss=D.CREDIT_LOSS_EGI, mgmt_pct=D.MGMT_FEE_EGI, res
                      expense_growth=D.EXPENSE_GROWTH)
 TAX_DEFAULTS = dict(growth=0.025, appeal_fee_pct=APPEAL_FEE_DEFAULT)
 ENTITY_DEFAULTS = dict(depr_years=39, improvements_life=15)
-COST_SEG_MAX = 0.15     # doctrine: 15% of building basis to MACRS, 85% on 39-yr straight line
+COST_SEG_DEFAULT = (0.07, 0.08)   # doctrine DEFAULT allocation, 5-yr 7% / 15-yr 8% (cost-seg-tax-layer);
+                                  # used in the entity-tax floor test (Gabriel ruling 2026-11-24)
+USE_CLASSES = {"office", "flex", "warehouse", "industrial", "retail", "other"}
 
 
-def _office_use(c: Component) -> bool:
-    return "office" in (c.use or "").lower() or bool(c.office_finish)
+def _core_default(c: Component) -> bool:
+    """Lens (c): office is non-core; every other declared use class is core. Never inferred from other inputs."""
+    return c.use_class != "office"
 
 
 def departures(deal: ComponentDeal) -> list:
@@ -793,12 +808,12 @@ def departures(deal: ComponentDeal) -> list:
             put("renewal_p", None)
         if c.renewal_downtime_m is not None and c.renewal_downtime_m != dm_def:
             put("renewal_downtime_m", None)
-        if c.office_finish is not None and c.office_finish != ("office" in (c.use or "").lower()):
+        if c.office_finish is not None and c.office_finish != (c.use_class == "office"):
             put("office_finish", None)
         if c.lease_expiry_month is None and c.downtime_m is not None and c.downtime_m != D.LEASE_UP_DOWNTIME_MONTHS:
             put("downtime_m", None)
-        if c.core != (not _office_use(c)):            # lens (c): office non-core, buy-box uses core
-            put("core", not _office_use(c))
+        if c.core != _core_default(c):                # lens (c): office non-core, buy-box uses core
+            put("core", _core_default(c))
     for f, dv in DEAL_DEFAULTS.items():
         if getattr(deal, f) != dv:
             out.append((f, replace(deal, **{f: dv})))
@@ -814,11 +829,10 @@ def departures(deal: ComponentDeal) -> list:
         for f, dv in ENTITY_DEFAULTS.items():
             if et.get(f, dv) != dv:
                 out.append((f"entity_tax.{f}", replace(deal, entity_tax={**et, f: dv})))
-        cs5, cs15 = et.get("cost_seg_5yr", 0.0), et.get("cost_seg_15yr", 0.0)
-        if cs5 + cs15 > COST_SEG_MAX + 1e-9:
-            k = COST_SEG_MAX / (cs5 + cs15)
-            out.append(("entity_tax.cost_seg", replace(deal, entity_tax={**et, "cost_seg_5yr": cs5 * k,
-                                                                         "cost_seg_15yr": cs15 * k})))
+        cs = (et.get("cost_seg_5yr", COST_SEG_DEFAULT[0]), et.get("cost_seg_15yr", COST_SEG_DEFAULT[1]))
+        if any(abs(a - b) > 1e-12 for a, b in zip(cs, COST_SEG_DEFAULT)):
+            out.append(("entity_tax.cost_seg", replace(deal, entity_tax={**et, "cost_seg_5yr": COST_SEG_DEFAULT[0],
+                                                                         "cost_seg_15yr": COST_SEG_DEFAULT[1]})))
         if (deal.state or "").strip().upper() == "DC":
             for f, dv in DC_UBT.items():
                 if et.get(f, 0.0) != dv:

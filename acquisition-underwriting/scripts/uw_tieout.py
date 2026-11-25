@@ -20,7 +20,7 @@ Run recalc first (xlsx skill scripts/recalc.py) so cached values exist.
 import sys, json, argparse, openpyxl
 from openpyxl.utils import range_boundaries, get_column_letter
 ERRS=('#REF!','#VALUE!','#DIV/0!','#NAME?','#N/A','#NUM!','#NULL!')
-import re as _re
+import re as _re   # ORA
 ERR_RX=_re.compile(r'^#(?:[A-Z0-9/]+[!?]|N/A|GETTING_DATA)$')   # ORA: any Excel error literal (#SPILL!, #CALC!, ...)
 def cells_of(ref):
     sh,rng=ref.split('!'); c1,r1,c2,r2=range_boundaries(rng)
@@ -32,7 +32,7 @@ def main():
     tm=E.get('tolerances',{}).get('money',1.0); tr=E.get('tolerances',{}).get('rate',1e-4)
     wb=openpyxl.load_workbook(a.xlsx,data_only=True)
     pairs=[(r.split('!')[0],r.split('!')[1],v) for r,v in E.get('cells',{}).items()]
-    bad_rows=[]
+    bad_rows=[]   # ORA: input errors (empty file, row-length mismatch)
     for ref,vals in E.get('rows',{}).items():
         cl=cells_of(ref)
         if len(cl)!=len(vals): bad_rows.append(f"{ref}: {len(cl)} cells vs {len(vals)} values")   # ORA: never truncate
@@ -47,17 +47,17 @@ def main():
         if isinstance(exp,str):
             ok=str(got)==exp
         else:
-            tol=tr if (abs(exp)<5 or f"{sh}!{c}" in ratios) else tm; ok=abs(float(got)-exp)<=tol
+            tol=tr if (abs(exp)<5 or f"{sh}!{c}" in ratios) else tm; ok=abs(float(got)-exp)<=tol   # ORA: ratios
         rows.append((f"{sh}!{c}",exp,got,'ok' if ok else 'FAIL')); fails+= (not ok)
     if not pairs: bad_rows.append("no checks: the expected file is empty")   # ORA: zero checks is never a PASS
-    missing+=len(bad_rows)
+    missing+=len(bad_rows)   # ORA
     status='PASS' if not fails and not missing and not errs else 'FAIL'
     L=[f"# Engine tie-out: {status}",f"- Workbook: {a.xlsx}",f"- Checks: {len(pairs)} · mismatches: {fails} · missing: {missing} · formula errors: {len(errs)}",
        f"- Tolerances: money ±{tm}, rate ±{tr}","","| Cell | Engine | Workbook | Result |","|---|---|---|---|"]
     show=[r for r in rows if r[3]!='ok'] or rows[:25]
     for r in show: L.append(f"| {r[0]} | {r[1]} | {r[2]} | {r[3]} |")
     if errs: L+=["","Formula errors: "+", ".join(errs[:50])]
-    if bad_rows: L+=["","Input errors: "+"; ".join(bad_rows)]
+    if bad_rows: L+=["","Input errors: "+"; ".join(bad_rows)]   # ORA
     rep="\n".join(L); print(rep)
     if a.out: open(a.out,'w',encoding='utf-8').write(rep)
     sys.exit(0 if status=='PASS' else (2 if missing and not fails else 1))
