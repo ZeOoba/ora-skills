@@ -10,7 +10,14 @@ v2.4 (round-7 cut, Gabriel: "Cut rehome/restore (Recommended)"): Step 6 is a man
 commands literally (each line through `sh -c`) and then checks the new clone and the archive; each
 refusal's printed fix is applied as printed and inventory then passes. SKILL.md's freeze/unfreeze recipe
 is run as written on three remote shapes.
+
+v2.4.1 (round-8 fixes): the scripts run WITHOUT -X utf8 (a pipe, as SKILL.md runs them). The first 6.3 line
+re-checks a digest of worktrees, refs, stash entries and uncommitted files (`check-unchanged`). The undo is
+printed per stage: Undo A (stopped in 6.3) moves back only folders that are in the archive and absent from
+their place; Undo B (git clone ran) first confirms the new clone by its pushurl marker and `check-new-clone`.
+Each stop point is followed by its undo and the checkout is compared byte for byte.
 """
+import hashlib
 import importlib.util
 import json
 import os
@@ -29,18 +36,27 @@ ENV = dict(os.environ, GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GI
            GIT_AUTHOR_EMAIL="t@example.com", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.com",
            GIT_ALLOW_PROTOCOL="file")
 SH = shutil.which("sh") or shutil.which("bash")
-BEGIN, UNDO, END = "# --- Step 6 commands (printed, not run) ---", "# --- Undo ---", "# --- end ---"
+BEGIN, END = "# --- Step 6 commands (printed, not run) ---", "# --- end ---"
+UNDO_A = "# --- Undo A: you stopped in 6.3 (git clone has not run) ---"
+UNDO_B = "# --- Undo B: git clone has run (6.4 started); only before anyone works in the new clone ---"
+MARK = "DISABLED-history-purge-new-clone"                   # the new clone's pushurl, set by its git clone line
+PY = "%s -I %s" % (shlex.quote(sys.executable), shlex.quote(SCRIPT))
+MSG_A = "Undo A refused: git clone has run (the archive and the checkout path both exist); run Undo B"
+MSG_B1 = "Undo B refused: the archived checkout is missing"
+MSG_B2 = "Undo B refused: the checkout path is not the new clone (remote.origin.pushurl is not %s)" % MARK
 
 
 def git(repo, *args, check=True):
-    return subprocess.run(["git", "-C", repo, "-c", "core.autocrlf=false", "-c", "protocol.file.allow=always"]
+    return subprocess.run(["git", "-C", repo, "-c", "core.autocrlf=false", "-c", "protocol.file.allow=always",
+                           "-c", "core.quotepath=false"]
                           + list(args), capture_output=True, encoding="utf-8", errors="surrogateescape",
                           check=check, env=ENV).stdout.strip()
 
 
 def run(*args, cwd=None):
-    return subprocess.run([sys.executable, "-I", "-X", "utf8", SCRIPT] + list(args), capture_output=True,
-                          encoding="utf-8", errors="replace", env=ENV, cwd=cwd)          # exact non-ASCII lines
+    """The script as SKILL.md runs it: python -I, no -X utf8, stdout a pipe; its output must be strict UTF-8."""
+    return subprocess.run([sys.executable, "-I", SCRIPT] + list(args), capture_output=True,
+                          encoding="utf-8", errors="strict", env=ENV, cwd=cwd)
 
 
 def sh(script, cwd=None):
@@ -229,15 +245,41 @@ def follow(lines):
 
 
 def step6(live, d, follow_it=True, url=None):
-    """inventory --archive <d>/arch --clone-url <purged>, then follow the printed Step 6 commands."""
+    """inventory --archive <d>/arch --clone-url <purged>, then follow the printed Step 6 commands.
+    undo = {"A": Undo A lines, "B": Undo B lines}."""
     arch = os.path.join(d, "arch")
     r, inv = inventory(live, os.path.join(d, "inv.json"), None, "--archive", arch, "--clone-url", url or S.purged)
     if r.returncode != 0:
         raise AssertionError("inventory exit %d\n%s%s" % (r.returncode, r.stdout, r.stderr))
-    cmds, undo = block(r.stdout, BEGIN, UNDO), block(r.stdout, UNDO, END)
+    cmds = block(r.stdout, BEGIN, UNDO_A)
+    undo = {"A": block(r.stdout, UNDO_A, UNDO_B), "B": block(r.stdout, UNDO_B, END)}
     if follow_it:
         follow(cmds)
     return arch, r, inv, cmds, undo
+
+
+def snapshot(roots):
+    """{(root index, relative path): sha256 of the bytes, or 'dir'} for every file and folder under each root."""
+    snap = {}
+    for i, root in enumerate(roots):
+        for dirpath, _dirs, files in os.walk(root):
+            rel = os.path.relpath(dirpath, root)
+            snap[(i, rel)] = "dir"
+            for f in files:
+                snap[(i, os.path.join(rel, f))] = hashlib.sha256(read(os.path.join(dirpath, f))).hexdigest()
+    return snap
+
+
+def snapshot_diff(a, b):
+    return sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))[:10]
+
+
+def run_fix(cmd, cwd, **subst):
+    """Run one printed fix command with its <placeholders> filled in; a destructive command is never run."""
+    for k, v in subst.items():
+        cmd = cmd.replace("<%s>" % k, v)
+    assert not re.match(r"\s*(rm|del|rmdir)\b", cmd) and "reset --hard" not in cmd, "destructive fix: " + cmd
+    return sh(cmd, cwd=cwd)
 
 
 def find_archived(arch, marker):
@@ -248,12 +290,12 @@ def find_archived(arch, marker):
     return hits[0]
 
 
-def printed_fix(stdout, path):
-    """The backticked commands of the REFUSED line for path, in order."""
+def printed_fix(stdout, path, word=""):
+    """The backticked commands of the (first) REFUSED line for path whose problem holds word, in order."""
     for line in stdout.splitlines():
-        if line.startswith("REFUSED %s: " % path):
+        if line.startswith("REFUSED %s: " % path) and word in line.split(" -> ", 1)[0]:
             return re.findall(r"`([^`]+)`", line.split(" -> ", 1)[1])
-    raise AssertionError("no REFUSED line for %s:\n%s" % (path, stdout))
+    raise AssertionError("no REFUSED line for %s (%s):\n%s" % (path, word, stdout))
 
 
 # ==================================================================== changed / overlap (unchanged)
@@ -501,6 +543,8 @@ class InventoryRefusalTest(unittest.TestCase):
         git(pw, "update-ref", "refs/worktree/keep", nm)
         add("k-lost", commit_on(live, nm, "no ref reaches this"), "--detach")
         cls.r, cls.inv = inventory(live, os.path.join(d, "inv.json"))
+        cls.ra = run("inventory", live, S.old, "--out", os.path.join(d, "inv-a.json"), "--archive",
+                     os.path.join(d, "arch"), "--clone-url", S.purged)
         cls.problems = {}
         for x in cls.inv["refusals"]:
             cls.problems.setdefault(norm(x["path"]), []).append(x["problem"])
@@ -553,6 +597,21 @@ class InventoryRefusalTest(unittest.TestCase):
     def test_each_refusal_names_what_to_do(self):
         self.assertTrue(all(x["fix"] for x in self.inv["refusals"]))
         self.assertIn("REFUSED", self.r.stdout)
+
+    def test_refused_with_archive_prints_no_step_6_command(self):              # N24
+        self.assertEqual(self.ra.returncode, 2, self.ra.stdout)
+        self.assertIn("REFUSED", self.ra.stdout)
+        for marker in (BEGIN, UNDO_A, UNDO_B, END, "check-unchanged", "git clone", "mv "):
+            self.assertNotIn(marker, self.ra.stdout)
+
+    def test_unchanged_skip_worktree_file_not_refused(self):                   # N43
+        d = fresh("skip-unchanged")
+        live = S.live(os.path.join(d, "live"))
+        git(live, "update-index", "--skip-worktree", "g.txt")
+        git(live, "update-index", "--assume-unchanged", "README.md")
+        r, inv = inventory(live, os.path.join(d, "inv.json"))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual(inv["refusals"], [])
 
 class RefusalInstructionTest(unittest.TestCase):
     """v2.3: each refusal prints a manual instruction; applied exactly as printed, inventory then passes."""
@@ -642,13 +701,24 @@ class RefusalInstructionTest(unittest.TestCase):
         wrong = git(live, "commit-tree", old_tip + "^{tree}", "-p", S.new_main, "-m", "v2.2.1 recipe")
         git(live, "update-ref", "refs/heads/old-feature", wrong, old_tip)       # the round-5 recipe: refused
 
-        def recipe():                                                           # SKILL.md Step 6 item 2 (v2.3)
-            cur = git(live, "rev-parse", "refs/heads/old-feature")
-            git(live, "fetch", "-q", S.purged, "refs/heads/old-feature")
-            git(live, "update-ref", "refs/heads/old-feature", git(live, "rev-parse", "FETCH_HEAD"), cur)
-        refs_ = self.refused_then_fixed(d, live, "SKILL.md Step 6 item 2", recipe, "purged")
+        B = os.path.join(d, "B")                                                # verify.git = the purged
+        subprocess.run(["git", "clone", "-q", "--bare", S.purged, os.path.join(B, "verify.git")], check=True, env=ENV)
+        subprocess.run(["git", "clone", "-q", "--mirror", S.backup, os.path.join(B, "mirror.git")], check=True,
+                       env=ENV)                                                 # the backup sits next to it
+
+        def recipe():                                                           # SKILL.md Step 6 item 0b, literally
+            with open(SKILL_MD, encoding="utf-8") as fh:
+                item = [l for l in fh.read().splitlines() if l.startswith("0b. ")][0]
+            steps = [c for c in re.findall(r"`([^`]+)`", item) if "<branch>" in c]
+            self.assertEqual(len(steps), 3, steps)
+            script = "\n".join(c.replace("<branch>", "old-feature").replace("<B>", B.replace(os.sep, "/"))
+                               for c in steps)
+            res = sh(script, cwd=live)
+            self.assertEqual(res.returncode, 0, script + res.stdout + res.stderr)
+        refs_ = self.refused_then_fixed(d, live, "SKILL.md Step 6 item 0b", recipe, "purged")
         self.assertTrue(refs_["refs/heads/old-feature"]["carry"])
         self.assertEqual(refs_["refs/heads/old-feature"]["sha"], git(S.purged, "rev-parse", "refs/heads/old-feature"))
+        self.assertIn(wrong, reflog(live, "refs/heads/old-feature"))           # the pinned old tip, in the reflog
 
 
 class InventoryInputTest(unittest.TestCase):
@@ -702,6 +772,44 @@ class InventoryInputTest(unittest.TestCase):
         r, _ = inventory(self.live, os.path.join(self.d, "inv-bad.json"), bad)
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertIn("malformed", r.stdout)
+
+    def test_long_sha_line_refused(self):                                       # N73
+        for n, extra in ((41, "a" * 41), (64, "b" * 63 + "z"), (65, "c" * 65)):
+            bad = os.path.join(self.d, "long%d.txt" % n)
+            write(bad, read(S.old).decode() + extra + "\n")
+            r, _ = inventory(self.live, os.path.join(self.d, "inv-long.json"), bad)
+            self.assertEqual(r.returncode, 2, (n, r.stdout))
+            self.assertIn("1 malformed line(s)", r.stdout)
+        ok = os.path.join(self.d, "sha256.txt")                                 # a SHA-256 line is well formed
+        write(ok, read(S.old).decode() + "d" * 64 + "\n")
+        r, _ = inventory(self.live, os.path.join(self.d, "inv-256.json"), ok)
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_relative_origin_url_resolved_against_the_checkout(self):          # R7-06 (correctness F4)
+        d = fresh("rel-origin")
+        live = S.live(os.path.join(d, "deep", "er", "live"))
+        rel = os.path.relpath(S.purged, live).replace(os.sep, "/")
+        git(live, "remote", "set-url", "origin", rel)
+        arch = os.path.join(d, "arch")
+        r = run("inventory", live, S.old, "--out", os.path.join(d, "inv.json"), "--archive", arch, cwd=d)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        clone = [l for l in block(r.stdout, BEGIN, UNDO_A) if l.startswith("git clone")]
+        self.assertEqual(clone, ["git clone --no-local --no-checkout --config remote.origin.pushurl=%s %s %s"
+                                 % (MARK, shlex.quote(os.path.normpath(S.purged)), shlex.quote(live))])
+        follow(block(r.stdout, BEGIN, UNDO_A))
+        self.assertEqual(git(live, "rev-parse", "main"), S.new_main)
+
+    def test_relative_clone_url_resolved_against_the_working_directory(self):  # R7-06, N25
+        d = fresh("rel-clone-url")
+        live = S.live(os.path.join(d, "live"))
+        rel = os.path.relpath(S.purged, d)
+        r = run("inventory", live, S.old, "--out", os.path.join(d, "inv.json"), "--archive",
+                os.path.join(d, "arch"), "--clone-url", rel, cwd=d)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        cmds = block(r.stdout, BEGIN, UNDO_A)
+        self.assertIn(shlex.quote(os.path.normpath(S.purged)), [l for l in cmds if l.startswith("git clone")][0])
+        follow(cmds)                                                            # run from the test's own folder
+        self.assertEqual(git(live, "rev-parse", "main"), S.new_main)
 
 class InventoryMoreRefusalTest(unittest.TestCase):
     """Cases a re-clone cannot carry, and one it can (R4-12: T02, T04, F6)."""
@@ -769,13 +877,13 @@ class RefusalPrintedFixTest(unittest.TestCase):
         r, _inv = inventory(live, os.path.join(d, "inv1.json"))
         self.assertEqual(r.returncode, 2, r.stdout)
         fix = printed_fix(r.stdout, live)
-        self.assertEqual(fix[:2], ["git update-index --no-skip-worktree <file>",
-                                   "git update-index --no-assume-unchanged <file>"])
+        self.assertEqual(fix, ["git update-index --no-skip-worktree <file>",
+                               "git update-index --no-assume-unchanged <file>", "git stash"])
         for f in ("g.txt", "README.md"):
             for cmd in fix[:2]:
-                res = sh(cmd.replace("<file>", f), cwd=live)
+                res = run_fix(cmd, live, file=f)
                 self.assertEqual(res.returncode, 0, cmd + res.stderr)
-        self.assertEqual(sh("git stash", cwd=live).returncode, 0)
+        self.assertEqual(run_fix(fix[2], live).returncode, 0)                  # the printed `git stash`
         r, _inv = inventory(live, os.path.join(d, "inv2.json"))
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertIn(b"LOCAL EDIT never committed", subprocess.run(
@@ -842,6 +950,137 @@ class RefusalPrintedFixTest(unittest.TestCase):
         r, _inv = inventory(live, os.path.join(d, "inv2.json"))
         self.assertEqual(r.returncode, 0, r.stdout)
 
+    # ---- R7-07 (N34-N38, N41): every printed fix is run as printed, then inventory passes
+    def fixed_by_printed(self, name, build, word, apply):
+        """build(live, d) -> path of the refused worktree; apply(fix, path, live) runs the printed fix."""
+        d = fresh(name)
+        live = S.live(os.path.join(d, "live"))
+        path = build(live, d)
+        r, _inv = inventory(live, os.path.join(d, "inv1.json"))
+        self.assertEqual(r.returncode, 2, r.stdout)
+        fix = printed_fix(r.stdout, path, word)
+        self.assertTrue(fix, "no command printed for %s" % word)
+        apply(fix, path, live)
+        r, inv = inventory(live, os.path.join(d, "inv2.json"))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        return live, inv
+
+    def ok(self, res):
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+
+    def test_missing_worktree_folder_then_printed_prune(self):                 # N34
+        def build(live, d):
+            wt = os.path.join(d, "gone")
+            git(live, "worktree", "add", "-q", "--detach", wt, S.new_main)
+            os.rename(wt, wt + "-moved")
+            return wt
+        self.fixed_by_printed("fix-missing", build, "missing",
+                              lambda fix, wt, live: [self.ok(run_fix(c, live)) for c in fix])
+
+    def test_bisect_in_progress_then_printed_reset(self):                      # N35
+        def build(live, d):
+            wt = os.path.join(d, "bi")
+            git(live, "worktree", "add", "-q", "--detach", wt, S.new_main)
+            git(wt, "bisect", "start")
+            return wt
+
+        def apply(fix, wt, live):
+            self.assertIn("git bisect reset", fix)
+            self.ok(run_fix("git bisect reset", wt))
+        self.fixed_by_printed("fix-bisect", build, "in progress", apply)
+
+    def test_rebase_in_progress_refused_then_printed_abort(self):              # N41, N35
+        def build(live, d):
+            wt = os.path.join(d, "rb")
+            git(live, "worktree", "add", "-q", "-b", "rb-br", wt, S.new_main)
+            write(os.path.join(wt, "README.md"), "mine\n")
+            git(wt, "commit", "-q", "-am", "mine")
+            other = os.path.join(d, "other")                                    # a commit that edits README too
+            git(live, "worktree", "add", "-q", "-b", "edit-br", other, S.new_main)
+            write(os.path.join(other, "README.md"), "theirs\n")
+            git(other, "commit", "-q", "-am", "theirs")
+            res = subprocess.run(["git", "-C", wt, "rebase", "edit-br"], capture_output=True, env=ENV)
+            self.assertNotEqual(res.returncode, 0)                              # stopped on the conflict
+            self.assertTrue(os.path.isdir(git(wt, "rev-parse", "--path-format=absolute", "--git-path",
+                                              "rebase-merge")))
+            return wt
+
+        def apply(fix, wt, live):
+            self.assertIn("git <op> --abort", fix)
+            self.ok(run_fix("git <op> --abort", wt, op="rebase"))
+        self.fixed_by_printed("fix-rebase", build, "in progress", apply)
+
+    def test_kept_submodule_then_printed_deinit(self):                         # N36
+        def build(live, d):
+            k = os.path.join(d, "k")
+            git(live, "worktree", "add", "-q", "-b", "k-br", k, S.new_main)
+            add_submodule(k)
+            return k
+
+        def apply(fix, k, live):
+            self.assertIn("git submodule deinit <sub>", fix)
+            sub = os.path.join(k, "sub")
+            write(os.path.join(sub, "l.txt"), "uncommitted lib edit\n")      # the printed deinit refuses it
+            self.assertNotEqual(run_fix("git submodule deinit <sub>", k, sub="sub").returncode, 0)
+            self.assertEqual(read(os.path.join(sub, "l.txt")), b"uncommitted lib edit\n")
+            git(sub, "checkout", "-q", "--", "l.txt")                           # the change dropped, as printed
+            for c in fix:
+                if "deinit" in c:
+                    self.ok(run_fix(c, k, sub="sub"))
+        _live, _inv = self.fixed_by_printed("fix-sub", build, "submodule", apply)
+
+    def test_modified_and_untracked_then_printed_stash(self):                  # N38
+        def build(live, d):
+            wt = os.path.join(d, "m")
+            git(live, "worktree", "add", "-q", "-b", "m-br", wt, S.new_main)
+            write(os.path.join(wt, "README.md"), "edited\n")
+            return wt
+
+        def apply(fix, wt, live):
+            self.assertEqual(fix, ["git stash"])
+            self.ok(run_fix(fix[0], wt))
+        live, _inv = self.fixed_by_printed("fix-mod", build, "modified", apply)
+        self.assertIn(b"edited", subprocess.run(["git", "-C", live, "show", "stash@{0}:README.md"],
+                                                capture_output=True, env=ENV).stdout)
+
+        def build_u(live, d):
+            wt = os.path.join(d, "u")
+            git(live, "worktree", "add", "-q", "-b", "u-br", wt, S.new_main)
+            write(os.path.join(wt, "new.txt"), "untracked\n")
+            return wt
+
+        def apply_u(fix, wt, live):
+            self.assertIn("git stash -u", fix)
+            self.ok(run_fix("git stash -u", wt))
+        self.fixed_by_printed("fix-untr", build_u, "untracked", apply_u)
+
+    def test_per_worktree_hooks_path_refused_then_printed_unset(self):          # R7-05 (Blast B7-01)
+        d = fresh("fix-wt-hooks")
+        live = S.live(os.path.join(d, "live"))
+        hooks = os.path.join(live, ".git", "ora-hooks")
+        write(os.path.join(hooks, "pre-push"), "#!/bin/sh\nexit 1\n")
+        git(live, "config", "core.hooksPath", hooks.replace(os.sep, "/"))
+        git(live, "config", "extensions.worktreeConfig", "true")
+        kw, ow = os.path.join(d, "kw"), os.path.join(d, "ow")
+        git(live, "worktree", "add", "-q", "-b", "kw-br", kw, S.new_main)
+        git(live, "worktree", "add", "-q", "-b", "ow-br", ow, S.c[2])          # OLD: archived, still runs hooks
+        nk = os.path.join(d, "nk")
+        git(live, "worktree", "add", "-q", "--detach", nk, S.new_main)          # no override: not refused
+        for wt in (kw, ow, live):
+            git(wt, "config", "--worktree", "core.hooksPath", hooks.replace(os.sep, "/"))
+        r, inv = inventory(live, os.path.join(d, "inv1.json"))
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertEqual(sorted(norm(x["path"]) for x in inv["refusals"]), sorted(norm(p) for p in (kw, ow, live)))
+        for wt in (kw, ow, live):
+            fix = printed_fix(r.stdout, wt, "per-worktree core.hooksPath")
+            self.assertEqual(fix, ["git config --worktree --unset core.hooksPath"])
+            self.ok(run_fix(fix[0], wt))
+        arch, _r, _inv, _cmds, _u = step6(live, d)
+        for name in ("kw", "ow", "nk"):
+            archived = find_archived(arch, name)
+            got = git(archived, "rev-parse", "--path-format=absolute", "--git-path", "hooks")
+            self.assertEqual(norm(got), norm(os.path.join(arch, "repo", ".git", "ora-hooks")), name)
+
 
 # ==================================================================== Step 6 procedure, followed literally
 
@@ -897,7 +1136,8 @@ class Step6ProcedureTest(unittest.TestCase):
         cls.arch = os.path.join(d, "arch ü")
         cls.inv_run, cls.inv = inventory(live, os.path.join(d, "inv.json"), None, "--archive", cls.arch,
                                          "--clone-url", S.purged)
-        cls.cmds, cls.undo = block(cls.inv_run.stdout, BEGIN, UNDO), block(cls.inv_run.stdout, UNDO, END)
+        cls.cmds = block(cls.inv_run.stdout, BEGIN, UNDO_A)
+        cls.undo = {"A": block(cls.inv_run.stdout, UNDO_A, UNDO_B), "B": block(cls.inv_run.stdout, UNDO_B, END)}
         cls.results = [(l, sh(l)) for l in cls.cmds if not l.startswith("#")]
         cls.overlap_after = run("overlap", live, S.old)
         cls.archived_repo = os.path.join(cls.arch, "repo")
@@ -916,16 +1156,18 @@ class Step6ProcedureTest(unittest.TestCase):
                  (self.out, os.path.join(A, "worktrees", "2-out ü"))]
         kept2, _old, kept1 = self.stash_before
         want = ["# 6.3 move every worktree folder and the main checkout into the archive (never delete)",
+                "%s check-unchanged %s %s" % (PY, q(live), self.inv["digest"]),
                 "mkdir -p %s" % q(os.path.join(A, "worktrees"))]
         want += ["mv %s %s" % (q(s), q(t)) for s, t in moved]
         want += ["mv %s %s" % (q(live), q(arepo)),
                  "git -C %s worktree repair %s" % (q(arepo), " ".join(q(t) for _s, t in moved)),
                  "git -C %s config core.hooksPath %s" % (q(arepo), q(os.path.join(arepo, ".git", "ora-hooks"))),
                  "# 6.4 clone the purged remote, freeze its pushes, bring the kept work across",
-                 "git clone --no-local --no-checkout %s %s" % (q(S.purged), q(live)),
+                 "git clone --no-local --no-checkout --config remote.origin.pushurl=%s %s %s"
+                 % (MARK, q(S.purged), q(live)),
                  g + "remote add fork https://example.invalid/fork.git",
-                 g + "config --replace-all remote.origin.pushurl DISABLED-history-purge",
-                 g + "config --replace-all remote.fork.pushurl DISABLED-history-purge"]
+                 g + "config --replace-all remote.origin.pushurl " + MARK,
+                 g + "config --replace-all remote.fork.pushurl " + MARK]
         want += [g + "fetch --no-tags --update-head-ok %s %s" % (q(arepo), q("+%s:%s" % (n, n))) for n in self.CARRIED]
         for sha, msg in ((kept1, self.stash_msgs[2]), (kept2, self.stash_msgs[0])):
             want += [g + "fetch --no-tags %s %s" % (q(arepo), sha), g + "stash store -m %s %s" % (q(msg), sha)]
@@ -936,17 +1178,36 @@ class Step6ProcedureTest(unittest.TestCase):
                  g + "worktree add %s out-br" % q(self.out),
                  g + "worktree lock --reason %s %s" % (q("busy reason"), q(self.out))]
         self.assertEqual(self.cmds, want)
-        aside = os.path.join(A, "new-clone-aside")
-        undo = ["# only before anyone works in the new clone: set it aside, move the archived folders back",
-                "mkdir -p %s" % q(os.path.join(aside, "worktrees")),
-                "mv %s %s" % (q(self.det), q(os.path.join(aside, "worktrees", "0-det"))),
-                "mv %s %s" % (q(self.out), q(os.path.join(aside, "worktrees", "1-out ü"))),
-                "mv %s %s" % (q(live), q(os.path.join(aside, "repo")))]
-        undo += ["mv %s %s" % (q(t), q(s)) for s, t in moved]
-        undo += ["mv %s %s" % (q(arepo), q(live)),
-                 g + "worktree repair %s" % " ".join(q(s) for s, _t in moved),
+        back = ["if [ -e %s ] && [ ! -e %s ]; then mv %s %s; fi" % (q(t), q(s), q(t), q(s))
+                for s, t in [(live, arepo)] + moved]
+        back += [g + "worktree repair %s" % " ".join(q(s) for s, _t in moved),
                  g + "config core.hooksPath %s" % q(self.hooks.replace(os.sep, "/"))]
-        self.assertEqual(self.undo, undo)
+        undo_a = ["# moves back only a folder that is in the archive and absent from its original place",
+                  "if [ -e %s ] && [ -e %s ]; then echo %s >&2; exit 1; fi" % (q(arepo), q(live), q(MSG_A))] + back
+        self.assertEqual(self.undo["A"], undo_a)
+        aside = os.path.join(A, "new-clone-aside")
+        aw = [(self.det, os.path.join(aside, "worktrees", "0-det")),
+              (self.out, os.path.join(aside, "worktrees", "1-out ü"))]
+        undo_b = ["# sets the new clone aside only once it is confirmed as the new clone, untouched; "
+                  "then moves the archived folders back",
+                  "if [ ! -e %s ]; then echo %s >&2; exit 1; fi" % (q(arepo), q(MSG_B1)),
+                  'if [ "$(git -C %s config --get remote.origin.pushurl)" != %s ]; then echo %s >&2; exit 1; fi'
+                  % (q(live), MARK, q(MSG_B2)),
+                  "%s check-new-clone %s %s %s" % (PY, q(live), q(os.path.join(self.d, "inv.json")),
+                                                   self.inv["new_clone_digest"]),
+                  "mkdir -p %s" % q(os.path.join(aside, "worktrees"))]
+        undo_b += ["if [ -e %s ]; then mv %s %s; fi" % (q(s), q(s), q(t)) for s, t in aw]
+        undo_b.append("mv %s %s" % (q(live), q(os.path.join(aside, "repo"))))
+        undo_b += ["if [ -e %s ]; then git -C %s worktree repair %s; fi" % (q(t), q(os.path.join(aside, "repo")), q(t))
+                   for _s, t in aw]
+        self.assertEqual(self.undo["B"], undo_b + back)
+
+    def test_new_clone_expectation_recorded(self):                              # what check-new-clone compares
+        exp = self.inv["new_clone"]
+        self.assertEqual(exp["refs"], {n: self.refs_before[n] for n in self.CARRIED})
+        kept2, _old, kept1 = self.stash_before
+        self.assertEqual(exp["stash"], [kept1, kept2])
+        self.assertEqual(sorted(norm(p) for p in exp["worktrees"]), sorted([norm(self.out), norm(self.det)]))
 
     def test_every_printed_command_exit_0(self):
         for line, res in self.results:
@@ -1021,7 +1282,7 @@ class Step6ProcedureTest(unittest.TestCase):
         self.assertEqual(git(self.live, "config", "--get-all", "core.hooksPath", check=False), "")
 
     def test_pushes_stay_frozen_in_the_new_clone_and_the_archive(self):        # R6-02
-        for repo, value in ((self.live, "DISABLED-history-purge"), (self.archived_repo, "DISABLED-history-purge-x")):
+        for repo, value in ((self.live, MARK), (self.archived_repo, "DISABLED-history-purge-x")):
             for r in ("origin", "fork"):
                 self.assertEqual(git(repo, "config", "--get-all", "remote.%s.pushurl" % r), value, (repo, r))
             pushes = [l for l in git(repo, "remote", "-v").splitlines() if l.endswith("(push)")]
@@ -1033,43 +1294,311 @@ class Step6ProcedureTest(unittest.TestCase):
         self.assertNotIn("refs/heads/x", refs(S.purged))
 
 
+def undo_fixture(d, name="live"):
+    """A checkout for the undo tests: absolute hooksPath inside .git, a kept locked worktree on a branch, a kept
+    detached worktree in a folder named outside cp1252, an old dirty worktree, a kept stash entry, a frozen
+    second remote. Returns (live, roots: the main folder and every linked worktree folder)."""
+    live = S.live(os.path.join(d, name))
+    git(live, "config", "remote.origin.pushurl", "DISABLED-history-purge-2026-11-27")   # the Step 0 freeze
+    hooks = os.path.join(live, ".git", "ora-hooks")
+    write(os.path.join(hooks, "pre-push"), "#!/bin/sh\nexit 1\n")
+    git(live, "config", "core.hooksPath", hooks.replace(os.sep, "/"))
+    a, b, c = (os.path.join(d, "wts", n) for n in ("a", "b-old", "c-Проект"))
+    git(live, "worktree", "add", "-q", "-b", "a-br", a, commit_on(live, S.new_main, "a work"))
+    git(live, "worktree", "lock", "--reason", "keep me", a)
+    git(live, "worktree", "add", "-q", "-b", "b-br", b, S.c[2])
+    write(os.path.join(b, "dirty.txt"), "old dirty\n")
+    git(live, "worktree", "add", "-q", "--detach", c, S.new_main)
+    write(os.path.join(live, "README.md"), "kept stash\n")
+    git(live, "stash", "-q")
+    return live, [live, a, b, c]
+
+
+def git_state(live):
+    return (refs(live), wt_list(live), reflog(live, "refs/stash"), git(live, "config", "--list", "--local"))
+
+
 class Step6UndoTest(unittest.TestCase):
-    """The printed commands, then the printed undo: the original checkout is back, identical."""
+    """R7-01: the printed commands are stopped at EVERY line; the undo for that stage is run as printed; the
+    checkout is back byte for byte (every file of the main folder, .git included, and of every worktree), and
+    no folder of the original set is left aside or in the archive."""
 
-    @classmethod
-    def setUpClass(cls):
-        d = cls.d = fresh("undo")
-        live = cls.live = S.live(os.path.join(d, "live"))
-        hooks = os.path.join(live, ".git", "ora-hooks")
-        write(os.path.join(hooks, "pre-push"), "#!/bin/sh\nexit 1\n")
-        cls.hp = hooks.replace(os.sep, "/")
-        git(live, "config", "core.hooksPath", cls.hp)
-        cls.a, cls.b = os.path.join(d, "wts", "a"), os.path.join(d, "wts", "b")
-        git(live, "worktree", "add", "-q", "-b", "a-br", cls.a, commit_on(live, S.new_main, "a work"))
-        git(live, "worktree", "lock", "--reason", "keep me", cls.a)
-        git(live, "worktree", "add", "-q", "-b", "b-br", cls.b, S.c[2])
-        write(os.path.join(cls.b, "dirty.txt"), "old dirty\n")
-        write(os.path.join(live, "README.md"), "kept stash\n")
+    def stop_and_undo(self, k, name):
+        d = fresh(name)
+        live, roots = undo_fixture(d)
+        before, state = snapshot(roots), git_state(live)
+        arch, _r, _inv, cmds, undo = step6(live, d, follow_it=False)
+        lines = [l for l in cmds if not l.startswith("#")]
+        clone_at = [i for i, l in enumerate(lines) if l.startswith("git clone")][0]
+        follow(lines[:k])
+        stage = "B" if k > clone_at else "A"
+        follow(undo[stage])
+        self.assertEqual(snapshot_diff(before, snapshot(roots)), [], (k, lines[k - 1] if k else None))
+        self.assertEqual(git_state(live), state)
+        self.assertFalse(os.path.exists(os.path.join(arch, "repo")))
+        self.assertEqual(os.listdir(os.path.join(arch, "worktrees")) if os.path.isdir(
+            os.path.join(arch, "worktrees")) else [], [])
+        aside = os.path.join(arch, "new-clone-aside")
+        if stage == "B":                                                        # only the new clone is aside
+            self.assertEqual(git(os.path.join(aside, "repo"), "config", "remote.origin.pushurl"), MARK)
+            for n in os.listdir(os.path.join(aside, "worktrees")):
+                self.assertIn(n, ("0-a", "1-c-Проект"))
+                self.assertEqual(norm(git(os.path.join(aside, "worktrees", n), "rev-parse", "--git-common-dir")),
+                                 norm(os.path.join(aside, "repo", ".git")))
+        else:
+            self.assertFalse(os.path.exists(aside))
+        return len(lines)
+
+    def test_every_stop_point_then_its_undo_restores_the_checkout_byte_for_byte(self):
+        n = self.stop_and_undo(0, "undo-0")
+        for k in range(1, n + 1):
+            with self.subTest(stop_after=k):
+                self.stop_and_undo(k, "undo-%d" % k)
+
+    def test_undo_a_refuses_once_git_clone_has_run(self):
+        d = fresh("undo-a-late")
+        live, roots = undo_fixture(d)
+        arch, _r, _inv, cmds, undo = step6(live, d)
+        after = snapshot([live, os.path.join(arch, "repo")])
+        guard = [l for l in undo["A"] if not l.startswith("#")][0]
+        res = sh(guard)
+        self.assertEqual(res.returncode, 1)
+        self.assertIn(MSG_A, res.stderr)
+        self.assertEqual(snapshot([live, os.path.join(arch, "repo")]), after)
+
+    def test_undo_b_refuses_before_git_clone_and_on_the_original(self):
+        d = fresh("undo-b-early")
+        live, roots = undo_fixture(d)
+        arch, _r, _inv, cmds, undo = step6(live, d, follow_it=False)
+        guards = [l for l in undo["B"] if not l.startswith("#")][:2]
+        res = sh(guards[0])                                                     # nothing archived yet
+        self.assertEqual((res.returncode, res.stderr.strip()), (1, MSG_B1))
+        os.makedirs(os.path.join(arch, "repo"))                                 # pretend 6.3 ran, original in place
+        res = sh(guards[1])                                                     # Step 0's DISABLED-...-<date> marker
+        self.assertEqual((res.returncode, res.stderr.strip()), (1, MSG_B2))
+        os.rmdir(os.path.join(arch, "repo"))
+
+
+class NewCloneGuardTest(unittest.TestCase):
+    """R7-01 / race probe 1: Undo B sets the new clone aside only when nobody has worked in it."""
+
+    def worked_in(self, name, work):
+        d = fresh(name)
+        live, roots = undo_fixture(d)
+        arch, _r, inv, cmds, undo = step6(live, d)
+        work(live, d)
+        lines = [l for l in undo["B"] if not l.startswith("#")]
+        check = lines[2]
+        self.assertTrue(check.startswith(PY + " check-new-clone "), check)
+        follow(lines[:2])                                                       # identity guards pass
+        res = sh(check)
+        self.assertEqual(res.returncode, 1, res.stdout + res.stderr)
+        self.assertIn("CHANGED", res.stdout)
+        self.assertTrue(os.path.isdir(live) and not os.path.exists(os.path.join(arch, "new-clone-aside")))
+        return res.stdout
+
+    def test_untouched_new_clone_passes(self):
+        d = fresh("ncg-ok")
+        live, roots = undo_fixture(d)
+        arch, _r, _inv, cmds, undo = step6(live, d)
+        res = sh([l for l in undo["B"] if not l.startswith("#")][2])
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        git(live, "fetch", "-q", "origin")                                      # remote-tracking refs may move
+        self.assertEqual(sh([l for l in undo["B"] if not l.startswith("#")][2]).returncode, 0)
+
+    def test_tags_the_clone_brought_pass_a_new_tag_refused(self):              # remote tags are not "new work"
+        d = fresh("ncg-tags")
+        remote = os.path.join(d, "remote.git")
+        subprocess.run(["git", "clone", "-q", "--mirror", "--no-local", S.purged, remote], check=True, env=ENV)
+        git(remote, "tag", "-a", "v-remote", S.new_main, "-m", "remote release")
+        git(remote, "tag", "lt-remote", S.new_main)
+        live, roots = undo_fixture(d)
+        arch, _r, _inv, cmds, undo = step6(live, d, url=remote)
+        self.assertEqual(git(live, "cat-file", "-t", "refs/tags/v-remote"), "tag")
+        check = [l for l in undo["B"] if not l.startswith("#")][2]
+        res = sh(check)
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        git(live, "tag", "session-tag", S.new_main)
+        res = sh(check)
+        self.assertEqual(res.returncode, 1, res.stdout)
+        self.assertIn("refs/tags/session-tag", res.stdout)
+
+    def test_session_worktree_with_a_commit_refused(self):                      # race probe 1 (A)
+        def work(live, d):
+            x = os.path.join(live, ".claude", "worktrees", "x")
+            git(live, "worktree", "add", "-q", "-b", "sess-x", x, "main")
+            write(os.path.join(x, "s.txt"), "session work\n")
+            git(x, "add", "s.txt")
+            git(x, "commit", "-q", "-m", "session work")
+        out = self.worked_in("ncg-wt", work)
+        self.assertIn("refs/heads/sess-x", out)
+
+    def test_worktree_added_without_a_new_ref_refused(self):                    # only the worktree list shows it
+        def work(live, d):
+            git(live, "worktree", "add", "-q", "--detach", os.path.join(d, "session-wt"), S.new_main)
+        out = self.worked_in("ncg-wt-noref", work)
+        self.assertIn("was added", out)
+
+    def test_recreated_worktree_moved_to_another_carried_commit_refused(self):  # clean, no new ref
+        def work(live, d):
+            c = os.path.join(d, "wts", "c-Проект")
+            git(c, "checkout", "-q", "--detach", git(live, "rev-parse", "refs/heads/a-br"))
+            self.assertEqual(git(c, "status", "--porcelain"), "")
+        out = self.worked_in("ncg-wt-moved", work)
+        self.assertIn("is not at", out)
+
+    def test_commit_on_a_carried_branch_refused(self):
+        self.worked_in("ncg-commit", lambda live, d: git(live, "commit", "-q", "--allow-empty", "-m", "new work"))
+
+    def test_commit_in_a_recreated_worktree_refused(self):
+        def work(live, d):
+            a = os.path.join(d, "wts", "a")
+            git(a, "commit", "-q", "--allow-empty", "-m", "work in a")
+        self.worked_in("ncg-wt-commit", work)
+
+    def test_new_stash_entry_refused(self):
+        def work(live, d):
+            write(os.path.join(live, "README.md"), "new stash\n")
+            git(live, "stash", "-q")
+        self.worked_in("ncg-stash", work)
+
+    def test_uncommitted_edit_refused(self):
+        self.worked_in("ncg-edit", lambda live, d: write(os.path.join(d, "wts", "c-Проект", "README.md"), "x\n"))
+
+    def test_detached_commit_in_the_main_worktree_refused(self):
+        def work(live, d):
+            git(live, "checkout", "-q", "--detach")
+            git(live, "commit", "-q", "--allow-empty", "-m", "detached work")
+        self.worked_in("ncg-detached", work)
+
+    def test_inv_json_from_another_run_refused(self):
+        d = fresh("ncg-other-inv")
+        live, roots = undo_fixture(d)
+        arch, _r, inv, cmds, undo = step6(live, d)
+        check = [l for l in undo["B"] if not l.startswith("#")][2]
+        inv["new_clone"]["refs"]["refs/heads/zzz"] = S.new_main                 # a later inventory rewrote it
+        with open(os.path.join(d, "inv.json"), "w", encoding="utf-8") as fh:
+            json.dump(inv, fh)
+        res = sh(check)
+        self.assertEqual(res.returncode, 2, res.stdout)
+        self.assertIn("inv.json", res.stdout)
+
+
+class CheckUnchangedTest(unittest.TestCase):
+    """R7-04 (race 1): the first 6.3 line re-checks the digest inventory printed; any change to worktrees, refs,
+    stash entries or uncommitted files since then stops the procedure before anything moves."""
+
+    def changed_after_inventory(self, name, change):
+        d = fresh(name)
+        live, roots = undo_fixture(d)
+        arch, r, inv, cmds, undo = step6(live, d, follow_it=False)
+        first = [l for l in cmds if not l.startswith("#")][0]
+        self.assertEqual(cmds[0][:6], "# 6.3 ")
+        self.assertEqual(first, "%s check-unchanged %s %s" % (PY, shlex.quote(live), inv["digest"]))
+        self.assertEqual(sh(first).returncode, 0, sh(first).stdout)
+        self.assertEqual(run("check-unchanged", live, inv["digest"]).returncode, 0)
+        change(live, d)
+        res = sh(first)
+        self.assertEqual(res.returncode, 1, res.stdout + res.stderr)
+        self.assertIn("CHANGED since inventory", res.stdout)
+        with self.assertRaises(AssertionError):                                 # following stops at line 1
+            follow(cmds)
+        self.assertTrue(os.path.isdir(live) and not os.path.exists(os.path.join(arch, "repo")))
+
+    def test_capture_run_branch_after_inventory(self):                          # race1_capture_after_inventory
+        def capture(live, d):
+            wt = os.path.join(d, "cap")
+            git(live, "worktree", "add", "-q", "--detach", wt, S.new_main)
+            git(wt, "switch", "-q", "-c", "capture/runtime-cache-1")
+            git(wt, "commit", "-q", "--allow-empty", "-m", "capture")
+            git(live, "worktree", "remove", "--force", wt)
+        self.changed_after_inventory("cu-capture", capture)
+
+    def test_commit_in_a_linked_worktree(self):
+        self.changed_after_inventory("cu-commit", lambda live, d: git(
+            os.path.join(d, "wts", "a"), "commit", "-q", "--allow-empty", "-m", "x"))
+
+    def test_new_stash_entry(self):
+        def stash(live, d):
+            write(os.path.join(live, "README.md"), "y\n")
+            git(live, "stash", "-q")
+        self.changed_after_inventory("cu-stash", stash)
+
+    def test_older_stash_entry_dropped(self):                                   # refs/stash itself does not move
+        d = fresh("cu-stash-drop")
+        live, roots = undo_fixture(d)
+        write(os.path.join(live, "README.md"), "second\n")
         git(live, "stash", "-q")
-        cls.refs, cls.wts = refs(live), wt_list(live)
-        cls.stash = reflog(live, "refs/stash")
-        cls.arch, _r, _inv, cls.cmds, cls.undo = step6(live, d, follow_it=False)
+        top = git(live, "rev-parse", "refs/stash")
+        _arch, _r, inv, cmds, _u = step6(live, d, follow_it=False)
+        git(live, "stash", "drop", "-q", "stash@{1}")
+        self.assertEqual(git(live, "rev-parse", "refs/stash"), top)
+        res = run("check-unchanged", live, inv["digest"])
+        self.assertEqual(res.returncode, 1, res.stdout)
 
-    def test_commands_then_undo_restore_the_original_checkout(self):
-        follow(self.cmds)
-        self.assertEqual(run("overlap", self.live, S.old).returncode, 0)
-        follow(self.undo)
-        self.assertEqual(refs(self.live), self.refs)
-        self.assertEqual(wt_list(self.live), self.wts)                            # paths, HEADs, locks, none prunable
-        self.assertEqual(reflog(self.live, "refs/stash"), self.stash)
-        self.assertEqual(read(os.path.join(self.b, "dirty.txt")), b"old dirty\n")
-        self.assertEqual(git(self.live, "config", "core.hooksPath"), self.hp)
-        self.assertEqual(norm(git(self.live, "config", "remote.origin.url")), norm(S.src))   # not the new clone
-        self.assertEqual(run("overlap", self.live, S.old).returncode, 1)          # the old history is back
-        aside = os.path.join(self.arch, "new-clone-aside")
-        self.assertEqual(git(os.path.join(aside, "repo"), "rev-parse", "refs/remotes/origin/main"), S.new_main)
-        self.assertEqual(sorted(os.listdir(os.path.join(aside, "worktrees"))), ["0-a"])
-        self.assertEqual(os.listdir(os.path.join(self.arch, "worktrees")), [])
+    def test_edit_in_a_kept_worktree(self):
+        self.changed_after_inventory("cu-edit", lambda live, d: write(
+            os.path.join(d, "wts", "c-Проект", "README.md"), "edited\n"))
+
+    def test_per_worktree_ref_in_a_linked_worktree(self):
+        self.changed_after_inventory("cu-perwt", lambda live, d: git(
+            os.path.join(d, "wts", "a"), "update-ref", "refs/bisect/bad", S.new_main))
+
+    def test_lock_added_to_a_worktree(self):
+        self.changed_after_inventory("cu-lock", lambda live, d: git(
+            live, "worktree", "lock", os.path.join(d, "wts", "c-Проект")))
+
+    def test_bad_digest_or_repo_exit_2(self):
+        d = fresh("cu-bad")
+        live = S.live(os.path.join(d, "live"))
+        self.assertEqual(run("check-unchanged", os.path.join(d, "nope"), "0" * 20).returncode, 2)
+        self.assertEqual(run("check-unchanged", live, "not-a-digest").returncode, 2)
+
+
+class EncodingTest(unittest.TestCase):
+    """R7-02: inventory runs WITHOUT -X utf8, under python -I, its stdout a pipe (`| tee`, as SKILL.md item 2),
+    with Cyrillic and CJK folder names, branch names and stash messages; the tee'd file is UTF-8 and every printed
+    command, run from it, reproduces the names exactly."""
+
+    def test_non_cp1252_names_through_tee_then_followed(self):
+        d = fresh("enc Отчёт 日本")
+        live = S.live(os.path.join(d, "live Проект"))
+        kept = commit_on(live, S.new_main, "kept")
+        git(live, "update-ref", "refs/heads/feature/отчёт-日本", kept)
+        git(live, "tag", "-a", "релиз-版本", kept, "-m", "tag")
+        wt = os.path.join(d, "wts", "дерево 木")
+        git(live, "worktree", "add", "-q", "-b", "ветка/枝", wt, kept)
+        git(live, "worktree", "lock", "--reason", "сессия 会话", wt)
+        write(os.path.join(live, "README.md"), "s\n")
+        git(live, "stash", "push", "-q", "-m", "Отчёт 日本 it's")
+        stash_msgs = git(live, "log", "-g", "--format=%gs", "refs/stash", "--")
+        arch, txt = os.path.join(d, "архив 档案"), os.path.join(d, "inventory-1.txt")
+        cmd = "%s %s inventory %s %s --out %s --archive %s --clone-url %s | tee %s" % tuple(
+            shlex.quote(x) for x in (sys.executable, SCRIPT, live, S.old, os.path.join(d, "inv.json"), arch,
+                                     S.purged, txt))
+        cmd = cmd.replace(shlex.quote(sys.executable) + " ", shlex.quote(sys.executable) + " -I ", 1)
+        self.assertNotIn("-X", cmd)
+        res = subprocess.run([SH, "-c", "set -o pipefail; " + cmd], capture_output=True, env=ENV)
+        self.assertEqual(res.returncode, 0, res.stdout.decode("utf-8", "replace") + res.stderr.decode("utf-8", "replace"))
+        text = read(txt).decode("utf-8")                                        # strict: the file is UTF-8
+        self.assertNotIn(chr(13), text)                                           # LF only: bash can run it as a file
+        self.assertNotIn("\\u", text)
+        self.assertNotIn("\\x", text)
+        for name in ("feature/отчёт-日本", "релиз-版本", "дерево 木", "ветка/枝", "Отчёт 日本 it", "сессия 会话"):
+            self.assertIn(name, text)
+        follow(block(text, BEGIN, UNDO_A))
+        self.assertEqual(git(live, "rev-parse", "refs/heads/feature/отчёт-日本"), kept)
+        self.assertEqual(git(live, "rev-parse", "refs/tags/релиз-版本^{}"), kept)
+        self.assertEqual(git(live, "log", "-g", "--format=%gs", "refs/stash", "--"), stash_msgs)
+        rows = {w["path"]: w for w in wt_list(live)}
+        self.assertEqual(rows[norm(wt)]["branch"], "refs/heads/ветка/枝")
+        self.assertEqual(rows[norm(wt)]["locked"], "сессия 会话")
+
+    def test_a_name_that_is_not_utf8_is_refused_not_mangled(self):
+        mod = load_module()
+        mod.check_writable(["ascii", "Отчёт 日本"])
+        with self.assertRaises(mod.Refuse):
+            mod.check_writable(["ok", "refs/heads/caf\udce9"])                  # a Latin-1 byte, surrogate-escaped
 
 
 class Step6LayoutTest(unittest.TestCase):
@@ -1221,11 +1750,53 @@ class Step6LayoutTest(unittest.TestCase):
             k = os.path.join(d, "k")
             git(live, "worktree", "add", "-q", "-b", "k-br", k, S.new_main)
             add_submodule(k)
-            git(k, "submodule", "deinit", "-q", "-f", "sub")                    # the printed fix
+            git(k, "submodule", "deinit", "-q", "sub")                          # the printed fix
             return k
         _live, _arch, k, _r, _inv, _c = self.follow_layout("submodule-after", build)
         git(k, "submodule", "update", "-q", "--init")                           # the step after Step 6
         self.assertEqual(read(os.path.join(k, "sub", "l.txt")), b"lib\n")
+
+    def test_hooks_path_outside_the_checkout_left_as_it_is(self):              # N06
+        hooks = []
+
+        def build(live, d):
+            hooks.append(os.path.join(d, "machine-hooks"))
+            write(os.path.join(hooks[0], "pre-push"), "#!/bin/sh\nexit 1\n")
+            git(live, "config", "core.hooksPath", hooks[0].replace(os.sep, "/"))
+        live, arch, _i, _r, _inv, cmds = self.follow_layout("hooks-outside", build)
+        self.assertEqual([c for c in cmds if "hooksPath" in c], [])
+        self.assertEqual(norm(git(os.path.join(arch, "repo"), "config", "core.hooksPath")), norm(hooks[0]))
+
+    def test_dotted_branch_upstream_carried(self):                              # N14
+        def build(live, d):
+            git(live, "branch", "rel.1", S.new_main)
+            git(live, "config", "branch.rel.1.remote", "origin")
+            git(live, "config", "branch.rel.1.merge", "refs/heads/rel.1")
+        live, _arch, _i, _r, _inv, _c = self.follow_layout("dotted", build)
+        self.assertEqual(git(live, "config", "--get", "branch.rel.1.merge"), "refs/heads/rel.1")
+        self.assertEqual(git(live, "config", "--get", "branch.rel.1.remote"), "origin")
+
+    def test_worktree_locked_without_a_reason_relocked(self):                   # N17
+        def build(live, d):
+            wt = os.path.join(d, "wt")
+            git(live, "worktree", "add", "-q", "-b", "wt-br", wt, S.new_main)
+            git(live, "worktree", "lock", wt)
+            return wt
+        live, _arch, wt, _r, _inv, _c = self.follow_layout("lock-no-reason", build)
+        self.assertEqual({w["path"]: w["locked"] for w in wt_list(live)}[norm(wt)], "")
+
+    def test_lock_reason_with_tab_quote_and_backslash_carried_exactly(self):   # git C-quotes it in porcelain
+        reason = 'tab\there "quoted" back\\slash сессия'
+
+        def build(live, d):
+            wt = os.path.join(d, "wt")
+            git(live, "worktree", "add", "-q", "-b", "wt-br", wt, S.new_main)
+            git(live, "worktree", "lock", "--reason", reason, wt)
+            return wt
+        live, _arch, wt, _r, inv, _c = self.follow_layout("lock-quoted", build)
+        self.assertEqual([w["lock_reason"] for w in inv["worktrees"] if w["locked"]], [reason])
+        locked = git(wt, "rev-parse", "--path-format=absolute", "--git-path", "locked")
+        self.assertEqual(read(locked).decode("utf-8"), reason + "\n")          # as `git worktree lock` writes it
 
     def test_stash_entry_holding_a_purged_blob_stays_in_the_archive(self):
         def build(live, d):
@@ -1319,7 +1890,8 @@ class Step6InputTest(unittest.TestCase):
     def test_clone_url_defaults_to_origin_and_refused_without_one(self):
         r = self.inv("--archive", os.path.join(self.d, "a2"))
         self.assertEqual(r.returncode, 0, r.stdout)
-        self.assertIn("git clone --no-local --no-checkout %s %s" % (shlex.quote(S.src), shlex.quote(self.live)),
+        self.assertIn("git clone --no-local --no-checkout --config remote.origin.pushurl=%s %s %s"
+                      % (MARK, shlex.quote(S.src), shlex.quote(self.live)),
                       r.stdout.splitlines())
         d = fresh("no-origin")
         live = S.live(os.path.join(d, "live"))
@@ -1339,7 +1911,9 @@ class Step6InputTest(unittest.TestCase):
         for opt in ("--out", "--archive", "--clone-url"):
             self.assertIn(opt, r.stdout)
         top = run("--help").stdout
-        self.assertIn("{changed,inventory,overlap}", top)
+        self.assertIn("{changed,inventory,overlap,check-unchanged,check-new-clone}", top)
+        self.assertIn("digest", run("check-unchanged", "--help").stdout)
+        self.assertIn("inv", run("check-new-clone", "--help").stdout)
 
 
 # ==================================================================== SKILL.md freeze / unfreeze recipe
@@ -1354,10 +1928,42 @@ class FreezeRecipeTest(unittest.TestCase):
     """R6-02: SKILL.md Step 0 freeze and Step 6 unfreeze, run as written, on a plain remote, one with one
     custom pushurl and one with two pushurls."""
 
-    def test_freeze_then_unfreeze_on_three_remote_shapes(self):
-        freeze = [b for b in skill_blocks() if "pushurls-before.txt" in b and "--replace-all" in b]
-        unfreeze = [b for b in skill_blocks() if "pushurls-before.txt" in b and "--unset-all" in b]
+    FILE = "pushurls-before-<clone>.txt"
+
+    def recipes(self):
+        freeze = [b for b in skill_blocks() if self.FILE in b and "--replace-all" in b]
+        unfreeze = [b for b in skill_blocks() if self.FILE in b and "--unset-all" in b]
         self.assertEqual((len(freeze), len(unfreeze)), (1, 1), skill_blocks())
+        return freeze[0], unfreeze[0]
+
+    def test_each_clone_gets_back_its_own_push_urls(self):                     # R7-06 (scope F1)
+        freeze, unfreeze = self.recipes()
+        d = fresh("freeze-two")
+        B = d.replace(os.sep, "/")
+        up = os.path.join(d, "up.git")
+        subprocess.run(["git", "init", "-q", "--bare", up], check=True, env=ENV)
+        clones = {}
+        for name, pushurls in (("live", [os.path.join(d, "mirror.git"), up]), ("second", [])):
+            c = clones[name] = os.path.join(d, name)
+            subprocess.run(["git", "init", "-q", "-b", "main", c], check=True, env=ENV)
+            git(c, "remote", "add", "origin", up)
+            for p in pushurls:
+                git(c, "config", "--add", "remote.origin.pushurl", p)
+        git(clones["live"], "remote", "add", "fork", up)
+        before = {n: git(c, "config", "--get-regexp", r"^remote\..*\.pushurl$", check=False) for n, c in clones.items()}
+        for n, c in clones.items():
+            res = sh(freeze.replace("<B>", B).replace("<clone>", n).replace("<date>", "2026-11-27"), cwd=c)
+            self.assertEqual(res.stdout.strip().splitlines()[-1], "every push URL is frozen", res.stdout + res.stderr)
+        for n, c in clones.items():                                             # each re-cloned in Step 6.4
+            git(c, "config", "--replace-all", "remote.origin.pushurl", MARK)
+        for n, c in clones.items():
+            res = sh(unfreeze.replace("<B>", B).replace("<clone>", n), cwd=c)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertEqual(git(c, "config", "--get-regexp", r"^remote\..*\.pushurl$", check=False), before[n], n)
+
+    def test_freeze_then_unfreeze_on_three_remote_shapes(self):
+        freeze, unfreeze = self.recipes()
+        freeze, unfreeze = [freeze.replace("<clone>", "live")], [unfreeze.replace("<clone>", "live")]
         d = fresh("freeze")
         B = d.replace(os.sep, "/")
         ups = {}
@@ -1398,6 +2004,31 @@ class FreezeRecipeTest(unittest.TestCase):
                                             env=ENV).returncode, 0, r)
         landed = {n for n in ups if git(ups[n], "for-each-ref")}
         self.assertEqual(landed, {"up", "a2", "b2", "c2"})
+
+
+class TagRenameRecipeTest(unittest.TestCase):
+    """R7-07 (D12/D14/D15): SKILL.md Step 3's tag-rename block, run as written."""
+
+    def test_tag_rename_block_leaves_no_old_tag_object(self):
+        blocks = [b for b in skill_blocks() if "tag -a <new>" in b]
+        self.assertEqual(len(blocks), 1, skill_blocks())
+        d = fresh("tag-rename")
+        src = os.path.join(d, "src")
+        subprocess.run(["git", "init", "-q", "-b", "main", src], check=True, env=ENV)
+        git(src, "commit", "-q", "--allow-empty", "-m", "c0")
+        git(src, "tag", "-a", "v-123457", "-m", "release notes\n\nsecond line")
+        work = os.path.join(d, "work.git")
+        subprocess.run(["git", "clone", "-q", "--mirror", src, work], check=True, env=ENV)
+        old_obj, peeled = git(work, "rev-parse", "v-123457"), git(work, "rev-parse", "v-123457^{}")
+        msg = git(work, "tag", "-l", "--format=%(contents)", "v-123457")
+        script = blocks[0].replace("<B>", d.replace(os.sep, "/")).replace("<old>", "v-123457").replace("<new>", "v-x")
+        res = sh(script)
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        self.assertFalse(exists(work, old_obj))                                 # the old tag object is gone
+        self.assertEqual(git(work, "cat-file", "-t", "v-x"), "tag")             # annotated, not lightweight
+        self.assertEqual(git(work, "rev-parse", "v-x^{}"), peeled)
+        self.assertEqual(git(work, "tag", "-l", "--format=%(contents)", "v-x"), msg)
+        self.assertEqual(git(work, "tag", "-l"), "v-x")
 
 
 class UnitTest(unittest.TestCase):

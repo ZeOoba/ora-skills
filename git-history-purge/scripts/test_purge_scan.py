@@ -1217,6 +1217,172 @@ class PurgeScanTest(unittest.TestCase):
         self.assertFalse(self._pdf_found(b"BT (0124 614-555) Tj ET"))
         self.assertFalse(self._pdf_found(b"BT (0124 Call 614 555) Tj ET"))
 
+    def test_round8_pdf_strings_keep_their_order(self):
+        # S031: sorting the lines put " 614-555" (a later string) before "0124 Call", so the phone
+        # read whole in a PDF that never shows it. The lines keep the order they appear in.
+        self.assertEqual(purge_scan.pdf_strings(b"BT (b) Tj (a) Tj ET"), b"b\na")
+        self.assertFalse(self._pdf_found(b"BT (0124 Call) Tj ( 614-555) Tj ET"))
+
+    def test_round8_pdf_odd_hex_string_final_digit_is_padded_with_zero(self):
+        # S037: PDF 32000-1 7.3.4.3, an odd final hex digit is followed by an implied 0, not dropped.
+        self.assertEqual(purge_scan.pdf_strings(b"<414>"), b"A@")
+        pats, _ = purge_scan.value_patterns({"values": [], "phone_numbers": ["6145550120"]})
+        content = b"BT <3631342d3535352d303132 3> Tj ET"            # "614-555-012" + "3" -> "614-555-0120"
+        self.assertFalse(any(p.search(content) for p in pats))
+        parts, _ = purge_scan.expand(self._pdf_objs(self._stream(zlib.compress(content), b" /Filter /FlateDecode")))
+        self.assertTrue(any(p.search(x) for p in pats for x in parts))
+        self.assertFalse(self._pdf_found(b"BT <3938373635333> Tj ET"))   # "9876530": a longer number
+
+    def test_round8_pdf_nested_array_joins_at_the_outermost_bracket(self):
+        # S038: an inner "]" must not end the outer array's join.
+        self.assertTrue(self._pdf_found(b"BT [(987,) [] (653)] TJ ET"))
+        self.assertTrue(self._pdf_found(b"BT [(987,) [ ] (653)] TJ ET"))
+
+    # ---- round 8 (R7-03): UTF-16 strings, object streams, re-mapped font codes ---------------
+    U16 = b"\xfe\xff" + "NOI 987653".encode("utf-16-be")
+
+    def _found_in(self, pdf):
+        pats, _ = purge_scan.value_patterns({"values": [987653], "phone_numbers": ["6145550124"]})
+        self.assertFalse(any(p.search(pdf) for p in pats), pdf)
+        parts, why = purge_scan.expand(pdf)
+        return any(p.search(x) for p in pats for x in parts), why
+
+    def test_round8_pdf_utf16_text_strings_are_decoded(self):
+        # R7-03: a PDF text string (/Title, a form /V, an annotation) starting with the byte-order mark
+        # FE FF (or FF FE) is UTF-16. Its bytes alone hold no figure, so its decoding is searched too.
+        octal = b"".join(b"\\%03o" % c for c in self.U16)
+        le = b"\xff\xfe" + "NOI 987653".encode("utf-16-le")
+        for title in (b"<" + self.U16.hex().encode() + b">", b"(" + octal + b")", b"<" + le.hex().encode() + b">",
+                      b"(" + b"".join(b"\\%03o" % c for c in le) + b")"):
+            pdf = self._pdf_objs(b"<< /Type /Catalog >>", b"<< /Title " + title + b" /Producer (t) >>")
+            self.assertEqual(self._found_in(pdf), (True, set()), title)
+        self.assertIn("NOI 987653".encode(), purge_scan.pdf_strings(b"<" + self.U16.hex().encode() + b">"))
+        # pieces of an array of UTF-16 strings are joined as text
+        arr = b"[<" + (b"\xfe\xff" + "NOI 987,".encode("utf-16-be")).hex().encode() + b"> <" + \
+              (b"\xfe\xff" + "653".encode("utf-16-be")).hex().encode() + b">]"
+        self.assertEqual(self._found_in(self._pdf_objs(b"<< /Subject " + arr + b" >>")), (True, set()))
+        # an odd-length or broken UTF-16 string never crashes
+        for s in (b"<FEFF00>", b"<FFFE>", b"<FEFF>", b"<FEFFD800>", b"(\\376\\377\\000)"):
+            purge_scan.pdf_strings(s)
+        self.assertEqual(purge_scan.pdf_utf16(b"\xfe\xff\x00A\x00"), b"A")       # an odd last byte is dropped
+        self.assertIsNone(purge_scan.pdf_utf16(b"\x00A"))
+
+    def test_round8_pdf_form_value_in_an_object_stream_is_read(self):
+        # R7-03: PDF 1.5+ writers put most dictionaries, form fields among them, in a compressed
+        # /ObjStm; the field's /V value is read there, as plain text and as UTF-16.
+        for v in (b"(987,653)", b"<" + self.U16.hex().encode() + b">"):
+            objstm = zlib.compress(b"5 0 << /FT /Tx /T (amount) /V " + v + b" >>")
+            pdf = self._pdf_objs(b"<< /Type /Catalog /AcroForm << /Fields [5 0 R] >> >>",
+                                 self._stream(objstm, b" /Type /ObjStm /N 1 /First 4 /Filter /FlateDecode"))
+            self.assertEqual(self._found_in(pdf), (True, set()), v)
+
+    def test_round8_verify_finds_utf16_pdf_strings_in_history(self):
+        # R7-03 end to end (repro gate297r7-correctness/pdf_utf16.py): each case held the figure
+        # and verify exited 0 with nothing opaque.
+        u16hex = b"<" + self.U16.hex().encode() + b">"
+        objstm = zlib.compress(b"5 0 << /FT /Tx /T (amount) /V " + u16hex + b" >>")
+        layouts = {
+            "info title hex UTF-16BE": {"s.pdf": self._pdf_objs(b"<< /Type /Catalog >>", b"<< /Title " + u16hex + b" >>")},
+            "info title literal UTF-16BE": {"s.pdf": self._pdf_objs(
+                b"<< /Type /Catalog >>", b"<< /Title (" + b"".join(b"\\%03o" % c for c in self.U16) + b") >>")},
+            "form value in an object stream": {"s.pdf": self._pdf_objs(
+                b"<< /Type /Catalog >>", self._stream(objstm, b" /Type /ObjStm /N 1 /First 4 /Filter /FlateDecode"))},
+        }
+        self.assertEqual(self._verify_each_layout(layouts), [])
+
+    REMAP = "PDF text in re-mapped font codes"
+
+    def _font_pdf(self, *objs):
+        content = self._stream(zlib.compress(b"BT /F1 12 Tf <010203040506> Tj ET"), b" /Filter /FlateDecode")
+        return self._pdf_objs(content, *objs)
+
+    def test_round8_pdf_text_in_re_mapped_font_codes_is_opaque(self):
+        # R7-03: a subset font draws "987653" with codes 1..6 through /Differences (cairo-style), so
+        # neither the bytes nor the strings hold the figure: verify must say it cannot read it.
+        diff = b"<< /Type /Font /Subtype /TrueType /BaseFont /ABCDEF+Arial /FirstChar 1 /LastChar 6 " \
+               b"/Encoding << /Type /Encoding /Differences [1 /nine /eight /seven /six /five /three] >> >>"
+        opaque = {
+            "Differences, codes below 32": diff,
+            "Differences, named glyphs": b"<< /Encoding << /Differences [1 /g1 /g2 /g3] >> >>",
+            "Differences, a digit moved to another ASCII code": b"<< /Encoding << /Differences [65 /nine] >> >>",
+            "Differences, a digit at a high code": b"<< /Encoding << /Differences [200 /nine] >> >>",
+            "Differences, uniXXXX digit at a high code": b"<< /Encoding << /Differences [200 /uni0039] >> >>",
+            "Differences, ASCII code given another glyph": b"<< /Encoding << /Differences [57 /eacute] >> >>",
+            "predefined CMap": b"<< /Type /Font /Subtype /Type0 /Encoding /UniJIS-UCS2-H >>",
+            "predefined CMap, one letter": b"<< /Type /Font /Subtype /Type0 /Encoding /H >>",
+            "embedded CMap": self._stream(zlib.compress(
+                b"/CIDInit /ProcSet findresource begin begincmap 1 begincodespacerange <00> <FF> endcodespacerange "
+                b"1 begincidrange <01> <06> 20 endcidrange endcmap"), b" /Type /CMap /Filter /FlateDecode"),
+            "ToUnicode bfchar re-map": self._stream(zlib.compress(
+                b"begincmap 2 beginbfchar <01> <0039> <02> <0038> endbfchar endcmap"), b" /Filter /FlateDecode"),
+            "ToUnicode bfrange re-map": self._stream(zlib.compress(
+                b"begincmap 1 beginbfrange <01> <06> <0031> endbfrange endcmap"), b" /Filter /FlateDecode"),
+            "ToUnicode bfrange array re-map": self._stream(zlib.compress(
+                b"begincmap 1 beginbfrange <01> <02> [<0039> <0038>] endbfrange endcmap"), b" /Filter /FlateDecode"),
+            "ToUnicode two-byte codes": self._stream(
+                b"begincmap 1 beginbfchar <0039> <0039> endbfchar endcmap"),
+            "ToUnicode bfrange array shorter than its range": self._stream(
+                b"begincmap 1 beginbfrange <41> <43> [<0041> <0042>] endbfrange endcmap"),
+            "ToUnicode bfrange ending before it starts": self._stream(
+                b"begincmap 1 beginbfrange <39> <30> <0039> endbfrange endcmap"),
+            "ToUnicode bfrange one-byte destination": self._stream(
+                b"begincmap 1 beginbfrange <41> <42> <41> endbfrange endcmap"),
+            "ToUnicode entry it cannot read": self._stream(b"begincmap 1 beginbfchar <41> /A endbfchar endcmap"),
+            "Differences in an object stream": self._stream(zlib.compress(
+                b"5 0 << /Type /Encoding /Differences [1 /nine] >>"), b" /Type /ObjStm /N 1 /First 4 /Filter /FlateDecode"),
+            "Differences, unparseable entry": b"<< /Encoding << /Differences [48 (x) /zero] >> >>",
+            "Differences never closed": b"<< /Encoding << /Differences [1 /nine /eight",
+        }
+        for name, obj in opaque.items():
+            self.assertEqual(purge_scan.expand(self._font_pdf(obj))[1], {self.REMAP}, name)
+        plain = {
+            "Differences, high codes only": b"<< /Encoding << /BaseEncoding /WinAnsiEncoding "
+                                            b"/Differences [128 /Euro 233 /eacute /egrave] >> >>",
+            "Differences, ASCII names at their own codes": b"<< /Encoding << /Differences [48 /zero /one /two "
+                                                          b"39 /quotesingle 96 /grave 32 /space 45 /hyphen] >> >>",
+            "Differences, uniXXXX at its own code and .notdef": b"<< /Encoding << /Differences [57 /uni0039 1 /.notdef] >> >>",
+            "Differences, quoteright and quoteleft at 39 and 96": b"<< /Encoding << /Differences [39 /quoteright 96 /quoteleft] >> >>",
+            "ToUnicode identity": self._stream(zlib.compress(
+                b"begincmap 1 beginbfchar <39> <0039> endbfchar 1 beginbfrange <30> <38> <0030> endbfrange "
+                b"1 beginbfrange <41> <42> [<0041> <0042>] endbfrange 1 beginbfchar <E9> <00E9> endbfchar endcmap"),
+                b" /Filter /FlateDecode"),
+            "ToUnicode high code to a ligature": self._stream(b"begincmap 1 beginbfchar <AE> <00660069> endbfchar endcmap"),
+            "ToUnicode control code to itself": self._stream(b"begincmap 1 beginbfchar <01> <0001> endbfchar endcmap"),
+            "simple encodings": b"<< /Encoding /WinAnsiEncoding >> << /Encoding /MacRomanEncoding >> "
+                                b"<< /Encoding /StandardEncoding >> << /Encoding /PDFDocEncoding >> << /Encoding /MacExpertEncoding >>",
+            "names that are not CMaps": b"<< /Encoding /Identity-Vx >> << /Encoding /Identity-HV1 >> << /Encoding /Custom >> "
+                                        b"<< /Encoding /GBK-EUC-Hx >>",
+        }
+        for name, obj in plain.items():
+            self.assertEqual(purge_scan.expand(self._font_pdf(obj))[1], set(), name)
+        # Identity-H/V keep their own reason, and are not called re-mapped too
+        self.assertEqual(purge_scan.expand(self._font_pdf(b"<< /Subtype /Type0 /Encoding /Identity-H >>"))[1],
+                         {"PDF text in font glyph codes (Identity-H/V)"})
+
+    def test_round8_font_code_scan_reads_a_run_of_unclosed_blocks_once(self):
+        # A run of block starts with no end (damaged or hostile PDF) is read once, not once per
+        # start: a rescan per start took minutes on 2 MB and verify looked hung.
+        import time
+        for blob in (b"beginbfchar <41> " * 120000, b"/Differences [1 /one " * 100000, b"beginbfrange " * 160000):
+            t = time.perf_counter()
+            self.assertTrue(purge_scan.remapped_font_codes(blob))
+            self.assertLess(time.perf_counter() - t, 5, blob[:20])
+
+    def test_round8_verify_lists_a_pdf_in_re_mapped_font_codes_as_opaque(self):
+        self.config(values=[987653], phones=False)
+        self.r.commit({"a.md": "x\n"})
+        self.r.commit({"statement.pdf": self._font_pdf(
+            b"<< /Type /Font /Subtype /TrueType /Encoding << /Differences [1 /nine /eight /seven /six /five /three] >> >>")})
+        self.r.commit(delete=["statement.pdf"])
+        self._empty_rules()
+        v = self.verify()
+        self.assertEqual(v.returncode, 0, v.stdout)
+        self.assertIn("opaque blobs (NOT searched inside): 1", v.stdout)
+        line = [l for l in v.stdout.splitlines() if l.startswith("OPAQUE ")]
+        self.assertEqual(len(line), 1, v.stdout)
+        self.assertIn("path=statement.pdf ", line[0])
+        self.assertIn("reason=" + self.REMAP, line[0])
+
     # ---- R3-06: renaming a tag whose name holds a value ------------------------------------
     def test_tag_rename_recipe_leaves_no_old_tag_object(self):
         self.config(values=[987653], phones=False)

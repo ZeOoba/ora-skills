@@ -65,10 +65,16 @@ verify - exit 1 if any removed path is still reachable, any rule still matches a
          the member names; UTF-16 LE/BE text (byte-order mark, or mostly-NUL odd/even bytes);
          a PDF's FlateDecode (or /Fl) and unfiltered streams, each decoded stream read again
          the same way (an attached xlsx is opened), plus the text of its literal (...) and hex
-         <...> strings, each alone and with the pieces of a TJ array joined. A blob verify
+         <...> strings, each alone and with the pieces of a TJ array joined, in every stream
+         (an object stream /ObjStm too, where form fields and their /V values sit) and outside
+         them; a string starting with the byte-order mark FE FF or FF FE is also read as
+         UTF-16. A blob verify
          cannot read inside - an encrypted zip member or PDF, a zip member or PDF stream under another compression
          or filter (images in a PDF), PDF text drawn with a font's own glyph codes
-         (Identity-H/V), a container nested more than one level deep, an image file, a
+         (Identity-H/V), PDF text in re-mapped font codes (an /Encoding /Differences array or a
+         ToUnicode CMap that moves a character to another code, as subset fonts do, a
+         predefined CMap such as /UniJIS-UCS2-H, or an embedded CID CMap; one that leaves
+         every code reading as its own character is read), a container nested more than one level deep, an image file, a
          gzip/bzip2/xz/7z/rar archive, a legacy Office (OLE2) file - is listed
          at the end as OPAQUE <blob> path=<a path> commit=<a commit> ref=<a branch, tag or
          notes ref that reaches the commit, full name> reason=<why> (a blob a tag points at
@@ -301,11 +307,32 @@ def pdf_literal(data, i):
         i += 1
 
 
+def pdf_utf16(s):
+    """A PDF text string's UTF-16 decoding as UTF-8 (R7-03), or None: a string starting with the
+    byte-order mark FE FF is UTF-16BE, FF FE UTF-16LE (/Title, a form field's /V, an annotation).
+    An odd last byte is dropped; a broken code unit reads as U+FFFD."""
+    enc = {b"\xfe\xff": "utf-16-be", b"\xff\xfe": "utf-16-le"}.get(s[:2])
+    if enc is None:
+        return None
+    body = s[2:len(s) - len(s) % 2]
+    return body.decode(enc, "replace").encode("utf-8")
+
+
 def pdf_string_lines(data, comments):
-    """pdf_strings() for one reading of data: every string on its own line, plus the pieces of
-    each [...] array (one still open at the end too) joined on a line of their own. comments:
-    whether "%" starts a comment running to the end of the line."""
+    """pdf_strings() for one reading of data: every string on its own line (a UTF-16 one followed
+    by its decoding), plus the pieces of each [...] array (one still open at the end too) joined
+    on a line of their own, a UTF-16 piece as its decoding. comments: whether "%" starts a
+    comment running to the end of the line."""
     lines, cur, depth, i = [], [], 0, 0
+
+    def add(s):
+        text = pdf_utf16(s)
+        lines.append(s)
+        if text is not None:
+            lines.append(text)
+        if depth:
+            cur.append(s if text is None else text)
+
     while True:
         m = PDF_TOKEN.search(data, i)
         if not m:
@@ -313,9 +340,7 @@ def pdf_string_lines(data, comments):
         c, i = m.group(0), m.start()
         if c == b"(":
             s, i = pdf_literal(data, i)
-            lines.append(s)
-            if depth:
-                cur.append(s)
+            add(s)
             continue
         if c == b"<":
             if data[i + 1:i + 2] == b"<":                  # a dictionary, not a string
@@ -325,9 +350,7 @@ def pdf_string_lines(data, comments):
             if h:
                 digits = re.sub(rb"[^0-9A-Fa-f]", b"", h.group(1))
                 s = bytes.fromhex((digits + b"0" * (len(digits) % 2)).decode("ascii"))
-                lines.append(s)
-                if depth:
-                    cur.append(s)
+                add(s)
                 i = h.end()
                 continue
         elif c == b"[":
@@ -373,6 +396,151 @@ def xml_text(data):
 
 GLYPH_CODES = re.compile(rb"/Identity-[HV](?![A-Za-z0-9])")
 
+# R7-03: a font whose codes do not read as the text they draw. The glyph names of printable ASCII
+# 0x20..0x7E (Adobe standard names; quoteright/quoteleft and minus also accepted at their codes).
+ASCII_GLYPHS = dict(zip(
+    "space exclam quotedbl numbersign dollar percent ampersand quotesingle parenleft parenright "
+    "asterisk plus comma hyphen period slash zero one two three four five six seven eight nine colon "
+    "semicolon less equal greater question at".split() + [chr(c) for c in range(0x41, 0x5B)]
+    + "bracketleft backslash bracketright asciicircum underscore grave".split()
+    + [chr(c) for c in range(0x61, 0x7B)] + "braceleft bar braceright asciitilde".split(), range(0x20, 0x7F)))
+GLYPH_ALIASES = {"quoteright": 0x27, "quoteleft": 0x60, "minus": 0x2D}
+DIFFERENCES = re.compile(rb"/Differences\s*\[")
+DIFF_TOKEN = re.compile(rb"\d+|/[^\s/\[\]()<>{}%]*|\S")
+CMAP_NAME = re.compile(rb"/Encoding\s*/((?:[A-Za-z0-9.+_]+-)*[HV])(?![^\s/\[\]()<>{}%])")
+CID_CMAP = re.compile(rb"begincid(?:range|char)\b")
+BF_BLOCK = re.compile(rb"beginbf(char|range)\b")
+BF_TOKEN = re.compile(rb"<([^<>]*)>|\[|\]|[^\s<>\[\]]+")
+
+
+def ascii_glyph(text):
+    """The code of the printable ASCII character text is, or None (another character, several, none)."""
+    return ord(text) if len(text) == 1 and 0x20 <= ord(text) <= 0x7E else None
+
+
+def plain_code(code, text, alias=False):
+    """True if a font code that shows text (one character, or None for a glyph that is not printable
+    ASCII) reads as that text in the PDF's bytes: a code below 128 shows its own ASCII character
+    (alias: a GLYPH_ALIASES name for it), a code of 128 or more shows no printable ASCII character."""
+    if code < 0x80:
+        return alias or (text is not None and ascii_glyph(text) == code)
+    return text is None or ascii_glyph(text) is None
+
+
+def glyph_text(name):
+    """(text, alias) a glyph name shows: its ASCII character, a uniXXXX / uXXXX[XX] code point, or
+    None for any other glyph."""
+    if name in ASCII_GLYPHS:
+        return chr(ASCII_GLYPHS[name]), False
+    m = re.fullmatch(r"uni([0-9A-F]{4})|u([0-9A-F]{4,6})", name)
+    if m:
+        cp = int(m.group(1) or m.group(2), 16)
+        return (chr(cp) if cp < 0x110000 and not 0xD800 <= cp < 0xE000 else None), False
+    return None, False
+
+
+def differences_plain(body):
+    """True if every code an /Encoding /Differences array gives a glyph still reads plainly
+    (plain_code); an entry it cannot read is not plain. .notdef shows nothing and is plain."""
+    code = None
+    for t in DIFF_TOKEN.findall(body):
+        if t[:1].isdigit():
+            code = int(t)
+            continue
+        if not t.startswith(b"/") or code is None:
+            return False
+        name = re.sub(rb"#([0-9A-Fa-f]{2})", lambda m: bytes([int(m.group(1), 16)]), t[1:]).decode("latin-1")
+        if name != ".notdef":
+            text, _ = glyph_text(name)
+            alias = code < 0x80 and GLYPH_ALIASES.get(name) == code
+            if not plain_code(code, text, alias):
+                return False
+        code += 1
+    return True
+
+
+def tounicode_plain(block, body):
+    """True if a ToUnicode beginbfchar / beginbfrange block maps each one-byte code to the text it
+    reads as (plain_code); a two-byte code or an entry it cannot read is not plain."""
+    toks = [(m.group(1), m.group(0)) for m in BF_TOKEN.finditer(body)]
+
+    def hexval(t):
+        if t[0] is None:
+            raise ValueError
+        digits = re.sub(rb"\s", b"", t[0])
+        return bytes.fromhex((digits + b"0" * (len(digits) % 2)).decode("ascii"))
+
+    try:
+        i = 0
+        while i < len(toks):
+            src = hexval(toks[i])
+            if len(src) != 1:
+                return False
+            lo = src[0]
+            if block == b"char":
+                pairs, i = [(lo, hexval(toks[i + 1]))], i + 2
+            else:
+                hi = hexval(toks[i + 1])
+                if len(hi) != 1 or hi[0] < lo:
+                    return False
+                n = hi[0] - lo + 1
+                if toks[i + 2][1] == b"[":
+                    dsts = []
+                    i += 3
+                    while toks[i][1] != b"]":
+                        dsts.append(hexval(toks[i]))
+                        i += 1
+                    i += 1
+                    if len(dsts) != n:
+                        return False
+                    pairs = list(zip(range(lo, hi[0] + 1), dsts))
+                else:
+                    dst = hexval(toks[i + 2])
+                    if len(dst) < 2:
+                        return False
+                    last = int.from_bytes(dst[-2:], "big")
+                    pairs = [(lo + k, dst[:-2] + (last + k & 0xFFFF).to_bytes(2, "big")) for k in range(n)]
+                    i += 3
+            for code, dst in pairs:
+                text = dst.decode("utf-16-be", "replace")
+                if text != chr(code) and not plain_code(code, text if len(text) == 1 else None):
+                    return False
+    except (ValueError, IndexError):
+        return False
+    return True
+
+
+def pdf_blocks(data, start, end):
+    """Yield (match, body) for each start match in data and the bytes up to the end(match) marker
+    after it (the rest of data if there is none, then stop). The next start is looked for after
+    that marker, so a run of starts with no end is read once, not once per start (no hang)."""
+    pos = 0
+    while True:
+        m = start.search(data, pos)
+        if not m:
+            return
+        e = data.find(end(m), m.end())
+        if e < 0:
+            yield m, data[m.end():]
+            return
+        yield m, data[m.end():e]
+        pos = e + len(end(m))
+
+
+def remapped_font_codes(data):
+    """True if data (a PDF's text outside its streams, or one decoded stream) holds a font whose
+    codes do not read as the text they draw (R7-03): an /Encoding /Differences array or a
+    ToUnicode CMap that moves a character to another code (a subset font drawing "987653" as
+    codes 1..6), a predefined CMap other than Identity-H/V (/UniJIS-UCS2-H) or an embedded CID
+    CMap. One that leaves every code reading plainly (accented letters at codes 128+) is not."""
+    if CID_CMAP.search(data) or any(m.group(1) not in (b"Identity-H", b"Identity-V")
+                                    for m in CMAP_NAME.finditer(data)):
+        return True
+    if any(not differences_plain(body) for _, body in pdf_blocks(data, DIFFERENCES, lambda m: b"]")):
+        return True
+    return any(not tounicode_plain(m.group(1), body)
+               for m, body in pdf_blocks(data, BF_BLOCK, lambda m: b"endbf" + m.group(1)))
+
 
 def expand(data, depth=0):
     """(parts, opaque): the byte strings verify searches for one blob, and the reasons any part
@@ -380,8 +548,8 @@ def expand(data, depth=0):
     member's name, content, and content with its XML tags removed (text split across runs), opening
     a zip or PDF inside it one level deep. A PDF gives its raw bytes, each FlateDecode or
     unfiltered stream run through expand() again (an attached xlsx is read), and the text of its
-    literal and hex strings with TJ array pieces joined; text drawn with a font's glyph codes
-    (Identity-H/V) is opaque. UTF-16 text gives its raw bytes plus the text as UTF-8; an image,
+    literal and hex strings with TJ array pieces joined (a UTF-16 string also decoded); text drawn
+    with a font's glyph codes (Identity-H/V) or in re-mapped font codes is opaque. UTF-16 text gives its raw bytes plus the text as UTF-8; an image,
     another compressed format or a legacy Office (OLE2) file is opaque."""
     if data[:4] in (b"PK\x03\x04", b"PK\x05\x06"):
         if depth >= 2:
@@ -418,7 +586,10 @@ def expand(data, depth=0):
             return [data], {"PDF nested more than one level"}
         streams, opaque = pdf_streams(data)
         pieces = STREAM_RE.split(data)                   # the strings outside every stream too
-        parts = [data, pdf_strings(pieces[0] + b"".join(p.split(b"endstream", 1)[-1] for p in pieces[1:]))]
+        outside = pieces[0] + b"".join(p.split(b"endstream", 1)[-1] for p in pieces[1:])
+        parts = [data, pdf_strings(outside)]
+        # Every decoded stream is read for strings, an object stream (/ObjStm, where PDF 1.5+
+        # writers put most dictionaries, form fields and their /V values among them) too.
         for content, filtered in streams:
             sub, why = expand(content, depth + 1)
             parts += [p for p in sub if filtered or p is not content]
@@ -426,8 +597,12 @@ def expand(data, depth=0):
             opaque |= {"PDF stream: " + w for w in why}
             if GLYPH_CODES.search(content):
                 opaque.add("PDF text in font glyph codes (Identity-H/V)")
+            if remapped_font_codes(content):
+                opaque.add("PDF text in re-mapped font codes")
         if GLYPH_CODES.search(data):
             opaque.add("PDF text in font glyph codes (Identity-H/V)")
+        if remapped_font_codes(outside):
+            opaque.add("PDF text in re-mapped font codes")
         return [p for p in parts if p], opaque
     text = utf16_text(data) if is_binary(data) or data[:2] in (b"\xff\xfe", b"\xfe\xff") else None
     if text is not None:
