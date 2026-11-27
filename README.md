@@ -33,7 +33,7 @@ git tooling that keeps the library itself honest.
 
 | | |
 |---|---|
-| Live skills | 104 top-level folders with a `SKILL.md` (recount: `ls */SKILL.md \| wc -l`) |
+| Live skills | 106 top-level folders with a `SKILL.md` (recount: `ls */SKILL.md \| wc -l`) |
 | Shared data | [`target-markets.json`](target-markets.json), the canonical buy-box market list, injected into 8 skills at package time |
 | Shared code | [`tools/ora_doc_qc.py`](tools/ora_doc_qc.py), the document-QC harness, injected into 5 QC skills as `scripts/ora_doc_qc.py` |
 | Tooling | [`tools/`](tools): packaging, CI gates, drift and mirror sync, hooks, 26 `tools/test_*.py` suites |
@@ -81,7 +81,7 @@ derived copies; Cowork only picks up a change when a packaged `.skill` is import
 
 ## Skill catalog
 
-104 skills, grouped by domain. One more, `personal-portfolio`, is kept local-only and gitignored because it holds personal (non-firm) financial data. Purposes are condensed from each skill's frontmatter `description`;
+106 skills, grouped by domain. One more, `personal-portfolio`, is kept local-only and gitignored because it holds personal (non-firm) financial data. Purposes are condensed from each skill's frontmatter `description`;
 the `SKILL.md` is authoritative. Expand a group to browse it.
 
 <details open>
@@ -104,7 +104,7 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 </details>
 
 <details open>
-<summary><strong>Acquisitions: underwriting</strong> (11)</summary>
+<summary><strong>Acquisitions: underwriting</strong> (12)</summary>
 
 | Skill | Purpose |
 |---|---|
@@ -235,11 +235,12 @@ the `SKILL.md` is authoritative. Expand a group to browse it.
 </details>
 
 <details>
-<summary><strong>Engineering, git and repo tooling</strong> (13)</summary>
+<summary><strong>Engineering, git and repo tooling</strong> (14)</summary>
 
 | Skill | Purpose |
 |---|---|
 | `isolated-commit` | Lands your own reviewed change in a shared checkout that other sessions may be editing |
+| `git-history-purge` | Removes private data from a GitHub repo's whole history: leased force-push, fresh-clone verify, each local checkout moved whole into an archive and re-cloned from the purged remote by hand, from commands a read-only inventory prints (nothing deleted; every unsupported layout refused with a manual fix; a state re-check before the first move and a guarded undo per stage), Support request for old PRs |
 | `dirty-tree-triage` | Attributes and safely settles uncommitted work across the shared checkouts |
 | `branch-catchup` | Brings a long-lived branch up to date with `origin/main` in a worktree, conflict by conflict |
 | `adversarial-merge-gate` | Second-reviewer gate before merging blast-radius or multi-session changes |
@@ -338,7 +339,7 @@ eval harness's daily `runs/` output.
 Install the test dependencies first. A missing dependency shows up as `SKIP`, which fails the gate.
 
 ```bash
-python -m pip install pymupdf python-docx reportlab lxml openpyxl   # plus poppler-utils for pdftotext
+python -m pip install pymupdf python-docx reportlab lxml openpyxl git-filter-repo   # plus poppler-utils for pdftotext
 bash tools/run_suite.sh               # tools/test_*.py
 bash tools/run_skill_suites.sh        # packaged-layout check + every skill-level test_*.py
 python tools/skill_ci_gates.py frontmatter
