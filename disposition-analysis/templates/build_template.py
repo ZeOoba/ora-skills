@@ -26,26 +26,26 @@ def sec(row,t):
 r=4; sec(r,'PROPERTY & LEASE'); r+=1
 D='$#,##0;($#,##0)'; P='0.00%'
 spec=[
-('Property name','55 New Plant Ct','PropName',None,'Text'),
-('Rentable SF',34534,'SF','#,##0',''),
-('Base rent year 1 (t=1)',466209,'Rent1',D,'Override the 10-yr schedule on Calc row 5 if the lease has fixed steps'),
+('Property name','SAMPLE PROPERTY (synthetic defaults)','PropName',None,'Replace every blue input with sourced figures'),
+('Rentable SF',25000,'SF','#,##0',''),
+('Base rent year 1 (t=1)',250000,'Rent1',D,'Override the 10-yr schedule on Calc row 5 if the lease has fixed steps'),
 ('Rent growth / yr',0.025,'RentG',P,''),
-('Abatement in year 1',77701.5,'Abate1',D,''),
+('Abatement in year 1',20000,'Abate1',D,''),
 ('Management fee % of collected rent',0.03,'Mgmt',P,''),
-('Insurance (landlord cost)',9075,'Ins',D,'[UNVERIFIED] until declarations are on file'),
-('Other landlord-only costs',4000,'OtherLL',D,''),
+('Insurance (landlord cost)',10000,'Ins',D,'[UNVERIFIED] until declarations are on file'),
+('Other landlord-only costs',5000,'OtherLL',D,''),
 ('Reserve $/SF',0.25,'ResSF','$0.00',''),
-('Tenant allowance, total',69068,'Allow',D,''),
+('Tenant allowance, total',50000,'Allow',D,''),
 ('Allowance first year (t)',4,'AllowStart','0',''),
 ('Allowance last year (t)',6,'AllowEnd','0',''),
-('Leasing commission at t0',128635,'Comm',D,'Amortized over 10 yrs on hold paths'),
+('Leasing commission at t0',100000,'Comm',D,'Amortized over 10 yrs on hold paths'),
 ]
 for lab,v,n,f,note in spec: inp(r,lab,v,n,f,note); r+=1
 r+=1; sec(r,'TAX (taxpayer who reports the gain)'); r+=1
 spec=[
 ('Adjusted basis at t0',1000000,'Basis',D,'[DATA-GAP] until CPA basis package'),
 ('Accumulated depreciation in chain (for §1250)',500000,'AccDep',D,'Includes carryover from relinquished property'),
-('Annual depreciation',14529,'Dep',D,'From latest Form 4562 / Sch E line 18'),
+('Annual depreciation',25000,'Dep',D,'From latest Form 4562 / Sch E line 18'),
 ('Ordinary rate (fed + NIIT + state + local)',0.505,'ORD',P,''),
 ('LTCG rate (fed + NIIT + state + surtax)',0.355,'LTCG',P,''),
 ('Unrecaptured §1250 rate',0.405,'R1250',P,''),
@@ -55,7 +55,7 @@ for lab,v,n,f,note in spec: inp(r,lab,v,n,f,note); r+=1
 r+=1; sec(r,'VALUATION & CAPITAL MARKETS'); r+=1
 spec=[
 ('Cap rate (sale today and exit)',0.0725,'Cap',P,'Cite market source + date'),
-('Selling costs %',0.02,'SellC',P,'Add any broker tail (e.g., JLL 2%) here'),
+('Selling costs %',0.02,'SellC',P,'Add any surviving broker-agreement fee here'),
 ('Reinvestment rate on cash, pre-tax',0.05,'Reinv',P,'Taxed at ORD'),
 ('Refi LTV max',0.65,'LTV',P,''),
 ('Refi DSCR min',1.25,'DSCR','0.00"x"',''),
@@ -68,7 +68,7 @@ spec=[
 ]
 for lab,v,n,f,note in spec: inp(r,lab,v,n,f,note); r+=1
 r+=1; sec(r,'SELLER-FINANCE VARIANTS'); ws.cell(r,2,'B1').font=HF; ws.cell(r,3,'B2').font=HF; ws.cell(r,3).fill=HFILL; r+=1
-for lab,v1,v2,n,f in [('Price',7500000,7500000,'BPrice',D),('Down payment',1500000,2500000,'BDown',D),('Note rate (≥ AFR)',0.05,0.05,'BRate',P),('Amortization (yrs)',25,25,'BAm','0'),('Term to balloon (yrs, ≤10)',5,7,'BTerm','0'),('Selling costs %',0.02,0.02,'BSell',P)]:
+for lab,v1,v2,n,f in [('Price',8000000,8000000,'BPrice',D),('Down payment',1600000,2400000,'BDown',D),('Note rate (≥ AFR)',0.05,0.05,'BRate',P),('Amortization (yrs)',25,25,'BAm','0'),('Term to balloon (yrs, ≤10)',5,7,'BTerm','0'),('Selling costs %',0.02,0.02,'BSell',P)]:
     ws.cell(r,1,lab).font=NF
     for j,v in ((2,v1),(3,v2)):
         c=ws.cell(r,j,v); c.font=INF; c.fill=IFILL; c.number_format=f

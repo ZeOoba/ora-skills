@@ -3,7 +3,7 @@ name: disposition-analysis
 description: "Use when the user mentions: should we sell, hold or sell, disposition, dispose of, exit an asset, recycle or prune the portfolio, 1031, like-kind exchange, replace an asset, refinance vs sell, harvest gains, cash out, when to sell, keeping vs selling a property, seller financing, depreciation recapture, or estate step-up — the Oxford Realty Advisors hold / refinance / 1031 / sell decision engine. Refi execution (term sheets, lender selection) routes to debt-management."
 ---
 
-# Disposition Analysis — Oxford Realty Advisors (v1.7)
+# Disposition Analysis — Oxford Realty Advisors (v1.8)
 
 You are evaluating whether ORA should HOLD, REFINANCE, 1031-EXCHANGE, or make a TAXABLE SALE of an asset. ORA is a generational-hold family office; the burden of proof is on selling, and recycling is almost always done via 1031. Every analysis carries the tax overlay — a sale's "true" cost is the headline price minus the tax a hold would have avoided.
 
@@ -80,9 +80,10 @@ acquisition-underwriting (replacement-asset underwrite for 1031 targets) · deal
 
 ## Changelog
 
+- v1.8 (2026-11-27): Removed one owned property's name and real figures from the skill and the template: `templates/build_template.py` input defaults are now synthetic (SAMPLE PROPERTY, round numbers) and `ORA_Disposition_Template_v1.0.xlsx` is regenerated from it; the v1.5/v1.6 changelog lines now describe the source review generically. No formula, model logic, tax treatment or governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).
 - v1.7 (2026-11-24): Restored the v1.3 description clause "Refi execution (term sheets, lender selection) routes to debt-management" (reciprocal handoff with debt-management), lost in the v1.5/v1.6 account sync (#299). No model, tax treatment or governor constant changed.
-- v1.6 (2026-11-24): Output now requires the live-formula ORA Disposition Template v1.0 (templates/ in the ora-skills repo), reconciled to the 55 New Plant Court values model within rounding. Step 0 basis pull now starts from the Property Register `Basis & Tax` field. No governor constant changed.
-- v1.5 (2026-11-24): Added Step 0 mandatory pre-discussion fact pull (ownership entity, basis, debt, leases, broker agreements, encumbrances, transfer/reassessment, market) after the 55 New Plant Court review required each item to be dug up by hand — including a signed 2022 JLL letter granting 2% on a tenant purchase. Added the seller-financed/installment-sale path (cash-equivalent pricing, AFR, §453A USD 5M, note-is-boot 1031 conflict, balloon refinance test), MD tax rates, and the current refi/cap references. No governor constant changed.
+- v1.6 (2026-11-24): Output now requires the live-formula ORA Disposition Template v1.0 (templates/ in the ora-skills repo), reconciled to a prior hand-built values model within rounding. Step 0 basis pull now starts from the Property Register `Basis & Tax` field. No governor constant changed.
+- v1.5 (2026-11-24): Added Step 0 mandatory pre-discussion fact pull (ownership entity, basis, debt, leases, broker agreements, encumbrances, transfer/reassessment, market) after a portfolio hold/sell review required each item to be dug up by hand, including a prior broker agreement whose fee survived into a sale to the tenant. Added the seller-financed/installment-sale path (cash-equivalent pricing, AFR, §453A USD 5M, note-is-boot 1031 conflict, balloon refinance test), MD tax rates, and the current refi/cap references. No governor constant changed.
 - v1.4 (2026-10-26): Step 6 pointer: a SELL or 1031 PSA follows the `debt-management` v1.6 INTERIM aggregate-LTV checklist. Pointer only; no model, tax treatment, or trigger vocabulary changed. No governor constant changed (DSCR 1.25x; 40% aggregate; 65% per-property).
 - v1.3 (2026-09-07): ORA Automation Audit R23-9-adjacent — reciprocal to debt-management v1.4. Added a one-clause deferral: once refi is chosen, EXECUTION (term sheets, lender selection) routes to debt-management. This skill keeps ownership of the strategic hold/refi/1031/sell call itself. No model, tax treatment, or trigger vocabulary otherwise changed.
 - v1.2 (2026-08-24): Description trimmed to restore headroom (was 1001/1024,
