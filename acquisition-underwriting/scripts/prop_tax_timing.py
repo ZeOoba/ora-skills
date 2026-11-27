@@ -37,7 +37,7 @@ class Deal:
     current_base: float          # DC: assessment in force at close; MI: seller's capped TV in force at close
     assessor_value: float        # DC: assessor's latest/proposed AV; MI: assessor's current SEV
     rate: float = None           # DC: None -> Class 2 step; MI: total mills / 1000 (incl. admin fee)
-    addon_rate: float = 0.0      # e.g. DC BID 0.000972 of AV; MI special assessments as rate
+    addon_rate: float = 0.0      # e.g. a DC BID of about 0.001 of AV; MI special assessments as rate
     growth: float = 0.025        # assessor value growth [EST]
     mi_cap: float = 0.025        # MI inflation rate multiplier - 1 after uncap [EST] (capped at 5%)
     weights: tuple = (0.2, 0.5, 0.3)   # standing reported default (Gabriel 2026-11-24)
@@ -101,11 +101,11 @@ def excel_pattern(profile):
     return ("CY tax = IF(CY=YEAR(Close), TV_capped*mills*(DaysOwned/365), TV_uncapped(CY)*mills)\n"
             "  TV_uncapped(CY) = IF(Case=\"A\",0.5*Price,SEV_assessor*(1+g))*(1+MIN(CPIcap,5%))^(CY-YEAR(Close)-1)")
 if __name__ == '__main__':
-    # Test 1: 1500 21st St NW (DC) — must reproduce the v02 model (Y1 RP = 62,606; Y2 = 34,867 under case A)
-    d = Deal('DC', dt.date(2027, 1, 1), 2_100_000, 4_359_090, 4_359_090)
-    s = schedule(d, 3, 'A'); print('DC 1500 21st, case A:', s)
+    # Test 1: synthetic DC deal (price 1.4M, AV 3.2M) — Y1 RP = 45,375; Y2 = 23,244 under case A
+    d = Deal('DC', dt.date(2027, 1, 1), 1_400_000, 3_200_000, 3_200_000)
+    s = schedule(d, 3, 'A'); print('DC synthetic, case A:', s)
     print('DC reset TY: close 1/1/2027 ->', dc_reset_ty(dt.date(2027, 1, 1)), '| 6/15/2027 ->', dc_reset_ty(dt.date(2027, 6, 15)), '| 10/15/2027 ->', dc_reset_ty(dt.date(2027, 10, 15)))
-    d2 = Deal('DC', dt.date(2027, 6, 15), 2_100_000, 4_359_090, 4_359_090, next_ty_base=4_359_090 * 1.025)
+    d2 = Deal('DC', dt.date(2027, 6, 15), 1_400_000, 3_200_000, 3_200_000, next_ty_base=3_200_000 * 1.025)
     print('DC June close, case A (new-owner petition within 45 days; reset still TY2028):', schedule(d2, 3, 'A'))
     # Test 2: 2900 Northridge, Walker MI — capped TV 562,626, 44.75 mills, price 2.25M -> Y2 tax 50,344
     m = Deal('MI', dt.date(2026, 1, 1), 2_250_000, 562_626, 1_125_000, rate=0.04475, growth=0.0)

@@ -1,6 +1,6 @@
 """Tests for the v4.61 tax and intake tools: prop_tax_timing.py (RE-4.61-4), uw_tieout.py (RE-4.61-2) and the
 offline parts of dc_parcel_pull.py (RE-4.61-1). Network calls are never made here; the live DC acceptance call
-(`python dc_parcel_pull.py --ssl "0067 0066"`) is a manual verification step.
+(`python dc_parcel_pull.py --ssl "<SQUARE LOT>"` on a live parcel) is a manual verification step.
 Run: python acquisition-underwriting/scripts/test_tax_intake_tools.py"""
 import contextlib
 import datetime as dt
@@ -22,10 +22,11 @@ import prop_tax_timing as P  # noqa: E402
 class PropTaxTiming(unittest.TestCase):
     """The module's own acceptance figures (handoff section 9.1)."""
 
-    def test_dc_1500_21st_case_a(self):
-        d = P.Deal("DC", dt.date(2027, 1, 1), 2_100_000, 4_359_090, 4_359_090)
+    def test_dc_synthetic_case_a(self):
+        # synthetic DC deal: price 1.4M, in-force AV 3.2M (Class 2 <= USD 5M, 1.65%)
+        d = P.Deal("DC", dt.date(2027, 1, 1), 1_400_000, 3_200_000, 3_200_000)
         s = P.schedule(d, 2, "A")
-        self.assertEqual([r["tax"] for r in s], [62_606.24, 34_866.56])
+        self.assertEqual([r["tax"] for r in s], [45_375.0, 23_244.38])
 
     def test_dc_reset_ty(self):
         self.assertEqual(P.dc_reset_ty(dt.date(2027, 1, 1)), 2028)
@@ -41,7 +42,7 @@ class PropTaxTiming(unittest.TestCase):
         self.assertEqual(P.Deal("DC", dt.date(2027, 1, 1), 1, 1, 1).weights, (0.2, 0.5, 0.3))
 
     def test_pw_is_the_weighted_mix(self):
-        d = P.Deal("DC", dt.date(2027, 1, 1), 2_100_000, 4_359_090, 4_359_090)
+        d = P.Deal("DC", dt.date(2027, 1, 1), 1_400_000, 3_200_000, 3_200_000)
         a, b, c, pw = (P.base_for(d, 2029, 1, k) for k in ("A", "B", "C", "PW"))
         self.assertAlmostEqual(pw, 0.2 * a + 0.5 * b + 0.3 * c, places=6)
 
@@ -127,16 +128,16 @@ class UwTieout(unittest.TestCase):
 
 class DcParcelOffline(unittest.TestCase):
     def test_ssl_key_pads_square_to_8(self):
-        self.assertEqual(DCP.ssl_key("0067 0066"), "0067    0066")
+        self.assertEqual(DCP.ssl_key("1234 0056"), "1234    0056")
         self.assertEqual(DCP.ssl_key("5128N 0012"), "5128N   0012")
 
     def test_ssl_key_rejects_bad_input(self):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
-            DCP.ssl_key("00670066")
+            DCP.ssl_key("12340056")
 
     def _pull_with(self, flood):
         calls = []
-        attrs = {"SSL": "0067    0066", "PREMISEADD": "X", "CLASSTYPE": "2", "NEWTOTAL": 1_000_000}
+        attrs = {"SSL": "1234    0056", "PREMISEADD": "X", "CLASSTYPE": "2", "NEWTOTAL": 1_000_000}
         feat = {"attributes": attrs, "geometry": {"rings": [[[-77.0, 38.9], [-77.0, 38.91], [-77.01, 38.9]]]}}
 
         def fake_get(url, params, timeout=40):
@@ -145,7 +146,7 @@ class DcParcelOffline(unittest.TestCase):
         orig = DCP.get
         DCP.get = fake_get
         try:
-            out = DCP.pull(ssl="0067 0066", flood=flood)
+            out = DCP.pull(ssl="1234 0056", flood=flood)
         finally:
             DCP.get = orig
         return out, calls
@@ -161,7 +162,7 @@ class DcParcelOffline(unittest.TestCase):
         self.assertTrue(any("hazards.fema.gov" in u for u in calls), calls)
 
     def test_class_rate(self):
-        self.assertEqual(DCP.class_rate("2", 4_359_090), 0.0165)
+        self.assertEqual(DCP.class_rate("2", 3_200_000), 0.0165)
         self.assertEqual(DCP.class_rate("2", 5_000_000), 0.0165)        # whole-value step: <= USD 5M
         self.assertEqual(DCP.class_rate("2", 5_000_001), 0.0177)
         self.assertEqual(DCP.class_rate("2", 6_000_000), 0.0177)

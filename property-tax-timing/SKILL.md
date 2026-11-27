@@ -12,14 +12,14 @@ In some jurisdictions a sale does not reset the tax base on day one. ORA pays th
 - Any other state where the tax year differs from the calendar year or the base resets after a lag (add a profile first; never copy a neighbor).
 
 ## Tool
-`acquisition-underwriting/scripts/prop_tax_timing.py` (vendored in acquisition-underwriting v4.61). The walk solver reads it through `property_tax` in component mode (`acquisition-underwriting/scripts/WALK_SOLVER.md`); a `growth` other than 2.5% or an `appeal_fee_pct` other than 30% must be declared in `cited_overrides` with its source (an MI CPI-based growth, for example). `schedule(Deal, years, case)` returns the calendar-year (model-year) tax; `dc_reset_ty(close)` returns the first DC tax year the price can reach; `excel_pattern(profile)` prints the workbook formula. Run `python prop_tax_timing.py` first: its tests must reproduce DC 1500 21st (CY2027 USD 62,606.24, CY2028 USD 34,866.56) and MI Walker (USD 25,177.51 / USD 50,343.75).
+`acquisition-underwriting/scripts/prop_tax_timing.py` (vendored in acquisition-underwriting v4.61). The walk solver reads it through `property_tax` in component mode (`acquisition-underwriting/scripts/WALK_SOLVER.md`); a `growth` other than 2.5% or an `appeal_fee_pct` other than 30% must be declared in `cited_overrides` with its source (an MI CPI-based growth, for example). `schedule(Deal, years, case)` returns the calendar-year (model-year) tax; `dc_reset_ty(close)` returns the first DC tax year the price can reach; `excel_pattern(profile)` prints the workbook formula. Run `python prop_tax_timing.py` first: its tests must reproduce the synthetic DC deal (CY2027 USD 45,375.00, CY2028 USD 23,244.38) and MI Walker (USD 25,177.51 / USD 50,343.75).
 
 ## Profiles
 **DC.** Tax year (TY) runs Oct 1 to Sep 30 and is named by its ending year (TY2027 = Oct 2026 to Sep 2027). Annual 100% market reassessment. TY T is valued as of Jan 1 of T-1; notices by Mar 1; first-level appeal deadline Apr 1. A sale does not reset the base; it is evidence for the assessor or an appeal, and OTR often disqualifies sales from its model.
 - Year 1: the assessment in force at close (pull it with `dc_parcel_pull.py`).
 - Reset TY = the TY in force at close + 1. A new owner may petition for administrative review within 45 days of the purchase date (OTR), so a close after Apr 1 does not forfeit the next TY: file within 45 days of closing, or by Apr 1, whichever applies.
 - Usual outcome: a full reset to the price is the optimistic tail. RPTAC reduced 3.6% (TY2023) and 8.5% (TY2024) of decided Class 2 appeals; practitioners cite 5-25% reductions when an appeal succeeds. Case B governs DC (below).
-- Rate: Class 2 whole-value step (1.65% up to USD 5M, 1.77% up to USD 10M, 1.89% above). Add the BID rate (Dupont Circle about 0.0972% of AV) and public-space fees as separate lines.
+- Rate: Class 2 whole-value step (1.65% up to USD 5M, 1.77% up to USD 10M, 1.89% above). Add the BID rate (about 0.1% of AV in a typical DC BID) and public-space fees as separate lines.
 - Calendar-year cost = 9/12 of TY(CY) + 3/12 of TY(CY+1) in full years.
 
 **Michigan.** Tax year = calendar year (summer and winter bills on that year's Taxable Value, TV). Tax day Dec 31.
@@ -46,4 +46,4 @@ Governing case: **DC = B** where the assessment exceeds the price (acquisition-u
 
 ## Changelog
 - v1.1 (2026-11-24): script vendored into acquisition-underwriting/scripts (v4.61); DC governing case B and PW 20/50/30 (Gabriel in-turn 2026-11-24); routing tie-breaks added to the description. The v1.0 platform package bundled the walk solver's files instead of `prop_tax_timing.py`: repackage from this folder.
-- v1.0 (2026-11-24): from 1500 21st St NW (DC) and 2900 Northridge, Walker MI. Gabriel in-turn: "A small skill or template for that pattern would help."
+- v1.0 (2026-11-24): from a DC mixed-use pursuit and 2900 Northridge, Walker MI. Gabriel in-turn: "A small skill or template for that pattern would help."

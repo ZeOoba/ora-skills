@@ -1152,9 +1152,11 @@ class RolloverAndLeaseUpTiming(unittest.TestCase):
 
 class ComponentMode(unittest.TestCase):
     """v4.61 (RE-4.61-3): Mixed-Use Component Lens, property-tax timing and entity tax in the walk solver.
-    Fixture = 1500 21st St NW v02 inputs (public record + OM). Acceptance compares the IRR legs with the deal
-    engine's walks (2026-11-24, UST 5.00%); the Basis leg here runs on the synthetic RCT table."""
-    FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "walk_examples", "1500_21st_St_NW.json")
+    Fixture = walk_examples/synthetic_dc_mixed_use.json: fictional inputs (two components, DC tax profile, DC UBT).
+    The pins below are this solver's own outputs on that fixture (regression locks, 0.5%); the cross-engine
+    acceptance against the real deal runs off-repo (test_walk_real_acceptance.py). The Basis leg runs on the synthetic RCT
+    table."""
+    FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "walk_examples", "synthetic_dc_mixed_use.json")
     ENGINE_UST = 0.05
 
     @classmethod
@@ -1190,23 +1192,24 @@ class ComponentMode(unittest.TestCase):
         return self._cache[case]
 
     def assertWithin(self, got, want, tol, label):
-        self.assertLessEqual(abs(got / want - 1), tol, f"{label}: {got:,.0f} vs engine {want:,.0f}")
+        self.assertLessEqual(abs(got / want - 1), tol, f"{label}: {got:,.0f} vs pin {want:,.0f}")
 
-    # --- acceptance vs the deal engine (handoff section 8.5) ---
-    def test_fixture_base_tax_a_within_1pct(self):
-        self.assertWithin(self.solved("A")["input_case"]["legs_base"]["irr"], 1_188_896, 0.01, "Base tax A")
+    # --- regression pins on the synthetic fixture (solver outputs 2026-11-27, UST 5.00%) ---
+    def test_fixture_base_tax_a_pinned(self):
+        self.assertWithin(self.solved("A")["input_case"]["legs_base"]["irr"], 926_352, 0.005, "Base tax A")
 
-    def test_fixture_downside_tax_a_within_1pct(self):
-        self.assertWithin(self.solved("A")["input_case"]["legs_downside"]["irr"], 788_380, 0.01, "Downside tax A")
+    def test_fixture_downside_tax_a_pinned(self):
+        self.assertWithin(self.solved("A")["input_case"]["legs_downside"]["irr"], 600_415, 0.005, "Downside tax A")
 
-    def test_fixture_assessment_holds_within_1pct(self):
-        self.assertWithin(self.solved("C")["input_case"]["legs_base"]["irr"], 630_223, 0.01, "Base tax C")
+    def test_fixture_assessment_holds_pinned(self):
+        self.assertWithin(self.solved("C")["input_case"]["legs_base"]["irr"], 546_239, 0.005, "Base tax C")
 
-    def test_fixture_tax_b_within_2pct(self):
-        # 2%, not 1%: prop_tax_timing's case B is the midpoint of the price and the assessor value GROWN to the reset
-        # TY; the v02 engine took the midpoint with the in-force AV (WALK_SOLVER.md, Component mode, convention gaps).
-        self.assertWithin(self.solved("B")["input_case"]["legs_base"]["irr"], 953_850, 0.02, "Base tax B")
-        self.assertWithin(self.solved("B")["input_case"]["legs_downside"]["irr"], 532_529, 0.02, "Downside tax B (RE-4.61-6)")
+    def test_fixture_tax_b_pinned(self):
+        self.assertWithin(self.solved("B")["input_case"]["legs_base"]["irr"], 750_515, 0.005, "Base tax B")
+        self.assertWithin(self.solved("B")["input_case"]["legs_downside"]["irr"], 405_886, 0.005, "Downside tax B (RE-4.61-6)")
+
+    def test_fixture_is_marked_synthetic(self):
+        self.assertIs(self.spec.get("_synthetic"), True)
 
     # --- handoff section 8.6 ---
     def test_component_split_sums_to_building_noi(self):
@@ -1237,28 +1240,28 @@ class ComponentMode(unittest.TestCase):
         self.assertEqual(P.dc_reset_ty(date(2027, 10, 15)), 2029)     # TY2028 already in force at close
         # In the model: a June close still reaches the price in TY2028 (Oct 2027), so model year 1 (Jun 2027 -
         # May 2028) carries 4 months of the seller's base and 8 of the price, not 12 of the seller's base.
-        price = 2_100_000
+        price = 1_400_000
         d = self.deal(close_date="2027-06-01")
         tax, _ = self.C.tax_by_year(d, price)
-        rate = 0.0165 + 0.000972
-        self.assertAlmostEqual(tax[0], 4 / 12 * 4_359_090 * rate + 8 / 12 * price * rate, places=2)
+        rate = 0.0165 + 0.0010
+        self.assertAlmostEqual(tax[0], 4 / 12 * 3_200_000 * rate + 8 / 12 * price * rate, places=2)
 
     def test_tax_line_matches_prop_tax_timing_schedule(self):
         from datetime import date
         P = self.C._ptt()
         for case in ("A", "B", "C", "PW"):
             d = self.deal(tax_case=case)
-            tax, _ = self.C.tax_by_year(d, 2_100_000)
-            ref = P.schedule(P.Deal("DC", date(2027, 1, 1), 2_100_000, 4_359_090, 4_359_090, addon_rate=0.000972),
+            tax, _ = self.C.tax_by_year(d, 1_400_000)
+            ref = P.schedule(P.Deal("DC", date(2027, 1, 1), 1_400_000, 3_200_000, 3_200_000, addon_rate=0.0010),
                              11, case)
             for t in range(11):
                 self.assertAlmostEqual(tax[t], ref[t]["tax"], delta=0.01, msg=f"{case} year {t + 1}")
 
     def test_dc_tax_y1_is_seller_base_not_price(self):
-        tax, fee = self.C.tax_by_year(self.deal(), 2_100_000)
-        self.assertAlmostEqual(tax[0], 62_606.24 + 0.75 * 4_359_090 * 0.000972 + 0.25 * 2_100_000 * 0.000972, places=1)
+        tax, fee = self.C.tax_by_year(self.deal(), 1_400_000)
+        self.assertAlmostEqual(tax[0], 45_375.0 + 0.75 * 3_200_000 * 0.0010 + 0.25 * 1_400_000 * 0.0010, places=1)
         self.assertGreater(fee[1], 0)            # appeal fee in the reset year
-        _, fee_c = self.C.tax_by_year(self.deal(tax_case="C"), 2_100_000)
+        _, fee_c = self.C.tax_by_year(self.deal(tax_case="C"), 1_400_000)
         self.assertEqual(sum(fee_c), 0)          # no appeal, no fee
 
     def test_entity_tax_lowers_the_irr_walk(self):
@@ -1271,12 +1274,12 @@ class ComponentMode(unittest.TestCase):
         fa = self.solved("A")["flags"]
         self.assertTrue(any("Tax case A is reported only" in f for f in fa))
         self.assertFalse(any("is reported only: the walk is solved" in f for f in self.solved("B")["flags"]))
-        for case in ("A", "B", "C", "PW"):                              # assessment 4.36M > every walk: B governs
+        for case in ("A", "B", "C", "PW"):                              # assessment 3.2M > every walk: B governs
             self.assertEqual(self.solved(case)["tax_case"], "B", case)
             self.assertAlmostEqual(self.solved(case)["binding_walk"], self.solved("B")["binding_walk"], delta=1)
-        self.assertTrue(any("Retail (L1-L2).renewal_at_contract raises legs" in f and "cited: OM p.20" in f
+        self.assertTrue(any("Retail (L1-L2).renewal_at_contract raises legs" in f and "cited: Synthetic" in f
                             for f in fa))
-        self.assertTrue(self.solved("A")["majority_vacant"])            # office 3,638 of 5,216 SF vacant
+        self.assertTrue(self.solved("A")["majority_vacant"])            # office 3,000 of 5,000 SF vacant
         self.assertAlmostEqual(self.solved("A")["irr_floor"], 0.125)    # 10.5% + 100 vacant + 100 single tenant
 
     def test_validation(self):
@@ -1371,9 +1374,9 @@ class ComponentMode(unittest.TestCase):
         self.assertAlmostEqual(sch.rent[73], 1000 * 1.03 ** 6)        # next anniversary, month 73
 
     def test_appeal_fee_on_full_bill_saving(self):
-        tax, fee = self.C.tax_by_year(self.deal(), 2_100_000)
-        hold, a = 4_359_090 * 1.025, 2_100_000
-        saving = hold * (0.0165 + 0.000972) - a * (0.0165 + 0.000972)
+        tax, fee = self.C.tax_by_year(self.deal(), 1_400_000)
+        hold, a = 3_200_000 * 1.025, 1_400_000
+        saving = hold * (0.0165 + 0.0010) - a * (0.0165 + 0.0010)
         self.assertAlmostEqual(fee[1], 0.30 * saving, places=2)
 
     def test_case_b_flag_only_when_assessment_above_price(self):
@@ -1430,7 +1433,7 @@ class ComponentMode(unittest.TestCase):
     def test_dc_selector_uses_assessor_value(self):
         # high in-force base, low proposed assessment: B (midpoint with the low path) would be looser than A
         spec = json.loads(json.dumps(self.spec))
-        spec["property_tax"].update(current_base=4_359_090, assessor_value=150_000)
+        spec["property_tax"].update(current_base=3_200_000, assessor_value=150_000)
         r = self.C.solve_components(self.fd(spec), self.ENGINE_UST)
         self.assertEqual(r["tax_case"], "A")
 
@@ -1527,8 +1530,8 @@ class ComponentMode(unittest.TestCase):
 
     def test_basis_leg_pinned(self):
         r = self.solved("B")
-        self.assertAlmostEqual(r["legs_base"]["basis"], 232_986, delta=2)      # synthetic RCT regression pin
-        self.assertAlmostEqual(r["binding_walk"], 232_986, delta=2)
+        self.assertAlmostEqual(r["legs_base"]["basis"], 207_535, delta=2)      # synthetic RCT regression pin
+        self.assertAlmostEqual(r["binding_walk"], 207_535, delta=2)
         # independent check: the all-in at the Basis-leg price equals the doctrine maximum all-in
         from ora_walk.solver import max_allin_basis, basis_context
         d = self.deal(tax_case="B")
@@ -1667,7 +1670,7 @@ class ComponentMode(unittest.TestCase):
     def test_base_binds_when_downside_is_higher(self):
         spec = json.loads(json.dumps(self.spec))
         spec.update(market_land_value=5_000_000, land_comp_count=5, land_flood_cleared=True)
-        spec["components"][1]["services_psf"] = 40
+        spec["components"][1]["services_psf"] = 28
         r = self.C.solve_components(self.fd(spec), self.ENGINE_UST)
         self.assertEqual(r["binding_case"], "Base")
         self.assertEqual(r["binding_walk"], r["base_walk"])
@@ -1841,12 +1844,12 @@ class ComponentMode(unittest.TestCase):
 
     def test_dc_parcel_null_assessment_is_a_gap(self):
         import dc_parcel_pull as DCP
-        attrs = {"SSL": "0067    0066", "PREMISEADD": "X", "CLASSTYPE": "2", "NEWTOTAL": None, "LANDAREA": 1100}
+        attrs = {"SSL": "1234    0056", "PREMISEADD": "X", "CLASSTYPE": "2", "NEWTOTAL": None, "LANDAREA": 1100}
         orig = DCP.get
         DCP.get = lambda url, params, timeout=40: {"features": [{"attributes": attrs, "geometry": {}}]} \
             if "MapServer/40" in url else {"features": []}
         try:
-            out = DCP.pull(ssl="0067 0066")
+            out = DCP.pull(ssl="1234 0056")
         finally:
             DCP.get = orig
         self.assertIsNone(out["next_bill"]["real_property_tax"])
@@ -1863,6 +1866,7 @@ class ComponentMode(unittest.TestCase):
         out = json.loads(buf.getvalue())
         self.assertIn("binding_walk", out)
         self.assertAlmostEqual(out["binding_walk"], self.solved("A")["binding_walk"], delta=1)
+
 
 
 if __name__ == "__main__":

@@ -11,8 +11,8 @@ Sources (no key, public ArcGIS REST; verified 2026-11-24):
 NOT in these layers: BID tax, public-space fees, special assessments -> confirm on MyTax.DC (Tax History tab).
 
 Usage:
-  python dc_parcel_pull.py --ssl "0067 0066"            # square + lot (suffix optional, e.g. "0199 0821" or "5128N 0012")
-  python dc_parcel_pull.py --address "1500 21ST ST NW"
+  python dc_parcel_pull.py --ssl "1234 0056"            # square + lot (suffix optional, e.g. "0199 0821" or "5128N 0012")
+  python dc_parcel_pull.py --address "<STREET ADDRESS> NW"
   options: --json out.json  --md out.md  --flood (opt-in FEMA NFHL centroid pre-check; ORA: off by default, flood
            determinations belong to ora-flood-zoning-dd, Gabriel 2026-11-24)
 """
@@ -27,7 +27,7 @@ def get(url,params,timeout=40):
         return json.load(r)
 def ssl_key(s):
     p=s.split()
-    if len(p)!=2: raise SystemExit("SSL must be 'SQUARE LOT', e.g. '0067 0066'")
+    if len(p)!=2: raise SystemExit("SSL must be 'SQUARE LOT', e.g. '1234 0056'")
     sq,lot=p
     return f"{sq:<8}{lot}" if len(sq)<=8 else f"{sq}{lot}"   # DC pads square+suffix to 8 chars
 def ms(ts): return dt.datetime.fromtimestamp(ts/1000,dt.timezone.utc).date().isoformat() if ts else None
