@@ -1080,6 +1080,77 @@ class PurgeScanTest(unittest.TestCase):
             "OPAQUE %s path=d/scan-[private].png commit=(none) ref=refs/tags/treetag reason=image (PNG)" % png2,
             "OPAQUE %s path=(none) commit=(unreachable) ref=(none) reason=image (PNG)" % png3]), v.stdout)
 
+    def test_round7_opaque_blob_stored_by_a_branch_commit_keeps_that_origin_when_also_tagged(self):
+        # S005 / S006: a blob a branch commit stored is ALSO tagged directly, and the tree holding a
+        # second one is tagged. The commit origin must stand: the tag fallback is only for a blob no
+        # commit stored (it used to overwrite path and commit with (none)).
+        self.config(values=[987653], phones=False)
+        os.makedirs(os.path.join(self.r.path, "d"))
+        with open(os.path.join(self.r.path, "scan.png"), "wb") as fh:
+            fh.write(b"\x89PNG\r\n\x1a\n" + bytes(300))
+        with open(os.path.join(self.r.path, "d", "plan.png"), "wb") as fh:
+            fh.write(b"\x89PNG\r\n\x1a\n" + bytes(301))
+        self._git_at("2020-01-01T00:00:00Z", "add", "-A")
+        self._git_at("2020-01-01T00:00:00Z", "commit", "-q", "-m", "pngs")
+        commit = git(self.r.path, "rev-parse", "HEAD").strip()
+        png, png2 = (git(self.r.path, "rev-parse", "HEAD:" + p).strip() for p in ("scan.png", "d/plan.png"))
+        git(self.r.path, "tag", "zz-blobtag", png)                                    # tag -> blob
+        git(self.r.path, "tag", "zz-treetag", git(self.r.path, "rev-parse", "HEAD:d").strip())   # tag -> tree
+        self._git_at("2020-01-02T00:00:00Z", "rm", "-q", "-r", "scan.png", "d")        # not at tip
+        self._git_at("2020-01-02T00:00:00Z", "commit", "-q", "-m", "drop pngs")
+        v, lines = self._opaque_lines()
+        self.assertEqual(lines, sorted([
+            "OPAQUE %s path=scan.png commit=%s ref=refs/heads/main reason=image (PNG)" % (png, commit),
+            "OPAQUE %s path=d/plan.png commit=%s ref=refs/heads/main reason=image (PNG)" % (png2, commit)]),
+            v.stdout)
+
+    def test_round7_opaque_blob_on_a_commit_only_a_tag_reaches_names_the_tag(self):
+        # S008: a release tag on a detached commit is the only ref reaching it; a tag push publishes
+        # the blob, so OPAQUE must name that commit and tag, never commit=(unreachable) ref=(none).
+        self.config(values=[987653], phones=False)
+        with open(os.path.join(self.r.path, "a.md"), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("x\n")
+        self._git_at("2020-01-01T00:00:00Z", "add", "-A")
+        self._git_at("2020-01-01T00:00:00Z", "commit", "-q", "-m", "a")
+        self._git_at("2020-01-02T00:00:00Z", "checkout", "-q", "--detach")
+        with open(os.path.join(self.r.path, "scan.png"), "wb") as fh:
+            fh.write(b"\x89PNG\r\n\x1a\n" + bytes(300))
+        self._git_at("2020-01-02T00:00:00Z", "add", "-A")
+        self._git_at("2020-01-02T00:00:00Z", "commit", "-q", "-m", "release")
+        commit = git(self.r.path, "rev-parse", "HEAD").strip()
+        png = git(self.r.path, "rev-parse", "HEAD:scan.png").strip()
+        self._git_at("2020-01-02T00:00:00Z", "tag", "-a", "v1", "-m", "release")
+        self._git_at("2020-01-03T00:00:00Z", "checkout", "-q", "main")
+        v, lines = self._opaque_lines()
+        self.assertEqual(lines, ["OPAQUE %s path=scan.png commit=%s ref=refs/tags/v1 reason=image (PNG)"
+                                 % (png, commit)], v.stdout)
+
+    def test_round7_unreachable_opaque_blob_is_found_by_the_documented_command(self):
+        # Scope F2: commit=(unreachable) ref=(none) is documented as "no branch, tag or notes ref
+        # reaches it, but it is still here"; the find-object command the help prints names the holder.
+        self.config(values=[987653], phones=False)
+        with open(os.path.join(self.r.path, "a.md"), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("x\n")
+        self._git_at("2020-01-01T00:00:00Z", "add", "-A")
+        self._git_at("2020-01-01T00:00:00Z", "commit", "-q", "-m", "a")
+        self._git_at("2020-01-02T00:00:00Z", "checkout", "-q", "--detach")
+        with open(os.path.join(self.r.path, "scan.png"), "wb") as fh:
+            fh.write(b"\x89PNG\r\n\x1a\n" + bytes(300))
+        self._git_at("2020-01-02T00:00:00Z", "add", "-A")
+        self._git_at("2020-01-02T00:00:00Z", "commit", "-q", "-m", "pull request only")
+        commit = git(self.r.path, "rev-parse", "HEAD").strip()
+        png = git(self.r.path, "rev-parse", "HEAD:scan.png").strip()
+        git(self.r.path, "update-ref", "refs/pull/1/head", commit)
+        self._git_at("2020-01-03T00:00:00Z", "checkout", "-q", "main")
+        v, lines = self._opaque_lines()
+        self.assertEqual(lines, ["OPAQUE %s path=(none) commit=(unreachable) ref=(none) reason=image (PNG)" % png],
+                         v.stdout)
+        doc = run("--help").stdout
+        self.assertIn("commit=(unreachable) ref=(none)", doc)
+        self.assertIn('`git log --all --reflog --source\n         --find-object=<blob> --format="%H %S"`', doc)
+        held = git(self.r.path, "log", "--all", "--reflog", "--source", "--find-object=" + png, "--format=%H %S")
+        self.assertEqual(held.split(), [commit, "refs/pull/1/head"])
+
     # ---- round 6: PDF string decoding (M01, M06, M12, M13, M14) -------------------------------
     def _pdf_found(self, content):
         """True if verify's search finds 987653 or 614-555-0124 in a PDF whose one Flate stream is
@@ -1131,6 +1202,20 @@ class PurgeScanTest(unittest.TestCase):
         # after a digit ("123" + "987,653") read as a longer number.
         self.assertTrue(self._pdf_found(b"BT [(NOI 123) Tj (987\\054653) Tj ET"))
         self.assertTrue(self._pdf_found(b"BT [(Unit 4) Tj (614\\055555\\0550124) Tj ET"))
+
+    def test_round7_pdf_hex_strings_in_an_unterminated_array_stand_alone(self):
+        # S025: the hex twin of the case above. A hex string inside an open "[" must also be a line
+        # of its own, or "NOI 123" + "987,653" glue into one longer number and hide the figure.
+        self.assertTrue(self._pdf_found(b"BT [<4e4f4920313233> Tj <3938372c363533> Tj ET"))
+        self.assertTrue(self._pdf_found(b"BT [<556e69742034> Tj <3631342d3535352d30313234> Tj ET"))
+
+    def test_round7_pdf_strings_lists_each_line_once(self):
+        # S023: both readings (with and without "%" comments) usually give the same lines. Each must
+        # appear once: a repeated line puts a string's end next to its own start, so "0124 614-555"
+        # read twice holds "614-555\n0124", a phone number the PDF never shows.
+        self.assertEqual(purge_scan.pdf_strings(b"BT (a) Tj (b) Tj (a) Tj ET"), b"a\nb")
+        self.assertFalse(self._pdf_found(b"BT (0124 614-555) Tj ET"))
+        self.assertFalse(self._pdf_found(b"BT (0124 Call 614 555) Tj ET"))
 
     # ---- R3-06: renaming a tag whose name holds a value ------------------------------------
     def test_tag_rename_recipe_leaves_no_old_tag_object(self):

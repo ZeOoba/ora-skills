@@ -18,11 +18,15 @@ sys.path.insert(0, HERE)
 import leased_push  # noqa: E402  (in-process test of prepare's race check)
 ENV = dict(os.environ, GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_AUTHOR_NAME="t",
            GIT_AUTHOR_EMAIL="t@example.com", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.com")
+# P011: one round-6 mutant run sat for 23 hours. Every child process here gets a timeout and no stdin,
+# so a hang (or a git waiting on a prompt) fails its test instead of stalling the suite.
+TIMEOUT = 300
 
 
 def git(repo, *args):
     return subprocess.run(["git", "-C", repo] + list(args), capture_output=True, encoding="utf-8",
-                          errors="surrogateescape", check=True, env=ENV).stdout.strip()
+                          errors="surrogateescape", check=True, env=ENV, stdin=subprocess.DEVNULL,
+                          timeout=TIMEOUT).stdout.strip()
 
 
 def write(path, text):
@@ -65,7 +69,7 @@ class Base(unittest.TestCase):
         if os.path.isdir(self.work):
             shutil.move(self.work, self.work + "-old%d" % len(os.listdir(self.tmp.name)))
         subprocess.run([sys.executable, "-I", SCRIPT, "prepare", backup or self.mirror, self.work],
-                       check=True, env=ENV, capture_output=True)
+                       check=True, env=ENV, capture_output=True, stdin=subprocess.DEVNULL, timeout=TIMEOUT)
         git(self.work, "filter-repo", "--force", "--replace-text", self.rules, "--replace-message", self.rules,
             *extra)
 
@@ -81,7 +85,8 @@ class Base(unittest.TestCase):
     def run_push(self, *extra, env=None, mirror=None, work=None, url=None):
         e = dict(ENV, **(env or {}))
         return subprocess.run([sys.executable, "-I", SCRIPT, mirror or self.mirror, work or self.work,
-                               url or self.remote] + list(extra), capture_output=True, text=True, env=e)
+                               url or self.remote] + list(extra), capture_output=True, text=True, env=e,
+                              stdin=subprocess.DEVNULL, timeout=TIMEOUT)
 
     def late_push(self, branch="b1"):
         other = os.path.join(self.tmp.name, "other-" + branch)
@@ -238,7 +243,7 @@ class LeasedPushTest(Base):
         # the snapshot's; pushing would put the wrong history on that branch.
         work = os.path.join(self.tmp.name, "moved-copy.git")
         subprocess.run([sys.executable, "-I", SCRIPT, "prepare", self.mirror, work],
-                       check=True, env=ENV, capture_output=True)
+                       check=True, env=ENV, capture_output=True, stdin=subprocess.DEVNULL, timeout=TIMEOUT)
         git(work, "update-ref", "refs/heads/b1", git(work, "rev-parse", "refs/heads/b0"))
         git(work, "filter-repo", "--force", "--replace-text", self.rules, "--replace-message", self.rules)
         r = self.run_push(work=work)
@@ -399,7 +404,7 @@ class LeasedPushTest(Base):
 class PrepareTest(Base):
     def run_prepare(self, backup, work):
         return subprocess.run([sys.executable, "-I", SCRIPT, "prepare", backup, work],
-                              capture_output=True, text=True, env=ENV)
+                              capture_output=True, text=True, env=ENV, stdin=subprocess.DEVNULL, timeout=TIMEOUT)
 
     def test_prepare_clones_and_snapshots_the_backup_refs(self):
         work = os.path.join(self.tmp.name, "fresh.git")

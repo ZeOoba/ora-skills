@@ -72,7 +72,11 @@ verify - exit 1 if any removed path is still reachable, any rule still matches a
          gzip/bzip2/xz/7z/rar archive, a legacy Office (OLE2) file - is listed
          at the end as OPAQUE <blob> path=<a path> commit=<a commit> ref=<a branch, tag or
          notes ref that reaches the commit, full name> reason=<why> (a blob a tag points at
-         directly, or holds in a tree it points at: commit=(none), ref=that tag); OPAQUE
+         directly, or holds in a tree it points at: commit=(none), ref=that tag;
+         path=(none) commit=(unreachable) ref=(none): no branch, tag or notes ref reaches
+         it, but it is still in this repository - dangling, or held only by a reflog, a
+         stash or a ref such as refs/pull/*; `git log --all --reflog --source
+         --find-object=<blob> --format="%H %S"` names what holds it); OPAQUE
          does not change the exit code: open each one and check it, or remove it by path.
          A configured phone number is found in ANY punctuated form: within a span of digit
          groups joined by 1-4 of ()[]./+-, whitespace, a Unicode dash or a no-break/thin
@@ -445,8 +449,9 @@ def mask(data, patterns):
 def blob_origins(repo, shas):
     """sha -> (a path, a commit, the full name of a ref reaching that commit) that stored it, from
     branches, tags and notes refs. A blob a tag (or other ref) points at directly, or holds in a
-    tree it points at, gives (its path in that tree or "(none)", "(none)", that ref). Absent if
-    unreachable."""
+    tree it points at, gives (its path in that tree or "(none)", "(none)", that ref), but only
+    when no commit stored it (S005/S006: a commit origin is never overwritten). Absent if no
+    branch, tag or notes ref reaches it (verify then prints commit=(unreachable) ref=(none))."""
     want, out, commit, ref = set(shas), {}, "", b""
     toks = git(repo, "log", "-z", "--raw", "--no-abbrev", "--no-renames", "--root", "-m", "--source",
                "--format=%x01%H %S", "--glob=refs/heads/*", "--glob=refs/tags/*", NOTES).split(b"\0")
