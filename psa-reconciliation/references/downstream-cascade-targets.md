@@ -51,7 +51,7 @@ Each target section specifies (a) what fields to push, (b) where they go in the 
 | §1.1 Parties | P-001, P-010, P-015 |
 | §1.1 Seller Counsel | P-014 |
 | §1.1 PSA Status + Effective Date | P-046 |
-| §1.1 Hard Close Deadline | P-058 or "None — Stearns/lender flex codified" if P-058 = N/A |
+| §1.1 Hard Close Deadline | P-058 or "None — lender flex codified" if P-058 = N/A |
 | §1.1 Earnest Money + Escrow Agent | P-034, P-036 |
 | §1.2 Investment Thesis — Price/SF | P-037 (derived) |
 | §1.3 Key Return Metrics | Depends on model — not directly sourced from PSA |

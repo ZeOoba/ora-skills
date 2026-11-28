@@ -72,7 +72,7 @@ Each row in the Fact Table carries these columns:
 - **Low** — the value appears in the PSA but conflicts with another provision or with an attached exhibit. Always flag Low with a Note.
 
 ### PSA ambiguities that recur — flag them explicitly
-- **Closing-date blank**: §9.1 language like "but in no case beyond _____" — treat as "no hard outer date; Stearns/lender flex codified"
+- **Closing-date blank**: §9.1 language like "but in no case beyond _____" — treat as "no hard outer date; lender flex codified"
 - **Party-name drift**: preamble may say one buyer entity, §17 Notice may say another (e.g., Oxford Capital Partners, LLC vs. Oxford Realty Advisors, LLC). Record both and flag as Typo/Conflicting.
 - **Exhibit typos**: lease expiration in body ≠ expiration in Exhibit D Rent Roll. Record body text and flag the exhibit typo.
 - **Address typos**: Purchaser's own address misstated (e.g., 100 vs. 1000 Example Way). Apply corrected value, flag typo, cite known-correct source.

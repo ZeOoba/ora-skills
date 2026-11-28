@@ -8,7 +8,7 @@ description: "Use when Gabriel names a street or corridor and asks to find the f
 Street or corridor name in, verified roster of for-sale industrial listings out, with a pricing-driver read. This skill enumerates, enriches and sanity-checks; it does not score. Scoring belongs to `acquisition-underwriting` (SCREEN), single-target pre-screens to `verified-deal-recon`, off-market owner work to `county-parcel-screen`.
 
 ## Step 0 — Resolve the street name
-User street names are often abbreviated ("Cane Road" was Cane Run Road, 40258/40216). Search the variants, state the resolved name and zip codes up front, and note which end of a long street each listing sits on (character can change sharply along one road).
+User street names are often abbreviated ("Oak Rd" was Oak Ridge Road, spanning two zip codes). Search the variants, state the resolved name and zip codes up front, and note which end of a long street each listing sits on (character can change sharply along one road).
 
 ## Step 1 — Enumerate
 Run WebSearch for `<street> <city> industrial for sale`, plus one query per zip. Then fetch, in this order, the sources that have worked: brokerage property pages (CBRE, Colliers, Cushman), CityFeet and CommercialSearch listing indexes, ZoomProspector property reports. LoopNet, Crexi, CoStar and Showcase generally return robots-disallowed, 403 or empty shells to WebFetch. **Never route around a block** (no curl/Python fetch, no cached mirrors); a Chrome-tab pull of two LoopNet property pages on 2026-09-28 returned only related-listing snippets, so it is not a dependable substitute. When a needed listing is behind a block, list it as UNREACHED and ask Gabriel to paste the listing text or an export he holds.
@@ -51,5 +51,5 @@ Every street run writes the same file, so runs are comparable and diffable.
 **Chat reply.** Lead with the outcome, the 2-4 facts that changed the picture, the file path, and the open gaps. Sources section with links. On a candidate Gabriel wants to pursue, hand to `acquisition-underwriting` SCREEN; do not log to the Deal Sourcing Log from this skill.
 
 ## Changelog
-- v1.1 (2026-09-28): Added Step 2b (enrichment pass via `listing-enrichment-gate`), dual-SF ceilings in Step 3, and the standard roster file spec (path, header, row order, flags, companion records-request draft, re-run diffing). Origin: the four-parcel Cane Run Road run of 2026-09-28. No floor, ramp, or threshold changed.
+- v1.1 (2026-09-28): Added Step 2b (enrichment pass via `listing-enrichment-gate`), dual-SF ceilings in Step 3, and the standard roster file spec (path, header, row order, flags, companion records-request draft, re-run diffing). Origin: the four-parcel Pursuit P-16 (Louisville) run of 2026-09-28. No floor, ramp, or threshold changed.
 - v1.0 (2026-09-28): Initial version.

@@ -51,7 +51,7 @@ For any county with no usable footprint/CAMA building source:
 
 ## Franklin County, OH (Columbus) — land area + building SF — 1,130/1,132 (99.8%)
 - **Endpoint:** `https://gis.franklincountyohio.gov/hosting/rest/services/ParcelFeatures/Parcel_Features/MapServer/0` (layer "Tax Parcel"). Confirmed live 2026-07-12.
-- **Join:** `PARCELID`, dashed exactly as screens ship (`010-113471`).
+- **Join:** `PARCELID`, dashed exactly as screens ship (`010-000000`).
 - **Fields:** `STATEDAREA` = land **square feet** (aliased "Legal Acres" but is sq ft — 24,107 = 0.55
   ac); `BLDGAREA` (matches auditor bldg SF); `ACRES` (GIS) is null service-wide — use `STATEDAREA`.
 - **FAR:** Bldg SF ÷ `STATEDAREA` directly (STATEDAREA already sq ft — do NOT ×43,560).

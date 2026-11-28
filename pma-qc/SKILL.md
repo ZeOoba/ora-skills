@@ -326,7 +326,7 @@ Compute and state:
   as an X% floor; vacancy insensitivity of flat per-SF fees), and a mandatory
   page-image check for OCR dollar figures plus the OneDrive-OCR fallback for
   empty Project scans in Step 2. Prompted by the Neyer Management 2026 PMA
-  template for 754 Old SR 74, which arrived carrying another client's property
+  template for Pursuit P-01, which arrived carrying another client's property
   (Fairfield Professional Park, Mack Rd), dates, SF, a garbled construction-fee
   tier and a healthcare Anti-Kickback clause; and by a tesseract misread of
   Peak's USD 1,250 fee as USD 7,250. P0 is procedural only — `pma_qc.py` does not

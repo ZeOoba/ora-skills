@@ -21,7 +21,7 @@ Extracted verbatim from `acquisition-underwriting/SKILL.md` (2026-08-13, progres
    4. Unstated basis: exclude from the grid or carry as "unstated" outside the statistics until confirmed.
    5. Report suite size for every comp; comps below one-third of the subject's block size are labeled "small-suite".
 
-   *Origin.* 4100 Perimeter Dr (Columbus): NNN asks ($10–$12) were compared with executed starting rents of $8.95 and $9.00 that were full-service (about $6.20–$6.25 NNN-equivalent [est] at $2.75/SF OpEx). The rent gap and a ~$560K uplift extrapolation were overstated; withdrawn in IC Memo v03 / Location Analysis v03.
+   *Origin.* Pursuit P-12 (Columbus): NNN asks were compared with executed starting rents that were full-service (well below the asks once converted to NNN-equivalent [est] at an OpEx proxy; figures redacted). The rent gap and the uplift extrapolated from it were overstated; withdrawn in IC Memo v03 / Location Analysis v03.
 
 ### Sale comp grid
 1. **Search:** `"[submarket] industrial property sold [year]"` (+ prior year) · `site:rebusinessonline.com` / `site:connectcre.com industrial sale [city]` · `"[city] [state] warehouse sold price per square foot"` · `"[submarket] industrial investment sale cap rate"`.

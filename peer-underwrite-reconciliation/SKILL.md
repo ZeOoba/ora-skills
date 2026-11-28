@@ -5,7 +5,7 @@ description: "Use when the user supplies other LLM or third-party underwrites (C
 
 # Peer Underwrite Reconciliation (v1.0)
 
-Purpose: extract what is valuable from outside underwrites without importing their errors, and use them as an independent check on ORA's own model. Origin: East Pointe Plaza, 2026-10-01 (ChatGPT, Gemini, Grok). The third reviewer exposed that ORA's own first-pass reading of the rent roll was wrong.
+Purpose: extract what is valuable from outside underwrites without importing their errors, and use them as an independent check on ORA's own model. Origin: Pursuit P-31 (Madison WI retail), 2026-10-01 (ChatGPT, Gemini, Grok). The third reviewer exposed that ORA's own first-pass reading of the rent roll was wrong.
 
 ## Rules
 

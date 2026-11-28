@@ -102,7 +102,7 @@
   0.666; ASR 59.08%->0.593. NO commercial SF anywhere -> pre-SF 0-95 scale (basis on age+impr/acre proxy).
 - Also: files.bcohio.gov Nextcloud shares — BOR.zip (Board of Revision complaints = distress signal).
 
-## Clermont County OH (Batavia; 754 deal county) — THIN
+## Clermont County OH (Batavia) — THIN
 - REST: https://maps.clermontauditor.org/arcgis/rest/services/Parcels/ParcelsWM/MapServer/0
   Fields: PIN (dotted '413215F117.' — opaque string), FULLADDR, OWN1/OWN2, MAIL1/MADDR1-3, LUC, ACRES.
   NO values/SF/sales in layer. Sales join: .../Sales/ParSales/MapServer/12 (PIN,PRICE,SALEDATE,SALETYPE).

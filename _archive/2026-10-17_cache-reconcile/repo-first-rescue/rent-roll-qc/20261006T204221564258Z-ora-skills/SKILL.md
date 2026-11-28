@@ -7,9 +7,9 @@ description: "Final quality audit and institutional polish for rent roll spreads
 
 Two uses. **Outbound:** a final quality audit before a rent roll goes to an external counterparty (Steps 0–2). **Inbound:** a column-integrity check on any rent roll received from a seller or broker, run before NOI is built (Step 0A). **Do not change, fabricate, or infer any data values in either use.**
 
-## Step 0A — Inbound column-integrity check (underwriting intake; added after East Pointe Plaza, 2026-10-01)
+## Step 0A — Inbound column-integrity check (underwriting intake; added after Pursuit P-31 (Madison WI retail), 2026-10-01)
 
-Origin: on East Pointe Plaza the rent roll printed a Rent/SF column that did not equal annual rent ÷ SF for 6 of 16 suites. The model treated the monthly-rent column as pure base rent and added separate recoveries on top, which likely double counted about $36K of income and overstated the walk price by about $330K. Two outside LLMs quoted the printed column; the first-pass underwrite labelled those figures errors. Run these tests before building NOI:
+Origin: on Pursuit P-31 (Madison WI retail) the rent roll printed a Rent/SF column that did not equal annual rent ÷ SF for several suites. The model treated the monthly-rent column as pure base rent and added separate recoveries on top, which likely double counted about $36K of income and overstated the walk price by about $330K. Two outside LLMs quoted the printed column; the first-pass underwrite labelled those figures errors. Run these tests before building NOI:
 
 1. **Printed vs computed.** For every column pair that should reconcile (Rent/SF vs Annual ÷ SF; Monthly × 12 vs Annual; Total vs sum of parts), compute the difference per row and in aggregate. Report suites that differ by more than $0.05/SF or 1% and the aggregate dollar gap. A gap in a minority of suites, in uneven amounts, is the signature of pass-throughs or other charges billed inside the monthly-rent column.
 2. **Never call a printed column an error until the alternative is tested.** Treat both columns as candidate base rent. Compute implied base rent from each and compare to the seller's collected base rent in the P&L.

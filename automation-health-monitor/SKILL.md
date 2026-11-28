@@ -30,7 +30,7 @@ Based on today's date and day of week, identify which of the LIVE-enumerated tas
 
 ### Step 1.25 — One-time tickler lifecycle check (added 2026-08-28, closes a false "stuck" alarm class)
 
-Incident (2026-08-28): `ora-754-flaute-escalation-check`, a one-time CC/MCP tickler (fireAt 08:00 ET), was throttle-delayed ~1h41m by the AM catch-up burst, actually fired 09:41 ET, then auto-disabled per normal one-time completion. A fleet-status/setup-self-audit advisory snapshotted mid-delay — while the task was still enabled and pre-fire — correctly read "expired, not yet fired, still enabled" AT THAT INSTANT, but was forwarded and acted on minutes later, after the task had already completed. Read at face value, a disabled one-time task looks indistinguishable from a genuinely stuck one unless `lastRunAt` is checked.
+Incident (2026-08-28): `ora-[deal]-escalation-check`, a one-time CC/MCP tickler (fireAt 08:00 ET), was throttle-delayed ~1h41m by the AM catch-up burst, actually fired 09:41 ET, then auto-disabled per normal one-time completion. A fleet-status/setup-self-audit advisory snapshotted mid-delay — while the task was still enabled and pre-fire — correctly read "expired, not yet fired, still enabled" AT THAT INSTANT, but was forwarded and acted on minutes later, after the task had already completed. Read at face value, a disabled one-time task looks indistinguishable from a genuinely stuck one unless `lastRunAt` is checked.
 
 Before treating ANY one-time task's `disabled` state (or a pasted fleet-status/setup-self-audit advisory naming one) as evidence of a miss, check `lastRunAt` against `fireAt`:
 

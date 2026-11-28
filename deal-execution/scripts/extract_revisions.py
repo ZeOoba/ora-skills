@@ -14,13 +14,13 @@ A session that greps for <w:ins> on one of those files finds nothing and conclud
 "seller returned it clean / accepted everything." That is a false negative on the
 entire redline.
 
-    Origin: 2026-07-31, 754 Old State Route 74. Seller's counsel (KMK Law) delivered
-    "PSA -- 754 Old State Rd Seller Redline 07-31-2026.docx" — a Litera Compare
+    Origin: 2026-07-31, Pursuit P-01 (Cincinnati-area). Seller's counsel delivered
+    "PSA -- [deal] Seller Redline 07-31-2026.docx" — a Litera Compare
     output with 0 tracked changes and 29 real revisions encoded as red strikethrough
     and blue double-underline. A naive tracked-change parse returned nothing.
 
 Second, subtler payoff: a compare-tool summary block names the BASELINE the other
-side compared against. At 754 that block read "Original DMS: … Purchaser Clean
+side compared against. On that deal the block read "Original DMS: … Purchaser Clean
 07-22-2026.docx" — which is what proved seller had ACCEPTED the whole 07-22 package
 rather than merely declining to comment on it. Always read the base.
 
