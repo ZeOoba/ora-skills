@@ -5,13 +5,13 @@ description: "Build a signature-ready Combined PDF: front instrument + exhibit c
 
 # Exhibit Package Builder
 
-Builds the "Combined PDF" that goes out for signature: the instrument being signed, followed by an exhibit that reproduces each underlying instrument (lease, amendments, guaranty, plans) complete and unaltered. Each exhibit page is stamped so a returned scan identifies itself page by page. Proven on 754 Old State Route 74 (Estoppel V3 Combined, 754C 28 pp / 754B 18 pp, 10/15/2026).
+Builds the "Combined PDF" that goes out for signature: the instrument being signed, followed by an exhibit that reproduces each underlying instrument (lease, amendments, guaranty, plans) complete and unaltered. Each exhibit page is stamped so a returned scan identifies itself page by page. Proven on Pursuit P-01 (Cincinnati-area) (Estoppel V3 Combined, two tenant packages of 28 pp and 18 pp, 10/15/2026).
 
 **Use for:** estoppel Exhibit A, SNDA / consent / amendment exhibits, lender or title deliverables that must attach "true and complete copies". **Not for:** drafting the front instrument itself (estoppels → estoppel-request-generation; amendments → lease-addendum; LOIs → loi-generation).
 
 ## Inputs
 
-1. **Front instrument PDF.** Always regenerate it from the current .docx first. Never reuse an older Combined PDF's front pages; that is how a stale wording variant got into the 754B package.
+1. **Front instrument PDF.** Always regenerate it from the current .docx first. Never reuse an older Combined PDF's front pages; that is how a stale wording variant got into one tenant's package.
 2. **Source instruments.** Use the executed scans, in date order. Read the page images, not the OCR, to confirm each one is complete (signature pages, initials, exhibits).
 3. **Exhibit scope decision.** If a later instrument attaches and ratifies a copy of an earlier one (e.g. a Reaffirmation whose Exhibit 1 is the lease), reproduce the earlier instrument **once**, through the ratified copy, and say so in `note`. Do not attach a second, different scan of the same lease.
 
@@ -35,7 +35,7 @@ Builds the "Combined PDF" that goes out for signature: the instrument being sign
 - **Text checks on extracted PDF text must normalize whitespace** (`" ".join(t.split())`). Otherwise line breaks produce false FAILs.
 - **Contents sheet is one page.** The script stops if it overflows; shorten the `desc` text rather than adding a page.
 - **Exhibit pages are image-only scans.** They carry no text layer. Flag this in the cover note if a recipient requires searchable exhibits; the front instrument and contents sheet do carry text.
-- **Size.** Scans push packages past 10 MB (754C: 14.3 MB). The device commit limit is 20 MB per file. Above that, deliver through SendUserFile only and say so.
+- **Size.** Scans push packages past 10 MB (one 28-page package: 14.3 MB). The device commit limit is 20 MB per file. Above that, deliver through SendUserFile only and say so.
 
 ## Script
 
@@ -52,8 +52,8 @@ Config (JSON):
   "front": "Estoppel V3.pdf",                  # instrument the exhibit attaches to
   "out": "Estoppel V3 Combined.pdf",
   "letter": "A",                                # exhibit letter
-  "caption": "to Tenant Estoppel Certificate — Suite 754B",
-  "subcaption": "754 Old State Route 74, Cincinnati, Ohio 45245",   # optional
+  "caption": "to Tenant Estoppel Certificate — Suite 100B",
+  "subcaption": "123 Example Road, Anytown, Ohio 45000",   # optional
   "intro": "The Lease ... consists of the following instruments, each reproduced complete and as executed:",
   "items": [
     {"path": "Lease.pdf", "desc": "Commercial Lease Agreement dated April 8, 2025"},

@@ -2,15 +2,15 @@ $ErrorActionPreference = "Continue"
 $ROOT = "C:\Users\Owner\OneDrive - Oxford Capital Partners\Business\Investment Candidates -- 2026"
 $jobs = @(
  @{f="20260610_GS-F_Model_v03.xlsx";                                   s="Inputs"; c="B49"},
- @{f="2262-112th-Ave-Holland-MI IRR Model.xlsx";                                s="Inputs"; c="B59"},
- @{f="8025-8009 IRR Model.xlsx";                                                s="Inputs"; c="B30"},
+ @{f="[P-34] IRR Model.xlsx";                                s="Inputs"; c="B59"},
+ @{f="[P-36] IRR Model.xlsx";                                                s="Inputs"; c="B30"},
  @{f="[deal] Columbus IRR Model.xlsx";                                      s="Inputs"; c="B34"},
- @{f="IRR Model Pike Plaza Indy Car Dealerships 7.27.2026.xlsx";                s="Inputs"; c="B24"},
- @{f="ORA_UnderwritingModel_125DouglasPike_v2.0.xlsx";                          s="Inputs"; c="B38"},
- @{f="ORA_Underwriting_2900-Northridge-Dr-NW_v1.0.xlsx";                        s="Inputs"; c="B36"},
- @{f="ORA_Underwriting_4331-Brockton-Dr-SE_v1.0.xlsx";                          s="Inputs"; c="B36"},
- @{f="outputs\2026-07-18_2900-Northridge-Dr-NW_Underwriting-Model_v01.xlsx";    s="Inputs"; c="B37"},
- @{f="outputs\2026-07-18_4331-Brockton-Dr-SE_Underwriting-Model_v01.xlsx";      s="Inputs"; c="B37"}
+ @{f="[P-10] IRR Model.xlsx";                                                     s="Inputs"; c="B24"},
+ @{f="ORA_UnderwritingModel_[P-35]_v2.0.xlsx";                          s="Inputs"; c="B38"},
+ @{f="ORA_Underwriting_[P-08]_v1.0.xlsx";                        s="Inputs"; c="B36"},
+ @{f="ORA_Underwriting_[P-09]_v1.0.xlsx";                          s="Inputs"; c="B36"},
+ @{f="outputs\2026-07-18_[P-08]_Underwriting-Model_v01.xlsx";    s="Inputs"; c="B37"},
+ @{f="outputs\2026-07-18_[P-09]_Underwriting-Model_v01.xlsx";      s="Inputs"; c="B37"}
 )
 $xl = New-Object -ComObject Excel.Application
 $xl.Visible = $false

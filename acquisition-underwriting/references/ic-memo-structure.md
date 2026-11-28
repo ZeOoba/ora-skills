@@ -6,7 +6,7 @@ Extracted verbatim from `acquisition-underwriting/SKILL.md` (2026-08-13, progres
 
 Every FULL-mode IC memo uses these sections in order. DOCX, ORA institutional style; extractable text layer required (Microsoft Print to PDF prohibited). Every figure reconciles to the underwriting workbook and facts file (QC Gate).
 
-**Typographic system (Waukee IA audit finding, resolved — codifies a pattern executed well but never written down):**
+**Typographic system (Pursuit P-30 (Des Moines-area) audit finding, resolved — codifies a pattern executed well but never written down):**
 - **Headings & inline labels:** DM Sans, bold, Navy #1B2A4A.
 - **Body / prose:** EB Garamond, Navy-black #1A1A1A.
 - **Metadata lines, system/data callouts, and table cell contents:** IBM Plex Mono, 9pt, gray #555555.

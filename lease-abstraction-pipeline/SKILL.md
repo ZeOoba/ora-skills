@@ -52,7 +52,7 @@ Any document on the `OCR` path is subject to STEP 2A below and cannot be reporte
 
 ## STEP 2A — MANUSCRIPT-AMENDMENT SWEEP (mandatory for every `OCR` document)
 
-> Origin: 2026-08-21, 754 Old State Route 74. A lease term of "May 31, 2030" was struck through in ink and replaced by
+> Origin: 2026-08-21, Pursuit P-01 (Cincinnati-area). A lease term of "May 31, 2030" was struck through in ink and replaced by
 > hand with "2027", the paragraph circled and initialed. Tesseract transcribed the typed layer and dropped the manuscript
 > change with no signal that anything was missing. An IC memo and a full IRR model were rebuilt around a rollover trough
 > that does not exist, and were published before Gabriel caught it. The same sweep then found four more hand changes OCR
@@ -79,7 +79,7 @@ sees none of it. Never report a field from an `OCR` document until the page imag
 
 **Execution check (run on every document, not only OCR ones).** Inspect the signature block and record `EXECUTION_STATUS`
 = `EXECUTED` | `UNEXECUTED` | `PARTIALLY_EXECUTED` | `INDETERMINATE`. A file copy with blank signature lines is a
-transmittal draft, not a lease — at 754 Old State the 2020 base lease was unsigned, struck diagonally, and annotated
+transmittal draft, not a lease — at Pursuit P-01 the 2020 base lease was unsigned, struck diagonally, and annotated
 "Lease Sent 7/14/20", while the amendment that amends it by reference was fully executed. Where an amendment recites a
 base lease or renewal that is absent or unexecuted, flag the **chain gap** explicitly and name every missing instrument.
 
@@ -369,7 +369,7 @@ See `references/extraction-edge-cases.md` for guidance on:
 - v2.6 (2026-08-21): manuscript-amendment sweep. New STEP 2A makes a visual page-image review mandatory for every
   OCR-path document before any field is reported, adds an `EXECUTION_STATUS` check and a lease-chain-gap check to every
   document, and adds nine STEP 5 quality flags covering unexecuted counterparts, chain gaps, un-initialed hand changes,
-  landlord-of-record mismatch and natural-person tenants. Origin: 754 Old State Route 74 — OCR silently dropped an
+  landlord-of-record mismatch and natural-person tenants. Origin: Pursuit P-01 (Cincinnati-area) — OCR silently dropped an
   initialed strike-through that moved a lease expiry by three years, and the published memo and model were both wrong
   until Gabriel caught it. The same sweep then found an unexecuted base lease that four months of file review had missed.
 - v2.5 (2026-08-15): LOW fix (Skill Text Audit finding F9) + new finding (coverage-gap-3, stale file-naming-standard citation). Moved the v2.4/v2.3 changelog prose that had accumulated in the description field down here (both already existed in this section, so the description copies were pure duplication); description now carries a single trailing version tag. Step 6's file-naming citation updated from the archived "ORA Cowork Global Settings v2.0" (2026-06-11) to the current "ORA Cowork Global Operating Prompt v3.0" (2026-07-16) — the underlying three-schema rule is unchanged, only the version/document-name citation; same fix applied to the companion `SCHEDULED_TASK.md`. No extraction field, derived metric, or quality flag changed.

@@ -157,10 +157,10 @@ archive folder naming authority, method, per-model deltas, and what was delibera
   with an array splits ORA's space-containing roots, so the sweep silently walks the wrong tree and
   reports a confident tiny count — quote every path inside the argument string, and check the
   workbook count before believing any verdict. **The portfolio-wide sweep has still never completed**;
-  the `125DouglasPike` DEAD finding stands alone and nothing else has been audited.
+  the `[P-35]` DEAD finding stands alone and nothing else has been audited.
 - v1.0 (2026-08-22): initial. Extracted from the refi-rate rebase (7.00% → 6.50%, 10 workbooks),
   which established every rule above the hard way: the openpyxl cached-value trap (caught before
-  the write, not after), the constant-vs-formula pre-check (`125DouglasPike` Sensitivity!B9 is a
-  dependent), the unmoved-metric finding (LTV binds, not DSCR), and `125DouglasPike` v2.0 sitting
+  the write, not after), the constant-vs-formula pre-check (`[P-35]` Sensitivity!B9 is a
+  dependent), the unmoved-metric finding (LTV binds, not DSCR), and `[P-35]` v2.0 sitting
   DEAD with null DSCRs that no QC run would have surfaced — which is what `cached_value_lint.py`
   now exists to catch.

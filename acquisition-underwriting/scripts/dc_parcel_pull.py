@@ -11,7 +11,7 @@ Sources (no key, public ArcGIS REST; verified 2026-11-24):
 NOT in these layers: BID tax, public-space fees, special assessments -> confirm on MyTax.DC (Tax History tab).
 
 Usage:
-  python dc_parcel_pull.py --ssl "1234 0056"            # square + lot (suffix optional, e.g. "0199 0821" or "5128N 0012")
+  python dc_parcel_pull.py --ssl "1234 0056"            # square + lot (suffix optional, e.g. "5128N 0012")
   python dc_parcel_pull.py --address "<STREET ADDRESS> NW"
   options: --json out.json  --md out.md  --flood (opt-in FEMA NFHL centroid pre-check; ORA: off by default, flood
            determinations belong to ora-flood-zoning-dd, Gabriel 2026-11-24)

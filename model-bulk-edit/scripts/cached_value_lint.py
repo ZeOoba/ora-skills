@@ -9,7 +9,7 @@ reads comes back None. None reads as "field not populated", not as "this file ha
 never been calculated" -- so a broken model looks like an incomplete one and the QC
 Gate passes over it silently.
 
-Found live 2026-08-22: ORA_UnderwritingModel_125DouglasPike_v2.0.xlsx carried null
+Found live 2026-08-22: ORA_UnderwritingModel_[P-35]_v2.0.xlsx carried null
 DSCR at Returns!B37 and Sensitivity!B17. Any QC run against it would have read nulls.
 
 Exit codes: 0 = no dead workbooks, 1 = at least one DEAD/PARTIAL, 2 = usage error.

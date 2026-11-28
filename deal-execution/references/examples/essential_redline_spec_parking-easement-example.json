@@ -1,0 +1,166 @@
+[
+ {
+  "op": "insert",
+  "anchor": "as the same may exist from time to time",
+  "at": "end",
+  "text": ", but excluding the truck court, loading docks, drive-in door approaches, and other loading areas located on the Owner 1 Property (the \"Owner 1 Loading Areas\"), which shall remain under the sole control of Owner 1"
+ },
+ {
+  "op": "insert",
+  "anchor": "for access to the parking rights granted in this Agreement.",
+  "at": "end",
+  "text": " In addition, Owner 2 hereby grants to Owner 1, for the benefit of the Owner 1 Property, a perpetual, non-exclusive easement over, upon, and across the portion of the Owner 2 Property depicted as the \"Owner 1 Access Route\" on Exhibit C for ingress and egress by passenger, delivery, loading, and commercial vehicles to and from the public road, the Owner 1 Exclusive Spaces, and the Owner 1 Loading Areas. Owner 2 shall not relocate, narrow, obstruct, or reconfigure the Owner 1 Access Route without the prior written consent of Owner 1."
+ },
+ {
+  "op": "insert",
+  "anchor": "right to use the parking spaces shown",
+  "at": 12,
+  "text": ", for the parking and loading of vehicles by Owner 1 and its Permittees,"
+ },
+ {
+  "op": "insert",
+  "anchor": "\"). Neither Owner 2 nor its Permittees",
+  "at": 4,
+  "text": "The Owner 1 Exclusive Spaces shall include (a) all parking spaces located on the Owner 1 Property other than the Eliminated Spaces, and (b) the approximately [number] parking spaces on the Owner 2 Property adjacent to the building located on the Owner 1 Property that are designated as exclusive to the Owner 1 Property on the modified site plan approved by the Township on [date] (Case No. [number]). "
+ },
+ {
+  "op": "insert",
+  "anchor": "Owner , at its sole cost",
+  "at": 6,
+  "text": "1"
+ },
+ {
+  "op": "new_para_after",
+  "anchor": "Any amount not paid when due under this Article 4",
+  "segments": [
+   [
+    "Self-Help. ",
+    true
+   ],
+   [
+    "If Owner 2 fails to perform any Maintenance Work required under this Article 4 within thirty (30) days after written notice from Owner 1 (or, in the case of snow and ice removal or any condition presenting an imminent risk of injury to persons or damage to property, within twenty-four (24) hours after notice, which may be given by telephone or email), Owner 1 may perform such Maintenance Work, and Owner 2 shall reimburse Owner 1 for [percentage] of the reasonable, actual, out-of-pocket cost thereof within thirty (30) days after receipt of an invoice. Owner 1 may offset any amount not so reimbursed against amounts otherwise payable by Owner 1 under this Article 4.",
+    false
+   ]
+  ]
+ },
+ {
+  "op": "new_para_after",
+  "anchor": "Waiver of Subrogation. ",
+  "segments": [
+   [
+    "Insurance. ",
+    true
+   ],
+   [
+    "Each Owner shall maintain commercial general liability insurance covering its Property, including the Shared Facilities located thereon, and its and its Permittees' use of the Shared Facilities, with limits of not less than One Million Dollars ($1,000,000.00) per occurrence and Two Million Dollars ($2,000,000.00) in the aggregate, naming the other Owner as an additional insured, and shall deliver a certificate evidencing such insurance to the other Owner upon request. Owner 2 shall require each contractor performing Maintenance Work to maintain commercial general liability insurance with like limits naming both Owners as additional insureds.",
+    false
+   ]
+  ]
+ },
+ {
+  "op": "insert",
+  "anchor": "supersedes all prior understandings regarding the same.",
+  "at": "end",
+  "text": " Notwithstanding the foregoing, nothing in this Agreement terminates, modifies, or limits the Agreement Creating Reciprocal Easements recorded [date] in [book/page], [County] Records, or any recorded sanitary sewer or utility easement benefiting either Property, each of which remains in full force and effect."
+ },
+ {
+  "op": "new_para_after",
+  "anchor": "Counterparts. ",
+  "segments": [
+   [
+    "Mortgagee Consent. ",
+    true
+   ],
+   [
+    "Concurrently with the execution of this Agreement, Owner 2 shall cause the holder of each mortgage encumbering the Owner 2 Property to execute and deliver, for recording with this Agreement, a consent and subordination by which such holder consents to this Agreement and subordinates the lien of its mortgage to the easements and rights granted in this Agreement.",
+    false
+   ]
+  ]
+ },
+ {
+  "op": "new_para_after",
+  "anchor": "Counterparts. ",
+  "segments": [
+   [
+    "Notices. ",
+    true
+   ],
+   [
+    "All notices under this Agreement shall be in writing and shall be delivered by hand, by nationally recognized overnight courier, or by certified mail, return receipt requested, to an Owner at the address to which real estate tax bills for such Owner's Property are mailed by the County Treasurer, or at such other address as such Owner designates by notice to the other Owner, with a copy by email to any email address so designated. Notice shall be effective upon delivery or refusal of delivery.",
+    false
+   ]
+  ]
+ },
+ {
+  "op": "insert",
+  "anchor": "Depiction of Owner 1 Exclusive Spaces (located",
+  "at": 0,
+  "text": "Surveyed Legal Description and "
+ },
+ {
+  "op": "insert",
+  "anchor": "Owner 1 Exclusive Spaces (located on the Owner 1 Property and the Owner 2 Property)",
+  "at": 24,
+  "text": ", the Owner 1 Access Route, and the Owner 1 Loading Areas"
+ },
+ {
+  "op": "comment",
+  "anchor": "THIS PARKING EASEMENT",
+  "text": "ORA comments are limited to essential items. Approval of this Agreement is subject to review of Exhibits A through E, which are blank in this draft."
+ },
+ {
+  "op": "comment",
+  "anchor": "The Owner 1 Property is adjacent to the Owner 2 Property",
+  "text": "Please confirm, by plotting the recorded reciprocal-easement exception on the survey, that the shared drive lies within the recorded access strip. The new last sentence of Section 8.5 preserves that recorded easement."
+ },
+ {
+  "op": "comment",
+  "anchor": "as the same may exist from time to time",
+  "text": "Owner 1 Loading Areas are carved out of Parking Areas so that the rear truck court and loading areas on the Owner 1 Property are not common parking and are not maintained or reconfigured by Owner 2."
+ },
+ {
+  "op": "comment",
+  "anchor": "for access to the parking rights granted in this Agreement.",
+  "text": "Fixes the route on the Owner 2 Property that serves the Owner 1 Exclusive Spaces and rear loading. As drafted, the drive aisles run only 'as the same may exist from time to time' and could be reconfigured by Owner 2. The route must be shown on Exhibit C."
+ },
+ {
+  "op": "comment",
+  "anchor": "Neither Owner 2 nor its Permittees shall park in the Owner 1",
+  "text": "Clause (a) papers a pre-PSA email exchange in which ORA proposed that the spaces in front of the Owner 1 building be exclusive to it, with shared use of non-exclusive spaces with the Owner 2 building, and the seller's representative agreed. Clause (b) is the exclusive row shown on the approved PD plat and the matching PSA exhibit."
+ },
+ {
+  "op": "comment",
+  "anchor": "Owner 2 as Maintaining Owner",
+  "text": "The PSA requires that electrical service from an adjoining third-party parcel to equipment and exterior lights on the Owner 1 Property be separated or submetered by Seller at its cost before Closing. It is not addressed here because that parcel's owner is not a party; please confirm Seller will separate before Closing."
+ },
+ {
+  "op": "comment",
+  "anchor": "Any amount not paid when due under this Article 4",
+  "text": "Self-help: both Owner 1 Property leases are gross, so the Owner 1 Property owner remains liable to its tenants for the parking lot and snow removal even though Owner 2 performs the work."
+ },
+ {
+  "op": "comment",
+  "anchor": "Waiver of Subrogation. ",
+  "text": "New Section 5.3: the draft has no insurance requirement, although Owner 2 performs snow and ice removal across the Owner 1 Property. Section 5.2's waiver also refers to insurance 'required to be carried hereunder'."
+ },
+ {
+  "op": "comment",
+  "anchor": "supersedes all prior understandings regarding the same.",
+  "text": "As drafted, 'supersedes all prior understandings regarding the same' could be read to displace the recorded Reciprocal Easements as between these two parcels."
+ },
+ {
+  "op": "comment",
+  "anchor": "Counterparts. ",
+  "text": "New Section 8.7: the deemed approval in Section 4.2 and the cure periods in Section 6.1 run from written notice, but the draft has no notice provision. After Closing, the buyer will designate its notice address, with a copy to its counsel. New Section 8.8: the PSA requires the Owner 2 mortgagee to consent and subordinate. Please identify the lender and add a joinder page."
+ },
+ {
+  "op": "comment",
+  "anchor": "Legal Description Owner 1 Property",
+  "text": "Use the commitment legal description, with the commencement-call typo identified in the title review corrected."
+ },
+ {
+  "op": "comment",
+  "anchor": "Surveyed Legal Description and",
+  "text": "Exhibit C must be a surveyed legal description plus a depiction so the easement can be insured as Parcel II (ALTA 17). It must match the approved PD Minor Amendment plat (exclusive and eliminated space counts) and the matching PSA exhibit. Exhibits D and E should be likewise surveyed and consistent with that plat."
+ }
+]

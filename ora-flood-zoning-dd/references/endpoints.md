@@ -18,7 +18,7 @@
 ## Cincinnati OH
 | CAGIS (Hamilton Co + city) | https://cagisonline.hamilton-co.org/arcgis/rest/services | V | CINC_PLANNING = zoning; COUNTYWIDE folder |
 | Cincinnati code | https://library.municode.com/oh/cincinnati | U | Browser |
-| Clermont Co GIS | https://gis.clermontcountyohio.gov | U | Verify on first 754-area use |
+| Clermont Co GIS | https://gis.clermontcountyohio.gov | U | Verify on first use |
 | Butler Co GIS | https://www.butlercountyauditor.org/gis | U | Liberty/West Chester deals |
 
 ## Kansas City
@@ -46,7 +46,7 @@
 
 ## Louisville / Jefferson County KY
 
-LOJIC (Louisville/Jefferson County Information Consortium) — keyless ArcGIS REST, verified live 2026-08-24 via direct point/envelope queries against both subject parcels (4652 Knopp Ave, 8301 Cane Run Rd). No Kentucky-outside-Cincinnati entries existed in this file before this pass; Louisville became a live target market 2026-08-05.
+LOJIC (Louisville/Jefferson County Information Consortium) — keyless ArcGIS REST, verified live 2026-08-24 via direct point/envelope queries against both subject parcels (Pursuits P-15 and P-16). No Kentucky-outside-Cincinnati entries existed in this file before this pass; Louisville became a live target market 2026-08-05.
 
 | Layer | URL | Status | Note |
 |---|---|---|---|

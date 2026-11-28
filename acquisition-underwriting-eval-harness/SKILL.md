@@ -51,11 +51,11 @@ irreducible rather than a research gap (finding 4 — GS-C's Tenancy & Lease):
 
 | Deal | Confidence | Scored (gates PASS/FLAG)? | Golden Combined | Observed range |
 |---|---|---|---|---|
-| GS-A, Jenison submarket, Grand Rapids MI | HIGH (0 nulls) | Yes | 30.08 (mean of 6 Opus: 2026-10-30 + 2026-11-05; Fable-era 26.81 superseded) | **5.5 pts (n=6) — exceeds tolerance** (unknown clear height / truck court scored 0 vs half credit) |
-| GS-B, West Chester OH | HIGH (0 nulls) | Yes | 29.0 (mean of 6 Opus: 2026-10-30 + 2026-11-05; Fable-era 28.11 superseded) | 2.0 pts (n=6) |
+| GS-A, a Grand Rapids-area submarket, Grand Rapids MI | HIGH (0 nulls) | Yes | 30.08 (mean of 6 Opus: 2026-10-30 + 2026-11-05; Fable-era 26.81 superseded) | **5.5 pts (n=6) — exceeds tolerance** (unknown clear height / truck court scored 0 vs half credit) |
+| GS-B, a Cincinnati-area submarket OH | HIGH (0 nulls) | Yes | 29.0 (mean of 6 Opus: 2026-10-30 + 2026-11-05; Fable-era 28.11 superseded) | 2.0 pts (n=6) |
 | GS-C portfolio, Columbus OH | MEDIUM (1 null, irreducible — see finding 4) | Yes | 52.98 (mean of 6 Opus: 2026-10-30 + 2026-11-05; Fable-era 56.79 superseded) | 5.0 pts (n=6) — at tolerance |
 | GS-D, Cincinnati OH | LOW (Basis null by v4.21 rule; 1-3 Quality nulls) | No — informational only | 17.0 (mean of 3 under v4.21, rebaselined 2026-09-12; all pre-v4.21 runs excluded; Fable-era, not re-baselined 2026-11-05) | **7.0 pts (n=3) — exceeds tolerance** |
-| GS-E, Gahanna OH | LOW (0-3 nulls in Fable-era runs; 0 in the 2026-11-05 Opus runs) | No — informational only | 16.67 (mean of 3 Opus, 2026-11-05; Fable-era 11.75 superseded) | 1.0 pts (n=3) |
+| GS-E, a Columbus-area submarket OH | LOW (0-3 nulls in Fable-era runs; 0 in the 2026-11-05 Opus runs) | No — informational only | 16.67 (mean of 3 Opus, 2026-11-05; Fable-era 11.75 superseded) | 1.0 pts (n=3) |
 | GS-F, Columbus OH | LOW (Quality mostly null) | No — informational only | 16.5 (mean of 3, lower-bound run excluded, rebaselined 2026-09-12; Fable-era, not re-baselined 2026-11-05) | **6.0 pts (n=3 clean) — exceeds tolerance** |
 
 **Every run gates on the MEAN of 3 replays per deal, never a single draw** (Steps 1–3 below) — a single replay is not a stable measurement (GS-A's clean Fable-era single-draw range was 3.5 pts against a 5.0-pt tolerance, 7.0 before the leakage fix, and 5.5 in the 2026-11-05 Opus run). Widening the tolerance instead of averaging was explicitly rejected.

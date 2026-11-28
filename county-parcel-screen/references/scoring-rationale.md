@@ -37,7 +37,7 @@ discriminating power lives.
 
 Diminishing marginal signal, as intended: **5->15 yrs = +9.9 pts; 25->35 yrs =
 +0.8 pts** — a ~12x difference in marginal information. This is the
-quantitative answer to "why does D&A Berwick's 38-year hold score near-maximal":
+quantitative answer to "why does Lead L-01's 38-year hold score near-maximal":
 it is not that 38 is a big number, it is that 38 is one year short of full
 depreciation of a commercial building, so every tax and life-cycle mechanism
 that makes tenure informative has already run to completion. A 45-year hold
@@ -59,7 +59,7 @@ buckets instead must say so on the face of its summary.
   conjunctive name+address test.
 - Registered-agent, attorney or property-manager mailing addresses standing
   behind dozens of unrelated owners (F9). Mitigated: address alone never merges.
-- Stale blanket-deed owner lines (the Howard OAKLAND RIDGE pattern). Mitigated
+- Stale blanket-deed owner lines (the Lead L-07 pattern). Mitigated
   by rule 3's disagreeing-address carve-out.
 - Land-condominium units under one declarant, which may be separately sellable.
   Merge for calling, flag `LAND-CONDO`, and verify structure before pricing.
@@ -74,8 +74,8 @@ buckets instead must say so on the face of its summary.
   signal precisely where succession motivation is highest. Partially mitigated by
   the `HOLD-PRE-NOMINAL` fallback (these transfers are usually nominal) — but
   only where the county publishes consideration AND a prior segment.
-- Alias drift a normaliser cannot reach: `BERWICK, D & A LLC` vs
-  `D & A BERWICK LLC`. Accepted miss; do not add fuzzy matching without a
+- Alias drift a normaliser cannot reach: `SURNAME, A & B LLC` vs
+  `A & B SURNAME LLC`. Accepted miss; do not add fuzzy matching without a
   measured FP rate.
 - Distinct SPEs per parcel with genuinely different addresses — invisible here,
   recoverable only from SOS principal lookups (step 8).

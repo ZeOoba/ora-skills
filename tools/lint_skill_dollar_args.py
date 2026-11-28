@@ -3,7 +3,7 @@
 Why: when a skill is invoked WITH arguments, the skill loader replaces positional placeholders (a dollar
 sign followed by digits) in the skill body with the whitespace-split argument tokens, so a figure such as
 "4.00/SF" written with a leading dollar sign is replaced by the 4th argument word ("<street-name>.00/SF",
-Walker MI lease-up underwrite, 2026-11-14; the v4.14 Madison incident is the same mechanism). Reference
+Pursuit P-08 (Grand Rapids-area) lease-up underwrite, 2026-11-14; the v4.14 Madison incident is the same mechanism). Reference
 files are not substituted; only SKILL.md bodies.
 
 Usage:
@@ -18,7 +18,7 @@ changed while it was being fixed. That re-check narrows but cannot close the win
 read and the atomic replace (no lock-free compare-and-swap exists on a plain file), so run --fix only on
 files no other session is editing at that moment.
 
-Fix rule: a dollar sign followed by a digit becomes "USD " + the number ("USD 4.00/SF", "USD 2,450,000",
+Fix rule: a dollar sign followed by a digit becomes "USD " + the number ("USD 4.00/SF", "USD 2,500,000",
 "USD 1.25M"). Fenced code blocks (``` ... ```) and inline code spans are left alone: they are reported
 separately as WARN(code-only) because the loader still substitutes inside them, and so are spreadsheet
 references such as $B$5.

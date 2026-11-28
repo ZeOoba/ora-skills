@@ -1,6 +1,6 @@
 # Construction-Type RCT Multiplier: Evidence File (v4.37)
 
-Backs the **Construction-Type Multiplier Schedule** in `SKILL.md` (Replacement Cost Table). Compiled from the 2026-10-27 research task for 211 Piper Circle (Annville PA). Figures below are as reported by that research; they were **not re-fetched** when the schedule was merged. Every multiplier is `[EST]` and calibration-pending (see "Open item").
+Backs the **Construction-Type Multiplier Schedule** in `SKILL.md` (Replacement Cost Table). Compiled from the 2026-10-27 research task for Pursuit P-11 (central PA). Figures below are as reported by that research; they were **not re-fetched** when the schedule was merged. Every multiplier is `[EST]` and calibration-pending (see "Open item").
 
 ## Sources
 
@@ -33,4 +33,4 @@ Buy one current **Marshall Valuation Service Section 14** page set or an **RSMea
 
 ## First application
 
-211 Piper Circle: PEMB, 26,800 SF, multiplier 0.90. Penn Corridor POINT (the Maryland/Baltimore-DC row of `rct-table.local.json`) x 0.90 + $12 conditioned adder, LOW = 0.9 x that. The Basis walk fell by about 10%. (Figures omitted: this repo is public and the RCT table is private, v4.48.)
+Pursuit P-11: PEMB, sub-50K SF (exact SF redacted), multiplier 0.90. Penn Corridor POINT (the Maryland/Baltimore-DC row of `rct-table.local.json`) x 0.90 + $12 conditioned adder, LOW = 0.9 x that. The Basis walk fell by about 10%. (Figures omitted: this repo is public and the RCT table is private, v4.48.)

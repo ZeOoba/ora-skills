@@ -8,7 +8,7 @@ An exhibit can be present, referenced, correctly titled, and completely EMPTY �
 because reviewers read the body and skim the back matter, an empty exhibit survives
 round after round while the body increasingly depends on it.
 
-    Origin: 2026-08-01, 754 Old State Route 74. Exhibit B (Rent Roll) was a heading
+    Origin: 2026-08-01, Pursuit P-01 (Cincinnati-area). Exhibit B (Rent Roll) was a heading
     and nothing else — no table, no image, no text — across four drafting rounds and
     two law firms. Meanwhile §7 defined "Leases" by reference to it, and §15.1.2
     confirmed the absence of renewal/purchase options "except as expressly set forth

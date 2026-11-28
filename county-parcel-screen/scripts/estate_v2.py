@@ -77,7 +77,7 @@ def estate_v2(name):
         if len(toks) >= 2 and all(t.isalpha() for t in toks) and toks[-1] not in _STREET_SUFFIX:
             personal_seg = True
     # bare 'TR'/'TRS'/'TTEE' segment after '&' alongside a personal-name segment
-    # (e.g. 'TSOLOMETES PETER G & TR')
+    # (e.g. 'SMITH JOHN A & TR')
     if personal_seg and any(seg in ('TR', 'TRS', 'TTEE') for seg in segs):
         return True
     # name ending in TRUST / TRUSTEES with personal-looking prefix (e.g. SMITH FAMILY TRUST,

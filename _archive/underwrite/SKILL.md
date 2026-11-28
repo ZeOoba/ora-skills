@@ -23,7 +23,7 @@ If a required input (purchase price, SF, in-place rent roll) is not available fr
 
 ### Step 3 — File naming and location
 Create the Excel file at: `C:\Users\Owner\ORA\Operations\outputs\[Property Street Address] IRR Model [MM-YYYY].xlsx`
-- Replace `[Property Street Address]` with the numeric and street portion only (e.g., "2530 Agriculture Drive"), no city/state/zip
+- Replace `[Property Street Address]` with the numeric and street portion only (e.g., "123 Main Street"), no city/state/zip
 - Replace `[MM-YYYY]` with the two-digit month and four-digit year of model creation (e.g., "04-2026")
 
 ### Step 4 — Populate all 5 tabs
