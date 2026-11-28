@@ -135,14 +135,13 @@ kids.push(table(['Asset','In-place $/SF','In-place basis','Asking $/SF','Gap'],g
 kids.push(cap('In-place = weighted base rent on occupied leases. Asking from oxfordra.net/available-space, 5 Oct 2026. Shown as entered with basis labels, no conversion. *9620 asking is plus utilities; confirm utilities treatment. FVC asking is NNN while in-place is mostly modified gross, so the gap is not comparable until confirmed per suite.'));
 kids.push(H2('Largest tenants'));
 kids.push(table(['Tenant','Asset','SF','Annual rent','% of rent','Expires'],topT.map(t=>[(t.co||t.t).replace(/, a Delaware Corporation/,'').slice(0,34),short[t.e]||t.e,(t.sf||0).toLocaleString('en-US'),$(t.mr*12),pc(t.mr*12/rt,1),t.le]),[3000,1650,900,1400,1050,1720],{align:['l','l','r','r','r','r'],size:16}));
-kids.push(cap('Eurosort at 55 New Plant is the largest single exposure at 8.4% of in-place rent and expires 12/31/2027.'));
+kids.push(cap('[Largest tenant] at [asset] is the largest single exposure at [x]% of in-place rent and expires [date].'));
 kids.push(H2('Lease intelligence'));
 kids.push(table(['Lease','Terms','Reading'],[
  ['3034 Westerville\nBuckeye\'s Best Transport','18,360 SF; rent stepped $8,950.50 to $13,005.00 on 4/1/2026 ($8.50/SF); 3.5% steps; expires 9/30/2030','45% step captured; TTM NOI $135.5K vs $19.2K prior. Verify the $3,553 above schedule in May.'],
  ['3875-3883 Livingston\nMy Autonomous Transportation','10,950 SF; $8,212.50/mo ($9.00/SF NNN), 3% steps, rent from 9/1/2026; 5-year option','About 45% below the prior $15,000/mo; all-in about $11.95/SF with the NNN estimate.'],
  ['7658 Fishel\nHeritage Pool Supply','24,000 SF; flat $8,540/mo for 60 months; renewal fixed at $8,710.80 (+2%/yr) from 10/1/2026','No market reset. Lease-form lesson: renewals at the greater of fixed or fair market value, and 3% initial steps. Each $1.00/SF is $24K a year.'],
  ['3540 E 5th\nIMH LLC (Malul of London)','35,886 SF; NNN; 2.5% steps; $24,153.32/mo from Aug 2026; expires 7/31/2033; mgmt fee cap 3%','On schedule. Reconcile recoveries that exceed cost.'],
- ['55 New Plant\nEurosort','34,534 SF; $37,736/mo in 2026, 3% steps; expires 12/31/2027','FY25 rent of $440,745 ties to schedule. Start renewal or backfill now; renewal clause only partly read.'],
  ['401 Sunburst Highway\nThe Bay Area Corporation','5,100 SF; $61,560/yr initial; two 5-year renewals at the greater of fair rent or a stated minimum','Strong renewal structure; use it as the template.']],[2400,3720,3600],{align:['l','l','l'],size:16}));
 
 // ---------- 6 CAPITAL STRUCTURE AND RISK
@@ -156,7 +155,7 @@ kids.push(table(['Asset','Balance','Rate','Maturity','To maturity','LTV','DSCR']
 kids.push(sp(80));
 kids.push(bullet([B('9050 Red Branch, 4.25% to 1/1/2028. '),'Balance $1.31M at 15% LTV and 3.74x coverage. It is inside the 18-month balloon alert. The 4.25% coupon is unlikely to be matched at refinance [FORECAST], but the low leverage leaves room to upsize and return equity.']));
 kids.push(bullet([B('3540 E 5th, 54% LTV and 1.48x DSCR. '),'The only asset above the 40% LTV governor on model value. Confirm the valuation basis before relying on this figure; the lease is NNN with 2.5% steps through 2033, so coverage improves each August.']));
-kids.push(bullet([B('55 New Plant, no debt, idle cash. '),'Interest expense fell from $32.6K (2025) to $3.2K (2026 YTD) while interest income reached $78.3K YTD, which points to a payoff and a large entity cash balance. Redeploying it toward the acquisition plan is a direct value lever.']));
+kids.push(bullet([B('[Asset], no debt, idle cash. '),'Interest expense fell to near zero while interest income rose, which points to a payoff and a large entity cash balance. Redeploying it toward the acquisition plan is a direct value lever.']));
 kids.push(new Paragraph({heading:HeadingLevel.HEADING_2,pageBreakBefore:true,spacing:{before:0,after:90},children:[new TextRun({text:'Model valuation snapshot',font:FH,size:30,bold:true,color:NAVY})]}));
 const DB=D.xt.debt; const dnames=Object.keys(DB).sort((a,b)=>DB[b].val_o-DB[a].val_o);
 const vrows=dnames.map(n=>{const x=DB[n];return [short[n]||n,x.own<1?pc(x.own):'100%',$k(x.noi_o),pc(x.cap,2),$k(x.val_o),x.loan_bal&&x.lender?$k(x.loan_bal):'none']});
