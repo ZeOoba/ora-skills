@@ -1,6 +1,6 @@
 """Component mode for the ORA walk solver: the Mixed-Use Component Lens (SKILL.md UNDERWRITING CONVENTIONS,
 v4.57/v4.58), property-tax timing (property-tax-timing skill, prop_tax_timing.py) and an entity-level tax in the
-floor test (DC UBT precedent: 3930 Georgia 2026-11-20, 1500 21st St NW 2026-11-24). Added v4.61 (RE-4.61-3).
+floor test (DC UBT precedent: 3930 Georgia 2026-11-20, a second DC pursuit 2026-11-24). Added v4.61 (RE-4.61-3).
 
 One building, split into components (for example ground-floor retail and upper-floor office). Each component
 runs its own monthly schedule, expected value over branches:
@@ -919,7 +919,7 @@ def solve_components(deal: ComponentDeal, ust: float) -> dict:
     if deal.entity_tax is None:
         if (deal.state or "").strip().upper() == "DC":
             flags.append(f"{LOOSE}: no entity_tax on a DC deal: the floor test runs after DC UBT (3930 Georgia / "
-                         "1500 21st precedent)")
+                         "2026-11-24 precedent)")
         else:
             flags.append("No entity_tax: floor test before entity-level tax (state it)")
 
