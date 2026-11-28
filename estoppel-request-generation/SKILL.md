@@ -101,7 +101,7 @@ whole form.
 
 Where the deal needs the tenant's agreement to something the lease does not already give (a parking reconfiguration, a
 relocation right), put it in a separate one-paragraph consent signed at the same sitting, stating that neither instrument
-is conditioned on the other (754C Tenant Parking Consent, 2026-10-15).
+is conditioned on the other (Pursuit P-01 tenant parking consent, 2026-10-15).
 
 ---
 
@@ -127,7 +127,7 @@ relied upon by buyer, its lender, and their successors and assigns.
   source class (CANONICAL / ARCHIVE, v1.2), and the specific defect each form is curing.
 - A **Combined PDF** for signature — the certificate plus an Exhibit A reproducing every instrument in the chain
   complete — built with `exhibit-package-builder`, regenerated from the current .docx every time (a stale front page
-  carried superseded wording into the 754B package on 2026-10-15).
+  carried superseded wording into one tenant's package on 2026-10-15).
 - A **returned-form review checklist**: what a non-conforming response looks like for each pre-filled field,
   and which corrections are material enough to reopen underwriting or trigger a price adjustment.
 
@@ -152,8 +152,8 @@ Then hold for Gabriel's confirmation before anything leaves ORA.
 
 - v1.3 (2026-10-16): STEP 1 takes the per-party **entity record** from `deal-execution` v1.10 Entity Verification
   (captions and signature blocks typed from the registry record). STEP 3 adds the separate-consent rule for tenant
-  agreements beyond the lease. STEP 5 and Cross-Skill route the Combined PDF to `exhibit-package-builder`. Origin: 754 Old
-  State estoppel V3, 2026-10-15. Also commits v1.2, which existed only in the runtime cache (CACHE-AHEAD, rescued
+  agreements beyond the lease. STEP 5 and Cross-Skill route the Combined PDF to `exhibit-package-builder`. Origin: Pursuit
+  P-01 estoppel V3, 2026-10-15. Also commits v1.2, which existed only in the runtime cache (CACHE-AHEAD, rescued
   2026-09-29); removes the trailing "v1.2" from its description (frontmatter_sweep: version text belongs in the H1, not
   the description); and restores the H1 version marker.
 - v1.2 (2026-09-28): source-class handling. The abstract this skill consumes is now 33 fields (was cited as 32) and carries `SOURCE_CLASS`. Archive copies of leases can differ from canonical; added a STEP 1 source check, a STEP 3 certification row and a tracking-table column so an estoppel is never pre-filled from an unverified archive copy as if it were the operative lease. No standing certification changed.
@@ -162,4 +162,4 @@ Then hold for Gabriel's confirmation before anything leaves ORA.
   request routing to the wrong one). Added a fallback to STEP 1 for when `deal-execution` Workflow 3's Lease-Chain
   Integrity hasn't run yet for a suite this skill is asked to cover, since this skill's own trigger can fire before
   Workflow 3 completes.
-- v1.0 (2026-08-21): initial. Built after the 754 Old State Route 74 lease review, where the estoppels were the natural cure for four separate defects — an unexecuted base lease amended by an executed First Amendment, a three-year renewal evidenced only by a handwritten margin note, an initialed manuscript change to a lease expiry, and a landlord named in the lease who was not the seller — none of which a blank-form estoppel would have reached.
+- v1.0 (2026-08-21): initial. Built after the Pursuit P-01 (Cincinnati-area) lease review, where the estoppels were the natural cure for four separate defects — an unexecuted base lease amended by an executed First Amendment, a three-year renewal evidenced only by a handwritten margin note, an initialed manuscript change to a lease expiry, and a landlord named in the lease who was not the seller — none of which a blank-form estoppel would have reached.

@@ -169,7 +169,7 @@ and tier on the 1-dp component total.
 
 **Versus the v1.2 buckets: this DOES move scores** — unlike v1.2, which changed no
 scored constant. Any run using the v1.2 buckets instead must say so on the face of
-its summary. Marginal-signal figures and the D&A Berwick worked example:
+its summary. Marginal-signal figures and the Lead L-01 worked example:
 references/scoring-rationale.md.
 
 **What `y` is measured from, in order:**
@@ -228,12 +228,12 @@ abbreviations, unit/suite split into its own field, ZIP5.
 2. **MERGE — deed link.** Same deed/instrument reference (liber+folio, deed
    transfer number, book/page) across parcels AND agreeing mail addresses. One
    deed is one acquisition event, so this merges even when the names differ.
-   This is what recovers Howard's three Rumsey Road parcels.
+   This is what recovers Lead L-04's parcels (a Howard one-deed cluster).
 3. **FLAG, never merge — `RELATIONSHIP-CANDIDATE`.** Same mail address with
    different owner names, where the parcels are also adjacent or same-street
-   (Franklin's CCC COLUMBUS / BSC COLUMBUS sibling SPEs at one out-of-state
+   (Lead L-06: Franklin sibling SPEs at one out-of-state
    address, same-day re-titling). Also: same deed reference but DISAGREEING mail
-   addresses (Howard's nine OAKLAND RIDGE parcels on one liber /10583/00069 with
+   addresses (Lead L-07: a Howard multi-parcel group on one liber with
    nine different C/O parties — either one owner or a stale blanket-deed entry,
    and the run may not assert which). Human adjudication before outreach.
 4. **Geographic qualifier.** Members must be in the same county screen and
@@ -245,7 +245,7 @@ abbreviations, unit/suite split into its own field, ZIP5.
 
 - **Combined SF** = sum of members. **Do NOT re-apply the 10,000-80,000 SF gate
   to it** — the gate is per BUILDING, because ORA buys shallow-bay boxes, not
-  one 120K box. Rumsey Road's 120,060 SF is a three-building portfolio purchase,
+  one 120K box. Lead L-04's combined SF is a multi-building portfolio purchase,
   not an out-of-box asset.
 - **Relationship years-held** = the MAXIMUM member years-held (the earliest
   acquisition dates the relationship; later add-ons evidence a committed local

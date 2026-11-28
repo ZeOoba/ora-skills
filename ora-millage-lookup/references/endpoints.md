@@ -14,7 +14,7 @@ Every V entry below was fetched on its stated date. Re-verify before citing a fi
 | Field | Value |
 |---|---|
 | URL | `https://www.in.gov/dlgf/files/2026-reports/2026_Certifed_Tax_Rates_By_District.pdf` |
-| Status | **V** — HTTP 200, 649,963 bytes, `Last-Modified: 2026-03-04`; verified 2026-07-27 (Pike Plaza underwrite), re-verified 2026-08-03 |
+| Status | **V** — HTTP 200, 649,963 bytes, `Last-Modified: 2026-03-04`; verified 2026-07-27 (Pursuit P-10 (Indianapolis) underwrite), re-verified 2026-08-03 |
 | Unit | percent of assessed value |
 | Covers | every IN taxing district, by county |
 | Reference figure | Marion County, Pike Township, tax district **601 INDIANAPOLIS PIKE**: 2026 certified gross rate **2.6830%**. Supersedes any earlier `[EST]` range-midpoint for Marion County / Indianapolis screens. |
@@ -30,10 +30,10 @@ Tier-3 fallback for IN: the DLGF **Gateway** portal (interactive; log query date
 | Service | `https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Property_and_Land_WebMercator/MapServer` |
 | Layer | **40** — *Owner Polygons (Common Ownership Layer)*, 222 fields |
 | Query | `/40/query?where=SSL%3D'<ssl>'&outFields=*&returnGeometry=false&f=json` |
-| Status | **V** — verified 2026-08-02 (1518 K St NW underwrite), re-verified live 2026-08-03 |
+| Status | **V** — verified 2026-08-02 (Pursuit P-02 (DC office) underwrite), re-verified live 2026-08-03 |
 | Unit | `TAXRATE` is **per $100** of taxable value (`1.65` = 1.65%) |
 
-**Key format — the trap.** `SSL` is fixed-width: 4-char square + padding + 4-char lot. `SSL='0199    0821'` (**four** spaces) returns 1 feature; one or two spaces returns **HTTP 200 with zero features**, indistinguishable from a nonexistent parcel. Use `SSL LIKE '0199%0821'` when padding is uncertain and confirm exactly one feature came back.
+**Key format — the trap.** `SSL` is fixed-width: 4-char square + padding + 4-char lot. `SSL='1234    0056'` (**four** spaces; illustrative key) resolves to exactly one feature for a real parcel; one or two spaces returns **HTTP 200 with zero features**, indistinguishable from a nonexistent parcel. Use `SSL LIKE '1234%0056'` when padding is uncertain and confirm exactly one feature came back.
 
 **Fields that carry the underwriting inputs:**
 
@@ -46,14 +46,14 @@ Tier-3 fallback for IN: the DLGF **Gateway** portal (interactive; log query date
 
 **Read the taxable base, not the headline assessment.** DC phases in assessment increases, so `ANNUALTAX ÷ TAXRATE` recovers the base actually taxed and will not equal `OLDTOTAL`.
 
-Worked validation — **1518 K St NW** (SSL `0199    0821`), retrieved 2026-08-02, re-verified 2026-08-03:
+Worked validation — **Pursuit P-02 (DC office)** (SSL and figures redacted), retrieved 2026-08-02, re-verified 2026-08-03:
 
 | | |
 |---|---|
-| `OWNERNAME` | 1518 K STREET LLC |
-| `SALEPRICE` / `SALEDATE` | $5,800,000 · 2012-12-20 |
-| `OLDTOTAL` / `NEWTOTAL` | $5,049,400 / $3,488,890 |
-| `ANNUALTAX` ÷ `TAXRATE` | $48,954.02 ÷ 1.65% = **$2,966,910 taxable base** (~41% below the current headline assessment, purely on phase-in) |
+| `OWNERNAME` | [redacted] |
+| `SALEPRICE` / `SALEDATE` | [redacted] |
+| `OLDTOTAL` / `NEWTOTAL` | [redacted] |
+| `ANNUALTAX` ÷ `TAXRATE` | [redacted] ÷ 1.65% = **taxable base** ~41% below the current headline assessment, purely on phase-in |
 
 **DC Class 2 commercial rates, FY2026 (graduated):** $1.65/$100 ≤$5M · $1.77/$100 $5–10M · $1.89/$100 >$10M.
 **DC transfer + recordation, commercial:** 2.9% combined, effective 10/1/2023.
@@ -70,7 +70,7 @@ Worked validation — **1518 K St NW** (SSL `0199    0821`), retrieved 2026-08-0
 | **Missouri** (Clay/Platte/Jackson) | established cluster | County collector/assessor records; no statewide static document located. |
 | **Kansas** (Johnson) | established cluster | County clerk publishes annual levy sheets; endpoint not yet located. |
 | **Tennessee** | owned footprint | Comptroller publishes certified rates; endpoint not yet located. |
-| **Michigan** (Kent/Grand Rapids) | entry cluster | City/township + county treasurer millage; **units are mills** — see the worked MI example in `acquisition-underwriting` (44.75 mills derived from a disclosed bill ÷ taxable value). |
+| **Michigan** (Kent/Grand Rapids) | entry cluster | City/township + county treasurer millage; **units are mills** — see the worked MI example in `acquisition-underwriting` (millage derived from a disclosed bill ÷ taxable value). |
 | **Virginia** (Richmond) | entry cluster | City/county rate ordinances; endpoint not yet located. |
 | **Iowa** (Polk/Des Moines) | entry cluster | County treasurer; note the 90% rollback when reading assessments. |
 | **Kentucky** (Louisville/Jefferson) | entry cluster | PVA + Metro rate schedule; endpoint not yet located. |

@@ -73,7 +73,7 @@ Moved out of `SKILL.md` on 2026-09-22 (body split). Read before generating the D
 
 **LEASE-CHAIN INTEGRITY (Category: Legal — run on every occupied suite — added v1.5)**
 
-> Origin: 2026-08-21, 754 Old State Route 74. Two separate defects surfaced on one small multi-tenant building. The
+> Origin: 2026-08-21, Pursuit P-01 (Cincinnati-area). Two separate defects surfaced on one small multi-tenant building. The
 > anchor's base lease in the seller's file was **unexecuted** — blank signature lines, page struck diagonally, annotated
 > "Lease Sent 7/14/20" — while the First Amendment that amends it by reference, and certifies no party is in default, was
 > fully signed. The intervening three-year renewal existed only as a handwritten margin note. On the second suite the
@@ -101,10 +101,10 @@ For each occupied suite, reconstruct and verify the full chain before waiving th
 
 **ENTITY VERIFICATION (Category: Legal — run on every acquisition: before the first PSA draft, again before estoppels go out, and again within 30 days of closing — added v1.10)**
 
-> Origin: 2026-10-15, 754 Old State Route 74. Estoppel V3 was ready for signature with three party names never checked
-> against a state record: the 754C co-tenant "Godesana Organics, LLC" (the 2020 lease says "goDesana LLC"), the 754B trade
-> name "3Waters Behavioral Health", and a Union Township PD Minor Amendment approved for applicant "Oxford Financial
-> Partners, LLC" — not ORA's contracting entity, Oxford Capital Partners, LLC. Each was chased one-off eight days before the
+> Origin: 2026-10-15, Pursuit P-01 (Cincinnati-area). Estoppel V3 was ready for signature with three party names never checked
+> against a state record: a co-tenant whose registered name differed in capitalization from the 2020 lease, another
+> tenant's unregistered trade name, and a township PD Minor Amendment approved for an applicant entity that was
+> not ORA's contracting entity, Oxford Capital Partners, LLC (names redacted). Each was chased one-off eight days before the
 > PSA §9.5 estoppel delivery deadline.
 
 Look up, in the business-entity registry of its **state of formation** (and of the **property's state** where it is

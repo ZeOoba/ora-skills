@@ -35,7 +35,7 @@ comparable, which is the failure these three runs hit.
 
 One owner holding several adjacent parcels on one old deed is ONE relationship
 and ONE phone call, but v1.2 scored it as N independent rows. All three
-2026-09-18 runs hit this and all three flagged it unresolved: Franklin (D&A
-Berwick 2 parcels / 46,000 SF, DINOVO 3, AIRPORT PLAZA 4), Howard (RUMSEY ROAD
-3 parcels / 120,060 SF on one deed liber), Jackson (DEEVIC 4 contiguous parcels
-/ ~60,400 SF — "seven names collapse to roughly four conversations").
+2026-09-18 runs hit this and all three flagged it unresolved: Franklin (Leads
+L-01, L-02 and L-03, each a multi-parcel owner), Howard (Lead L-04, one deed
+liber), Jackson (Lead L-08, contiguous parcels — "seven names collapse to
+roughly four conversations").

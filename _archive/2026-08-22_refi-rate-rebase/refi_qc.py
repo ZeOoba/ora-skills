@@ -6,15 +6,15 @@ ROOT = r"C:\Users\Owner\OneDrive - Oxford Capital Partners\Business\Investment C
 STAMP = "2026-08-22_refi-rebase-6.50"
 FILES = [
  "20260610_GS-F_Model_v03.xlsx",
- "2262-112th-Ave-Holland-MI IRR Model.xlsx",
- "8025-8009 IRR Model.xlsx",
+ "[P-34] IRR Model.xlsx",
+ "[P-36] IRR Model.xlsx",
  "[deal] Columbus IRR Model.xlsx",
- "IRR Model Pike Plaza Indy Car Dealerships 7.27.2026.xlsx",
- "ORA_UnderwritingModel_125DouglasPike_v2.0.xlsx",
- "ORA_Underwriting_2900-Northridge-Dr-NW_v1.0.xlsx",
- "ORA_Underwriting_4331-Brockton-Dr-SE_v1.0.xlsx",
- r"outputs\2026-07-18_2900-Northridge-Dr-NW_Underwriting-Model_v01.xlsx",
- r"outputs\2026-07-18_4331-Brockton-Dr-SE_Underwriting-Model_v01.xlsx",
+ "[P-10] IRR Model.xlsx",
+ "ORA_UnderwritingModel_[P-35]_v2.0.xlsx",
+ "ORA_Underwriting_[P-08]_v1.0.xlsx",
+ "ORA_Underwriting_[P-09]_v1.0.xlsx",
+ r"outputs\2026-07-18_[P-08]_Underwriting-Model_v01.xlsx",
+ r"outputs\2026-07-18_[P-09]_Underwriting-Model_v01.xlsx",
 ]
 KEY = re.compile(r"\bDSCR\b|levered IRR|IRR --|refi proceeds|loan amount|equity multiple|refi rate|refi interest|refi fixed", re.I)
 

@@ -81,10 +81,10 @@ until the whole line fits, rolling each dropped one into the "(+N more)" tail.
 how many properties the letter concerns, and returns the property/properties word so both body
 mentions agree.
 
-**Mode 2 — the address block wraps.** One of five (Sheldon C Tyler & Gwyneth Ann).
+**Mode 2 — the address block wraps.** One of five (a two-trustee owner record; names redacted).
 The Tier-0 mailing parse emitted a street field that repeated the mailing name and then appended a
-capacity phrase — `Sheldon C Tyler & Gwyneth Ann CO Trustees Et Al 5180 Golden Foothill Pkwy Suite
-210`, 82 characters. `split_address_block()` peels the duplicated name, lifts the capacity phrase
+capacity phrase — `[Owner A] & [Owner B] CO Trustees Et Al [mailing street address] Suite
+[nnn]`, 82 characters in the original. `split_address_block()` peels the duplicated name, lifts the capacity phrase
 onto its own attention line, and leaves a clean street line. This is also a mailing-quality fix:
 that string would have printed badly in a window envelope regardless of pagination.
 

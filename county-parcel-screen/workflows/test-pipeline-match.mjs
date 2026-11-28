@@ -95,7 +95,7 @@ const cases = [
   ['Self-owned Oxford entity → hard drop',
     { owner: 'OXFORD INDUSTRIAL HOLDINGS LLC', siteAddress: '9 Anywhere Dr, Carlisle OH' }, 'counterparty'],
   ['Clean unrelated industrial parcel → no match',
-    { owner: 'PAC HOLDINGS LLC', siteAddress: '300 Industry Drive, Carlisle OH 45005' }, null],
+    { owner: 'SAMPLE PARCEL HOLDINGS LLC', siteAddress: '123 Example Industrial Way, Carlisle OH 45005' }, null],
   ['Different route number, same county → no false road match',
     { owner: 'RF&T PROPERTIES LLC', siteAddress: 'STATE ROUTE 132, Clermont County OH' }, null],
 ]

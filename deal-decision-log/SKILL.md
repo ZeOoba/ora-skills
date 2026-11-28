@@ -14,7 +14,7 @@ One running log per deal is the single source of truth for what Gabriel has deci
 
 ## Location and naming
 - Leases: Leases project, path `claude/[YYYY-MM-DD of first entry]_[TenantShort]-[Property]-[Unit]_Decision-Log.md`.
-- Acquisitions and PSAs: the deal's own Project, path `claude/[DealShort]-decision-log.md`. Where the deal already keeps a `DEAL-TERMS-REGISTER.md`, the register remains the term tracker; at minimum keep section 10 as `claude/[DealShort]-agreed-outside-documents.md` and add a pointer line to the register. Reference implementation: 754 Old State, `claude/754-agreed-outside-documents.md` (2026-11-25).
+- Acquisitions and PSAs: the deal's own Project, path `claude/[DealShort]-decision-log.md`. Where the deal already keeps a `DEAL-TERMS-REGISTER.md`, the register remains the term tracker; at minimum keep section 10 as `claude/[DealShort]-agreed-outside-documents.md` and add a pointer line to the register. Reference implementation: Pursuit P-01 (Cincinnati-area), `claude/[DealShort]-agreed-outside-documents.md` (2026-11-25).
 - One file per deal. Never fork a second log for the same deal; a per-topic log (e.g., an Exhibit B log) is folded into the deal log, or linked from it, never left as a parallel source of truth.
 - Before creating, run `project_search` for the tenant and property; if a log or a topic log already exists, extend it.
 
@@ -57,5 +57,5 @@ One running log per deal is the single source of truth for what Gabriel has deci
 - Side agreements: every section 10 row is PAPERED in the execution copy or carries a Decisions entry accepting its absence; no NOT AGREED item appears.
 
 ## Changelog
-- v1.1 (2026-11-25): Added section 10, the agreed-outside-the-documents ledger with source links and papered status, its rules, the acquisitions/PSA location, and an execution-copy check. Origin: on 754 Old State, answering "what was agreed on 754's own lot" took a manual pass through a register row, plat images and three email threads (Gabriel's request, 2026-11-25).
+- v1.1 (2026-11-25): Added section 10, the agreed-outside-the-documents ledger with source links and papered status, its rules, the acquisitions/PSA location, and an execution-copy check. Origin: on Pursuit P-01, answering "what was agreed on the subject's own lot" took a manual pass through a register row, plat images and three email threads (Gabriel's request, 2026-11-25).
 - v1.0: initial version.

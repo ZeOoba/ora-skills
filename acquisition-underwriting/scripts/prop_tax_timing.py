@@ -107,7 +107,7 @@ if __name__ == '__main__':
     print('DC reset TY: close 1/1/2027 ->', dc_reset_ty(dt.date(2027, 1, 1)), '| 6/15/2027 ->', dc_reset_ty(dt.date(2027, 6, 15)), '| 10/15/2027 ->', dc_reset_ty(dt.date(2027, 10, 15)))
     d2 = Deal('DC', dt.date(2027, 6, 15), 1_400_000, 3_200_000, 3_200_000, next_ty_base=3_200_000 * 1.025)
     print('DC June close, case A (new-owner petition within 45 days; reset still TY2028):', schedule(d2, 3, 'A'))
-    # Test 2: 2900 Northridge, Walker MI — capped TV 562,626, 44.75 mills, price 2.25M -> Y2 tax 50,344
-    m = Deal('MI', dt.date(2026, 1, 1), 2_250_000, 562_626, 1_125_000, rate=0.04475, growth=0.0)
-    print('MI Walker, case A:', schedule(m, 3, 'A'))
+    # Test 2: synthetic MI deal — capped TV 500,000, 40.00 mills, price 2.0M -> Y2 tax 40,000
+    m = Deal('MI', dt.date(2026, 1, 1), 2_000_000, 500_000, 1_000_000, rate=0.04, growth=0.0)
+    print('MI synthetic, case A:', schedule(m, 3, 'A'))
     print(excel_pattern('DC')); print(excel_pattern('MI'))

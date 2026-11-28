@@ -23,8 +23,8 @@ def _run(root, *args):
 
 class FixBody(unittest.TestCase):
     def test_money_rewritten(self):
-        self.assertEqual(L.fix_body("floor $4.00/SF, ask $2,450,000, cap $1.25M\n"),
-                         "floor USD 4.00/SF, ask USD 2,450,000, cap USD 1.25M\n")
+        self.assertEqual(L.fix_body("floor $4.00/SF, ask $2,500,000, cap $1.25M\n"),
+                         "floor USD 4.00/SF, ask USD 2,500,000, cap USD 1.25M\n")
 
     def test_negative_and_parenthesised(self):
         self.assertEqual(L.fix_body("(-$5) and ($3K)\n"), "(-USD 5) and (USD 3K)\n")

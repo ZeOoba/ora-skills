@@ -10,7 +10,7 @@ Moved out of `SKILL.md` on 2026-09-22 (body split). Provenance only — every op
   curve**, `20 x (1-e^(-(y-2)/8)) / (1-e^(-4.5))`, 0 below 2 yrs, capped at 20 from
   38 yrs — tau = 8 yrs (the shallow-bay hold/refi cycle), normalised to reach 20.0
   at 38 yrs, one year inside the **39-year commercial straight-line depreciation
-  life**. That anchor is the non-hand-waving answer to why D&A Berwick's 38-year
+  life**. That anchor is the non-hand-waving answer to why Lead L-01's 38-year
   hold is near-maximal: basis decay, depreciation exhaustion and owner life-cycle
   have all run to completion, so a 45-year hold carries no more information.
   Marginal signal 5->15 yrs = +9.9 pts vs 25->35 yrs = +0.8 pts (~12x), and the
@@ -68,28 +68,28 @@ Moved out of `SKILL.md` on 2026-09-22 (body split). Provenance only — every op
   **-4.1** (106 down / 46 up / 23 unchanged); tiers A 38->28, B 32->23, C 79->71,
   D 26->53, 59 rows change tier. **The movement is almost entirely the retired
   UNKNOWN-HOLD default, not the curve** — 34 rows (19.4%) lose 16 points; the curve
-  alone moves rows by <=3. **D&A Berwick behaves exactly as designed: both parcels
+  alone moves rows by <=3. **Lead L-01 behaves exactly as designed: both parcels
   hold 100.0 and rise to ranks 1-2 (from 1 and 3), consolidating into ONE
-  relationship — 2 parcels, 46,000 SF, 38 yrs.** 13 clusters cover 33 rows, so the
+  relationship — 2 parcels, 38 yrs.** 13 clusters cover 33 rows, so the
   list collapses from 175 parcel rows to **155 conversations**. The largest
-  relationship found is AIRPORT PLAZA LTD at **4 parcels / 119,640 SF**, previously
-  scattered across two sheets. `BERWICK CENTRE DEVELOPMENT CO` was correctly NOT
-  merged with D&A Berwick (different mail address) — the conjunctive rule working.
-  Top-5 reshuffle: Modern Builders 4->3, BSC Columbus 10->5, Airport Plaza 2->4 and
-  FRG-X-DMD-OH 5->7 (both lose `multi` points as single-parcel members of their
+  relationship found is Lead L-03 (parcel count and SF redacted), previously
+  scattered across two sheets. A similarly named development company was correctly NOT
+  merged with Lead L-01 (different mail address) — the conjunctive rule working.
+  Top-5 reshuffle: four leads moved (L-09 4->3, L-06 10->5, L-03 2->4 and
+  L-10 5->7; the last two lose `multi` points as single-parcel members of their
   clusters). **Watch item: Franklin sits at 19.4% UNKNOWN-HOLD, one row short of
   flipping to the >20% drop-the-component branch** — a genuinely fragile boundary on
   this data set; re-check it every run rather than assuming the branch. Expected
   qualitatively if the other two are re-run, NOT re-run live here: **Howard MD**
   changes most — 16 UNKNOWN-HOLD rows become real tenures off `TRADATE`, the run
-  leaves the >20% branch entirely and returns to a full 0-100 scale, Rumsey Road's
-  three parcels (120,060 SF, one liber) merge into one relationship, and the
-  long-hold rows the summary could only infer from deed vintage (Standard Court
-  /05290, Rumsey /06228) should score their way up rather than needing a manual
+  leaves the >20% branch entirely and returns to a full 0-100 scale, Lead L-04's
+  parcels (one liber) merge into one relationship, and the
+  long-hold rows the summary could only infer from deed vintage (two Howard
+  deed-vintage leads; liber refs redacted) should score their way up rather than needing a manual
   call-order override. **Jackson MO** changes least in ranking and most in
   presentation: no transfer date exists at any price, so it stays on the dropped-hold
   branch, but the scale becomes 0-60 with tiers on the achievable maximum, and
-  Deevic's four contiguous parcels plus Monopoly's adjacent holding collapse the
+  Lead L-08's contiguous parcels plus another owner's adjacent holding collapse the
   seven-name list to roughly four conversations as its own summary predicted.
 - **v1.2 (2026-09-18):** Findings from three same-day adjacent-parcel ring screens
   (Franklin OH pilot, Howard MD, Jackson MO). **No scored constant changed** — the

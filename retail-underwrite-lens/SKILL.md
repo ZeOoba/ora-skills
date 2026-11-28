@@ -9,7 +9,7 @@ description: "Use when underwriting a retail strip or neighborhood center under 
 
 **No ground leases (v1.2, Gabriel 2026-10-30):** ORA never acquires a ground lease. Before any lens work, confirm the sale is fee simple. A leasehold (improvements on ground-leased land) is excluded outright: do not run the lens, do not rank it, and list it only under exclusions. A listing whose sale conditions say "on ground lease" stays excluded until the broker or title confirms fee simple.
 
-Layers on `acquisition-underwriting`. The industrial Basis/Yield/IRR floors stay the governing test; these tabs are lenses reported beside them. Origin: East Pointe Plaza, 2026-10-01, built by hand over three revisions. Build in this order so nothing is rebuilt.
+Layers on `acquisition-underwriting`. The industrial Basis/Yield/IRR floors stay the governing test; these tabs are lenses reported beside them. Origin: Pursuit P-31 (Madison WI retail), 2026-10-01, built by hand over three revisions. Build in this order so nothing is rebuilt.
 
 ## Tabs and sections
 
@@ -41,4 +41,4 @@ When the roll is one credit tenant plus a large vacant suite, replace the Base /
 - v1.2.1 (2026-11-14): Wording only: dollar figures in the body now read "USD n" with no dollar sign before a digit, because a skill invoked with arguments has every dollar-digit sequence in its body replaced by an argument token (`tools/lint_skill_dollar_args.py`). No value, rule, threshold or constant changed.
 - v1.2 — 2026-10-30 (Gabriel): "No ground leases" rule at the top of the body; its changelog line was missing and is restored here 2026-11-14.
 - v1.1 — 2026-10-29 (Gabriel, in-turn; landed 2026-10-30 from runtime-cache capture PR #180): gate-first rule (run only when the retail asset qualifies under `acquisition-underwriting` Stage 0 Gate 6 as land-heavy quasi-IOS, land ≥40% of all-in basis, or on Gabriel's explicit ask; `acquisition-underwriting` v4.40) and the credit-tenant + vacant-box variant (Base / Evidence / Tenant-Dark cases), from the Louisville retail deal. No governor constant changed.
-- v1.0 — 2026-10-01, template built by hand from the East Pointe Plaza FULL run (three revisions). Authored in the Cowork runtime cache; first captured 2026-10-16 (PR #122, closed without landing) and committed to the repo with v1.1.
+- v1.0 — 2026-10-01, template built by hand from the Pursuit P-31 (Madison WI retail) FULL run (three revisions). Authored in the Cowork runtime cache; first captured 2026-10-16 (PR #122, closed without landing) and committed to the repo with v1.1.

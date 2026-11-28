@@ -33,9 +33,10 @@ class PropTaxTiming(unittest.TestCase):
         self.assertEqual(P.dc_reset_ty(dt.date(2027, 6, 15)), 2028)
         self.assertEqual(P.dc_reset_ty(dt.date(2027, 10, 15)), 2029)
 
-    def test_mi_walker_case_a(self):
-        m = P.Deal("MI", dt.date(2026, 1, 1), 2_250_000, 562_626, 1_125_000, rate=0.04475, growth=0.0)
-        self.assertEqual([r["tax"] for r in P.schedule(m, 2, "A")], [25_177.51, 50_343.75])
+    def test_mi_synthetic_case_a(self):
+        # synthetic MI deal: price 2.0M, capped TV 500K, 40.00 mills; Y2 uncaps to 50% of price
+        m = P.Deal("MI", dt.date(2026, 1, 1), 2_000_000, 500_000, 1_000_000, rate=0.04, growth=0.0)
+        self.assertEqual([r["tax"] for r in P.schedule(m, 2, "A")], [20_000.0, 40_000.0])
 
     def test_standing_pw_weights_20_50_30(self):
         # Gabriel in-turn 2026-11-24 (revised): PW = 20/50/30 (A/B/C), reported only

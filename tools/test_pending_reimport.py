@@ -1095,7 +1095,7 @@ class LogBeforeClearGuard(unittest.TestCase):
             '\n'
             'Install CONFIRMED.\n'
             '\n'
-            '- **skill-a** consumer-sweep: only 754 Old State has a refi model, and\n'
+            '- **skill-a** consumer-sweep: only Pursuit P-01 has a refi model, and\n'
             '  it is still stale -- but on a v04 workbook.\n'
         )
         err, out, _ = self._clear(['skill-a'], block, known=['skill-a'])
