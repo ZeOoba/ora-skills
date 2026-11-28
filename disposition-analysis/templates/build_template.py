@@ -6,6 +6,14 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.utils import get_column_letter as L
+import re as _re
+from openpyxl.utils import column_index_from_string as _cidx
+def _safe(n):
+    """Reject a defined name Excel would read as a cell (A1 or R1C1); it would resolve to a blank cell."""
+    m=_re.fullmatch(r'([A-Za-z]{1,3})(\d+)',n)
+    if m and _cidx(m.group(1).upper())<=16384 and 1<=int(m.group(2))<=1048576: raise ValueError(f'defined name {n!r} is a cell address')
+    if _re.fullmatch(r'(R\d*C\d*|R\d*|C\d*)',n,_re.I): raise ValueError(f'defined name {n!r} is an R1C1 reference')
+    return n
 NAVY='1B2A4A'; GOLD='C9A96E'; PARCH='F5F3EF'
 HF=Font(name='DM Sans',bold=True,color='FFFFFF'); BF=Font(name='DM Sans',bold=True)
 NF=Font(name='DM Sans'); INF=Font(name='IBM Plex Mono',color='0000FF')
@@ -20,7 +28,7 @@ def inp(row,label,val,name,fmt=None,note=''):
     ws.cell(row,1,label).font=NF; c=ws.cell(row,2,val); c.font=INF; c.fill=IFILL
     if fmt: c.number_format=fmt
     ws.cell(row,4,note).font=Font(name='DM Sans',size=9,italic=True)
-    wb.defined_names[name]=DefinedName(name,attr_text=f"Inputs!$B${row}"); names[name]=f'Inputs!$B${row}'
+    wb.defined_names[_safe(name)]=DefinedName(name,attr_text=f"Inputs!$B${row}"); names[name]=f'Inputs!$B${row}'
 def sec(row,t):
     c=ws.cell(row,1,t); c.font=HF; c.fill=HFILL; ws.cell(row,2).fill=HFILL; ws.cell(row,4).fill=HFILL
 r=4; sec(r,'PROPERTY & LEASE'); r+=1
@@ -48,8 +56,8 @@ spec=[
 ('Annual depreciation',25000,'Dep',D,'From latest Form 4562 / Sch E line 18'),
 ('Ordinary rate (fed + NIIT + state + local)',0.505,'ORD',P,''),
 ('LTCG rate (fed + NIIT + state + surtax)',0.355,'LTCG',P,''),
-('Unrecaptured §1250 rate',0.405,'R1250',P,''),
-('§1245 recapture (cost-seg personal property)',0,'S1245',D,'Taxed at ORD in year of sale'),
+('Unrecaptured §1250 rate',0.405,'Rate1250',P,''),
+('§1245 recapture (cost-seg personal property)',0,'Recap1245',D,'Taxed at ORD in year of sale'),
 ]
 for lab,v,n,f,note in spec: inp(r,lab,v,n,f,note); r+=1
 r+=1; sec(r,'VALUATION & CAPITAL MARKETS'); r+=1
@@ -63,16 +71,16 @@ spec=[
 ('Refi amortization (yrs)',25,'RefiAm','0',''),
 ('Refi cost % of loan',0.01,'RefiC',P,''),
 ('Market loan rate for cash-equivalent value',0.07,'MktR',P,''),
-('§453A threshold',5000000,'T453',D,''),
-('§453A underpayment rate',0.07,'U453',P,''),
+('§453A threshold',5000000,'Thr453A',D,''),
+('§453A underpayment rate',0.07,'Rate453A',P,''),
 ]
 for lab,v,n,f,note in spec: inp(r,lab,v,n,f,note); r+=1
 r+=1; sec(r,'SELLER-FINANCE VARIANTS'); ws.cell(r,2,'B1').font=HF; ws.cell(r,3,'B2').font=HF; ws.cell(r,3).fill=HFILL; r+=1
-for lab,v1,v2,n,f in [('Price',8000000,8000000,'BPrice',D),('Down payment',1600000,2400000,'BDown',D),('Note rate (≥ AFR)',0.05,0.05,'BRate',P),('Amortization (yrs)',25,25,'BAm','0'),('Term to balloon (yrs, ≤10)',5,7,'BTerm','0'),('Selling costs %',0.02,0.02,'BSell',P)]:
+for lab,v1,v2,n,f in [('Price',3600000,3600000,'BPrice',D),('Down payment',720000,1080000,'BDown',D),('Note rate (≥ AFR)',0.05,0.05,'BRate',P),('Amortization (yrs)',25,25,'BAmort','0'),('Term to balloon (yrs, ≤10)',5,7,'BTerm','0'),('Selling costs %',0.02,0.02,'BSell',P)]:
     ws.cell(r,1,lab).font=NF
     for j,v in ((2,v1),(3,v2)):
         c=ws.cell(r,j,v); c.font=INF; c.fill=IFILL; c.number_format=f
-    wb.defined_names[n+'1']=DefinedName(n+'1',attr_text=f"Inputs!$B${r}"); wb.defined_names[n+'2']=DefinedName(n+'2',attr_text=f"Inputs!$C${r}")
+    wb.defined_names[_safe(n+'1')]=DefinedName(n+'1',attr_text=f"Inputs!$B${r}"); wb.defined_names[_safe(n+'2')]=DefinedName(n+'2',attr_text=f"Inputs!$C${r}")
     r+=1
 from openpyxl.worksheet.datavalidation import DataValidation
 dv=DataValidation(type='whole',operator='between',formula1='2',formula2='10',showErrorMessage=True,error='Balloon term must be 2-10 years'); ws.add_data_validation(dv)
@@ -113,12 +121,12 @@ R('a2tax','A2 tax',lambda t,col,prev: f'=({g("noi",col)}-{g("int",col)}-Dep-Comm
 R('a2cf','A2 after-tax cash',lambda t,col,prev: f'={g("noi",col)}-DS-{g("alw",col)}-{g("a2tax",col)}',True,t0='=-Comm+Loan*(1-RefiC)')
 for v in (1,2):
     c.cell(len(row)+5,1,f'— B{v} SELLER-FINANCED SALE —').font=BF; row[f'_b{v}']=len(row)+5
-    R(f'b{v}pr',f'B{v} principal received',lambda t,col,prev,v=v: f'=IF({col}$4<BTerm{v},-CUMPRINC(BRate{v}/12,BAm{v}*12,BPrice{v}-BDown{v},({col}$4-1)*12+1,{col}$4*12,0),IF({col}$4=BTerm{v},BPrice{v}-BDown{v}+IF({col}$4>1,CUMPRINC(BRate{v}/12,BAm{v}*12,BPrice{v}-BDown{v},1,({col}$4-1)*12,0),0),0))',t0=f'=BDown{v}')
-    R(f'b{v}int',f'B{v} interest received',lambda t,col,prev,v=v: f'=IF({col}$4<=BTerm{v},-CUMIPMT(BRate{v}/12,BAm{v}*12,BPrice{v}-BDown{v},({col}$4-1)*12+1,{col}$4*12,0),0)')
-    R(f'b{v}cg',f'B{v} cumulative gain recognized',lambda t,col,prev,v=v: f'={prev}{row[f"b{v}cg"]}+{g(f"b{v}pr",col)}*GP{v}',t0=f'=C{row[f"b{v}pr"]}*GP{v}')
+    R(f'b{v}pr',f'B{v} principal received',lambda t,col,prev,v=v: f'=IF({col}$4<BTerm{v},-CUMPRINC(BRate{v}/12,BAmort{v}*12,BPrice{v}-BDown{v},({col}$4-1)*12+1,{col}$4*12,0),IF({col}$4=BTerm{v},BPrice{v}-BDown{v}+IF({col}$4>1,CUMPRINC(BRate{v}/12,BAmort{v}*12,BPrice{v}-BDown{v},1,({col}$4-1)*12,0),0),0))',t0=f'=BDown{v}')
+    R(f'b{v}int',f'B{v} interest received',lambda t,col,prev,v=v: f'=IF({col}$4<=BTerm{v},-CUMIPMT(BRate{v}/12,BAmort{v}*12,BPrice{v}-BDown{v},({col}$4-1)*12+1,{col}$4*12,0),0)')
+    R(f'b{v}cg',f'B{v} cumulative gain recognized',lambda t,col,prev,v=v: f'={prev}{row[f"b{v}cg"]}+{g(f"b{v}pr",col)}*GrossPR{v}',t0=f'=C{row[f"b{v}pr"]}*GrossPR{v}')
     R(f'b{v}c1250',f'B{v} cumulative §1250 recognized',lambda t,col,prev,v=v: f'=MIN({g(f"b{v}cg",col)},S1250AMT{v})',t0=f'=MIN(C{row[f"b{v}cg"]},S1250AMT{v})')
-    R(f'b{v}tax',f'B{v} tax on gain',lambda t,col,prev,v=v: f'=({g(f"b{v}c1250",col)}-{prev}{row[f"b{v}c1250"]})*R1250+(({g(f"b{v}cg",col)}-{g(f"b{v}c1250",col)})-({prev}{row[f"b{v}cg"]}-{prev}{row[f"b{v}c1250"]}))*LTCG',t0=f'=C{row[f"b{v}c1250"]}*R1250+(C{row[f"b{v}cg"]}-C{row[f"b{v}c1250"]})*LTCG+S1245*ORD')
-    R(f'b{v}453',f'B{v} §453A interest charge',lambda t,col,prev,v=v: f'=IF({col}$4<=BTerm{v},(BTotTax{v}-(SUM($C{row[f"b{v}tax"]}:{prev}{row[f"b{v}tax"]})-S1245*ORD))*MAX(0,(BPrice{v}-BDown{v}-T453)/(BPrice{v}-BDown{v}))*U453,0)')
+    R(f'b{v}tax',f'B{v} tax on gain',lambda t,col,prev,v=v: f'=({g(f"b{v}c1250",col)}-{prev}{row[f"b{v}c1250"]})*Rate1250+(({g(f"b{v}cg",col)}-{g(f"b{v}c1250",col)})-({prev}{row[f"b{v}cg"]}-{prev}{row[f"b{v}c1250"]}))*LTCG',t0=f'=C{row[f"b{v}c1250"]}*Rate1250+(C{row[f"b{v}cg"]}-C{row[f"b{v}c1250"]})*LTCG+Recap1245*ORD')
+    R(f'b{v}453',f'B{v} §453A interest charge',lambda t,col,prev,v=v: f'=IF({col}$4<=BTerm{v},(BTotTax{v}-(SUM($C{row[f"b{v}tax"]}:{prev}{row[f"b{v}tax"]})-Recap1245*ORD))*MAX(0,(BPrice{v}-BDown{v}-Thr453A)/(BPrice{v}-BDown{v}))*Rate453A,0)')
     R(f'b{v}cf',f'B{v} after-tax cash',lambda t,col,prev,v=v: f'={g(f"b{v}pr",col)}+{g(f"b{v}int",col)}*(1-ORD)-{g(f"b{v}tax",col)}-{g(f"b{v}453",col)}',True,t0=f'=BDown{v}-BPrice{v}*BSell{v}-Comm-C{row[f"b{v}tax"]}')
 c.cell(len(row)+5,1,'— C CASH SALE + 1031 —').font=BF; row['_c']=len(row)+5
 R('cnoi','C replacement NOI',lambda t,col,prev: f'=RPrice*RCap*(1+RG)^({col}$4-1)*IF({col}$4=1,1-RIdle/12,1)')
@@ -137,30 +145,30 @@ scal=[
 ('Refi annual debt service','=-PMT(RefiR/12,RefiAm*12,Loan)*12','DS'),
 ('Exit value yr 10 (yr-11 buyer NOI / cap)','=(Calc!M%d*(1+RentG)-OtherLL-ResSF*SF)/Cap'%row['rent'],'TV'),
 ('D: taxable cash sale, amount realized','=V0*(1-SellC)-Comm','D_AR'),
-('D: tax on sale','=MIN(MAX(D_AR-Basis-S1245,0),AccDep)*R1250+(MAX(D_AR-Basis-S1245,0)-MIN(MAX(D_AR-Basis-S1245,0),AccDep))*LTCG+MIN(S1245,MAX(D_AR-Basis,0))*ORD','D_Tax'),
+('D: tax on sale','=MIN(MAX(D_AR-Basis-Recap1245,0),AccDep)*Rate1250+(MAX(D_AR-Basis-Recap1245,0)-MIN(MAX(D_AR-Basis-Recap1245,0),AccDep))*LTCG+MIN(Recap1245,MAX(D_AR-Basis,0))*ORD','D_Tax'),
 ('D: after-tax proceeds today (IRR investment base)','=D_AR-D_Tax','D0'),
 ('After-tax reinvestment rate','=Reinv*(1-ORD)','RA'),
 ('Hold: basis at yr 10','=Basis-10*Dep+Allow','Basis10'),
-('Hold: liquidation tax at yr 10','=MIN(MAX(TV*(1-SellC)-Basis10-S1245,0),AccDep+10*Dep)*R1250+(MAX(TV*(1-SellC)-Basis10-S1245,0)-MIN(MAX(TV*(1-SellC)-Basis10-S1245,0),AccDep+10*Dep))*LTCG+MIN(S1245,MAX(TV*(1-SellC)-Basis10,0))*ORD','HoldTax10'),
+('Hold: liquidation tax at yr 10','=MIN(MAX(TV*(1-SellC)-Basis10-Recap1245,0),AccDep+10*Dep)*Rate1250+(MAX(TV*(1-SellC)-Basis10-Recap1245,0)-MIN(MAX(TV*(1-SellC)-Basis10-Recap1245,0),AccDep+10*Dep))*LTCG+MIN(Recap1245,MAX(TV*(1-SellC)-Basis10,0))*ORD','HoldTax10'),
 ('C: exchange proceeds to QI','=D_AR','CExch'),
 ('C: replacement price','=CExch/(1+RAcq)','RPrice'),
 ('C: exit equity yr 10','=RPrice*(1+RG)^10*(1-RExit)','CEq'),
 ('C: basis yr 10 (carryover + acq cost, less 10 yrs depreciation)','=Basis+RPrice*RAcq-10*(Dep+RPrice*RAcq/39)','CBasis10'),
-('C: liquidation tax yr 10','=MIN(MAX(CEq-CBasis10-S1245,0),AccDep+10*Dep)*R1250+(MAX(CEq-CBasis10-S1245,0)-MIN(MAX(CEq-CBasis10-S1245,0),AccDep+10*Dep))*LTCG+MIN(S1245,MAX(CEq-CBasis10,0))*ORD','CTax10'),
+('C: liquidation tax yr 10','=MIN(MAX(CEq-CBasis10-Recap1245,0),AccDep+10*Dep)*Rate1250+(MAX(CEq-CBasis10-Recap1245,0)-MIN(MAX(CEq-CBasis10-Recap1245,0),AccDep+10*Dep))*LTCG+MIN(Recap1245,MAX(CEq-CBasis10,0))*ORD','CTax10'),
 ]
 for v in (1,2):
     scal+= [(f'B{v}: total gain','=BPrice%d*(1-BSell%d)-Comm-Basis'%(v,v),f'BGain{v}'),
-            (f'B{v}: gross-profit ratio (excl. §1245, recognized at sale)',f'=MAX(BGain{v}-S1245,0)/BPrice{v}',f'GP{v}'),
-            (f'B{v}: §1250 portion of gain',f'=MIN(MAX(BGain{v}-S1245,0),AccDep)',f'S1250AMT{v}'),
-            (f'B{v}: total installment tax (excl. §1245)',f'=S1250AMT{v}*R1250+(MAX(BGain{v}-S1245,0)-S1250AMT{v})*LTCG',f'BTotTax{v}'),
+            (f'B{v}: gross-profit ratio (excl. §1245, recognized at sale)',f'=MAX(BGain{v}-Recap1245,0)/BPrice{v}',f'GrossPR{v}'),
+            (f'B{v}: §1250 portion of gain',f'=MIN(MAX(BGain{v}-Recap1245,0),AccDep)',f'S1250AMT{v}'),
+            (f'B{v}: total installment tax (excl. §1245)',f'=S1250AMT{v}*Rate1250+(MAX(BGain{v}-Recap1245,0)-S1250AMT{v})*LTCG',f'BTotTax{v}'),
             (f'B{v}: note',f'=BPrice{v}-BDown{v}',f'BNote{v}'),
             (f'B{v}: note ÷ value today',f'=BNote{v}/V0',f'BNoteLTV{v}'),
-            (f'B{v}: cash-equivalent value @ market rate',f'=BDown{v}-PV(MktR/12,BTerm{v}*12,PMT(BRate{v}/12,BAm{v}*12,-BNote{v}))+(BNote{v}+CUMPRINC(BRate{v}/12,BAm{v}*12,BNote{v},1,BTerm{v}*12,0))/(1+MktR/12)^(BTerm{v}*12)',f'BCEV{v}'),
-            (f'B{v}: balloon balance',f'=BNote{v}+CUMPRINC(BRate{v}/12,BAm{v}*12,BNote{v},1,BTerm{v}*12,0)',f'BBalloon{v}')]
+            (f'B{v}: cash-equivalent value @ market rate',f'=BDown{v}-PV(MktR/12,BTerm{v}*12,PMT(BRate{v}/12,BAmort{v}*12,-BNote{v}))+(BNote{v}+CUMPRINC(BRate{v}/12,BAmort{v}*12,BNote{v},1,BTerm{v}*12,0))/(1+MktR/12)^(BTerm{v}*12)',f'BCEV{v}'),
+            (f'B{v}: balloon balance',f'=BNote{v}+CUMPRINC(BRate{v}/12,BAmort{v}*12,BNote{v},1,BTerm{v}*12,0)',f'BBalloon{v}')]
 rr=4; s.cell(rr,1,'Key derived values').font=HF; s.cell(rr,1).fill=HFILL; s.cell(rr,2).fill=HFILL; rr+=1
 for lab,f,n in scal:
-    s.cell(rr,1,lab).font=NF; s.cell(rr,2,f).number_format=P if ('ratio' in lab or 'rate' in lab or '÷' in lab) else D
-    wb.defined_names[n]=DefinedName(n,attr_text=f"Summary!$B${rr}"); rr+=1
+    s.cell(rr,1,lab).font=NF; s.cell(rr,2,f).number_format=P if ('ratio' in lab or 'reinvestment rate' in lab or '÷' in lab) else D
+    wb.defined_names[_safe(n)]=DefinedName(n,attr_text=f"Summary!$B${rr}"); rr+=1
 rr+=1
 hdr=['Path','After-tax cash t0','Yr-1 after-tax','Sum yrs 1-10','2037 wealth: liquidate','2037 wealth: step-up','IRR vs taxable-sale base']
 for j,h in enumerate(hdr): x=s.cell(rr,1+j,h); x.font=HF; x.fill=HFILL
@@ -180,7 +188,7 @@ for i,(lab,k,liq,step) in enumerate(paths):
     for t in range(1,11):
         col=L(3+t)
         c[f'{col}{fr}']=f'={col}{row[k]}'+(liq if t==10 else '')
-    s.cell(rr,7,f'=IRR(Calc!C{fr}:M{fr})')
+    irr=f'IRR(Calc!C{fr}:M{fr})'; s.cell(rr,7,f'=IF(ISNUMBER({irr}),{irr},IF(ERROR.TYPE({irr})=6,"n/a: IRR undefined",{irr}))')
     for j in range(2,7): s.cell(rr,j).number_format=D
     s.cell(rr,7).number_format=P; rr+=1
 s.cell(rr,1,'D Taxable cash sale today').font=BF; s.cell(rr,2,'=D0'); s.cell(rr,5,'=D0*(1+RA)^10'); s.cell(rr,6,'=D0*(1+RA)^10')
